@@ -11,11 +11,14 @@ async def fib_server(address):
     sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
     sock.bind(address)
     sock.listen(5)
-    print('Waiting for connection')
-    while True:
-        client, addr = await sock.accept()
-        print('Connection from', addr)
-        kernel.add_task(fib_client(client))
+    try:
+        print('Waiting for connection')
+        while True:
+            client, addr = await sock.accept()
+            print('Connection from', addr)
+            kernel.add_task(fib_client(client))
+    except curio.CancelledError:
+        print('Server cancelled')
         
 async def fib_client(client):
     with client:
@@ -117,26 +120,264 @@ async def task_locked_with(n, lck):
              await curio.sleep(4)
          n -= 1
 
+
+class Counter(object):
+    def __init__(self):
+        self.n = 0
+        self.cond = curio.Condition(curio.Semaphore())
+
+async def count_monitor(c):
+     while True:
+         async with c.cond:
+              print('Monitor: n=', c.n)
+              await c.cond.wait()
+
+async def count_update(c):
+      while True:
+          await curio.sleep(5)
+          print('Count update', c.cond._lock)
+          async with c.cond:
+              print('Updating count')
+              c.n += 1
+              c.cond.notify()
+
+async def queue_getter(q):
+    while True:
+         item = await q.get()
+         print('Got queue:', item)
+
+async def queue_putter(q):
+    n = 0
+    while True:
+         await q.put(n)
+         n += 1
+         await curio.sleep(4)
+
+
+async def queue_test(kernel):
+    print('Queue Test')
+    q = curio.Queue()
+    async def queue_worker():
+          while True:
+               item = await q.get()
+               await curio.sleep(4)
+               print('Worker processed', item)
+               q.task_done()
+          
+    kernel.add_task(queue_worker())
+    for n in range(10):
+        await q.put(n)
+
+    await q.join()
+    print('Queue Test Worker finished')
+
+def cancel_test1(kernel):
+    async def task_a():
+        try:
+            print('Sleeping')
+            await curio.sleep(1000)
+        except curio.CancelledError as e:
+            print('Cancelled')
+
+    async def task_b():
+        tid = kernel.add_task(task_a())
+        print('Created task', tid)
+        await curio.sleep(10)
+        print('About to cancel')
+        kernel.cancel_task(tid)
+        print('Done with cancel')
+
+    kernel.add_task(task_b())
+
+def cancel_test2(kernel):
+    async def task_b():
+        tid = kernel.add_task(fib_server(('', 25000)))
+        await curio.sleep(10)
+        print('About to cancel')
+        kernel.cancel_task(tid)
+        print('Done with cancel')
+
+    kernel.add_task(task_b())
+
+def cancel_test3(kernel):
+    async def task_a(q):
+        try:
+            print('Waiting for an item')
+            item = await q.get()
+        except curio.CancelledError:
+            print('Waiting cancelled')
+            await curio.sleep(2)
+            print('Waiting really cancelled')
+    
+    async def task_b():
+        q = curio.Queue()
+        tid = kernel.add_task(task_a(q))
+        print('Created task', tid)
+        await curio.sleep(10)
+        print('About to cancel')
+        kernel.cancel_task(tid)
+        print('Done with cancel')
+
+    kernel.add_task(task_b())
+
+def cancel_test4(kernel):
+    async def task_a(lck):
+        try:
+            async with lck:
+                 print('Holding a lock. Ho hum')
+                 await curio.sleep(1000)
+        except curio.CancelledError:
+            print('Cancelled!')
+            print('Wait? Am I still holding the lock or not?')
+    
+    async def task_b():
+        lck = curio.Lock()
+        tid = kernel.add_task(task_a(lck))
+        print('Created task', tid)
+        await curio.sleep(10)
+        print('About to cancel')
+        kernel.cancel_task(tid)
+        async with lck:
+            print('Hey, I got the lock. Good')
+        print('Done with cancel')
+
+    kernel.add_task(task_b())
+
+
+def cancel_test5(kernel):
+    async def task_a(lck):
+        try:
+            print('Trying to get the lock')
+            async with lck:
+                 print('Hey. I got it. What?')
+        except curio.CancelledError:
+            print('Cancelled!')
+            print('Sure hope I didn\'t get that lock')
+    
+    async def task_b():
+        lck = curio.Lock()
+        async with lck:
+            tid = kernel.add_task(task_a(lck))
+            print('Created task', tid)
+            await curio.sleep(10)
+            print('About to cancel')
+            kernel.cancel_task(tid)
+            print('Done with cancel')
+
+    kernel.add_task(task_b())
+
+def timeout_test1(kernel):
+    async def task_a():
+         sock = curio.Socket(AF_INET, SOCK_DGRAM)
+         sock.bind(('', 30000))
+         sock.settimeout(15)
+         print('Socket created:', sock)
+         while True:
+             try:
+                 msg = await sock.recvfrom(8192)
+                 print('Got:', msg)
+             except curio.TimeoutError:
+                 print('Timeout. No message')
+
+    kernel.add_task(task_a())
+
+def timeout_test2(kernel):
+    async def task_a(q):
+        while True:
+            try:
+                print('Waiting for an item')
+                item = await q.get(timeout=15)
+            except curio.TimeoutError:
+                print('Timed out. Trying again')
+            except curio.CancelledError:
+                print('Waiting cancelled')
+                return
+    
+    async def task_b():
+        q = curio.Queue()
+        tid = kernel.add_task(task_a(q))
+        print('Created task', tid)
+        await curio.sleep(60)
+        print('About to cancel')
+        kernel.cancel_task(tid)
+        print('Done with cancel')
+
+    kernel.add_task(task_b())
+
+def timeout_test3(kernel):
+    async def task_a(lck):
+        try:
+            await lck.acquire(timeout=10)
+            print('Got the lock')
+            lck.release()
+        except curio.TimeoutError:
+            print('Lock timeout. Oh well. Goodbye')
+    
+    async def task_b():
+        lck = curio.Lock()
+        tid = kernel.add_task(task_a(lck))
+        print('Created task', tid)
+        async with lck:
+            await curio.sleep(15)
+        print('Did it ever get the lock?')
+
+    kernel.add_task(task_b())
+
+def timeout_test4(kernel):
+    async def task_a(lck):
+        try:
+            await curio.alarm(10)
+            print('Trying to get the lock')
+            async with lck:
+                print('Got the lock')
+        except curio.TimeoutError:
+            print('Lock timeout. Oh well. Goodbye')
+    
+    async def task_b():
+        lck = curio.Lock()
+        async with lck:
+            tid = kernel.add_task(task_a(lck))
+            print('Created task', tid)
+            await curio.sleep(15)
+        print('Did it ever get the lock?')
+
+    kernel.add_task(task_b())
+
+
 kernel = curio.get_kernel()
+timeout_test4(kernel)
 
-evt = curio.Event()
-kernel.add_task(event_waiter(evt))
-kernel.add_task(event_waiter(evt))
-kernel.add_task(event_setter(evt, 30))
+if False:
+    kernel.add_task(queue_test(kernel))
 
-lck = curio.Semaphore(2)
-kernel.add_task(task_locked(5, lck))
-kernel.add_task(task_locked(5, lck))
-kernel.add_task(task_locked_with(5, lck))
-kernel.add_task(task_locked_with(5, lck))
+    q = curio.Queue()
+    kernel.add_task(queue_putter(q))
+    kernel.add_task(queue_getter(q))
 
-kernel.add_task(server.serve_forever())
-kernel.add_task(eserver.serve_forever())
-kernel.add_task(udpserver.serve_forever())
-kernel.add_task(fib_server(('',25000)))
+    cnt = Counter()
+    kernel.add_task(count_monitor(cnt))
+    kernel.add_task(count_update(cnt))
+
+    evt = curio.Event()
+    kernel.add_task(event_waiter(evt))
+    kernel.add_task(event_waiter(evt))
+    kernel.add_task(event_setter(evt, 30))
+
+    lck = curio.Semaphore(2)
+    kernel.add_task(task_locked(5, lck))
+    kernel.add_task(task_locked(5, lck))
+    kernel.add_task(task_locked_with(5, lck))
+    kernel.add_task(task_locked_with(5, lck))
+
+    kernel.add_task(fib_server(('',25000)))
+
+#kernel.add_task(server.serve_forever())
+#kernel.add_task(eserver.serve_forever())
+#kernel.add_task(udpserver.serve_forever())
+
 #kernel.add_task(spinner('spin1', 5))
 #kernel.add_task(spinner('spin2', 1))
-kernel.add_task(udp_echo(('',26000)))
-kernel.add_task(subproc())
+#kernel.add_task(udp_echo(('',26000)))
+#kernel.add_task(subproc())
 kernel.run(detached=True)
 

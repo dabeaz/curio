@@ -1,7 +1,7 @@
 # curio/sync.py
 '''
-Implementation of common task synchronization primitives such as events,
-locks, semaphores, condition variables, and queues.  These primitives
+Implementation of common task synchronization primitives such as
+events, locks, semaphores, and condition variables. These primitives
 are only safe to use in the curio framework--they are not thread safe.
 '''
 
@@ -28,15 +28,15 @@ class Event(object):
     def clear(self):
         self._set = False
 
-    async def wait(self):
+    async def wait(self, *, timeout=None):
         if self._set:
             return
-        await self._kernel.wait_on(self._waiting, 'EVENT_WAIT')
+        await self._kernel.wait_on(self._waiting, 'EVENT_WAIT', timeout)
         
     def set(self):
         self._set = True
         for task in self._waiting:
-            self._kernel.reschedule_task(task)
+             self._kernel.reschedule_task(task)
         self._waiting = []
 
 class _LockBase(object):
@@ -58,9 +58,9 @@ class Lock(_LockBase):
         extra = 'locked' if self.locked() else 'unlocked'
         return '<{} [{},waiters:{}]>'.format(res[1:-1], extra, len(self._waiting))
 
-    async def acquire(self):
+    async def acquire(self, *, timeout=None):
         if self._acquired:
-            await self._kernel.wait_on(self._waiting, 'LOCK_ACQUIRE')
+            await self._kernel.wait_on(self._waiting, 'LOCK_ACQUIRE', timeout)
         self._acquired = True
         return True
 
@@ -85,9 +85,9 @@ class Semaphore(_LockBase):
         extra = 'locked' if self.locked() else 'unlocked'
         return '<{} [{},value:{},waiters:{}]>'.format(res[1:-1], extra, self._value, len(self._waiting))
 
-    async def acquire(self):
+    async def acquire(self, *, timeout=None):
         if self._value <= 0:
-            await self._kernel.wait_on(self._waiting, 'SEMA_ACQUIRE')
+            await self._kernel.wait_on(self._waiting, 'SEMA_ACQUIRE', timeout)
         else:
             self._value -= 1
         return True
@@ -129,25 +129,25 @@ class Condition(_LockBase):
     def locked(self):
         return self._lock.locked()
 
-    async def acquire(self):
-        await self._lock.acquire()
+    async def acquire(self, *, timeout=None):
+        await self._lock.acquire(timeout=timeout)
 
     def release(self):
         self._lock.release()
 
-    async def wait(self):
+    async def wait(self, *, timeout=None):
         if not self.locked():
             raise RuntimeError("Can't wait on unacquired lock")
         self.release()
-        await self._kernel.wait_on(self._waiting, 'COND_WAIT')
+        await self._kernel.wait_on(self._waiting, 'COND_WAIT', timeout)
         await self.acquire()
 
-    async def wait_for(self, predicate):
+    async def wait_for(self, predicate, *, timeout=None):
         while True:
             result = predicate()
             if result:
                 return result
-            await self.wait()
+            await self.wait(timeout=timeout)
 
     def notify(self, n=1):
         if not self.locked():

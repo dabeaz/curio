@@ -9,17 +9,24 @@ import time
 import threading
 import os
 
+class CancelledError(Exception):
+    pass
+
+class TimeoutError(Exception):
+    pass
+
 class Kernel(object):
     def __init__(self, selector=None):
         if selector is None:
             selector = DefaultSelector()
         self._selector = selector
-        self._ready = deque()
-        self._status = defaultdict(dict)
-        self._sleeping = []
-        self._suspended = { }
-        self._killed = set()
-        self._current_task = None
+        self._ready = deque()              # Tasks ready to run
+        self._status = defaultdict(dict)   # Task status information
+        self._sleeping = []                # Heap of tasks waiting on sleep()
+        self._suspended = {}               # Tasks that have requested a suspension
+        self._killed = set()               # Tasks with a pending kill request
+        self._current_task = None          # Currently running task 
+        self._current_status = None        # Status dict of current running task
         self.njobs = 0
 
         # Create task responsible for waiting the event loop
@@ -28,51 +35,62 @@ class Kernel(object):
         self.add_task(self._wait_task(), daemon=True)
 
     # Callback that causes the kernel to wake on non-I/O events
-    def _wake(self, task):
-        self._ready.append(task)
+    def _wake(self, task, value=None, exc=None):
+        self.reschedule_task(task, value, exc)
         self._notify_sock.send(b'x')
 
-    # Internal task that wakes the kernel on non-I/O events
+    # Internal task that monitors the loopback socket--allowing the kernel to
+    # awake for non-I/O events.
     @coroutine
     def _wait_task(self):
         while True:
             yield 'trap_read_wait', self._wait_sock
             data = self._wait_sock.recv(100)
 
-    # Traps
-    def trap_read_wait(self, resource, task):
-        self._selector.register(resource, EVENT_READ, task)
-        self._status[id(task)]['state'] = 'READ_WAIT'
+    # Traps.  Low level system calls. Direct use is discouraged.
+    def trap_read_wait(self, resource, timeout=None):
+        self._selector.register(resource, EVENT_READ, self._current_task)
+        self._current_status['state'] = 'READ_WAIT'
+        self._current_status['kill'] = lambda task=self._current_task: self._selector.unregister(resource)
+        if timeout is not None:
+            self._set_timeout(timeout)
 
-    def trap_write_wait(self, resource, task):
-        self._selector.register(resource, EVENT_WRITE, task)
-        self._status[id(task)]['state'] = 'WRITE_WAIT'
+    def trap_write_wait(self, resource, timeout=None):
+        self._selector.register(resource, EVENT_WRITE, self._current_task)
+        self._current_status['state'] = 'WRITE_WAIT'
+        self._current_status['kill'] = lambda task=self._current_task: self._selector.unregister(resource)
+        if timeout is not None:
+            self._set_timeout(timeout)
 
-    def trap_future_wait(self, future, task):
-        future.add_done_callback(lambda fut: self._wake(task))
-        self._status[id(task)]['state'] = 'FUTURE_WAIT'
+    def trap_future_wait(self, future, timeout=None):
+        future.add_done_callback(lambda fut, task=self._current_task: self._wake(task))
+        self._current_status['state'] = 'FUTURE_WAIT'
+        self._current_status['kill'] = lambda: None
+        if timeout is not None:
+            self._set_timeout(timeout)
 
-    def trap_wait(self, queue, task, state):
-        queue.append(task)
-        self._status[id(task)]['state'] = state
+    def trap_wait(self, queue, state, timeout=None):
+        queue.append(self._current_task)
+        self._current_status['state'] = state
+        self._current_status['kill'] = lambda task=self._current_task: queue.remove(task)
+        if timeout is not None:
+            self._set_timeout(timeout)
 
-    def trap_sleep(self, seconds, task):
-        heapq.heappush(self._sleeping, (time.monotonic() + seconds, task))
-        self._status[id(task)]['state'] = 'TIME_SLEEP'
+    def trap_alarm(self, timeout):
+        self._set_timeout(timeout)
+        self.reschedule_task(self._current_task)
 
-    @coroutine
-    def wait_on(self, queue, state):
-        yield 'trap_wait', queue, state
-
-    @coroutine
-    def run_in_executor(self, exc, callable, *args):
-        future = exc.submit(callable, *args)
-        yield 'trap_future_wait', future
-        return future.result()
-
-    @coroutine
-    def sleep(self, seconds):
-        yield 'trap_sleep', seconds
+    def _set_timeout(self, seconds, sleep_type='timeout'):
+        item = (time.monotonic() + seconds, self._current_task, sleep_type)
+        heapq.heappush(self._sleeping, item)
+        
+    def trap_sleep(self, seconds, sleep_type='sleep'):
+        self._set_timeout(seconds, sleep_type)
+        self._current_status['state'] = 'TIME_SLEEP'
+        def remove():
+            self._sleeping.remove(item)
+            heapq.heapify(self._sleeping)
+        self._current_status['kill'] = remove
 
     # I/O 
     def poll_for_io(self):
@@ -85,16 +103,18 @@ class Kernel(object):
         for key, mask in events:
             task = key.data
             self._selector.unregister(key.fileobj)
-            self._ready.append(task)
-            self._status[id(task)]['state'] = 'READY'
+            self.reschedule_task(task)
 
         # Process sleeping tasks
         current = time.monotonic()
         while self._sleeping and self._sleeping[0][0] <= current:
-            _, task = heapq.heappop(self._sleeping)
-            self._ready.append(task)
-            self._status[id(task)]['state'] = 'READY'
+            _, task, sleep_type = heapq.heappop(self._sleeping)
+            if sleep_type == 'sleep':
+                self.reschedule_task(task)
+            elif sleep_type == 'timeout':
+                self.cancel_task(id(task), exc=TimeoutError)
 
+    # Kernel central loop
     def run(self, detached=False):
         if detached:
             threading.Thread(target=self.run).start()
@@ -102,6 +122,7 @@ class Kernel(object):
 
         while self.njobs > 0:
             self._current_task = None
+            self._current_status = None
 
             # Poll for I/O as long as there is nothing to run
             while not self._ready:
@@ -109,11 +130,12 @@ class Kernel(object):
 
             # Run everything that's ready
             while self._ready:
-                self._current_task = self._ready.popleft()
+                self._current_task, value, exc = self._ready.popleft()
+                self._current_status = self._status[id(self._current_task)]
                 taskid = id(self._current_task)
 
                 if taskid in self._killed:
-                    self._current_task.close()
+                    self._current_task.close()        # Might be dicey (what if holding locks with async context manager)
                     self._killed.remove(taskid)
                     del self._status[taskid]
                     self.njobs -= 1
@@ -127,25 +149,42 @@ class Kernel(object):
                 try:
                     self._status[taskid]['state'] = 'RUNNING'
                     self._status[taskid]['cycles'] += 1
-                    op, resource, *extra = self._current_task.send(None)
+                    if exc is None:
+                        op, *args = self._current_task.send(value)
+                    else:
+                        op, *args = self._current_task.throw(exc)
                     trap = getattr(self, op, None)
                     assert trap, "Unknown trap: %s" % op
-                    trap(resource, self._current_task, *extra)
-                except StopIteration as e:
+                    trap(*args)
+                except (StopIteration, CancelledError) as e:
                     del self._status[taskid]
                     self.njobs -= 1
 
-    def reschedule_task(self, task):
-        self._ready.append(task)
+    def reschedule_task(self, task, value=None, exc=None):
+        self._ready.append((task, value, exc))
         self._status[id(task)]['state'] = 'READY'
+        self._status[id(task)].pop('kill', None)
 
     def add_task(self, task, daemon=False):
-        self._ready.append(task)
+        self.reschedule_task(task)
         self._status[id(task)]['coro'] = task
-        self._status[id(task)]['state'] = 'READY'
         self._status[id(task)]['cycles'] = 0
         if not daemon:
             self.njobs += 1
+        return id(task)
+
+    def cancel_task(self, taskid, exc=CancelledError):
+        task_status = self._status[taskid]
+        if task_status == self._current_status:
+            raise CancelledError()
+
+        # Remove/unregister the task from whereever it might happen to be at the moment
+        kill_func = task_status.pop('kill', None)
+        if kill_func:
+            kill_func()
+
+        # Reschedule it with a pending exception
+        self.reschedule_task(task_status['coro'], exc=exc())
 
     # Debugging
     def ps(self):
@@ -173,6 +212,25 @@ class Kernel(object):
     def kill_task(self, taskid):
         self._killed.add(taskid)
 
+    # System calls
+    @coroutine
+    def wait_on(self, queue, state, timeout=None):
+        yield 'trap_wait', queue, state, timeout
+
+    @coroutine
+    def run_in_executor(self, exc, callable, *args):
+        future = exc.submit(callable, *args)
+        yield 'trap_future_wait', future
+        return future.result()
+
+@coroutine
+def sleep(seconds):
+    yield 'trap_sleep', seconds
+
+@coroutine
+def alarm(seconds):
+    yield 'trap_alarm', seconds
+
 class Socket(object):
     '''
     Wrapper around a standard socket object.
@@ -180,12 +238,17 @@ class Socket(object):
     def __init__(self, family=socket.AF_INET, type=socket.SOCK_STREAM, proto=0, fileno=None):
         self._socket = socket.socket(family, type, proto, fileno)
         self._socket.setblocking(False)
+        self._timeout = None
+
+    def settimeout(self, seconds):
+        self._timeout = seconds
 
     @classmethod
     def from_sock(cls, sock):
         self = Socket.__new__(Socket)
         self._socket = sock
         self._socket.setblocking(False)
+        self._timeout = None
         return self
 
     def __repr__(self):
@@ -200,7 +263,7 @@ class Socket(object):
             try:
                 return self._socket.recv(maxsize)
             except BlockingIOError:
-                yield 'trap_read_wait', self._socket
+                yield 'trap_read_wait', self._socket, self._timeout
 
     @coroutine
     def send(self, data):
@@ -228,7 +291,7 @@ class Socket(object):
                 client, addr = self._socket.accept()
                 return Socket.from_sock(client), addr
             except BlockingIOError:
-                yield 'trap_read_wait', self._socket
+                yield 'trap_read_wait', self._socket, self._timeout
 
     @coroutine
     def connect(self, address):
@@ -244,7 +307,7 @@ class Socket(object):
             try:
                 return self._socket.recvfrom(buffersize)
             except BlockingIOError:
-                yield 'trap_read_wait', self._socket
+                yield 'trap_read_wait', self._socket, self._timeout
 
     @coroutine
     def sendto(self, data, address):
@@ -336,10 +399,7 @@ def get_kernel():
         _default_kernel = Kernel()
     return _default_kernel
 
-async def sleep(seconds):
-    kernel = get_kernel()
-    await kernel.sleep(seconds)
-
-__all__ = [ 'Kernel', 'Socket', 'File', 'get_kernel', 'sleep' ]
+__all__ = [ 'Kernel', 'Socket', 'File', 'get_kernel', 'sleep', 'alarm',
+            'CancelledError', 'TimeoutError' ]
             
         
