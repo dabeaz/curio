@@ -19,6 +19,7 @@ class Kernel(object):
         self._sleeping = []
         self._suspended = { }
         self._killed = set()
+        self._current_task = None
         self.njobs = 0
 
         # Create task responsible for waiting the event loop
@@ -51,9 +52,17 @@ class Kernel(object):
         future.add_done_callback(lambda fut: self._wake(task))
         self._status[id(task)]['state'] = 'FUTURE_WAIT'
 
+    def trap_wait(self, queue, task, state):
+        queue.append(task)
+        self._status[id(task)]['state'] = state
+
     def trap_sleep(self, seconds, task):
         heapq.heappush(self._sleeping, (time.monotonic() + seconds, task))
         self._status[id(task)]['state'] = 'TIME_SLEEP'
+
+    @coroutine
+    def wait_on(self, queue, state):
+        yield 'trap_wait', queue, state
 
     @coroutine
     def run_in_executor(self, exc, callable, *args):
@@ -92,16 +101,19 @@ class Kernel(object):
             return
 
         while self.njobs > 0:
+            self._current_task = None
+
             # Poll for I/O as long as there is nothing to run
             while not self._ready:
                 self.poll_for_io()
 
             # Run everything that's ready
             while self._ready:
-                task = self._ready.popleft()
-                taskid = id(task)
+                self._current_task = self._ready.popleft()
+                taskid = id(self._current_task)
+
                 if taskid in self._killed:
-                    task.close()
+                    self._current_task.close()
                     self._killed.remove(taskid)
                     del self._status[taskid]
                     self.njobs -= 1
@@ -115,13 +127,17 @@ class Kernel(object):
                 try:
                     self._status[taskid]['state'] = 'RUNNING'
                     self._status[taskid]['cycles'] += 1
-                    op, resource = task.send(None)
+                    op, resource, *extra = self._current_task.send(None)
                     trap = getattr(self, op, None)
                     assert trap, "Unknown trap: %s" % op
-                    trap(resource, task)
+                    trap(resource, self._current_task, *extra)
                 except StopIteration as e:
                     del self._status[taskid]
                     self.njobs -= 1
+
+    def reschedule_task(self, task):
+        self._ready.append(task)
+        self._status[id(task)]['state'] = 'READY'
 
     def add_task(self, task, daemon=False):
         self._ready.append(task)
@@ -246,7 +262,6 @@ class Socket(object):
 
     def __exit__(self, ety, eval, etb):
         self._socket.__exit__(ety, eval, etb)
-
 
 class File(object):
     '''

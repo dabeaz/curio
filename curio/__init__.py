@@ -2,3 +2,4 @@
 
 from .sched import Scheduler
 from .kernel import *
+from .sync import *

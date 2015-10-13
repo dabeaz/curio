@@ -92,7 +92,44 @@ class EchoStreamHandler(StreamRequestHandler):
 
 eserver = TCPServer(('', 29000), EchoStreamHandler)
 
+async def event_setter(evt, seconds):
+     await curio.sleep(seconds)
+     print('About to set', evt)
+     evt.set()
+     print('Done setting', evt)
+
+async def event_waiter(evt):
+     await evt.wait()
+     print('Event waiter done', evt)
+
+async def task_locked(n, lck):
+     while n > 0:
+          await lck.acquire()
+          print('Lock acquired')
+          await curio.sleep(4)
+          lck.release()
+          n -= 1
+
+async def task_locked_with(n, lck):
+     while n > 0:
+         async with lck:
+             print('With lock acquired')
+             await curio.sleep(4)
+         n -= 1
+
 kernel = curio.get_kernel()
+
+evt = curio.Event()
+kernel.add_task(event_waiter(evt))
+kernel.add_task(event_waiter(evt))
+kernel.add_task(event_setter(evt, 30))
+
+lck = curio.Semaphore(2)
+kernel.add_task(task_locked(5, lck))
+kernel.add_task(task_locked(5, lck))
+kernel.add_task(task_locked_with(5, lck))
+kernel.add_task(task_locked_with(5, lck))
+
 kernel.add_task(server.serve_forever())
 kernel.add_task(eserver.serve_forever())
 kernel.add_task(udpserver.serve_forever())
