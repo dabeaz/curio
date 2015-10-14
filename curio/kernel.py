@@ -61,8 +61,13 @@ class Kernel(object):
 
     # Callback that causes the kernel to wake on non-I/O events
     def _wake(self, task, value=None, exc=None):
-        self.reschedule_task(task, value, exc)
-        self._notify_sock.send(b'x')
+        # If the task no longer exists in the task table, perhaps it was cancelled
+        # or killed for some reason. In that case, there's no point in rescheduling it.
+        # If the task is in the task table, but has exception information set,
+        # it means it crashed.   Either way, we don't reschedule. Oh well.
+        if id(task) in self._tasks and not task.exc_info:
+            self.reschedule_task(task, value, exc)
+            self._notify_sock.send(b'x')
 
     # Internal task that monitors the loopback socket--allowing the kernel to
     # awake for non-I/O events.
