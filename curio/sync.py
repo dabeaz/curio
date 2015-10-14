@@ -139,8 +139,10 @@ class Condition(_LockBase):
         if not self.locked():
             raise RuntimeError("Can't wait on unacquired lock")
         self.release()
-        await self._kernel.wait_on(self._waiting, 'COND_WAIT', timeout)
-        await self.acquire()
+        try:
+            await self._kernel.wait_on(self._waiting, 'COND_WAIT', timeout)
+        finally:
+            await self.acquire()
 
     async def wait_for(self, predicate, *, timeout=None):
         while True:
