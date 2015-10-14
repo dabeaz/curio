@@ -5,7 +5,10 @@ curio clone of socketserver built-in library.
 import socket
 import os
 import errno
-from .kernel import Socket, File, get_kernel
+from .socket import Socket
+from .file import File
+from .kernel import get_kernel
+
 
 __all__ = ["BaseServer", "TCPServer", "UDPServer", 
            "BaseRequestHandler", "StreamRequestHandler",

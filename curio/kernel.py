@@ -1,32 +1,57 @@
 # kernel.py
 
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
-from collections import deque, defaultdict
+from collections import deque
 import socket
 from types import coroutine
 import heapq
 import time
 import threading
 import os
+import sys
+import logging
 
-class CancelledError(Exception):
+log = logging.getLogger(__name__)
+
+class CurioError(Exception):
     pass
 
-class TimeoutError(Exception):
+class CancelledError(CurioError):
     pass
+
+class TimeoutError(CurioError):
+    pass
+
+class AlarmError(CurioError):
+    pass
+
+class Task(object):
+    def __init__(self, coro):
+        self.coro = coro          # Underlying generator/coroutine
+        self.cycles = 0           # Execution cycles completed
+        self.state = 'INITIAL'    # Execution state
+        self.cancel_f = None      # Cancellation function
+        self.timeout = None       # Pending timeout (if any)
+        self.exc_info = None      # Exception info (if any)
+        self.next_value = None    # Next value to send on execution
+        self.next_exc = None      # Next exception to send on execution
+        self.waiting = None       # Optional set of tasks waiting to join with this one
+
+    def __repr__(self):
+        return 'Task(%r)' % self.coro
+
+    def __str__(self):
+        return self.coro.__qualname__
 
 class Kernel(object):
     def __init__(self, selector=None):
         if selector is None:
             selector = DefaultSelector()
         self._selector = selector
-        self._ready = deque()              # Tasks ready to run
-        self._status = defaultdict(dict)   # Task status information
-        self._sleeping = []                # Heap of tasks waiting on sleep()
-        self._suspended = {}               # Tasks that have requested a suspension
-        self._killed = set()               # Tasks with a pending kill request
-        self._current_task = None          # Currently running task 
-        self._current_status = None        # Status dict of current running task
+        self._ready = deque()       # Tasks ready to run
+        self._tasks = { }           # Task table
+        self._current = None        # Current task
+        self._sleeping = []         # Heap of tasks waiting on timer
         self.njobs = 0
 
         # Create task responsible for waiting the event loop
@@ -47,50 +72,52 @@ class Kernel(object):
             yield 'trap_read_wait', self._wait_sock
             data = self._wait_sock.recv(100)
 
-    # Traps.  Low level system calls. Direct use is discouraged.
+    # Traps.  These implement low-level functionality.  Do not invoke directly.
     def trap_read_wait(self, resource, timeout=None):
-        self._selector.register(resource, EVENT_READ, self._current_task)
-        self._current_status['state'] = 'READ_WAIT'
-        self._current_status['kill'] = lambda task=self._current_task: self._selector.unregister(resource)
+        self._selector.register(resource, EVENT_READ, self._current)
+        self._current.state = 'READ_WAIT'
+        self._current.cancel_f = lambda task=self._current: self._selector.unregister(resource)
         if timeout is not None:
             self._set_timeout(timeout)
 
     def trap_write_wait(self, resource, timeout=None):
-        self._selector.register(resource, EVENT_WRITE, self._current_task)
-        self._current_status['state'] = 'WRITE_WAIT'
-        self._current_status['kill'] = lambda task=self._current_task: self._selector.unregister(resource)
+        self._selector.register(resource, EVENT_WRITE, self._current)
+        self._current.state = 'WRITE_WAIT'
+        self._current.cancel_f = lambda task=self._current: self._selector.unregister(resource)
         if timeout is not None:
             self._set_timeout(timeout)
 
     def trap_future_wait(self, future, timeout=None):
-        future.add_done_callback(lambda fut, task=self._current_task: self._wake(task))
-        self._current_status['state'] = 'FUTURE_WAIT'
-        self._current_status['kill'] = lambda: None
+        future.add_done_callback(lambda fut, task=self._current: self._wake(task))
+        self._current.state = 'FUTURE_WAIT'
+        self._current.cancel_f = None
         if timeout is not None:
             self._set_timeout(timeout)
 
     def trap_wait(self, queue, state, timeout=None):
-        queue.append(self._current_task)
-        self._current_status['state'] = state
-        self._current_status['kill'] = lambda task=self._current_task: queue.remove(task)
+        queue.append(self._current)
+        self._current.state = state
+        self._current.cancel_f = lambda task=self._current: queue.remove(task)
         if timeout is not None:
             self._set_timeout(timeout)
 
     def trap_alarm(self, timeout):
         self._set_timeout(timeout)
-        self.reschedule_task(self._current_task)
+        self.reschedule_task(self._current)
 
     def _set_timeout(self, seconds, sleep_type='timeout'):
-        item = (time.monotonic() + seconds, self._current_task, sleep_type)
+        item = (time.monotonic() + seconds, self._current, sleep_type)
+        self._current.timeout = item[0]
         heapq.heappush(self._sleeping, item)
+        return item
         
-    def trap_sleep(self, seconds, sleep_type='sleep'):
-        self._set_timeout(seconds, sleep_type)
-        self._current_status['state'] = 'TIME_SLEEP'
+    def trap_sleep(self, seconds):
+        item = self._set_timeout(seconds, 'sleep')
+        self._current.state = 'TIME_SLEEP'
         def remove():
             self._sleeping.remove(item)
             heapq.heapify(self._sleeping)
-        self._current_status['kill'] = remove
+        self._current.cancel_f = remove
 
     # I/O 
     def poll_for_io(self):
@@ -108,11 +135,17 @@ class Kernel(object):
         # Process sleeping tasks
         current = time.monotonic()
         while self._sleeping and self._sleeping[0][0] <= current:
-            _, task, sleep_type = heapq.heappop(self._sleeping)
+            tm, task, sleep_type = heapq.heappop(self._sleeping)
             if sleep_type == 'sleep':
                 self.reschedule_task(task)
             elif sleep_type == 'timeout':
-                self.cancel_task(id(task), exc=TimeoutError)
+                # If a timeout occurs, verify that the task still exists and that
+                # its locally set timeout value matches the time value.  If not,
+                # the timeout is ignored (it means that the task was already
+                # cancelled or that the previous operation involving a timeout
+                # already ran to completion).
+                if task.timeout == tm:
+                    self.cancel_task(id(task), exc=TimeoutError)
 
     # Kernel central loop
     def run(self, detached=False):
@@ -121,8 +154,7 @@ class Kernel(object):
             return
 
         while self.njobs > 0:
-            self._current_task = None
-            self._current_status = None
+            self._current = None
 
             # Poll for I/O as long as there is nothing to run
             while not self._ready:
@@ -130,61 +162,71 @@ class Kernel(object):
 
             # Run everything that's ready
             while self._ready:
-                self._current_task, value, exc = self._ready.popleft()
-                self._current_status = self._status[id(self._current_task)]
-                taskid = id(self._current_task)
-
-                if taskid in self._killed:
-                    self._current_task.close()        # Might be dicey (what if holding locks with async context manager)
-                    self._killed.remove(taskid)
-                    del self._status[taskid]
-                    self.njobs -= 1
-                    continue
-                    
-                if taskid in self._suspended:
-                    self._suspended[taskid] = task
-                    self._status[taskid]['state'] = 'SUSPENDED'
-                    continue
-
+                self._current = self._ready.popleft()
+                taskid = id(self._current)
                 try:
-                    self._status[taskid]['state'] = 'RUNNING'
-                    self._status[taskid]['cycles'] += 1
-                    if exc is None:
-                        op, *args = self._current_task.send(value)
+                    self._current.state = 'RUNNING'
+                    self._current.cycles += 1
+                    if self._current.next_exc is None:
+                        op, *args = self._current.coro.send(self._current.next_value)
                     else:
-                        op, *args = self._current_task.throw(exc)
+                        op, *args = self._current.coro.throw(self._current.next_exc)
                     trap = getattr(self, op, None)
                     assert trap, "Unknown trap: %s" % op
                     trap(*args)
+
                 except (StopIteration, CancelledError) as e:
-                    del self._status[taskid]
+                    # Reschedule any waiting jobs 
+                    if self._current.waiting:
+                        for task in self._current.waiting:
+                            self.reschedule_task(task, 
+                                                 value = e.value if isinstance(e, StopIteration) else None,
+                                                 exc = e if isinstance(e, CancelledError) else None)
+                        self._current.waiting = None
+                    del self._tasks[taskid]
                     self.njobs -= 1
 
-    def reschedule_task(self, task, value=None, exc=None):
-        self._ready.append((task, value, exc))
-        self._status[id(task)]['state'] = 'READY'
-        self._status[id(task)].pop('kill', None)
+                except Exception as e:
+                    self._current.exc_info = sys.exc_info()
+                    self._current.state = 'CRASHED'
+                    log.error('Curio: Task Crash: %s' % self._current, exc_info=True)
 
-    def add_task(self, task, daemon=False):
+    # Task management
+    def reschedule_task(self, task, value=None, exc=None):
+        self._ready.append(task)
+        task.next_value = value
+        task.next_exc = exc
+        task.state = 'READY'
+        task.cancel_f = None
+        task.timeout = None
+
+    def add_task(self, coro, daemon=False):
+        task = Task(coro)
+        self._tasks[id(task)] = task
         self.reschedule_task(task)
-        self._status[id(task)]['coro'] = task
-        self._status[id(task)]['cycles'] = 0
         if not daemon:
             self.njobs += 1
         return id(task)
 
     def cancel_task(self, taskid, exc=CancelledError):
-        task_status = self._status[taskid]
-        if task_status == self._current_status:
+        task = self._tasks[taskid]
+        if task == self._current:
             raise CancelledError()
 
-        # Remove/unregister the task from whereever it might happen to be at the moment
-        kill_func = task_status.pop('kill', None)
-        if kill_func:
-            kill_func()
+        # Remove/unregister the task from whatever it's waiting on right now
+        if task.cancel_f:
+            task.cancel_f()
+            task.cancel_f = None
 
         # Reschedule it with a pending exception
-        self.reschedule_task(task_status['coro'], exc=exc())
+        self.reschedule_task(task, exc=exc())
+
+    async def join(self, taskid, *, timeout=None):
+        task = self._tasks[taskid]
+        if task.waiting is None:
+            task.waiting = []
+        result = await self.wait_on(task.waiting, 'TASK_JOIN', timeout=timeout)
+        return result
 
     # Debugging
     def ps(self):
@@ -194,29 +236,23 @@ class Kernel(object):
             print('%-*s' % (w, h), end=' ')
         print()
         print(' '.join(w*'-' for w in widths))
-        for taskid in sorted(self._status):
-            state = self._status[taskid]['state']
-            coro = self._status[taskid]['coro']
-            cycles = self._status[taskid]['cycles']
+        for taskid in sorted(self._tasks):
+            state = self._tasks[taskid].state
+            coro = str(self._tasks[taskid])
+            cycles = self._tasks[taskid].cycles
             print('%-*d %-*s %-*d %-*s' % (widths[0], taskid, 
                                            widths[1], state,
                                            widths[2], cycles,
                                            widths[3], coro))
 
-    def suspend_task(self, taskid):
-        self._suspended[taskid] = None
-
-    def resume_task(self, taskid):
-        self._wake(self._suspended.pop(taskid))
-
-    def kill_task(self, taskid):
-        self._killed.add(taskid)
-
     # System calls
     @coroutine
     def wait_on(self, queue, state, timeout=None):
-        yield 'trap_wait', queue, state, timeout
-
+        '''
+        Wait on a queue-like object.  Optionally set a timeout.
+        '''
+        return (yield 'trap_wait', queue, state, timeout)
+        
     @coroutine
     def run_in_executor(self, exc, callable, *args):
         future = exc.submit(callable, *args)
@@ -231,164 +267,6 @@ def sleep(seconds):
 def alarm(seconds):
     yield 'trap_alarm', seconds
 
-class Socket(object):
-    '''
-    Wrapper around a standard socket object.
-    '''
-    def __init__(self, family=socket.AF_INET, type=socket.SOCK_STREAM, proto=0, fileno=None):
-        self._socket = socket.socket(family, type, proto, fileno)
-        self._socket.setblocking(False)
-        self._timeout = None
-
-    def settimeout(self, seconds):
-        self._timeout = seconds
-
-    @classmethod
-    def from_sock(cls, sock):
-        self = Socket.__new__(Socket)
-        self._socket = sock
-        self._socket.setblocking(False)
-        self._timeout = None
-        return self
-
-    def __repr__(self):
-        return '<curio.Socket %r>' % (self._socket)
-
-    def dup(self):
-        return Socket.from_sock(self._socket.dup())
-
-    @coroutine
-    def recv(self, maxsize):
-        while True:
-            try:
-                return self._socket.recv(maxsize)
-            except BlockingIOError:
-                yield 'trap_read_wait', self._socket, self._timeout
-
-    @coroutine
-    def send(self, data):
-        while True:
-            try:
-                return self._socket.send(data)
-            except BlockingIOError:
-                yield 'trap_write_wait', self._socket
-
-    @coroutine
-    def sendall(self, data):
-        while data:
-            try:
-                nsent = self._socket.send(data)
-                if nsent >= len(data):
-                    return
-                data = data[nsent:]
-            except BlockingIOError:
-                yield 'trap_write_wait', self._socket
-
-    @coroutine
-    def accept(self):
-        while True:
-            try:
-                client, addr = self._socket.accept()
-                return Socket.from_sock(client), addr
-            except BlockingIOError:
-                yield 'trap_read_wait', self._socket, self._timeout
-
-    @coroutine
-    def connect(self, address):
-        while True:
-            try:
-                return self._socket.connect(address)
-            except BlockingIOError:
-                yield 'trap_write_wait', self._socket
-
-    @coroutine
-    def recvfrom(self, buffersize):
-        while True:
-            try:
-                return self._socket.recvfrom(buffersize)
-            except BlockingIOError:
-                yield 'trap_read_wait', self._socket, self._timeout
-
-    @coroutine
-    def sendto(self, data, address):
-        while True:
-            try:
-                return self._socket.sendto(data, address)
-            except BlockingIOError:
-                yield 'trap_write_wait', self._socket
-
-    def __getattr__(self, name):
-        return getattr(self._socket, name)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, ety, eval, etb):
-        self._socket.__exit__(ety, eval, etb)
-
-class File(object):
-    '''
-    Wrapper around file objects.  Proof of concept. Needs to be redone
-    '''
-    def __init__(self, fileno):
-
-        if not isinstance(fileno, int):
-            fileno = fileno.fileno()
-
-        self._fileno = fileno
-        os.set_blocking(fileno, False)
-        self._linebuffer = bytearray()
-        self.closed = False
-
-    def fileno(self):
-        return self._fileno
-
-    @coroutine
-    def read(self, maxbytes):
-        while True:
-            try:
-                return os.read(self._fileno, maxbytes)
-            except BlockingIOError:
-                yield 'trap_read_wait', self
-
-    async def readline(self):
-        while True:
-            nl_index = self._linebuffer.find(b'\n')
-            if nl_index >= 0:
-                resp = bytes(self._linebuffer[:nl_index+1])
-                del self._linebuffer[:nl_index+1]
-                return resp
-            data = await self.read(1000)
-            if not data:
-                resp = bytes(self._linebuffer)
-                del self._linebuffer[:]
-                return resp
-            self._linebuffer.extend(data)
-
-    @coroutine
-    def write(self, data):
-        nwritten = 0
-        while data:
-            try:
-                nbytes = os.write(self._fileno, data)
-                nwritten += nbytes
-                data = data[nbytes:]
-            except BlockingIOError:
-                yield 'trap_write_wait', self
-
-        return nwritten
-
-    async def writelines(self, lines):
-        for line in lines:
-            await self.write(line)
-
-    def close(self):
-        os.close(self._fileno)
-        self.closed = True
-
-    async def flush(self):
-        pass
-
 _default_kernel = None
 def get_kernel():
     '''
@@ -399,7 +277,7 @@ def get_kernel():
         _default_kernel = Kernel()
     return _default_kernel
 
-__all__ = [ 'Kernel', 'Socket', 'File', 'get_kernel', 'sleep', 'alarm',
+__all__ = [ 'Kernel', 'get_kernel', 'sleep', 'alarm',
             'CancelledError', 'TimeoutError' ]
             
         

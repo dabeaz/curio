@@ -123,6 +123,47 @@ class TestEvent(unittest.TestCase):
                 'sleep_done',
                 ])
 
+
+    def test_event_wait_notimeout(self):
+        kernel = get_kernel()
+        results = []
+        async def event_waiter(evt):
+              results.append('event_wait')
+              try:
+                   await evt.wait(timeout=1.0)
+                   results.append('got event')
+              except TimeoutError:
+                   results.append('event_timeout')
+              
+              evt.clear()
+              try:
+                  await evt.wait()
+                  results.append('got event')
+              except TimeoutError:
+                  results.append('bad timeout')
+
+        async def event_run():
+              evt = Event()
+              taskid = kernel.add_task(event_waiter(evt))
+              results.append('sleep')
+              await sleep(0.25)
+              results.append('event_set')
+              evt.set()
+              await sleep(1.0)
+              results.append('event_set')
+              evt.set()
+
+        kernel.add_task(event_run())
+        kernel.run()
+        self.assertEqual(results, [
+                'sleep',
+                'event_wait',
+                'event_set',
+                'got event',
+                'event_set',
+                'got event'
+                ])
+
 class TestLock(unittest.TestCase):
     def test_lock_sequence(self):
         kernel = get_kernel()
@@ -496,6 +537,43 @@ class TestCondition(unittest.TestCase):
                 'wait_done',
                 'wait_done',
                 'wait_done'
+                ])
+
+    def test_cond_waitfor(self):
+        kernel = get_kernel()
+        results = []
+        async def consumer(cond, q, label):
+             async with cond:
+                 results.append(label + ' waitfor')
+                 await cond.wait_for(lambda: len(q) > 2)
+                 results.append((label, len(q)))
+             results.append(label+' done') 
+
+        async def producer(cond, q, count):
+             for n in range(count):
+                 async with cond:
+                     q.append(n)
+                     results.append(('producing', n))
+                     cond.notify()
+                 await sleep(0.1)
+              
+        cond = Condition()
+        q = deque()
+        kernel.add_task(consumer(cond, q, 'cons1'))
+        kernel.add_task(consumer(cond, q, 'cons2'))
+        kernel.add_task(producer(cond, q, 4))
+        kernel.run()
+        self.assertEqual(results, [
+                'cons1 waitfor',
+                'cons2 waitfor',
+                ('producing', 0),
+                ('producing', 1),
+                ('producing', 2),
+                ('cons1', 3),
+                'cons1 done',
+                ('producing', 3),
+                ('cons2', 4),
+                'cons2 done'
                 ])
 
 if __name__ == '__main__':

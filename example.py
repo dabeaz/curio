@@ -345,7 +345,10 @@ def timeout_test4(kernel):
 
 
 kernel = curio.get_kernel()
-timeout_test4(kernel)
+kernel.add_task(fib_server(('',25000)))
+
+
+# timeout_test4(kernel)
 
 if False:
     kernel.add_task(queue_test(kernel))
@@ -369,7 +372,7 @@ if False:
     kernel.add_task(task_locked_with(5, lck))
     kernel.add_task(task_locked_with(5, lck))
 
-    kernel.add_task(fib_server(('',25000)))
+
 
 #kernel.add_task(server.serve_forever())
 #kernel.add_task(eserver.serve_forever())
