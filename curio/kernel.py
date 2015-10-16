@@ -23,9 +23,6 @@ class CancelledError(CurioError):
 class TimeoutError(CurioError):
     pass
 
-class AlarmError(CurioError):
-    pass
-
 class Task(object):
     def __init__(self, coro):
         self.coro = coro          # Underlying generator/coroutine
@@ -34,7 +31,6 @@ class Task(object):
         self.fileobj = None       # File object waiting on (if any)
         self.waiting_in = None    # Queue where waiting (if any)
         self.timeout = None       # Pending timeout (if any)
-        self.alarm = None         # Pending alarm (if any)
         self.exc_info = None      # Exception info (if any)
         self.next_value = None    # Next value to send on execution
         self.next_exc = None      # Next exception to send on execution
@@ -108,15 +104,6 @@ class Kernel(object):
         if timeout is not None:
             self._set_timeout(timeout)
 
-    def trap_alarm(self, seconds):
-        if seconds is None:
-            self._current.alarm = None
-        else:
-            self._current.alarm = time.monotonic() + seconds
-            item = (task.alarm, self._current, 'alarm')
-            heapq.pushpush(self._sleeping, item)
-        self.reschedule_task(self._current)
-
     def _set_timeout(self, seconds, sleep_type='timeout'):
         self._current.timeout = time.monotonic() + seconds
         item = (self._current.timeout, self._current, sleep_type)
@@ -146,18 +133,15 @@ class Kernel(object):
             tm, task, sleep_type = heapq.heappop(self._sleeping)
             if sleep_type == 'sleep':
                 self.reschedule_task(task)
-            elif sleep_type == 'timeout' or sleep_type == 'alarm':
+            elif sleep_type == 'timeout':
                 # If a timeout occurs, verify that the task still exists and that
                 # its locally set timeout value matches the time value.  If not,
                 # the timeout is ignored (it means that the task was already
                 # cancelled or that the previous operation involving a timeout
                 # already ran to completion).
                 
-                if sleep_type == 'timeout' and task.timeout == tm:
+                if task.timeout == tm:
                     self.cancel_task(id(task), exc=TimeoutError)
-                elif sleep_type == 'alarm' and task.alarm == tm:
-                    self.cancel_task(id(task), exc=AlarmError)
-                    task.alarm = None
 
     # Kernel central loop
     def run(self, detached=False):
@@ -282,10 +266,6 @@ class Kernel(object):
 def sleep(seconds):
     yield 'trap_sleep', seconds
 
-@coroutine
-def alarm(seconds):
-    yield 'trap_alarm', seconds
-
 _default_kernel = None
 def get_kernel():
     '''
@@ -296,7 +276,7 @@ def get_kernel():
         _default_kernel = Kernel()
     return _default_kernel
 
-__all__ = [ 'Kernel', 'get_kernel', 'sleep', 'alarm',
-            'CancelledError', 'TimeoutError', 'AlarmError' ]
+__all__ = [ 'Kernel', 'get_kernel', 'sleep', 
+            'CancelledError', 'TimeoutError', ]
             
         
