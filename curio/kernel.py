@@ -1,7 +1,7 @@
 # kernel.py
 
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
-from collections import deque
+from collections import deque, namedtuple
 import socket
 from types import coroutine
 import heapq
@@ -10,6 +10,7 @@ import threading
 import os
 import sys
 import logging
+import inspect
 
 log = logging.getLogger(__name__)
 
@@ -30,8 +31,10 @@ class Task(object):
         self.coro = coro          # Underlying generator/coroutine
         self.cycles = 0           # Execution cycles completed
         self.state = 'INITIAL'    # Execution state
-        self.cancel_f = None      # Cancellation function
+        self.fileobj = None       # File object waiting on (if any)
+        self.waiting_in = None    # Queue where waiting (if any)
         self.timeout = None       # Pending timeout (if any)
+        self.alarm = None         # Pending alarm (if any)
         self.exc_info = None      # Exception info (if any)
         self.next_value = None    # Next value to send on execution
         self.next_exc = None      # Next exception to send on execution
@@ -81,48 +84,48 @@ class Kernel(object):
     def trap_read_wait(self, resource, timeout=None):
         self._selector.register(resource, EVENT_READ, self._current)
         self._current.state = 'READ_WAIT'
-        self._current.cancel_f = lambda task=self._current: self._selector.unregister(resource)
+        self._current.fileobj = resource
         if timeout is not None:
             self._set_timeout(timeout)
 
     def trap_write_wait(self, resource, timeout=None):
         self._selector.register(resource, EVENT_WRITE, self._current)
         self._current.state = 'WRITE_WAIT'
-        self._current.cancel_f = lambda task=self._current: self._selector.unregister(resource)
+        self._current.fileobj = resource
         if timeout is not None:
             self._set_timeout(timeout)
 
     def trap_future_wait(self, future, timeout=None):
         future.add_done_callback(lambda fut, task=self._current: self._wake(task))
         self._current.state = 'FUTURE_WAIT'
-        self._current.cancel_f = None
         if timeout is not None:
             self._set_timeout(timeout)
 
     def trap_wait(self, queue, state, timeout=None):
         queue.append(self._current)
         self._current.state = state
-        self._current.cancel_f = lambda task=self._current: queue.remove(task)
+        self._current.waiting_in = queue
         if timeout is not None:
             self._set_timeout(timeout)
 
-    def trap_alarm(self, timeout):
-        self._set_timeout(timeout)
+    def trap_alarm(self, seconds):
+        if seconds is None:
+            self._current.alarm = None
+        else:
+            self._current.alarm = time.monotonic() + seconds
+            item = (task.alarm, self._current, 'alarm')
+            heapq.pushpush(self._sleeping, item)
         self.reschedule_task(self._current)
 
     def _set_timeout(self, seconds, sleep_type='timeout'):
-        item = (time.monotonic() + seconds, self._current, sleep_type)
-        self._current.timeout = item[0]
+        self._current.timeout = time.monotonic() + seconds
+        item = (self._current.timeout, self._current, sleep_type)
         heapq.heappush(self._sleeping, item)
         return item
         
     def trap_sleep(self, seconds):
         item = self._set_timeout(seconds, 'sleep')
         self._current.state = 'TIME_SLEEP'
-        def remove():
-            self._sleeping.remove(item)
-            heapq.heapify(self._sleeping)
-        self._current.cancel_f = remove
 
     # I/O 
     def poll_for_io(self):
@@ -143,14 +146,18 @@ class Kernel(object):
             tm, task, sleep_type = heapq.heappop(self._sleeping)
             if sleep_type == 'sleep':
                 self.reschedule_task(task)
-            elif sleep_type == 'timeout':
+            elif sleep_type == 'timeout' or sleep_type == 'alarm':
                 # If a timeout occurs, verify that the task still exists and that
                 # its locally set timeout value matches the time value.  If not,
                 # the timeout is ignored (it means that the task was already
                 # cancelled or that the previous operation involving a timeout
                 # already ran to completion).
-                if task.timeout == tm:
+                
+                if sleep_type == 'timeout' and task.timeout == tm:
                     self.cancel_task(id(task), exc=TimeoutError)
+                elif sleep_type == 'alarm' and task.alarm == tm:
+                    self.cancel_task(id(task), exc=AlarmError)
+                    task.alarm = None
 
     # Kernel central loop
     def run(self, detached=False):
@@ -169,6 +176,7 @@ class Kernel(object):
             while self._ready:
                 self._current = self._ready.popleft()
                 taskid = id(self._current)
+                assert taskid in self._tasks
                 try:
                     self._current.state = 'RUNNING'
                     self._current.cycles += 1
@@ -198,12 +206,15 @@ class Kernel(object):
 
     # Task management
     def reschedule_task(self, task, value=None, exc=None):
-        self._ready.append(task)
-        task.next_value = value
-        task.next_exc = exc
-        task.state = 'READY'
-        task.cancel_f = None
-        task.timeout = None
+        # Note: If the task is not in the task list, it means that it was cancelled.
+        # In that case, we ignore requests to reschedule.   This can happen with
+        # cancellations of timeouts
+        if id(task) in self._tasks and not task.exc_info:
+            self._ready.append(task)
+            task.next_value = value
+            task.next_exc = exc
+            task.state = 'READY'
+            task.fileobj = task.waiting_in = task.timeout = None
 
     def add_task(self, coro, daemon=False):
         task = Task(coro)
@@ -218,10 +229,12 @@ class Kernel(object):
         if task == self._current:
             raise CancelledError()
 
-        # Remove/unregister the task from whatever it's waiting on right now
-        if task.cancel_f:
-            task.cancel_f()
-            task.cancel_f = None
+        # Remove the task from whatever it's waiting on right now
+        if task.fileobj is not None:
+            self._selector.unregister(task.fileobj)
+            
+        if task.waiting_in:
+            task.waiting_in.remove(task)
 
         # Reschedule it with a pending exception
         self.reschedule_task(task, exc=exc())
@@ -235,20 +248,21 @@ class Kernel(object):
 
     # Debugging
     def ps(self):
-        headers = ('Task ID', 'State', 'Cycles', 'Task')
-        widths = (12, 12, 10, 50)
+        headers = ('Task ID', 'State', 'Cycles', 'Timeout', 'Task')
+        widths = (11, 12, 10, 7, 50)
         for h, w in zip(headers, widths):
             print('%-*s' % (w, h), end=' ')
         print()
         print(' '.join(w*'-' for w in widths))
+        timestamp = time.monotonic()
         for taskid in sorted(self._tasks):
-            state = self._tasks[taskid].state
-            coro = str(self._tasks[taskid])
-            cycles = self._tasks[taskid].cycles
-            print('%-*d %-*s %-*d %-*s' % (widths[0], taskid, 
-                                           widths[1], state,
-                                           widths[2], cycles,
-                                           widths[3], coro))
+            task = self._tasks[taskid]
+            remaining = format((task.timeout - timestamp), '0.6f')[:7] if task.timeout else 'None'
+            print('%-*d %-*s %-*d %-*s %-*s' % (widths[0], taskid, 
+                                                widths[1], task.state,
+                                                widths[2], task.cycles,
+                                                widths[3], remaining,
+                                                widths[4], task))
 
     # System calls
     @coroutine
@@ -283,6 +297,6 @@ def get_kernel():
     return _default_kernel
 
 __all__ = [ 'Kernel', 'get_kernel', 'sleep', 'alarm',
-            'CancelledError', 'TimeoutError' ]
+            'CancelledError', 'TimeoutError', 'AlarmError' ]
             
         
