@@ -51,9 +51,9 @@ class TestKernel(unittest.TestCase):
                 results.append('cancelled')
 
         async def main():
-            taskid = kernel.add_task(sleeper())
+            task = await new_task(sleeper())
             await sleep(0.5)
-            kernel.cancel_task(taskid)
+            await task.cancel()
 
         kernel.add_task(main())
         kernel.run()
@@ -73,10 +73,10 @@ class TestKernel(unittest.TestCase):
             return 37
 
         async def main():
-            taskid = kernel.add_task(child())
+            task = await new_task(child())
             await sleep(0.1)
             results.append('joining')
-            r = await kernel.join(taskid)
+            r = await task.join()
             results.append(r)
 
         kernel.add_task(main())
@@ -88,46 +88,35 @@ class TestKernel(unittest.TestCase):
                 37
                 ])
 
-    def test_task_join_cancel(self):
-        # Test if a task waiting for the completion of another receives a CancelledError
-        # if the task gets cancelled
+    def test_task_cancel(self):
         kernel = get_kernel()
         results = []
 
         async def child():
             results.append('start')
-            await sleep(0.5)
-            results.append('end')
-            return 37
-
-        async def canceller(taskid):
-            results.append('cancel start')
-            await sleep(0.3)
-            kernel.cancel_task(taskid)
-            results.append('cancel end')
-           
-        async def main():
-            taskid = kernel.add_task(child())
-            kernel.add_task(canceller(taskid))
-            await sleep(0.1)
-            results.append('joining')
             try:
-                r = await kernel.join(taskid)
-                results.append(r)
+                await sleep(0.5)
+                results.append('end')
             except CancelledError:
                 results.append('cancelled')
+
+        async def main():
+            task = await new_task(child())
+            results.append('cancel start')
+            await sleep(0.1)
+            results.append('cancelling')
+            await task.cancel()
+            results.append('done')
 
         kernel.add_task(main())
         kernel.run()
         self.assertEqual(results, [
                 'start',
                 'cancel start',
-                'joining',
-                'cancel end',
-                'cancelled'
+                'cancelling',
+                'cancelled',
+                'done',
                 ])
-
-
 
 if __name__ == '__main__':
     unittest.main()

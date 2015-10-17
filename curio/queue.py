@@ -6,7 +6,7 @@ between tasks.  This is only safe to use within curio. It is not
 thread-safe.
 '''
 
-from .kernel import get_kernel
+from .kernel import get_kernel, wait_on_queue
 from collections import deque
 
 __all__ = [ 'Queue', 'QueueEmpty', 'QueueFull' ]
@@ -35,7 +35,7 @@ class Queue(object):
 
     async def get(self, *, timeout=None):
         if self.empty():
-            await self._kernel.wait_on(self._get_waiting, 'QUEUE_GET', timeout)
+            await wait_on_queue(self._get_waiting, 'QUEUE_GET', timeout)
         result = self._queue.popleft()
         if self._put_waiting:
             self._kernel.reschedule_task(self._put_waiting.popleft())
@@ -51,11 +51,11 @@ class Queue(object):
 
     async def join(self, *, timeout=None):
         if self._task_count > 0:
-            await self._kernel.wait_on(self._join_waiting, 'QUEUE_JOIN', timeout)
+            await wait_on_queue(self._join_waiting, 'QUEUE_JOIN', timeout)
 
     async def put(self, item, *, timeout=None):
         if self.full():
-            await self._kernel.wait_on(self._put_waiting, 'QUEUE_PUT', timeout)
+            await wait_on_queue(self._put_waiting, 'QUEUE_PUT', timeout)
         self._queue.append(item)
         self._task_count += 1
         if self._get_waiting:

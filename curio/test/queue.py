@@ -24,8 +24,8 @@ class TestQueue(unittest.TestCase):
         async def producer():
             queue = Queue()
             results.append('producer_start')
-            kernel.add_task(consumer(queue, 'cons1'))
-            kernel.add_task(consumer(queue, 'cons2'))
+            await new_task(consumer(queue, 'cons1'))
+            await new_task(consumer(queue, 'cons2'))
             await sleep(0.1)
             for n in range(4):
                 await queue.put(n)
@@ -66,7 +66,7 @@ class TestQueue(unittest.TestCase):
         async def producer():
             queue = Queue()
             results.append('producer_start')
-            kernel.add_task(consumer(queue, 'cons1'))
+            await new_task(consumer(queue, 'cons1'))
             await sleep(0.1)
             for n in range(4):
                 await queue.put(n)
@@ -106,7 +106,7 @@ class TestQueue(unittest.TestCase):
         async def producer():
             queue = Queue(maxsize=2)
             results.append('producer_start')
-            kernel.add_task(consumer(queue, 'cons1'))
+            await new_task(consumer(queue, 'cons1'))
             await sleep(0.1)
             for n in range(4):
                 await queue.put(n)
@@ -147,9 +147,9 @@ class TestQueue(unittest.TestCase):
                   results.append('consumer cancelled')
 
         async def driver():
-            tid = kernel.add_task(consumer())
+            task = await new_task(consumer())
             await sleep(0.5)
-            kernel.cancel_task(tid)
+            await task.cancel()
 
         kernel.add_task(driver())
         kernel.run()
@@ -174,9 +174,9 @@ class TestQueue(unittest.TestCase):
                 results.append('producer_cancel')
 
         async def driver():
-            tid = kernel.add_task(producer())
+            task = await new_task(producer())
             await sleep(0.5)
-            kernel.cancel_task(tid)
+            await task.cancel()
 
         kernel.add_task(driver())
         kernel.run()

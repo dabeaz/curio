@@ -350,7 +350,7 @@ kernel.add_task(fib_server(('',25000)))
 
 # timeout_test4(kernel)
 
-if False:
+if True:
     kernel.add_task(queue_test(kernel))
 
     q = curio.Queue()

@@ -5,7 +5,7 @@ events, locks, semaphores, and condition variables. These primitives
 are only safe to use in the curio framework--they are not thread safe.
 '''
 
-from .kernel import get_kernel
+from .kernel import get_kernel, wait_on_queue
 from types import coroutine
 from collections import deque
 
@@ -31,7 +31,7 @@ class Event(object):
     async def wait(self, *, timeout=None):
         if self._set:
             return
-        await self._kernel.wait_on(self._waiting, 'EVENT_WAIT', timeout)
+        await wait_on_queue(self._waiting, 'EVENT_WAIT', timeout)
         
     def set(self):
         self._set = True
@@ -60,7 +60,7 @@ class Lock(_LockBase):
 
     async def acquire(self, *, timeout=None):
         if self._acquired:
-            await self._kernel.wait_on(self._waiting, 'LOCK_ACQUIRE', timeout)
+            await wait_on_queue(self._waiting, 'LOCK_ACQUIRE', timeout)
         self._acquired = True
         return True
 
@@ -87,7 +87,7 @@ class Semaphore(_LockBase):
 
     async def acquire(self, *, timeout=None):
         if self._value <= 0:
-            await self._kernel.wait_on(self._waiting, 'SEMA_ACQUIRE', timeout)
+            await wait_on_queue(self._waiting, 'SEMA_ACQUIRE', timeout)
         else:
             self._value -= 1
         return True
@@ -140,7 +140,7 @@ class Condition(_LockBase):
             raise RuntimeError("Can't wait on unacquired lock")
         self.release()
         try:
-            await self._kernel.wait_on(self._waiting, 'COND_WAIT', timeout)
+            await wait_on_queue(self._waiting, 'COND_WAIT', timeout)
         finally:
             await self.acquire()
 

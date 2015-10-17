@@ -80,21 +80,21 @@ class TestEvent(unittest.TestCase):
 
         async def event_cancel(seconds):
               evt = Event()
-              taskid = kernel.add_task(event_waiter(evt))
+              task = await new_task(event_waiter(evt))
               results.append('sleep')
               await sleep(seconds)
               results.append('cancel_start')
-              kernel.cancel_task(taskid)
+              await task.cancel()
               results.append('cancel_done')
 
         kernel.add_task(event_cancel(1))
         kernel.run()
         self.assertEqual(results, [
-                'sleep',
                 'event_wait',
+                'sleep',
                 'cancel_start',
-                'cancel_done',
                 'event_cancel',
+                'cancel_done',
                 ])
 
     def test_event_wait_timeout(self):
@@ -109,7 +109,7 @@ class TestEvent(unittest.TestCase):
 
         async def event_run(seconds):
               evt = Event()
-              taskid = kernel.add_task(event_waiter(evt))
+              task = await new_task(event_waiter(evt))
               results.append('sleep')
               await sleep(seconds)
               results.append('sleep_done')
@@ -117,8 +117,8 @@ class TestEvent(unittest.TestCase):
         kernel.add_task(event_run(1))
         kernel.run()
         self.assertEqual(results, [
-                'sleep',
                 'event_wait',
+                'sleep',
                 'event_timeout',
                 'sleep_done',
                 ])
@@ -144,7 +144,7 @@ class TestEvent(unittest.TestCase):
 
         async def event_run():
               evt = Event()
-              taskid = kernel.add_task(event_waiter(evt))
+              task = await new_task(event_waiter(evt))
               results.append('sleep')
               await sleep(0.25)
               results.append('event_set')
@@ -156,8 +156,8 @@ class TestEvent(unittest.TestCase):
         kernel.add_task(event_run())
         kernel.run()
         self.assertEqual(results, [
-                'sleep',
                 'event_wait',
+                'sleep',
                 'event_set',
                 'got event',
                 'event_set',
@@ -209,22 +209,22 @@ class TestLock(unittest.TestCase):
 
         async def worker_cancel(seconds):
               lck = Lock()
-              taskid = kernel.add_task(worker(lck))
               async with lck:
+                  task = await new_task(worker(lck))
                   results.append('sleep')
                   await sleep(seconds)
                   results.append('cancel_start')
-                  kernel.cancel_task(taskid)
+                  await task.cancel()
                   results.append('cancel_done')
 
         kernel.add_task(worker_cancel(1))
         kernel.run()
         self.assertEqual(results, [
-                'sleep',
                 'lock_wait',
+                'sleep',
                 'cancel_start',
-                'cancel_done',
                 'lock_cancel',
+                'cancel_done',
                 ])
 
 
@@ -242,8 +242,8 @@ class TestLock(unittest.TestCase):
 
         async def worker_timeout(seconds):
               lck = Lock()
-              taskid = kernel.add_task(worker(lck))
               async with lck:
+                  await new_task(worker(lck))
                   results.append('sleep')
                   await sleep(seconds)
                   results.append('sleep_done')
@@ -251,8 +251,8 @@ class TestLock(unittest.TestCase):
         kernel.add_task(worker_timeout(1))
         kernel.run()
         self.assertEqual(results, [
-                'sleep',
                 'lock_wait',
+                'sleep',
                 'lock_timeout',
                 'sleep_done',
                 ])
@@ -334,24 +334,23 @@ class TestSemaphore(unittest.TestCase):
 
         async def worker_cancel(seconds):
               lck = Semaphore()
-              taskid = kernel.add_task(worker(lck))
               async with lck:
+                  task = await new_task(worker(lck))
                   results.append('sleep')
                   await sleep(seconds)
                   results.append('cancel_start')
-                  kernel.cancel_task(taskid)
+                  await task.cancel()
                   results.append('cancel_done')
 
         kernel.add_task(worker_cancel(1))
         kernel.run()
         self.assertEqual(results, [
-                'sleep',
                 'lock_wait',
+                'sleep',
                 'cancel_start',
-                'cancel_done',
                 'lock_cancel',
+                'cancel_done',
                 ])
-
 
     def test_sema_acquire_timeout(self):
         kernel = get_kernel()
@@ -367,8 +366,8 @@ class TestSemaphore(unittest.TestCase):
 
         async def worker_timeout(seconds):
               lck = Semaphore()
-              taskid = kernel.add_task(worker(lck))
               async with lck:
+                  await new_task(worker(lck))
                   results.append('sleep')
                   await sleep(seconds)
                   results.append('sleep_done')
@@ -376,8 +375,8 @@ class TestSemaphore(unittest.TestCase):
         kernel.add_task(worker_timeout(1))
         kernel.run()
         self.assertEqual(results, [
-                'sleep',
                 'lock_wait',
+                'sleep',
                 'lock_timeout',
                 'sleep_done',
                 ])
@@ -459,21 +458,21 @@ class TestCondition(unittest.TestCase):
 
         async def worker_cancel(seconds):
               cond = Condition()
-              taskid = kernel.add_task(worker(cond))
+              task = await new_task(worker(cond))
               results.append('sleep')
               await sleep(seconds)
               results.append('cancel_start')
-              kernel.cancel_task(taskid)
+              await task.cancel()
               results.append('cancel_done')
 
         kernel.add_task(worker_cancel(1))
         kernel.run()
         self.assertEqual(results, [
-                'sleep',
                 'cond_wait',
+                'sleep',
                 'cancel_start',
-                'cancel_done',
                 'worker_cancel',
+                'cancel_done',
                 ])
 
     def test_cond_wait_timeout(self):
@@ -490,7 +489,7 @@ class TestCondition(unittest.TestCase):
 
         async def worker_cancel(seconds):
               cond = Condition()
-              taskid = kernel.add_task(worker(cond))
+              task = await new_task(worker(cond))
               results.append('sleep')
               await sleep(seconds)
               results.append('done')
@@ -498,8 +497,8 @@ class TestCondition(unittest.TestCase):
         kernel.add_task(worker_cancel(1))
         kernel.run()
         self.assertEqual(results, [
-                'sleep',
                 'cond_wait',
+                'sleep',
                 'worker_timeout',
                 'done'
                 ])
@@ -515,9 +514,9 @@ class TestCondition(unittest.TestCase):
 
         async def worker_notify(seconds):
               cond = Condition()
-              kernel.add_task(worker(cond))
-              kernel.add_task(worker(cond))
-              kernel.add_task(worker(cond))
+              await new_task(worker(cond))
+              await new_task(worker(cond))
+              await new_task(worker(cond))
               results.append('sleep')
               await sleep(seconds)
               async with cond:
@@ -528,10 +527,10 @@ class TestCondition(unittest.TestCase):
         kernel.add_task(worker_notify(1))
         kernel.run()
         self.assertEqual(results, [
+                'cond_wait',
+                'cond_wait',
+                'cond_wait',
                 'sleep',
-                'cond_wait',
-                'cond_wait',
-                'cond_wait',
                 'notify',
                 'done',
                 'wait_done',
