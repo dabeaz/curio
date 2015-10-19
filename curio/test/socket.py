@@ -16,7 +16,7 @@ class TestSocket(unittest.TestCase):
             results.append('accept wait')
             client, addr = await sock.accept()
             results.append('accept done')
-            kernel.add_task(handler(client))
+            await new_task(handler(client))
             sock.close()
 
         async def handler(client):
@@ -147,9 +147,9 @@ class TestSocket(unittest.TestCase):
             sock.close()
 
         async def canceller():
-             taskid = kernel.add_task(server(('',25000)))
+             task = await new_task(server(('',25000)))
              await sleep(0.5)
-             kernel.cancel_task(taskid)
+             await task.cancel()
 
         kernel.add_task(canceller())
         kernel.run()
@@ -179,8 +179,7 @@ class TestSocket(unittest.TestCase):
             sock.close()
 
         async def canceller():
-             taskid = kernel.add_task(server(('',25000)))
-             await sleep(0.1)
+             task = await new_task(server(('',25000)))
              sock = Socket(AF_INET, SOCK_STREAM)
              results.append('client connect')
              await sock.connect(('localhost', 25000))
@@ -220,14 +219,12 @@ class TestSocket(unittest.TestCase):
             sock.close()
 
         async def canceller():
-             taskid = kernel.add_task(server(('',25000)))
-             await sleep(0.1)
+             task = await new_task(server(('',25000)))
              sock = Socket(AF_INET, SOCK_STREAM)
              results.append('client connect')
              await sock.connect(('localhost', 25000))
              await sleep(1.0)
-             kernel.cancel_task(taskid)
-             await kernel.join(taskid)
+             await task.cancel()
              sock.close()
              results.append('client done')
 
@@ -259,7 +256,7 @@ class TestSocket(unittest.TestCase):
             sock.close()
 
         async def canceller():
-             taskid = kernel.add_task(server(('',25000)))
+             await new_task(server(('',25000)))
              await sleep(1.0)
              results.append('client done')
 
@@ -289,10 +286,9 @@ class TestSocket(unittest.TestCase):
             sock.close()
 
         async def canceller():
-             taskid = kernel.add_task(server(('',25000)))
+             task = await new_task(server(('',25000)))
              await sleep(1.0)
-             kernel.cancel_task(taskid)
-             await kernel.join(taskid)
+             await task.cancel()
              results.append('client done')
 
         kernel.add_task(canceller())
@@ -304,6 +300,35 @@ class TestSocket(unittest.TestCase):
                 'client done'
                 ])
 
+    def test_buffer_into(self):
+        from array import array
+        kernel = get_kernel()
+        results = []
+        async def sender(s1):
+            a = array('i', range(1000000))
+            await s1.sendall(a)
+            
+        async def receiver(s2):
+            a = array('i', (0 for n in range(1000000)))
+            view = memoryview(a).cast('b')
+            total = 0
+            while view:
+                nrecv = await s2.recv_into(view)
+                if not nrecv:
+                    break
+                total += nrecv
+                view = view[nrecv:]
+
+            results.append(a)
+            
+        s1, s2 = socketpair()
+        kernel.add_task(sender(s1))
+        kernel.add_task(receiver(s2))
+        kernel.run()
+        s1.close()
+        s2.close()
+
+        self.assertTrue(all(n==x for n,x in enumerate(results[0])))
 
 if __name__ == '__main__':
     unittest.main()

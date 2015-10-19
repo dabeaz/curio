@@ -7,8 +7,7 @@ import os
 import errno
 from .socket import Socket
 from .file import File
-from .kernel import get_kernel
-
+from .kernel import new_task
 
 __all__ = ["BaseServer", "TCPServer", "UDPServer", 
            "BaseRequestHandler", "StreamRequestHandler",
@@ -62,13 +61,10 @@ class BaseServer:
 
     """
 
-    def __init__(self, server_address, RequestHandlerClass, *, kernel=None):
+    def __init__(self, server_address, RequestHandlerClass):
         """Constructor.  May be extended, do not override."""
         self.server_address = server_address
         self.RequestHandlerClass = RequestHandlerClass
-        if kernel is None:
-            kernel = get_kernel()
-        self.kernel = kernel
 
     def server_activate(self):
         """Called by constructor to activate the server.
@@ -115,7 +111,7 @@ class BaseServer:
 
     async def _handle_request_noblock(self):
         request, client_address = await self.get_request()
-        self.kernel.add_task(self._run_request(request, client_address))
+        await new_task(self._run_request(request, client_address))
 
     async def _run_request(self, request, client_address):
         if await self.verify_request(request, client_address):
