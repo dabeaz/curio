@@ -1,6 +1,7 @@
 from curio import *
 from socket import *
 import signal
+import subprocess
 
 async def monitor():
     async with SignalSet(signal.SIGUSR1, signal.SIGUSR2) as sigset:
@@ -13,6 +14,46 @@ async def monitor():
              except CancelledError:
                   print('Cancelled')
                   return
+
+
+async def subproc():
+    p = Popen(['python3', 'slow.py'], stdout=subprocess.PIPE)
+    while True:
+        line = await p.stdout.readline()
+        if not line:
+            break
+        print('subproc', line)
+    await p.wait()
+    print('Subproc done')
+
+text = '''
+This is some test code
+More test
+code
+Some test input
+'''
+
+async def subproc():
+    p = Popen(['wc'], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+    stdout, stderr = await p.communicate(text.encode('ascii'))
+    print(':::stdout:::')
+    print(stdout)
+    print(':::stderr::')
+    print(stderr)
+
+async def subproc():
+    p = Popen(['python3', 'slow.py'], stdout=subprocess.PIPE)
+    stdout, _ = await p.communicate()
+    await p.wait()
+    print('Subproc done')
+    print(stdout)
+
+async def spinner(prefix, interval):
+    n = 0
+    while True:
+        await sleep(interval)
+        print(prefix, n)
+        n += 1
 
 async def main(address):
     task = await new_task(echo_server(address))
@@ -49,6 +90,8 @@ if __name__ == '__main__':
     kernel = get_kernel()
     kernel.add_task(main(('',25000)))
     kernel.add_task(monitor())
+    kernel.add_task(subproc())
+    kernel.add_task(spinner('spin',1))
     kernel.run()
 
 

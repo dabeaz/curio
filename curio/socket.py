@@ -1,7 +1,6 @@
 # curio/socket.py
 
 import socket
-from types import coroutine
 from .kernel import read_wait, write_wait
 from .file import File
 

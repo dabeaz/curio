@@ -5,4 +5,5 @@ from .sync import *
 from .queue import *
 from .socket import *
 from .file import *
+from .workers import *
 

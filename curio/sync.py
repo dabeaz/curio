@@ -6,7 +6,6 @@ are only safe to use in the curio framework--they are not thread safe.
 '''
 
 from .kernel import wait_on_queue, reschedule_tasks, kqueue
-from types import coroutine
 
 __all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition' ]
 

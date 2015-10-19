@@ -3,8 +3,6 @@
 import io
 from .kernel import read_wait, write_wait
 
-from types import coroutine
-
 __all__ = ['File']
 
 class File(object):
