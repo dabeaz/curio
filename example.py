@@ -93,7 +93,7 @@ class EchoStreamHandler(StreamRequestHandler):
               await self.wfile.write(b'Line:' + line)
           print('Client done')
 
-eserver = TCPServer(('', 29000), EchoStreamHandler)
+eserver = TCPServer(('', 30000), EchoStreamHandler)
 
 async def event_setter(evt, seconds):
      await curio.sleep(seconds)
@@ -350,7 +350,7 @@ kernel.add_task(fib_server(('',25000)))
 
 # timeout_test4(kernel)
 
-if False:
+if True:
     kernel.add_task(queue_test(kernel))
 
     q = curio.Queue()
