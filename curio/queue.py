@@ -6,25 +6,18 @@ between tasks.  This is only safe to use within curio. It is not
 thread-safe.
 '''
 
-from .kernel import get_kernel, wait_on_queue
+from .kernel import wait_on_queue, reschedule_tasks, kqueue
 from collections import deque
 
-__all__ = [ 'Queue', 'QueueEmpty', 'QueueFull' ]
-
-class QueueEmpty(Exception):
-    pass
-
-class QueueFull(Exception):
-    pass
+__all__ = [ 'Queue' ]
 
 class Queue(object):
-    def __init__(self, maxsize=0, *, kernel=None):
-        self._kernel = kernel if kernel else get_kernel()
+    def __init__(self, maxsize=0):
         self.maxsize = maxsize
         self._queue = deque()
-        self._get_waiting = deque()
-        self._put_waiting = deque()
-        self._join_waiting = []
+        self._get_waiting = kqueue()
+        self._put_waiting = kqueue()
+        self._join_waiting = kqueue()
         self._task_count = 0
 
     def empty(self):
@@ -38,15 +31,7 @@ class Queue(object):
             await wait_on_queue(self._get_waiting, 'QUEUE_GET', timeout)
         result = self._queue.popleft()
         if self._put_waiting:
-            self._kernel.reschedule_task(self._put_waiting.popleft())
-        return result
-
-    def get_nowait(self):
-        if self.empty():
-            raise QueueEmpty()
-        result = self._queue.popleft()
-        if self._put_waiting:
-            self._kernel.reschedule_task(self._put_waiting.popleft())
+            await reschedule_tasks(self._put_waiting, n=1)
         return result
 
     async def join(self, *, timeout=None):
@@ -59,22 +44,12 @@ class Queue(object):
         self._queue.append(item)
         self._task_count += 1
         if self._get_waiting:
-            self._kernel.reschedule_task(self._get_waiting.popleft())
-
-    def put_nowait(self, item):
-        if self.full():
-            raise QueueFull()
-        self._queue.append(item)
-        self._task_count += 1
-        if self._get_waiting:
-            self._kernel.reschedule_task(self._get_waiting.popleft())
+            await reschedule_tasks(self._get_waiting, n=1)
 
     def qsize(self):
         return len(self._queue)
 
-    def task_done(self):
+    async def task_done(self):
         self._task_count -= 1
-        if self._task_count == 0:
-            for task in self._join_waiting:
-                self._kernel.reschedule_task(task)
-            self._join_waiting = []
+        if self._task_count == 0 and self._join_waiting:
+            await reschedule_tasks(self._join_waiting, n=len(self._join_waiting))

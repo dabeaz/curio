@@ -1,35 +1,47 @@
 # curio/file.py
 
-import os
+import io
+from .kernel import read_wait, write_wait
+
 from types import coroutine
 
 __all__ = ['File']
 
 class File(object):
     '''
-    Wrapper around file objects.  Proof of concept. Needs to be redone
+    Wrapper around a file-like object.  File must be in non-blocking mode already.
     '''
-    def __init__(self, fileno):
-
-        if not isinstance(fileno, int):
-            fileno = fileno.fileno()
-
-        self._fileno = fileno
-        os.set_blocking(fileno, False)
+    def __init__(self, fileobj):
+        assert isinstance(fileobj, io.RawIOBase), 'File object must be unbuffered binary'
+        self._fileobj = fileobj
+        self._fileno = fileobj.fileno()
         self._linebuffer = bytearray()
-        self.closed = False
 
     def fileno(self):
-        return self._fileno
+        return self._fileno.fileno()
 
-    @coroutine
-    def read(self, maxbytes):
+    async def _read(self, maxbytes=-1):
         while True:
+            # In non-blocking mode, a file-like object might return None if no data is
+            # available.  Alternatively, we'll catch BlockingIOError just to be safe.
             try:
-                return os.read(self._fileno, maxbytes)
+                data = self._fileobj.read(maxbytes)
+                if data is not None:
+                    return data
             except BlockingIOError:
-                yield 'trap_read_wait', self
+                pass
+            await read_wait(self._fileobj)
 
+    async def read(self, maxbytes=-1):
+        if self._linebuffer:
+            if maxbytes == -1:
+                maxbytes = len(self._linebuffer)
+            data = bytes(self._linebuffer[:maxbytes])
+            del self._linebuffer[:maxbytes]
+            return data
+        else:
+            return await self._read(maxbytes)
+        
     async def readline(self):
         while True:
             nl_index = self._linebuffer.find(b'\n')
@@ -37,23 +49,25 @@ class File(object):
                 resp = bytes(self._linebuffer[:nl_index+1])
                 del self._linebuffer[:nl_index+1]
                 return resp
-            data = await self.read(1000)
-            if not data:
+            data = await self._read(1000)
+            if data == b'':
                 resp = bytes(self._linebuffer)
                 del self._linebuffer[:]
                 return resp
             self._linebuffer.extend(data)
 
-    @coroutine
-    def write(self, data):
+    async def write(self, data):
         nwritten = 0
-        while data:
+        view = memoryview(data).cast('b')
+        while view:
             try:
-                nbytes = os.write(self._fileno, data)
+                nbytes = self._fileobj.write(view)
+                if nbytes is None:
+                    raise BlockingIOError()
                 nwritten += nbytes
-                data = data[nbytes:]
+                view = view[nbytes:]
             except BlockingIOError:
-                yield 'trap_write_wait', self
+                await write_wait(self._fileobj)
 
         return nwritten
 
@@ -61,9 +75,29 @@ class File(object):
         for line in lines:
             await self.write(line)
 
-    def close(self):
-        os.close(self._fileno)
-        self.closed = True
-
-    async def flush(self):
+    def flush(self):
         pass
+
+    def __getattr__(self, name):
+        return getattr(self._fileobj, name)
+
+    def __enter__(self):
+        self._fileobj.__enter__()
+        return self
+
+    async def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        line = await self.readline()
+        if line:
+            return line
+        else:
+            raise StopAsyncIteration
+
+    def __iter__(self):
+        raise RuntimeError('Use: async-for to iterate')
+
+    def __exit__(self, *args):
+        self._fileobj.__exit__(*args)
+

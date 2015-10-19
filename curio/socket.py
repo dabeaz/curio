@@ -2,8 +2,10 @@
 
 import socket
 from types import coroutine
+from .kernel import read_wait, write_wait
+from .file import File
 
-__all__ = ['Socket']
+__all__ = ['Socket', 'socketpair']
 
 class Socket(object):
     '''
@@ -31,73 +33,93 @@ class Socket(object):
     def dup(self):
         return Socket.from_sock(self._socket.dup())
 
-    @coroutine
-    def recv(self, maxsize):
+    async def recv(self, maxsize, flags=0):
         while True:
             try:
-                return self._socket.recv(maxsize)
+                return self._socket.recv(maxsize, flags)
             except BlockingIOError:
-                yield 'trap_read_wait', self._socket, self._timeout
+                await read_wait(self._socket, self._timeout)
 
-    @coroutine
-    def send(self, data):
+    async def recv_into(self, buffer, nbytes=0, flags=0):
         while True:
             try:
-                return self._socket.send(data)
+                return self._socket.recv_into(buffer, nbytes, flags)
             except BlockingIOError:
-                yield 'trap_write_wait', self._socket
+                await read_wait(self._socket, self._timeout)
 
-    @coroutine
-    def sendall(self, data):
-        while data:
+    async def send(self, data, flags=0):
+        while True:
             try:
-                nsent = self._socket.send(data)
-                if nsent >= len(data):
+                return self._socket.send(data, flags)
+            except BlockingIOError:
+                await write_wait(self._socket, self._timeout)
+
+    async def sendall(self, data, flags=0):
+        buffer = memoryview(data).cast('b')
+        while buffer:
+            try:
+                nsent = self._socket.send(buffer, flags)
+                if nsent >= len(buffer):
                     return
-                data = data[nsent:]
+                buffer = buffer[nsent:]
             except BlockingIOError:
-                yield 'trap_write_wait', self._socket
+                await write_wait(self._socket, self._timeout)
 
-    @coroutine
-    def accept(self):
+    async def accept(self):
         while True:
             try:
                 client, addr = self._socket.accept()
                 return Socket.from_sock(client), addr
             except BlockingIOError:
-                yield 'trap_read_wait', self._socket, self._timeout
+                await read_wait(self._socket, self._timeout)
 
-    @coroutine
-    def connect(self, address):
+    async def connect(self, address):
         try:
             return self._socket.connect(address)
         except BlockingIOError:
-            yield 'trap_write_wait', self._socket
+            await write_wait(self._socket, self._timeout)
         err = self._socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
         if err != 0:
             raise OSError(err, 'Connect call failed %s' % (address,))
 
-    @coroutine
-    def recvfrom(self, buffersize):
+    async def recvfrom(self, buffersize, flags=0):
         while True:
             try:
-                return self._socket.recvfrom(buffersize)
+                return self._socket.recvfrom(buffersize, flags)
             except BlockingIOError:
-                yield 'trap_read_wait', self._socket, self._timeout
+                await read_wait(self._socket, self._timeout)
 
-    @coroutine
-    def sendto(self, data, address):
+    async def recvfrom_into(self, buffer, bytes=0, flags=0):
+        while True:
+            try:
+                return self._socket.recvfrom_into(buffer, bytes, flags)
+            except BlockingIOError:
+                await read_wait(self._socket, self._timeout)
+
+    async def sendto(self, data, address):
         while True:
             try:
                 return self._socket.sendto(data, address)
             except BlockingIOError:
-                yield 'trap_write_wait', self._socket
+                await write_wait(self._socket, self._timeout)
+
+
+    def makefile(self, mode, buffering=0):
+        if mode not in ['rb', 'wb', 'rwb']:
+            raise RuntimeError('File can only be created in binary mode')
+        f = self._socket.makefile(mode, 0)
+        return File(f)
 
     def __getattr__(self, name):
         return getattr(self._socket, name)
 
     def __enter__(self):
+        self._socket.__enter__()
         return self
 
     def __exit__(self, ety, eval, etb):
         self._socket.__exit__(ety, eval, etb)
+
+def socketpair():
+    s1, s2 = socket.socketpair()
+    return Socket.from_sock(s1), Socket.from_sock(s2)

@@ -8,12 +8,22 @@ import os
 import sys
 import logging
 import inspect
+import signal
 
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
-from collections import deque, namedtuple
+from collections import deque
 from types import coroutine
 
 log = logging.getLogger(__name__)
+
+# kqueue is the datatype used by the kernel for all of its queuing functionality.
+# Any time a task queue is needed, use this type instead of directly hard-coding the
+# use of a deque.  This will make sure the code continues to work even if the
+# queue type is changed later.
+
+kqueue = deque
+
+# --- Curio specific exceptions
 
 class CurioError(Exception):
     pass
@@ -26,6 +36,9 @@ class TimeoutError(CurioError):
 
 class TaskError(CurioError):
     pass
+
+# Task class wraps a coroutine, but provides other information about 
+# the task itself for the purposes of debugging, scheduling, timeouts, etc.
 
 class Task(object):
     _lastid = 0
@@ -77,7 +90,7 @@ class Kernel(object):
         if selector is None:
             selector = DefaultSelector()
         self._selector = selector
-        self._ready = deque()       # Tasks ready to run
+        self._ready = kqueue()      # Tasks ready to run
         self._tasks = { }           # Task table
         self._current = None        # Current task
         self._sleeping = []         # Heap of tasks waiting on a timer for any reason
@@ -86,13 +99,19 @@ class Kernel(object):
         # Create task responsible for waiting the event loop
         self._notify_sock, self._wait_sock = socket.socketpair()
         self._wait_sock.setblocking(False)
+        self._notify_sock.setblocking(False)
+        # signal.set_wakeup_fd(self._notify_sock.fileno())     
         self.add_task(self._wait_task(), daemon=True)
+
+    def __del__(self):
+        self._notify_sock.close()
+        self._wait_sock.close()
 
     # Callback that causes the kernel to wake on non-I/O events
     def _wake(self, task=None, value=None, exc=None):
         if task:
             self.reschedule_task(task, value, exc)
-        self._notify_sock.send(b'x')
+        self._notify_sock.send(b'\x00')
 
     # Internal task that monitors the loopback socket--allowing the kernel to
     # awake for non-I/O events.
@@ -133,9 +152,15 @@ class Kernel(object):
             self.reschedule_task(self._current, value=task)
         return task.id
 
+    def trap_reschedule_tasks(self, queue, n=1, value=None, exc=None):
+        while n > 0:
+            self.reschedule_task(queue.popleft(), value=value, exc=exc)
+            n -= 1
+        self.reschedule_task(self._current)
+
     def trap_join_task(self, task, timeout=None):
         if task.waiting is None:
-            task.waiting = []
+            task.waiting = kqueue()
         self.trap_wait_queue(task.waiting, 'TASK_JOIN', timeout)
 
     def trap_cancel_task(self, task, timeout=None):
@@ -315,6 +340,10 @@ def new_task(coro):
     return (yield 'trap_new_task', coro)
 
 @coroutine
+def reschedule_tasks(queue, n=1, value=None, exc=None):
+    yield 'trap_reschedule_tasks', queue, n, value, exc
+    
+@coroutine
 def wait_on_queue(queue, state, timeout=None):
     '''
     Wait on a queue-like object.  Optionally set a timeout.
@@ -336,7 +365,8 @@ def get_kernel():
         _default_kernel = Kernel()
     return _default_kernel
 
-__all__ = [ 'Kernel', 'get_kernel', 'sleep', 'new_task', 'wait_on_queue',
+__all__ = [ 'Kernel', 'get_kernel', 'sleep', 'new_task', 'wait_on_queue', 'reschedule_tasks', 'kqueue', 
+            'add_signal_handler', 
             'CancelledError', 'TimeoutError', ]
             
         

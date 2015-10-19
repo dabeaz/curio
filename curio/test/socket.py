@@ -300,6 +300,35 @@ class TestSocket(unittest.TestCase):
                 'client done'
                 ])
 
+    def test_buffer_into(self):
+        from array import array
+        kernel = get_kernel()
+        results = []
+        async def sender(s1):
+            a = array('i', range(1000000))
+            await s1.sendall(a)
+            
+        async def receiver(s2):
+            a = array('i', (0 for n in range(1000000)))
+            view = memoryview(a).cast('b')
+            total = 0
+            while view:
+                nrecv = await s2.recv_into(view)
+                if not nrecv:
+                    break
+                total += nrecv
+                view = view[nrecv:]
+
+            results.append(a)
+            
+        s1, s2 = socketpair()
+        kernel.add_task(sender(s1))
+        kernel.add_task(receiver(s2))
+        kernel.run()
+        s1.close()
+        s2.close()
+
+        self.assertTrue(all(n==x for n,x in enumerate(results[0])))
 
 if __name__ == '__main__':
     unittest.main()
