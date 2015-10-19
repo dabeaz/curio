@@ -101,6 +101,10 @@ class File(object):
     def __iter__(self):
         raise RuntimeError('Use: async-for to iterate')
 
+    def __enter__(self):
+        self._fileobj.__enter__()
+        return self
+
     def __exit__(self, *args):
         self._fileobj.__exit__(*args)
 
