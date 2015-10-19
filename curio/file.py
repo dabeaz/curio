@@ -81,10 +81,13 @@ class File(object):
     def __getattr__(self, name):
         return getattr(self._fileobj, name)
 
-    def __enter__(self):
+    async def __aenter__(self):
         self._fileobj.__enter__()
         return self
 
+    async def __aexit__(self, *args):
+        self._fileobj.__exit__(*args)
+        
     async def __aiter__(self):
         return self
 
