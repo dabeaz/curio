@@ -12,6 +12,7 @@ import signal
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
 from types import coroutine
+from contextlib import contextmanager
 
 log = logging.getLogger(__name__)
 
@@ -28,9 +29,6 @@ class CurioError(Exception):
     pass
 
 class CancelledError(CurioError):
-    pass
-
-class TimeoutError(CurioError):
     pass
 
 class TaskError(CurioError):
@@ -85,7 +83,7 @@ class Task(object):
         '''
         if not self.terminated:
             for task in list(self.children):
-                await cancel_task(task, timeout)
+                await task.cancel(timeout=timeout)
 
             await cancel_task(self, timeout)
 
@@ -117,6 +115,15 @@ class SignalSet(object):
             if self.pending:
                 return self.pending.popleft()
             await sigwait(self, timeout)
+
+    @contextmanager
+    def ignore(self):
+        try:
+            orig_signals = [ (signo, signal.signal(signo, signal.SIG_IGN)) for signo in self.signos ]
+            yield
+        finally:
+            for signo, handler in orig_signals:
+                signal.signal(signo, handler)
 
 # Underlying kernel that drives everything
 
@@ -411,7 +418,7 @@ class Kernel(object):
             self._set_timeout(timeout)
         
     def _trap_sleep(self, seconds):
-        item = self._set_timeout(seconds, 'sleep')
+        self._set_timeout(seconds, 'sleep')
         self._current.state = 'TIME_SLEEP'
 
     def _trap_sigwatch(self, sigset):
@@ -567,6 +574,6 @@ def get_kernel():
     return _default_kernel
 
 __all__ = [ 'Kernel', 'get_kernel', 'sleep', 'new_task', 'wait_on_queue', 'reschedule_tasks', 'kqueue', 
-            'SignalSet', 'CancelledError', 'TimeoutError', ]
+            'SignalSet', 'CancelledError' ]
             
         

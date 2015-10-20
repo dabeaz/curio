@@ -9,12 +9,14 @@ async def monitor():
              try:
                   signo = await sigset.wait(timeout=30)
                   print('Caught signal', signo)
+                  print('Ignoring signals for 30 seconds')
+                  with sigset.ignore():
+                        await sleep(30)
              except TimeoutError:
                   print('No signal')
              except CancelledError:
                   print('Cancelled')
                   return
-
 
 async def subproc():
     p = Popen(['python3', 'slow.py'], stdout=subprocess.PIPE)
@@ -43,10 +45,21 @@ async def subproc():
 
 async def subproc():
     p = Popen(['python3', 'slow.py'], stdout=subprocess.PIPE)
-    stdout, _ = await p.communicate()
+    stdout, _ = await p.communicate(timeout=10)
     await p.wait()
     print('Subproc done')
     print(stdout)
+
+async def subproc():
+    try:
+         out = await run_subprocess(['python3', 'slow.py'], timeout=10)
+         print(out.stdout)
+         print('return code', out.returncode)
+         print(out)
+    except subprocess.CalledProcessError as e:
+         print('Failed', e.returncode)
+         print(e.stderr)
+    print('Subproc done')
 
 async def spinner(prefix, interval):
     n = 0
@@ -92,7 +105,7 @@ if __name__ == '__main__':
     kernel.add_task(monitor())
     kernel.add_task(subproc())
     kernel.add_task(spinner('spin',1))
-    kernel.run()
+    kernel.run(pdb=True)
 
 
 

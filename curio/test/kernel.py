@@ -118,5 +118,123 @@ class TestKernel(unittest.TestCase):
                 'done',
                 ])
 
+    def test_task_child_cancel(self):
+        kernel = get_kernel()
+        results = []
+
+        async def child():
+            results.append('start')
+            try:
+                await sleep(0.5)
+                results.append('end')
+            except CancelledError:
+                results.append('child cancelled')
+
+        async def parent():
+            try:
+                 await new_task(child())
+                 await sleep(0.5)
+                 results.append('end parent')
+            except CancelledError:
+                results.append('parent cancelled')
+            
+        async def grandparent():
+            try:
+                await new_task(parent())
+                await sleep(0.5)
+                results.append('end grandparent')
+            except CancelledError:
+                results.append('grandparent cancelled')
+
+        async def main():
+            task = await new_task(grandparent())
+            await sleep(0.1)
+            results.append('cancel start')
+            await sleep(0.1)
+            results.append('cancelling')
+            await task.cancel()
+            results.append('done')
+
+        kernel.add_task(main())
+        kernel.run()
+
+        self.assertEqual(results, [
+                'start',
+                'cancel start',
+                'cancelling',
+                'child cancelled',
+                'parent cancelled',
+                'grandparent cancelled',
+                'done',
+                ])
+
+
+    def test_task_signal(self):
+        import signal, os
+        kernel = get_kernel()
+        results = []
+
+        async def child():
+            async with SignalSet(signal.SIGUSR1, signal.SIGUSR2) as sig:
+                signo = await sig.wait()
+                results.append(signo)
+                signo = await sig.wait()
+                results.append(signo)
+
+        async def main():
+            task = await new_task(child())
+            await sleep(0.1)
+            results.append('sending USR1')
+            os.kill(os.getpid(), signal.SIGUSR1)
+            await sleep(0.1)
+            results.append('sending USR2')
+            os.kill(os.getpid(), signal.SIGUSR2)
+            await sleep(0.1)
+            results.append('done')
+
+        kernel.add_task(main())
+        kernel.run()
+        self.assertEqual(results, [
+                'sending USR1',
+                signal.SIGUSR1,
+                'sending USR2',
+                signal.SIGUSR2,
+                'done',
+                ])
+
+
+    def test_task_signal_waitone(self):
+        import signal, os
+        kernel = get_kernel()
+        results = []
+
+        async def child():
+            sig = SignalSet(signal.SIGUSR1, signal.SIGUSR2)
+            signo = await sig.wait()
+            results.append(signo)
+            signo = await sig.wait()
+            results.append(signo)
+
+        async def main():
+            task = await new_task(child())
+            await sleep(0.1)
+            results.append('sending USR1')
+            os.kill(os.getpid(), signal.SIGUSR1)
+            await sleep(0.1)
+            results.append('sending USR2')
+            os.kill(os.getpid(), signal.SIGUSR2)
+            await sleep(0.1)
+            results.append('done')
+
+        kernel.add_task(main())
+        kernel.run()
+        self.assertEqual(results, [
+                'sending USR1',
+                signal.SIGUSR1,
+                'sending USR2',
+                signal.SIGUSR2,
+                'done',
+                ])
+
 if __name__ == '__main__':
     unittest.main()

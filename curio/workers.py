@@ -8,7 +8,13 @@ from .file import File
 import subprocess
 import os
 
-__all__ = [ 'run_in_executor', 'Popen' ]
+__all__ = [ 'run_in_executor', 'run_subprocess' ]
+
+from subprocess import (
+    CompletedProcess,
+    CalledProcessError,
+    TimeoutExpired
+    )
 
 async def run_in_executor(exc, callable, *args):
     '''
@@ -17,6 +23,12 @@ async def run_in_executor(exc, callable, *args):
     future = exc.submit(callable, *args)
     await future_wait(future)
     return future.result()
+
+async def run_blocking(callable, *args, **kwargs):
+    pass
+
+async def run_cpu_bound(callable, *args, **kwargs):
+    pass
 
 class Popen(object):
     '''
@@ -47,41 +59,52 @@ class Popen(object):
     async def communicate(self, input=b'', timeout=None):
         if input:
             assert self.stdin
+            stdin_task = await new_task(self.stdin.write(input, close_on_complete=True))
+        else:
+            stdin_task = None
 
-        async def feeder(input, fileobj):
-            await fileobj.write(input)
-            fileobj.close()
+        stdout_task = await new_task(self.stdout.readall())
+        stderr_task = await new_task(self.stderr.readall())
 
-        async def reader(fileobj):
-            if not fileobj:
-                return b''
+        # Collect the output from the workers
+        try:
+            stdout = await stdout_task.join(timeout=timeout)
+            stderr = await stderr_task.join(timeout=timeout)
+            return (stdout, stderr)
+        except TimeoutError:
+            await stdout_task.cancel()
+            await stderr_task.cancel()
+            if stdin_task:
+                await stdin_task.cancel()
+            raise
 
-            chunks = []
-            while True:
-                 chunk = await fileobj.read(1000000)
-                 if not chunk:
-                     break
-                 chunks.append(chunk)
-            return b''.join(chunks)
+async def run_subprocess(args, *, input=None, timeout=None, shell=False, stderr=subprocess.PIPE):
+    if input:
+        stdin = subprocess.PIPE
+    else:
+        stdin = None
 
-        if input:
-            await new_task(feeder(input, self.stdin))
+    process = Popen(args, stdin=stdin, stdout=subprocess.PIPE, stderr=stderr, shell=shell)
+    try:
+        stdout, stderr = await process.communicate(input, timeout)
+    except TimeoutError:
+        process.kill()
+        stdout, stderr = await process.communicate()
+        raise TimeoutExpired(process.args, timeout, output=stdout, stderr=stderr)
+    except:
+        process.kill()
+        await process.wait()
+        raise
+    finally:
+        process.stdout.close()
+        process.stderr.close()
+        if process.stdin:
+            process.stdin.close()
 
-        stdout_task = await new_task(reader(self.stdout))
-        stderr_task = await new_task(reader(self.stderr))
-
-        # Collect the output
-        stdout = await stdout_task.join()
-        stderr = await stderr_task.join()
-        return (stdout, stderr)
-
-async def run_subprocess(args, *, stdin=None, input=None, stdout=None, stderr=None, 
-                         shell=False, timeout=None, check=False):
-
-    assert (stdin is not None and input is not None), "Can't specify both stdin and input"
-    
-
-
-
+    retcode = process.poll()
+    if retcode:
+        raise CalledProcessError(retcode, process.args,
+                                 output=stdout, stderr=stderr)
+    return CompletedProcess(process.args, retcode, stdout, stderr)
 
     

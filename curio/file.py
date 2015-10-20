@@ -39,7 +39,15 @@ class File(object):
             return data
         else:
             return await self._read(maxbytes)
-        
+
+    async def readall(self):
+        chunks = []
+        while True:
+            chunk = await self.read()
+            if not chunk:
+                return b''.join(chunks)
+            chunks.append(chunk)
+
     async def readline(self):
         while True:
             nl_index = self._linebuffer.find(b'\n')
@@ -54,7 +62,7 @@ class File(object):
                 return resp
             self._linebuffer.extend(data)
 
-    async def write(self, data):
+    async def write(self, data, *, close_on_complete=False):
         nwritten = 0
         view = memoryview(data).cast('b')
         while view:
@@ -66,6 +74,9 @@ class File(object):
                 view = view[nbytes:]
             except BlockingIOError:
                 await write_wait(self._fileobj)
+
+        if close_on_complete:
+            self.close()
 
         return nwritten
 
