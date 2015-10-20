@@ -2,6 +2,7 @@
 
 import io
 from .kernel import read_wait, write_wait
+import os
 
 __all__ = ['File']
 
@@ -13,10 +14,11 @@ class File(object):
         assert isinstance(fileobj, io.RawIOBase), 'File object must be unbuffered binary'
         self._fileobj = fileobj
         self._fileno = fileobj.fileno()
+        os.set_blocking(fileobj.fileno(), False)
         self._linebuffer = bytearray()
 
     def fileno(self):
-        return self._fileno.fileno()
+        return self._fileobj.fileno()
 
     async def _read(self, maxbytes=-1):
         while True:

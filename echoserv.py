@@ -1,7 +1,7 @@
 from curio import *
-from socket import *
+from curio.socket import *
 import signal
-import subprocess
+from curio import subprocess
 
 async def monitor():
     async with SignalSet(signal.SIGUSR1, signal.SIGUSR2) as sigset:
@@ -19,7 +19,18 @@ async def monitor():
                   return
 
 async def subproc():
-    p = Popen(['python3', 'slow.py'], stdout=subprocess.PIPE)
+    p = subprocess.Popen(['python3', 'slow.py'], stdout=subprocess.PIPE)
+    try:
+         await p.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+         print('Not done yet')
+
+    try:
+         await p.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+         print('Still not done yet')
+         p.terminate()
+
     while True:
         line = await p.stdout.readline()
         if not line:
@@ -35,22 +46,22 @@ code
 Some test input
 '''
 
-async def subproc():
-    p = Popen(['wc'], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+async def subproc1():
+    p = subprocess.Popen(['wc'], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
     stdout, stderr = await p.communicate(text.encode('ascii'))
     print(':::stdout:::')
     print(stdout)
     print(':::stderr::')
     print(stderr)
 
-async def subproc():
+async def subproc2():
     p = Popen(['python3', 'slow.py'], stdout=subprocess.PIPE)
     stdout, _ = await p.communicate(timeout=10)
     await p.wait()
     print('Subproc done')
     print(stdout)
 
-async def subproc():
+async def subproc3():
     try:
          out = await run_subprocess(['python3', 'slow.py'], timeout=10)
          print(out.stdout)
@@ -70,13 +81,14 @@ async def spinner(prefix, interval):
 
 async def main(address):
     task = await new_task(echo_server(address))
-    await SignalSet(signal.SIGINT).wait()
-    print('You hit control-C')
-    await task.cancel()
-    print('Shutdown complete')
+    # await SignalSet(signal.SIGINT).wait()
+    # print('You hit control-C')
+    # await task.cancel()
+    # print('Shutdown complete')
+    await task.join()
 
 async def echo_server(address):
-    sock = Socket(AF_INET, SOCK_STREAM)
+    sock = socket(AF_INET, SOCK_STREAM)
     sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
     sock.bind(address)
     sock.listen(5)

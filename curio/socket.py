@@ -1,17 +1,27 @@
 # curio/socket.py
+#
+# Standin for the standard library socket library.  The entire contents of stdlib socket are
+# made available here.  However, the socket class is replaced by an async compatible version.
+# Certain blocking operations are also replaced by versions safe to use in async.
 
 import socket
+__all__ = socket.__all__
+
+from socket import *
 from .kernel import read_wait, write_wait
 from .file import File
 
-__all__ = ['Socket', 'socketpair']
+def replacement(defn):
+    globals()['_'+defn.__name__] = globals()[defn.__name__]
+    return defn
 
-class Socket(object):
+@replacement
+class socket(object):
     '''
     Wrapper around a standard socket object.
     '''
-    def __init__(self, family=socket.AF_INET, type=socket.SOCK_STREAM, proto=0, fileno=None):
-        self._socket = socket.socket(family, type, proto, fileno)
+    def __init__(self, family=AF_INET, type=SOCK_STREAM, proto=0, fileno=None):
+        self._socket = _socket(family, type, proto, fileno)
         self._socket.setblocking(False)
         self._timeout = None
 
@@ -20,17 +30,17 @@ class Socket(object):
 
     @classmethod
     def from_sock(cls, sock):
-        self = Socket.__new__(Socket)
+        self = socket.__new__(socket)
         self._socket = sock
         self._socket.setblocking(False)
         self._timeout = None
         return self
 
     def __repr__(self):
-        return '<curio.Socket %r>' % (self._socket)
+        return '<curio.socket %r>' % (self._socket)
 
     def dup(self):
-        return Socket.from_sock(self._socket.dup())
+        return socket.from_sock(self._socket.dup())
 
     async def recv(self, maxsize, flags=0):
         while True:
@@ -68,7 +78,7 @@ class Socket(object):
         while True:
             try:
                 client, addr = self._socket.accept()
-                return Socket.from_sock(client), addr
+                return socket.from_sock(client), addr
             except BlockingIOError:
                 await read_wait(self._socket, self._timeout)
 
@@ -77,7 +87,7 @@ class Socket(object):
             return self._socket.connect(address)
         except BlockingIOError:
             await write_wait(self._socket, self._timeout)
-        err = self._socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        err = self._socket.getsockopt(SOL_SOCKET, SO_ERROR)
         if err != 0:
             raise OSError(err, 'Connect call failed %s' % (address,))
 
@@ -119,6 +129,7 @@ class Socket(object):
     def __exit__(self, ety, eval, etb):
         self._socket.__exit__(ety, eval, etb)
 
+@replacement
 def socketpair():
-    s1, s2 = socket.socketpair()
-    return Socket.from_sock(s1), Socket.from_sock(s2)
+    s1, s2 = _socketpair()
+    return socket.from_sock(s1), socket.from_sock(s2)

@@ -1,55 +1,89 @@
 # curio/test/workers.py
 
 import unittest
-import subprocess
+import time
 
 from ..import *
 
-# ---- Test subprocesses and worker task related functions
+def fib(n):
+    if n <= 2:
+        return 1
+    else:
+        return fib(n-1) + fib(n-2)
 
-class TestSubprocess(unittest.TestCase):
-    def test_simple(self):
+class TestWorkers(unittest.TestCase):
+    def test_cpu(self):
         kernel = get_kernel()
         results = []
-        async def subproc():
-            out = await run_subprocess(['python3', '-m', 'curio.test.slow'])
-            results.append(out.stdout)
-            results.append(out.returncode)
 
-        kernel.add_task(subproc())
+        async def spin(n):
+            while n > 0:
+                results.append(n)
+                await sleep(0.1)
+                n -= 1
+                
+        async def cpu_bound(n):
+             r = await run_cpu_bound(fib, n)
+             results.append(('fib', r))
+
+        kernel.add_task(spin(10))
+        kernel.add_task(cpu_bound(36))
         kernel.run()
+
         self.assertEqual(results, [
-                b't-minus 4\nt-minus 3\nt-minus 2\nt-minus 1\n',
-                0,
+                10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
+                ('fib', 14930352)
                 ])
 
-    def test_bad_cmd(self):
+    def test_blocking(self):
         kernel = get_kernel()
         results = []
-        async def subproc():
-            try:
-                out = await run_subprocess(['python3', '-m', 'curio.test.bad'])
-                results.append('what?')
-            except subprocess.CalledProcessError:
-                results.append('bad command')
 
-        kernel.add_task(subproc())
+        async def spin(n):
+            while n > 0:
+                results.append(n)
+                await sleep(0.1)
+                n -= 1
+                
+        async def blocking(n):
+             await run_blocking(time.sleep, n)
+             results.append('sleep done')
+
+        kernel.add_task(spin(10))
+        kernel.add_task(blocking(2))
         kernel.run()
-        self.assertEqual(results, [ 'bad command' ])
 
-    def test_timeout(self):
+        self.assertEqual(results, [
+                10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
+                'sleep done',
+                ])
+
+
+    def test_blocking_timeout(self):
         kernel = get_kernel()
         results = []
-        async def subproc():
-            try:
-                out = await run_subprocess(['python3', '-m', 'curio.test.slow'], timeout=1)
-                results.append('what?')
-            except subprocess.TimeoutExpired:
-                results.append('timeout')
 
-        kernel.add_task(subproc())
+        async def spin(n):
+            while n > 0:
+                results.append(n)
+                await sleep(0.1)
+                n -= 1
+                
+        async def blocking(n):
+             try:
+                 await run_blocking(time.sleep, n, timeout=0.55)
+             except TimeoutError:
+                 results.append('timeout')
+
+        kernel.add_task(spin(10))
+        kernel.add_task(blocking(2))
         kernel.run()
-        self.assertEqual(results, [ 'timeout' ])
+
+        self.assertEqual(results, [
+                10, 9, 8, 7, 6, 5, 'timeout', 4, 3, 2, 1
+                ])
+
+
 
 if __name__ == '__main__':
     unittest.main()
