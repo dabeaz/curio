@@ -28,6 +28,16 @@ def get_stack(task):
         frames.reverse()
     return frames
 
+def get_stack(task):
+    frames = []
+    coro = task.coro
+    while coro:
+        f = coro.cr_frame if hasattr(coro, 'cr_frame') else coro.gi_frame
+        if f is not None:
+            frames.append(f)
+        coro = coro.cr_await if hasattr(coro, 'cr_await') else coro.gi_yieldfrom
+    return frames
+
 def print_stack(task):
         extracted_list = []
         checked = set()

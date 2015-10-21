@@ -49,7 +49,7 @@ class BaseServer:
         await self.finish_request(request, client_address)
         self.shutdown_request(request)
 
-    async def server_close(self):
+    def server_close(self):
         pass
 
     async def finish_request(self, request, client_address):
@@ -118,7 +118,6 @@ class TCPServer(BaseServer):
         self.close_request(request)
 
     def close_request(self, request):
-        """Called to clean up an individual request."""
         request.close()
 
 

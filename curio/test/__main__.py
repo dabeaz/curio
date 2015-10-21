@@ -4,8 +4,7 @@ from .kernel import *
 from .socket import *
 from .subprocess import *
 from .workers import *
-
-from ..kernel import get_kernel
+from .socketserver import *
 
 if __name__ == '__main__':
     import unittest

@@ -1,4 +1,7 @@
 # kernel.py
+# 
+# This is the core of curio.   Definitions for tasks, signal sets, and the kernel
+# are here.
 
 import socket
 import heapq
@@ -132,7 +135,7 @@ class SignalSet(object):
 # Underlying kernel that drives everything
 
 class Kernel(object):
-    def __init__(self, selector=None, with_monitor=True):
+    def __init__(self, selector=None, with_monitor=False):
         if selector is None:
             selector = DefaultSelector()
         self._selector = selector
@@ -588,7 +591,7 @@ def get_kernel():
         _default_kernel = Kernel()
     return _default_kernel
 
-__all__ = [ 'Kernel', 'get_kernel', 'sleep', 'new_task', 'wait_on_queue', 'reschedule_tasks', 'kqueue', 
+__all__ = [ 'Kernel', 'get_kernel', 'sleep', 'new_task', 
             'SignalSet', 'TaskError', 'CancelledError' ]
             
         

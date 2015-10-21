@@ -389,6 +389,4 @@ class TestSocket(unittest.TestCase):
         self.assertTrue(all(n==x for n,x in enumerate(results[0])))
 
 if __name__ == '__main__':
-    import atexit
-    atexit.register(get_kernel().shutdown)
     unittest.main()
