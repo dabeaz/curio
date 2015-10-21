@@ -78,7 +78,7 @@ def ps(kernel):
 async def monrun(kernel):
     stdin = File(sys.stdin.buffer.raw)
     try:
-         print('Curio Monitor:  %d tasks running' % len(kernel._tasks))
+         print('\nCurio Monitor:  %d tasks running' % len(kernel._tasks))
          print('Type help for commands')
 
          while True:
@@ -108,6 +108,7 @@ async def monrun(kernel):
                         taskid = int(taskid_s)
                         if taskid in kernel._tasks:
                              print_stack(kernel._tasks[taskid])
+                             print()
                    except Exception as e:
                         print('Bad command', e)
                              
