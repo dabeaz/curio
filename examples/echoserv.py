@@ -14,12 +14,11 @@ async def echo_server(address):
              client, addr = await sock.accept()
              print('Connection from', addr)
              await new_task(echo_client(client))
-             del client
 
 async def echo_client(client):
     with client:
          while True:
-             data = await client.recv(1000)
+             data = await client.recv(10000)
              if not data:
                   break
              await client.sendall(data)
