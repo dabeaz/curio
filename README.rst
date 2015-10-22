@@ -164,7 +164,7 @@ standard debugging tools.
 
 About
 -----
-Curio was created by David Beazley (@dabeaz).  [http://www.dabeaz.com](http://www.dabeaz.com).
+Curio was created by David Beazley (@dabeaz).  http://www.dabeaz.com
 
 It is a young project.  Contributions welcome.
 
