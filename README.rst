@@ -98,45 +98,45 @@ I/O. So, why create yet another library?  There is no simple answer to
 that question, but here are a few of the motivations for creating curio.
 
 - Python 3 has evolved considerably as a programming language and
-has adopted many new language features that are well-suited to cleanly
-writing a new I/O library. For example, support for delegation to
-subgenerators (`yield from`) and the introduction of explicit `async`
-and `await` syntax in Python 3.5. Curio takes full advantage of these
-features and is not encumbered by issues of backwards compatibility
-with legacy Python code written 15 years ago.
+  has adopted many new language features that are well-suited to cleanly
+  writing a new I/O library. For example, support for delegation to
+  subgenerators (`yield from`) and the introduction of explicit `async`
+  and `await` syntax in Python 3.5. Curio takes full advantage of these
+  features and is not encumbered by issues of backwards compatibility
+  with legacy Python code written 15 years ago.
 
 - Previous libraries have often made heavy use of clever hacks and
-tricks to implement concurrent I/O.  For example, relying upon C
-extensions to support green threads, monkeypatching standard library
-modules, performing dazzling acrobatic tricks with generators, and
-carrying out amazing feats of metaprogramming magic.  Many of these
-tricks were the motivation for features added to the Python language
-later.  Curio tries to avoid wild hacks. It is a pure Python library
-that uses standard features available in Python 3.5. It performs no
-clever patching, no manipulation of Python internals, and no advanced
-metaprogramming tricks.  The code does what it says it does.
+  tricks to implement concurrent I/O.  For example, relying upon C
+  extensions to support green threads, monkeypatching standard library
+  modules, performing dazzling acrobatic tricks with generators, and
+  carrying out amazing feats of metaprogramming magic.  Many of these
+  tricks were the motivation for features added to the Python language
+  later.  Curio tries to avoid wild hacks. It is a pure Python library
+  that uses standard features available in Python 3.5. It performs no
+  clever patching, no manipulation of Python internals, and no advanced
+  metaprogramming tricks.  The code does what it says it does.
 
 - Existing I/O libraries are largely built on event-loops and callback
-functions--this includes Python's own asyncio module. Unfortunately,
-this particular programming model invariably leads to a
-spaghetti-coded nightmare of gotos disguised as callback functions
-wrapped in futures running inside tasks wrapping coroutines yielding
-futures (or something sort of like that).  Nobody can reason about
-what's actually going on in a system like that.  You might as well
-abandon all hope if you ever have to debug it when things don't work
-as expected or if you ever have to explain how it works to a
-grey-bearded C programmer.  It's too complicated.
+  functions--this includes Python's own asyncio module. Unfortunately,
+  this particular programming model invariably leads to a
+  spaghetti-coded nightmare of gotos disguised as callback functions
+  wrapped in futures running inside tasks wrapping coroutines yielding
+  futures (or something sort of like that).  Nobody can reason about
+  what's actually going on in a system like that.  You might as well
+  abandon all hope if you ever have to debug it when things don't work
+  as expected or if you ever have to explain how it works to a
+  grey-bearded C programmer.  It's too complicated.
 
 - Curio is a powerful library in a small package.  However, it places
-a great emphasis on implementation simplicity above all else. Simplicity
-is an important part of writing reliable systems software.  If you're
-going to have thousands of concurrently executing tasks, it helps to
-have a coherent mental model of how tasks execute and interact with
-each other.  It's important to build upon well-known abstractions that
-programmers already understand (i.e., sockets, files, etc.).  When
-your code fails, you need to be able to debug it--possibly down to the
-level of individual calls to the operating system. Simplicity matters
-a lot.
+  a great emphasis on implementation simplicity above all else. Simplicity
+  is an important part of writing reliable systems software.  If you're
+  going to have thousands of concurrently executing tasks, it helps to
+  have a coherent mental model of how tasks execute and interact with
+  each other.  It's important to build upon well-known abstractions that
+  programmers already understand (i.e., sockets, files, etc.).  When
+  your code fails, you need to be able to debug it--possibly down to the
+  level of individual calls to the operating system. Simplicity matters
+  a lot.
 
 Under the Covers
 ----------------
