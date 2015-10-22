@@ -102,6 +102,15 @@ async def monrun(kernel):
                              print('Bad task id')
                    except Exception as e:
                         print('Bad command')
+              elif resp.startswith(b'signal'):
+                  try:
+                      _, signame = resp.split()
+                      signame = signame.decode('ascii').strip()
+                      if hasattr(signal, signame):
+                          os.kill(os.getpid(), getattr(signal, signame))
+                  except Exception as e:
+                      print('Bad command',e )
+
               elif resp.startswith(b'w'):
                    try:
                         _, taskid_s = resp.split()
@@ -118,6 +127,7 @@ async def monrun(kernel):
          ps               : Show task table
          where taskid     : Show stack frames for a task
          cancel taskid    : Cancel a task
+         signal signame   : Send a Unix signal
          exit             : Raise SystemExit and terminate
          quit             : Leave the monitor
      ''')
