@@ -20,7 +20,7 @@ class File(object):
     def fileno(self):
         return self._fileobj.fileno()
 
-    async def _read(self, maxbytes=-1):
+    async def _read(self, maxbytes=-1, *, timeout=None):
         while True:
             # In non-blocking mode, a file-like object might return None if no data is
             # available.  Alternatively, we'll catch BlockingIOError just to be safe.
@@ -30,9 +30,9 @@ class File(object):
                     return data
             except BlockingIOError:
                 pass
-            await read_wait(self._fileobj)
+            await read_wait(self._fileobj, timeout=timeout)
 
-    async def read(self, maxbytes=-1):
+    async def read(self, maxbytes=-1, *, timeout=None):
         if self._linebuffer:
             if maxbytes == -1:
                 maxbytes = len(self._linebuffer)
@@ -40,31 +40,31 @@ class File(object):
             del self._linebuffer[:maxbytes]
             return data
         else:
-            return await self._read(maxbytes)
+            return await self._read(maxbytes, timeout=timeout)
 
-    async def readall(self):
+    async def readall(self, *, timeout=None):
         chunks = []
         while True:
-            chunk = await self.read()
+            chunk = await self.read(timeout=timeout)
             if not chunk:
                 return b''.join(chunks)
             chunks.append(chunk)
 
-    async def readline(self):
+    async def readline(self, *, timeout=None):
         while True:
             nl_index = self._linebuffer.find(b'\n')
             if nl_index >= 0:
                 resp = bytes(self._linebuffer[:nl_index+1])
                 del self._linebuffer[:nl_index+1]
                 return resp
-            data = await self._read(1000)
+            data = await self._read(1000, timeout=timeout)
             if data == b'':
                 resp = bytes(self._linebuffer)
                 del self._linebuffer[:]
                 return resp
             self._linebuffer.extend(data)
 
-    async def write(self, data, *, close_on_complete=False):
+    async def write(self, data, *, close_on_complete=False, timeout=None):
         nwritten = 0
         view = memoryview(data).cast('b')
         while view:
@@ -75,16 +75,16 @@ class File(object):
                 nwritten += nbytes
                 view = view[nbytes:]
             except BlockingIOError:
-                await write_wait(self._fileobj)
+                await write_wait(self._fileobj, timeout=timeout)
 
         if close_on_complete:
             self.close()
 
         return nwritten
 
-    async def writelines(self, lines):
+    async def writelines(self, lines, *, timeout=None):
         for line in lines:
-            await self.write(line)
+            await self.write(line, timeout=timeout)
 
     def flush(self):
         pass

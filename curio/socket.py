@@ -10,6 +10,7 @@ __all__ = socket.__all__
 from socket import *
 from .kernel import read_wait, write_wait
 from .file import File
+from .workers import run_blocking
 
 def replacement(defn):
     globals()['_'+defn.__name__] = globals()[defn.__name__]
@@ -130,6 +131,14 @@ class socket(object):
         self._socket.__exit__(ety, eval, etb)
 
 @replacement
-def socketpair():
-    s1, s2 = _socketpair()
+def socketpair(family=AF_UNIX, type=SOCK_STREAM, proto=0):
+    s1, s2 = _socketpair(family, type, proto)
     return socket.from_sock(s1), socket.from_sock(s2)
+
+@replacement
+def fromfd(fd, family, type, proto=0):
+    return socket.from_sock(_fromfd(fd, family, type, proto))
+
+
+     
+    
