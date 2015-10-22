@@ -97,7 +97,7 @@ Python already has a plethora of libraries for async and event driven
 I/O. So, why create yet another library?  There is no simple answer to
 that question, but here are a few of the motivations for creating curio.
 
-- Python 3 has evolved considerably as a programming language and
+* Python 3 has evolved considerably as a programming language and
   has adopted many new language features that are well-suited to cleanly
   writing a new I/O library. For example, support for delegation to
   subgenerators (`yield from`) and the introduction of explicit `async`
@@ -105,7 +105,7 @@ that question, but here are a few of the motivations for creating curio.
   features and is not encumbered by issues of backwards compatibility
   with legacy Python code written 15 years ago.
 
-- Previous libraries have often made heavy use of clever hacks and
+* Previous libraries have often made heavy use of clever hacks and
   tricks to implement concurrent I/O.  For example, relying upon C
   extensions to support green threads, monkeypatching standard library
   modules, performing dazzling acrobatic tricks with generators, and
@@ -116,7 +116,7 @@ that question, but here are a few of the motivations for creating curio.
   clever patching, no manipulation of Python internals, and no advanced
   metaprogramming tricks.  The code does what it says it does.
 
-- Existing I/O libraries are largely built on event-loops and callback
+* Existing I/O libraries are largely built on event-loops and callback
   functions--this includes Python's own asyncio module. Unfortunately,
   this particular programming model invariably leads to a
   spaghetti-coded nightmare of gotos disguised as callback functions
@@ -127,7 +127,7 @@ that question, but here are a few of the motivations for creating curio.
   as expected or if you ever have to explain how it works to a
   grey-bearded C programmer.  It's too complicated.
 
-- Curio is a powerful library in a small package.  However, it places
+* Curio is a powerful library in a small package.  However, it places
   a great emphasis on implementation simplicity above all else. Simplicity
   is an important part of writing reliable systems software.  If you're
   going to have thousands of concurrently executing tasks, it helps to
