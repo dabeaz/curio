@@ -4,25 +4,24 @@
 # made available here.  However, the socket class is replaced by an async compatible version.
 # Certain blocking operations are also replaced by versions safe to use in async.
 
-import socket
-__all__ = socket.__all__
+import socket as _socket
+
+__all__ = _socket.__all__
 
 from socket import *
+from functools import wraps, partial
+
 from .kernel import read_wait, write_wait
 from .file import File
 from .workers import run_blocking
 
-def replacement(defn):
-    globals()['_'+defn.__name__] = globals()[defn.__name__]
-    return defn
-
-@replacement
-class socket(object):
+class CurioSocket(object):
+    __slots__ = ('_socket', '_timeout')
     '''
     Wrapper around a standard socket object.
     '''
     def __init__(self, family=AF_INET, type=SOCK_STREAM, proto=0, fileno=None):
-        self._socket = _socket(family, type, proto, fileno)
+        self._socket = _socket.socket(family, type, proto, fileno)
         self._socket.setblocking(False)
         self._timeout = None
 
@@ -31,7 +30,7 @@ class socket(object):
 
     @classmethod
     def from_sock(cls, sock):
-        self = socket.__new__(socket)
+        self = cls.__new__(cls)
         self._socket = sock
         self._socket.setblocking(False)
         self._timeout = None
@@ -130,15 +129,57 @@ class socket(object):
     def __exit__(self, ety, eval, etb):
         self._socket.__exit__(ety, eval, etb)
 
-@replacement
-def socketpair(family=AF_UNIX, type=SOCK_STREAM, proto=0):
-    s1, s2 = _socketpair(family, type, proto)
+# Alias socket to CurioSocket
+socket = CurioSocket
+
+@wraps(_socket.socketpair)
+def socketpair(*args, **kwargs):
+    s1, s2 = _socket.socketpair(*args, **kwargs)
     return socket.from_sock(s1), socket.from_sock(s2)
 
-@replacement
-def fromfd(fd, family, type, proto=0):
-    return socket.from_sock(_fromfd(fd, family, type, proto))
+@wraps(_socket.fromfd)
+def fromfd(*args, **kwargs):
+    return socket.from_sock(_socket.fromfd(*args, **kwargs))
 
+# Replacements for blocking functions related to domain names and DNS
+
+@wraps(_socket.create_connection)
+async def create_connection(*args, **kwargs):
+    sock = await run_blocking(partial(_socket.create_connection, *args, **kwargs))
+    return socket.from_sock(sock)
+
+@wraps(_socket.getaddrinfo)
+async def getaddrinfo(*args, **kwargs):
+    return await run_blocking(partial(_socket.getaddrinfo, *args, **kwargs))
+
+@wraps(_socket.getfqdn)
+async def getfqdn(*args, **kwargs):
+    return await run_blocking(partial(_socket.getfqdn, *args, **kwargs))
+
+@wraps(_socket.gethostbyname)
+async def gethostbyname(*args, **kwargs):
+    return await run_blocking(partial(_socket.gethostbyname, *args, **kwargs))
+
+@wraps(_socket.gethostbyname_ex)
+async def gethostbyname_ex(*args, **kwargs):
+    return await run_blocking(partial(_socket.gethostbyname_ex, *args, **kwargs))
+
+@wraps(_socket.gethostname)
+async def gethostname(*args, **kwargs):
+    return await run_blocking(partial(_socket.gethostname, *args, **kwargs))
+
+@wraps(_socket.gethostbyaddr)
+async def gethostbyaddr(*args, **kwargs):
+    return await run_blocking(partial(_socket.gethostbyaddr, *args, **kwargs))
+
+@wraps(_socket.getnameinfo)
+async def getnameinfo(*args, **kwargs):
+    return await run_blocking(partial(_socket.getnameinfo, *args, **kwargs))
+
+
+
+
+    
 
      
     

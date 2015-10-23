@@ -9,10 +9,11 @@ The Kernel
 The kernel is responsible for running all of the tasks.  It should normally be created
 in the main execution thread.
 
-.. class:: class Kernel([pdb=False [, with_monitor=False]])
+.. class:: class Kernel([selector=None [, with_monitor=False]])
 
-   Create an instance of a curio kernel.  If *pdb* is True, the kernel 
-   enters the debugger when any task crashes with an uncaught exception.
+   Create an instance of a curio kernel.  If *selector* is given, it should be
+   an instance of a selector from the :mod:`selectors` module.  If not given,
+   then ``selectors.DefaultSelector`` is used to poll for I/O. 
    If *with_monitor* is ``True``, the monitor task executes in the background.
    The monitor responds to the keyboard-interrupt and allows you to inspect
    the state of the running kernel.
@@ -27,15 +28,21 @@ There are only a few methods that may be used on a ``Kernel`` outside of corouti
    be used to add a task to a running kernel and may not be used inside a
    coroutine.
 
-.. method:: Kernel.run()
+.. method:: Kernel.run([pdb=False [, log_errors=True]])
   
    Runs the kernel until all non-daemonic tasks have finished execution.
+   If *pdb* is ``True``, then the kernel enters the Python debugger if any
+   task crashes with an uncaught exception.  If *log_errors* is ``True``, then
+   uncaught exceptions in tasks are logged.
 
 .. method:: Kernel.shutdown()
 
    Performs a clean shutdown of the kernel by issuing a cancellation request to
    all remaining tasks (including daemonic tasks).  This function will not return
-   until all tasks have terminated.  This method may not be used inside a coroutine.
+   until all tasks have terminated.  This method may only be invoked on a kernel
+   that is not actively running.  It may not be used inside coroutines or from
+   separate threads.  Normally, it is not necessary to call this method since
+   the kernel runs until all tasks have terminated anyways.
 
 .. method:: Kernel.stop()
 
@@ -201,12 +208,23 @@ block the kernel.
    Note: It is not possible to create a file with Unicode text encoding/decoding applied 
    to it so those options are not available.
 
-The following module-level functions have been modified to work with curio:
+The following module-level functions have been modified so that the returned socket
+objects are compatible with curio:
 
 .. function:: socketpair([ family=AF_UNIX [, type=SOCK_STREAM [, proto=0]]])
+.. function:: fromfd(fd, family, type [, proto=])
+.. function:: create_connection(address [,timeout [, source_address]])
 
-   Returns a pair of connected sockets.  The resulting sockets are instances
-   of :mod:`curio.socket.socket`.
+The following module-level functions have been redefined as coroutines so that they
+don't block the kernel:
+
+.. function:: await getaddrinfo(host, port, family=0, type=0, proto=0, flags=0)
+.. function:: await getfqdn([name])
+.. function:: await gethostbyname(hostname)
+.. function:: await gethostbyname_ex(hostname)
+.. function:: await gethostname()
+.. function:: await gethostbyaddr(ip_address)
+.. function:: await getnameinfo(sockaddr, flags)
 
 Files
 -----
@@ -223,26 +241,31 @@ the :func:`socket.makefile()` method).
 
 The following methods are available on instances of :class:`File`:
 
-.. method:: await File.read([maxbytes=-1 [, timeout=None]])
+.. method:: await File.read([maxbytes=-1])
 
    Read up to *maxbytes* of data on the file. If omitted, reads as 
    much data as is currently available and returns it.
 
-.. method:: await File.readall([timeout=None])
+.. method:: await File.readall()
 
    Return all of the data that's available on a file up until an EOF is read.
 
-.. method:: await File.readline([timeout=None]):
+.. method:: await File.readline():
  
    Read a single line of data from a file.
 
-.. method:: await File.write(bytes [, timeout=None])
+.. method:: await File.write(bytes)
 
    Write all of the data in *bytes* to the file. 
 
-.. method:: await File.writelines(lines [, timeout=None])
+.. method:: await File.writelines(lines)
 
    Writes all of the lines in *lines* to the file.
+
+.. method:: settimeout(seconds)
+
+   Sets a timeout on all file I/O operations.  If *seconds* is None, any previously set
+   timeout is cleared. 
 
 Other file methods (e.g., ``tell()``, ``seek()``, etc.) are available
 if the supplied ``fileobj`` also has them.

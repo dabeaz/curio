@@ -10,6 +10,7 @@ from .kernel import wait_on_queue, reschedule_tasks, kqueue
 __all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition' ]
 
 class Event(object):
+    __slots__ = ('_set', '_waiting')
     def __init__(self):
         self._set = False
         self._waiting = kqueue()
@@ -43,10 +44,10 @@ class _LockBase(object):
         await self.release()
 
 class Lock(_LockBase):
+    __slots__ = ('_acquired', '_waiting')
     def __init__(self):
-        self._kernel = None
-        self._waiting = kqueue()
         self._acquired = False
+        self._waiting = kqueue()
 
     def __repr__(self):
         res = super().__repr__()
@@ -70,10 +71,10 @@ class Lock(_LockBase):
         return self._acquired
 
 class Semaphore(_LockBase):
+    __slots__ = ('_value', '_waiting')
     def __init__(self, value=1):
-        self._kernel = None
-        self._waiting = kqueue()
         self._value = value
+        self._waiting = kqueue()
 
     def __repr__(self):
         res = super().__repr__()
@@ -97,6 +98,7 @@ class Semaphore(_LockBase):
         return self._value == 0
 
 class BoundedSemaphore(Semaphore):
+    __slots__ = ('_bound_value',)
     def __init__(self, value=1):
         self._bound_value = value
         super().__init__(value)
@@ -107,8 +109,8 @@ class BoundedSemaphore(Semaphore):
         await super().release()
 
 class Condition(_LockBase):
+    __slots__ = ('_lock', '_waiting')
     def __init__(self, lock=None):
-        self._kernel = None
         if lock is None:
             self._lock = Lock()
         else:
