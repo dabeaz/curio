@@ -442,9 +442,12 @@ class Kernel(object):
             self._set_timeout(timeout)
         
     def _trap_sleep(self, seconds):
-        self._set_timeout(seconds, 'sleep')
-        self._current.state = 'TIME_SLEEP'
-        self._current.cancel_func = lambda: None
+        if seconds > 0:
+            self._set_timeout(seconds, 'sleep')
+            self._current.state = 'TIME_SLEEP'
+            self._current.cancel_func = lambda: None
+        else:
+            self._reschedule_task(self._current)
 
     def _trap_sigwatch(self, sigset):
         # Initialize the signal handling part of the kernel if not done already
