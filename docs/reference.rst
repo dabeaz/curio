@@ -9,7 +9,7 @@ The Kernel
 The kernel is responsible for running all of the tasks.  It should normally be created
 in the main execution thread.
 
-.. class:: Kernel(*, pdb=False, with_monitor=False)
+.. class:: class Kernel([pdb=False [, with_monitor=False]])
 
    Create an instance of a curio kernel.  If *pdb* is True, the kernel 
    enters the debugger when any task crashes with an uncaught exception.
@@ -51,15 +51,19 @@ Basic System Calls
 Tasks interact with the kernel by making system calls.  These
 functions may only be used inside coroutines.
 
-.. function:: await new_task(coro)
+.. function:: await new_task(coro [, daemon=False])
 
-   Create a new task.  ``coro`` is a newly called coroutine.  Does not
+   Create a new task.  *coro* is a newly called coroutine.  Does not
    return to the caller until the new task has been scheduled and executed for at least
-   one cycle.  Returns a :class:`Task` instance as a result.
+   one cycle.  Returns a :class:`Task` instance as a result.  The *daemon* option,
+   if supplied, creates the new task without a parent.  The task will run indefinitely
+   in the background.  Note: The kernel only runs as long as there are non-daemonic
+   tasks to execute.
 
 .. function:: await sleep(seconds)
 
-   Sleep for a specified number of seconds.
+   Sleep for a specified number of seconds.  If the number of seconds is 0, the
+   kernel merely switches to the next task (if any).
 
 Tasks
 -----
@@ -77,8 +81,8 @@ are available on tasks:
 
 .. method:: await Task.cancel([timeout=None])
 
-   Cancels the task.  This raises an :exc:`curio.TaskCancelled` exception in the
-   task which may choose to handle or ignore it.  Does not return until the
+   Cancels the task.  This raises a :exc:`curio.TaskCancelled` exception in the
+   task which may choose to handle it.  Does not return until the
    task is actually cancelled.
 
 .. attribute:: Task.id
@@ -99,11 +103,11 @@ are available on tasks:
    A tuple of exception information obtained from ``sys.exc_info()`` if the
    task crashes for some reason.  Potentially useful for debugging.
 
-External Work
--------------
+Performing External Work
+------------------------
 
 Sometimes you need to perform work outside the kernel.  This includes CPU-intensive
-calculations and blocking operations.  Use the following functions to that:
+calculations and blocking operations.  Use the following functions to do that:
 
 .. function:: await run_cpu_bound(callable, *args [, timeout=None])
 
@@ -219,30 +223,29 @@ the :func:`socket.makefile()` method).
 
 The following methods are available on instances of :class:`File`:
 
-.. method:: await File.read([maxbytes=-1])
+.. method:: await File.read([maxbytes=-1 [, timeout=None]])
 
    Read up to *maxbytes* of data on the file. If omitted, reads as 
    much data as is currently available and returns it.
 
-.. method:: await File.readall()
+.. method:: await File.readall([timeout=None])
 
    Return all of the data that's available on a file up until an EOF is read.
 
-.. method:: await readline():
+.. method:: await File.readline([timeout=None]):
  
    Read a single line of data from a file.
 
-.. method:: await write(bytes)
+.. method:: await File.write(bytes [, timeout=None])
 
    Write all of the data in *bytes* to the file. 
 
-.. method:: await writelines(lines)
+.. method:: await File.writelines(lines [, timeout=None])
 
    Writes all of the lines in *lines* to the file.
 
 Other file methods (e.g., ``tell()``, ``seek()``, etc.) are available
-if the supplied ``fileobj`` has them.
-
+if the supplied ``fileobj`` also has them.
 
 Synchronization Primitives
 --------------------------
@@ -273,9 +276,30 @@ primitives are thread-safe.
 
    Set the event. Wake all waiting tasks (if any).
 
+Here is an Event example::
+
+    import curio
+   
+    async def waiter(evt):
+        print('Waiting')
+        await evt.wait()
+        print('Running')
+
+    async def main():
+        evt = curio.Event()
+	# Create a few waiters
+        await curio.new_task(waiter(evt))
+        await curio.new_task(waiter(evt))
+        await curio.new_task(waiter(evt))
+
+        await curio.sleep(5)
+
+	# Set the event. All waiters should wake up
+	await evt.set()
+
 .. class:: class Lock()
 
-   A mutex lock.
+   This class provides a mutex lock.  It can only be used in tasks. It is not thread safe.
 
 :class:`Lock` instances support the following methods:
 
@@ -291,31 +315,70 @@ primitives are thread-safe.
 
    Return ``True`` if the lock is currently held.
 
+The preferred way to use a Lock is as an asynchronous context manager. For example::
+
+    import curio
+    
+    async def child(lck):
+        async with lck:
+            print('Child has the lock')
+
+    async def main():
+        lck = curio.Lock()
+        await lck.acquire()
+        print('Parent has the lock')
+	await curio.new_task(child(lck))
+	await curio.sleep(5)
+	await lck.release()
 
 .. class:: class Semaphore([value=1])
 
-   Create a semaphore.
-
-.. method:: await Semaphore.acquire([timeout=None])
-
-   Acquire the semaphore.
-
-.. method:: await Semaphore.release()
- 
-   Release the semaphore.
-        
-.. method:: Semaphore.locked()
-
-   Return ``True`` if the Semaphore is locked.
+   Create a semaphore.  Semaphores are based on a counter.  If the count is greater
+   than 0, it is decremented and the semaphore is acquired.  Otherwise, the task
+   has to wait until the count is incremented by another task.
 
 .. class:: class BoundedSemaphore([value=1])
 
    This class is the same as :class:`Semaphore` except that the 
    semaphore value is not allowed to exceed the initial value.
 
+Semaphores support the following methods:
+
+.. method:: await Semaphore.acquire([timeout=None])
+
+   Acquire the semaphore, decrementing its count.  Blocks if the count is 0.
+
+.. method:: await Semaphore.release()
+ 
+   Release the semaphore, incrementing its count. Never blocks.
+        
+.. method:: Semaphore.locked()
+
+   Return ``True`` if the Semaphore is locked.
+
+Like locks, semaphores support the async-with statement.  A common use of semaphores is to
+limit the number of tasks performing an operation.  For example::
+
+    import curio
+
+    async def worker(sema):
+        async with sema:
+            print('Working')
+            await curio.sleep(5)
+
+    async def main():
+         sema = curio.Semaphore(2)     # Allow two tasks at a time
+
+         # Launch a bunch of tasks
+         for n in range(10):
+             await curio.new_task(worker(sema))
+
+         # After this point, you should see two tasks at a time run. Every 5 seconds.
+
 .. class:: class Condition([lock=None])
 
-   Condition variable.
+   Condition variable.  *lock* is the underlying lock to use. If none is provided, then
+   a :class:`Lock` object is used.
 
 :class:`Condition` objects support the following methods:
 
@@ -348,10 +411,37 @@ primitives are thread-safe.
 
    Notify all tasks waiting on the condition.
 
+Condition variables are often used to signal between tasks.  For example, here is a simple producer-consumer
+scenario::
+
+    import curio
+    from collections import deque
+   
+    items = deque()
+    async def consumer(cond):
+        while True:
+            async with cond:
+                while not items:
+                    await cond.wait()    # Wait for items
+                item = items.popleft()
+            print('Got', item)
+
+     async def producer(cond):
+         for n in range(10):
+              async with cond:
+                  items.append(n)
+                  await cond.notify()
+              await curio.sleep(1)
+         
+     async def main():
+         cond = curio.Condition()
+         await curio.new_task(producer(cond))
+         await curio.new_task(consumer(cond))
+
 Queues
 ------
-
-A :class:`Queue` class can be used to communicate data between tasks.
+If you want to communicate between tasks, it's usually much easier to use
+a :class:`Queue` instead.
 
 .. class:: class Queue([maxsize=0])
 
@@ -391,6 +481,29 @@ A :class:`Queue` instance supports the following methods:
    Indicate that processing has finished for an item.  If all items have
    been processed and there are tasks waiting on ``Queue.join()`` they
    will be awakened.
+
+Here is an example of using queues in a producer-consumer problem::
+
+    import curio
+
+    async def producer(queue):
+        for n in range(10):
+            await queue.put(n)
+        await queue.join()
+        print('Producer done')
+
+    async def consumer(queue):
+        while True:
+            item = await queue.get()
+            print('Consumer got', item)
+            await queue.task_done()
+
+    async def main():
+        q = curio.Queue()
+        prod_task = await curio.new_task(producer(q))
+        cons_task = await curio.new_task(consumer(q))
+        await prod_task.join()
+        await cons_task.cancel()
 
 Signals
 -------
@@ -525,8 +638,46 @@ implementing a new curio primitive.
 
    Wait for the arrival of a signal in a given signal set.
 
+Again, you're unlikely to use any of these functions directly.  However, here's a small taste
+of how they're used.  For example, here's the ``recv()`` method of ``socket`` objects::
 
+    class socket(object):
+        ...
+        def recv(self, maxbytes):
+            while True:
+                try:
+                    return self._socket.recv(maxbytes)
+                except BlockingIOError:
+                    await read_wait(self._socket)
+        ...
 
+This method first tries to receive data.  If none is available, the ``read_wait()`` call is used to 
+put the task to sleep until reading can be performed. When it awakes, the receive operation 
+is retried.
+
+Here's an example of code that implements a lock::
+
+    from collections import deque
+
+    class Lock(object):
+        def __init__(self):
+            self._acquired = False
+            self._waiting = deque()
+
+        async def acquire(self):
+            if self._acquired:
+                await wait_on_queue(self._waiting, 'LOCK_ACQUIRE')
+
+        async def release(self):
+             if self._waiting:
+                 await reschedule_tasks(self._waiting, n=1)
+             else:
+                 self._acquired = False
+
+In this code you can see the low-level calls related to managing a wait queue. This
+code is not significantly different than the actual implementation of a lock
+in curio.   If you wanted to make your own task synchronization objects, the 
+code would look similar.
 
 
 
