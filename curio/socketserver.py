@@ -148,6 +148,7 @@ if hasattr(socket, 'AF_UNIX'):
         address_family = socket.AF_UNIX
 
 class BaseRequestHandler:
+    __slots__ = ('request', 'client_address', 'server')
     def __init__(self, request, client_address, server):
         self.request = request
         self.client_address = client_address

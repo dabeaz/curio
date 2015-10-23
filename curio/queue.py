@@ -12,6 +12,7 @@ from collections import deque
 __all__ = [ 'Queue' ]
 
 class Queue(object):
+    __slots__ = ('maxsize', '_queue', '_get_waiting', '_put_waiting', '_join_waiting', '_task_count')
     def __init__(self, maxsize=0):
         self.maxsize = maxsize
         self._queue = deque()

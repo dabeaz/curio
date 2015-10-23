@@ -1,4 +1,5 @@
-# curio - concurrent I/O
+Curio - A Tutorial Introduction
+===============================
 
 Curio is a modern library for performing reliable concurrent I/O using
 Python coroutines and the explicit async/await syntax introduced in
@@ -7,10 +8,14 @@ programming abstractions such as sockets, files, tasks, subprocesses,
 locks, and queues.  It is an alternative to asyncio that is
 implemented as a queuing system, not a callback-based event loop.
 
-## Getting Started
+This tutorial will take you through the basics of creating and 
+managing tasks in curio as well as some useful debugging features. 
+Various I/O related features come a bit later.
 
+Getting Started
+---------------
 Here is a simple curio hello world program--a task that prints a simple
-countdown as you wait for your kid to put their shoes on:
+countdown as you wait for your kid to put their shoes on::
  
     # hello.py
     import curio
@@ -28,13 +33,13 @@ countdown as you wait for your kid to put their shoes on:
 
 Run it and you'll see a countdown.  Yes, some jolly fun to be
 sure. Curio is based around the idea of tasks.  Tasks are functions
-defined as coroutines using the `async` syntax.  To run a task, you
-create a `Kernel` instance, add the task to it and then invoke the
-`run()` method.
+defined as coroutines using the ``async`` syntax.  To run a task, you
+create a ``Kernel`` instance, add the task to it and then invoke the
+``run()`` method.
 
-## Tasks
-
-Let's add a few more tasks into the mix:
+Tasks
+-----
+Let's add a few more tasks into the mix::
 
     # hello.py
     import curio
@@ -65,10 +70,12 @@ Let's add a few more tasks into the mix:
         kernel.run()
 
 This program illustrates the process of creating and joining with
-tasks.  Use the `curio.new_task()` coroutine to have a task launch a
-new task.  Use the `join()` method of the returned task object to wait
-for it to finish.  If you run this program, you'll see it produce the
-following output:
+tasks.  Here, the ``parent()`` task uses the ``curio.new_task()`` coroutine to 
+launch a new child task.  After sleeping briefly, it then launches the
+``countdown()`` task.  The ``join()`` method is used to wait for a task to
+finish.  In this example, the parent first joins with ``countdown()`` and then
+with ``kid()`` before leaving. If you run this program, you'll see it produce the
+following output::
 
     bash % python3 hello.py
     Building the Millenium Falcon in Minecraft
@@ -87,9 +94,10 @@ following output:
     .... hangs ....
 
 At this point, the program appears hung.  The child is sleeping for
-the next 1000 seconds, the parent is blocked on `join()` and nothing
-much seems to be happening.  Change the last part of the program to
-create the kernel with the monitor enabled:
+the next 1000 seconds, the parent is blocked on ``join()`` and nothing
+much seems to be happening--this is the mark of all good concurrent
+programs.  Change the last part of the program to create the kernel
+with the monitor enabled::
 
     ...
     if __name__ == '__main__':
@@ -98,7 +106,7 @@ create the kernel with the monitor enabled:
         kernel.run()
 
 Run the program again. You'd really like to know what's happening?
-Yes?  Press Ctrl-C to enter the curio monitor:
+Yes?  Press Ctrl-C to enter the curio monitor::
 
     ...
     We're leaving!
@@ -108,7 +116,7 @@ Yes?  Press Ctrl-C to enter the curio monitor:
     Type help for commands
     curio > 
 
-Let's see what's happening:
+Let's see what's happening by typing ``ps``::
 
     curio > ps
     Task   State        Cycles     Timeout Task                                               
@@ -120,10 +128,10 @@ Let's see what's happening:
 
 In the monitor, you can see a list of the active tasks.  You can see
 that the parent is waiting to join and that the kid is sleeping for
-another 926 seconds.  If you type `ps` again, you'll see the timeout
+another 926 seconds.  If you type ``ps`` again, you'll see the timeout
 value change. Although you're in the monitor--the kernel is still
 running underneath.  Actually, you'd like to know more about what's
-happening. Get the stack frames of the tasks:
+happening. You can get the stack trace of any task using the ``where`` command::
 
     curio > where 3
      Stack for Task(id=3, <coroutine object parent at 0x1011bee60>, state='TASK_JOIN') (most recent call last):
@@ -144,7 +152,7 @@ happening. Get the stack frames of the tasks:
     curio > 
 
 Actually, that kid is just being super annoying.  Let's cancel their world and let the parent
-get on with their business:
+get on with their business::
 
     curio > cancel 4
     Cancelling task 4
@@ -152,10 +160,10 @@ get on with their business:
     curio > 
     bash % 
 
-Debugging is an important feature of curio--using the monitor, you see what's happening as tasks run.
+Debugging is an important feature of curio and by using the monitor, you see what's happening as tasks run.
 Can can find out where tasks are blocked and you can cancel any task that you want.
 However, it's not necessary to do this in the monitor.  Change the parent task to include a timeout
-and a cancellation request like this:
+and a cancellation request like this::
 
     async def parent():
         kid_task = await curio.new_task(kid())
@@ -172,10 +180,10 @@ and a cancellation request like this:
         print("Leaving!")
 
 If you run this version, the parent will wait 10 seconds for the child to join.  If not, the child is
-forcefully cancelled.  Problem solved.
+forcefully cancelled.  Problem solved. Now, if only real life were this easy.
 
 Of course, all is not lost in the child.  If desired, they can catch the cancellation request
-and cleanup. For example:
+and cleanup. For example::
 
     async def kid():
         try:
@@ -184,7 +192,7 @@ and cleanup. For example:
         except curio.CancelledError:
             print('Fine. Saving my work.')
 
-Now your program should produce output like this:
+Now your program should produce output like this::
 
     bash % python3 hello.py
     Building the Millenium Falcon in Minecraft
@@ -205,12 +213,16 @@ Now your program should produce output like this:
     Leaving!
 
 By now, you should have the basic gist of the curio task model. You can create tasks, join tasks, and cancel tasks. 
-Blocking operations (e.g., `join()`) almost always have a timeout option. 
+Blocking operations (e.g., ``join()``) almost always have a timeout option.  You have a lot of control over how
+things work.
 
-## Task Synchronization
+Task Synchronization
+--------------------
 
-Tasks often need to synchronize.  For this purpose, curio provides `Event`, `Lock`, `Semaphore`, and `Condition` objects.
-For example, let's introduce an event that makes the child wait for the parent's permission to start playing:
+Tasks often need to synchronize.  For this purpose, curio provides
+``Event``, ``Lock``, ``Semaphore``, and ``Condition`` objects.  For
+example, let's introduce an event that makes the child wait for the
+parent's permission to start playing::
 
     start_evt = curio.Event()
 
@@ -241,18 +253,35 @@ For example, let's introduce an event that makes the child wait for the parent's
         print("Leaving!")
 
 All of the synchronization primitives work the same way that they do
-in the `threading` module.  The main difference is that all operations
-must be prefaced by `await`. Thus, to set an event you use `await
-start_evt.set()` and to wait for an event you use `await
-start_evt.wait()`. Almost all of the synchronization methods also
-support timeouts.
+in the ``threading`` module.  The main difference is that all operations
+must be prefaced by ``await``. Thus, to set an event you use ``await
+start_evt.set()`` and to wait for an event you use ``await
+start_evt.wait()``. 
 
-## Signals
+All of the synchronization methods also support timeouts. So, if the
+kid wanted to be rather annoying, they could do use a timeout to
+repeatedly nag like this::
 
+    async def kid():
+        while True:
+	    try:
+                print('Can I play?')
+                await start_evt.wait(timeout=1)
+                break
+             except TimeoutError:
+                pass
+        try:
+            print('Building the Millenium Falcon in Minecraft')
+            await curio.sleep(1000)
+        except curio.CancelledError:
+            print('Fine. Saving my work.')
+
+Signals
+-------
 What kind of parent only lets their child play Minecraft for 5
 seconds?  Instead, let's have the parent allow the child to play as
-much as they want until a Unix signal arrives.  Modify the code like
-this:
+much as they want until a Unix signal arrives.  Modify the code to
+wait on a ``SignalSet`` like this::
 
     import signal, os
 
@@ -277,8 +306,8 @@ this:
         print("Leaving!")
 
 If you run this program, the parent lets the kid play 
-indefinitely--well, until a `SIGHUP` arrives.  When you run the
-program, you'll see this:
+indefinitely--well, until a ``SIGHUP`` arrives.  When you run the
+program, you'll see this::
 
     bash % python3 hello.py
     Parent PID 36069
@@ -287,7 +316,7 @@ program, you'll see this:
     Building the Millenium Falcon in Minecraft
 
 Don't forget, if you're wondering what's happening, you can always drop into
-the curio monitor by pressing Control-C:
+the curio monitor by pressing Control-C::
 
     ^C
     Curio Monitor:  4 tasks running
@@ -301,17 +330,23 @@ the curio monitor by pressing Control-C:
     4      TIME_SLEEP   2          796.593 kid                                               
     curio > 
 
-If you want to initiate the signal, go to a separate terminal and type this:
+Here you see the parent waiting on a signal and the kid sleeping await for another 796 seconds.
+If you want to initiate the signal, go to a separate terminal and type this::
 
     bash % kill -HUP 36069
 
-You'll see the parent wake up, do the countdown and cancel the child.  Very good.
+Alternatively, you can initiate the signal by typing this in the monitor::
 
-## Number Crunching
+    curio > signal SIGHUP
 
+In either case, you'll see the parent wake up, do the countdown and
+proceed to cancel the child.  Very good.
+
+Number Crunching and Blocking Operations
+----------------------------------------
 Now, suppose for a moment that the kid has decided that building the
 Millenium Falcon requires computing a sum of larger and larger
-Fibonacci numbers using an exponential algorithm like this:
+Fibonacci numbers using an exponential algorithm like this::
 
     def fib(n):
         if n <= 2:
@@ -334,12 +369,12 @@ If you run this version, you'll find that the entire kernel becomes
 unresponsive.  The monitor doesn't work, signals aren't caught, and
 there appears to be no way to get control back.  The problem here is
 that the kid is hogging the CPU and never yields.  Important lesson:
-curio does not provide any kind of preemption.  If a task decides to
-go off and mine bitcoins, the entire kernel will block until its done.
+curio does not have a preemptive scheduler.  If a task decides to
+go off and mine bitcoins, the entire kernel blocks until its done.
 
 If you know that work might take awhile, you can have it execute in a
-separate process however.  Change the code use `curio.run_cpu_bound()`
-like this:
+separate process. Change the code use ``curio.run_cpu_bound()`` like
+this::
 
     async def kid():
         print('Can I play?')
@@ -352,13 +387,42 @@ like this:
         except curio.CancelledError:
             print('Fine. Saving my work.')
 
-In this version, the kernel will remain fully responsive.  You can use the
-monitor and send the signal--shutdown will occur.
+In this version, the kernel remains fully responsive because the CPU
+intensive work is being carried out elsewhere.  You should be able to
+run the monitor, send the signal, and see the shutdown occur as before.
+
+The problem of blocking might also apply to other operations involving
+I/O.  For example, accessing a database or calling out to other
+libraries.  In fact, any operation not preceded by an explicit
+``await`` might block.  If you know that blocking is possible, use the
+``curio.run_blocking()`` coroutine.
+This arranges to have the computation
+carried out in a separate thread. For example::
+
+    import time
+
+    async def kid():
+        print('Can I play?')
+        await start_evt.wait()
+        try:
+            print('Building the Millenium Falcon in Minecraft')
+            total = 0
+            for n in range(50):
+                total += await curio.run_cpu_bound(fib, n)
+		# Rest for a bit
+		await curio.run_blocking(time.sleep, n)
+        except curio.CancelledError:
+            print('Fine. Saving my work.')
     
-## And Finally, Some I/O
+Note: ``time.sleep()`` has only been used to illustrate blocking in an outside
+library. ``curio`` already has its own sleep function so if you really need to
+sleep, use that instead.
+
+A Simple Echo Server
+--------------------
 
 Now that you've got the basics down, let's look at some I/O. Here
-is a simple echo server written directly with sockets using curio:
+is a simple echo server written directly with sockets using curio::
 
     from curio import Kernel, new_task
     from curio.socket import *
@@ -389,10 +453,10 @@ is a simple echo server written directly with sockets using curio:
         kernel.add_task(echo_server(('',25000)))
         kernel.run()
 
-Run this program and try connecting to it using a command such as `nc`
-or `telnet`.  You'll see the program echoing back data to you.  Open
+Run this program and try connecting to it using a command such as ``nc``
+or ``telnet``.  You'll see the program echoing back data to you.  Open
 up multiple connections and see that it handles multiple client
-connections perfectly well.  Very good.
+connections perfectly well::
 
     bash % nc localhost 25000
     Hello                 (you type)
@@ -404,13 +468,20 @@ connections perfectly well.  Very good.
     
 If you've written a similar program using sockets and threads, you'll
 find that this program looks nearly identical except for the use of
-`async` and `await`.  Any operation that involves I/O, blocking, or
-the services of the kernel is prefaced by `await`.  Carefully notice
-that we are using the module `curio.socket` instead of the built-in
-`socket` module here.
+``async`` and ``await``.  Any operation that involves I/O, blocking, or
+the services of the kernel is prefaced by ``await``.  
+
+Carefully notice that we are using the module ``curio.socket`` instead
+of the built-in ``socket`` module here.  Under the covers, ``curio.socket``
+is actually just a wrapper around the existing ``socket`` module.  All
+of the existing functionality of ``socket`` is available, but all of the
+operations that might block have been replaced by coroutines and must be
+preceded by an explicit ``await``. 
 
 If writing code with low-level sockets is a bit much, you can always
-switch to the higher level `socketserver` interface:
+switch to the higher level ``socketserver`` interface.  Like
+``socket`` this interface mimics that of the built-in ``socketserver``
+module. For example::
 
     from curio import Kernel, new_task
     from curio.socketserver import StreamRequestHandler, TCPServer
@@ -428,13 +499,134 @@ switch to the higher level `socketserver` interface:
         kernel.add_task(serv.serve_forever())
         kernel.run()
 
-This code mirrors the code you might write using the `socketserver`
-standard library--again, just remember to add `async` and `await` to
+This code mirrors the code you might write using the ``socketserver``
+standard library--again, just remember to add ``async`` and ``await`` to
 I/O operations.
 
-## More to Come...
+A Managed Echo Server
+---------------------
 
-Curio is a work in progress.  More documentation is forthcoming.
+Let's make a slightly more sophisticated echo server that wraps the
+server in a manager responsible for cancelling and restarting on a
+Unix signal::
+
+    import signal
+    from curio import Kernel, new_task, SignalSet, CancelledError
+    from curio.socketserver import TCPServer, StreamRequestHandler
+
+    class EchoHandler(StreamRequestHandler):
+        async def handle(self):
+            try:
+                print('Connection from', self.client_address)
+                async for line in self.rfile:
+                    await self.wfile.write(line)
+                print('Connection closed')
+            except CancelledError:
+                await self.wfile.write(b'Server is going down now\n')
+
+    async def main(address):
+        while True:
+            async with SignalSet(signal.SIGHUP) as sigset:
+                serv = TCPServer(('', 25000), EchoHandler)
+                print('Starting the server')
+                serv_task = await new_task(serv.serve_forever())
+                await sigset.wait()
+                print('Server about the restart')
+                await serv_task.cancel()
+                serv.server_close()
+
+    if __name__ == '__main__':
+        kernel = Kernel(with_monitor=True)
+        kernel.add_task(main(('',25000)))
+        kernel.run()
+
+In this code, the ``main()`` coroutine launches the server, but then
+waits for the arrival of a ``SIGHUP`` signal.  When received, it 
+cancels the server and restarts. An interesting thing about this cancellation is that
+it propagates to all of the child tasks created by the server (i.e., all
+of the connected clients).   The ``handle()`` method has been programmed to
+catch the resulting cancellation exception and perform a clean shutdown.
+Just to be clear, if there were a 1000 connected clients at the time
+the restart occurs, the server would drop all 1000 clients at once and start
+fresh with no active connections.
+
+Subprocesses
+------------
+Curio provides a wrapper around the ``subprocess`` module for launching subprocesses.
+For example, suppose you wanted to write a task to watch the output of the ``ping``
+command::
+
+    from curio import subprocess
+    import curio
+
+    async def main():
+        p = subprocess.Popen(['ping', 'www.python.org'], stdout=subprocess.PIPE)
+        async for line in p.stdout:
+            print('Got:', line.decode('ascii'), end='')
+
+    if __name__ == '__main__':
+        kernel = curio.Kernel()
+        kernel.add_task(main())
+        kernel.run()
+
+In addition to ``Popen()``, you can also use higher level functions
+such as ``subprocess.run()`` and ``subprocess.check_output()``.  For example::
+
+    from curio import subprocess
+    async def main():
+        try:
+            out = await subprocess.check_output(['netstat', '-a'])
+        except subprocess.CalledProcessError as e:
+            print('It failed!', e)
+
+These functions operate exactly as they do in the normal
+``subprocess`` module except that they're written on top of the
+``curio`` kernel.  There is no blocking and no use of hidden threads.
+
+Intertask Communication
+-----------------------
+If you have multiple tasks and want them to communicate, use a ``Queue``.
+For example::
+
+    # prodcons.py
+
+    import curio
+
+    async def producer(queue):
+        for n in range(10):
+            await queue.put(n)
+        await queue.join()
+        print('Producer done')
+
+    async def consumer(queue):
+        while True:
+            item = await queue.get()
+            print('Consumer got', item)
+            await queue.task_done()
+
+    async def main():
+        q = curio.Queue()
+        prod_task = await curio.new_task(producer(q))
+        cons_task = await curio.new_task(consumer(q))
+        await prod_task.join()
+        await cons_task.cancel()
+
+    if __name__ == '__main__':
+        kernel = curio.Kernel()
+        kernel.add_task(main())
+        kernel.run()
+
+Curio provides the same synchronization primitives as found in the built-in
+``threading`` module.  The same techniques used by threads can be used with
+curio.
+
+Final Words
+-----------
+At this point, you should have enough of the concepts to get going. 
+More information can be found in the reference manual.
+
+
+
 
 
 

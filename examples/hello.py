@@ -19,8 +19,13 @@ def fib(n):
         return fib(n-1) + fib(n-2)
 
 async def kid():
-    print('Can I play?')
-    await start_evt.wait()
+    while True:
+        try:
+            print('Can I play?')
+            await start_evt.wait(timeout=1)
+            break
+        except TimeoutError:
+            pass
     try:
         print('Building the Millenium Falcon in Minecraft')
         total = 0

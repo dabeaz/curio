@@ -16,6 +16,10 @@ class File(object):
         self._fileno = fileobj.fileno()
         os.set_blocking(fileobj.fileno(), False)
         self._linebuffer = bytearray()
+        self._timeout = None
+
+    def settimeout(self, timeout):
+        self._timeout = timeout
 
     def fileno(self):
         return self._fileobj.fileno()
@@ -30,7 +34,7 @@ class File(object):
                     return data
             except BlockingIOError:
                 pass
-            await read_wait(self._fileobj)
+            await read_wait(self._fileobj, timeout=self._timeout)
 
     async def read(self, maxbytes=-1):
         if self._linebuffer:
@@ -75,7 +79,7 @@ class File(object):
                 nwritten += nbytes
                 view = view[nbytes:]
             except BlockingIOError:
-                await write_wait(self._fileobj)
+                await write_wait(self._fileobj, timeout=self._timeout)
 
         if close_on_complete:
             self.close()

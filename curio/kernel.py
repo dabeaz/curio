@@ -41,6 +41,9 @@ class TaskError(CurioError):
 # the task itself for the purposes of debugging, scheduling, timeouts, etc.
 
 class Task(object):
+    __slots__ = ('id', 'parent_id', 'children', 'coro', 'cycles', 'state',
+                 'cancel_func', 'future', 'timeout', 'exc_info', 'next_value',
+                 'next_exc', 'joining', 'terminated')
     _lastid = 1
     def __init__(self, coro):
         self.id = Task._lastid
@@ -135,6 +138,10 @@ class SignalSet(object):
 # Underlying kernel that drives everything
 
 class Kernel(object):
+    __slots__ = ('_selector', '_ready', '_tasks', '_current', '_sleeping',
+                 '_signals', '_default_signals', '_njobs', '_running',
+                 '_notify_sock', '_wait_sock')
+
     def __init__(self, selector=None, with_monitor=False):
         if selector is None:
             selector = DefaultSelector()
@@ -147,7 +154,6 @@ class Kernel(object):
         self._default_signals = {}  # Dict of default signal handlers
         self._njobs = 0             # Number of non-daemonic jobs running
         self._running = False       # Kernel running?
-        self._monitor_task = None   # Kernel monitor task (if any)
 
         # Create the init task responsible for waking the event loop and processing signals
         self._notify_sock, self._wait_sock = socket.socketpair()
@@ -320,7 +326,6 @@ class Kernel(object):
         '''
         Run the kernel until no more non-daemonic tasks remain.
         '''
-
         self._running = True
         while self._njobs > 0 and self._running:
             self._current = None
@@ -331,37 +336,35 @@ class Kernel(object):
 
             # Run everything that's ready
             while self._ready:
-                self._current = self._ready.popleft()
-                assert self._current.id in self._tasks
+                current = self._current = self._ready.popleft()
+                assert current.id in self._tasks
                 try:
-                    self._current.state = 'RUNNING'
-                    self._current.cycles += 1
-                    if self._current.next_exc is None:
-                        op, *args = self._current.coro.send(self._current.next_value)
+                    current.state = 'RUNNING'
+                    current.cycles += 1
+                    if current.next_exc is None:
+                        op, *args = current.coro.send(current.next_value)
                     else:
-                        op, *args = self._current.coro.throw(self._current.next_exc)
+                        op, *args = current.coro.throw(current.next_exc)
 
-                    # Execute a trap. Trap functions are defined by methods below
-                    trap = getattr(self, op, None)
-                    assert trap, "Unknown trap: %s" % op
-                    trap(*args)
+                    # Execute the trap
+                    getattr(self, op)(*args)
 
                 except (StopIteration, CancelledError) as e:
-                    self._cleanup_task(self._current, value = e.value if isinstance(e, StopIteration) else None)
+                    self._cleanup_task(current, value = e.value if isinstance(e, StopIteration) else None)
 
                 except Exception as e:
-                    self._current.exc_info = sys.exc_info()
-                    self._current.state = 'CRASHED'
+                    current.exc_info = sys.exc_info()
+                    current.state = 'CRASHED'
                     exc = TaskError('Task Crashed')
                     exc.__cause__ = e
-                    self._cleanup_task(self._current, exc=exc)
+                    self._cleanup_task(current, exc=exc)
                     if log_errors:
-                        log.error('Curio: Task Crash: %s' % self._current, exc_info=True)
+                        log.error('Curio: Task Crash: %s' % current, exc_info=True)
                     if pdb:
                         import pdb as _pdb
-                        _pdb.post_mortem(self._current.exc_info[2])
-                finally:
-                    self._current = None
+                        _pdb.post_mortem(current.exc_info[2])
+
+        self._current = None
 
     def stop(self):
         '''
@@ -442,9 +445,12 @@ class Kernel(object):
             self._set_timeout(timeout)
         
     def _trap_sleep(self, seconds):
-        self._set_timeout(seconds, 'sleep')
-        self._current.state = 'TIME_SLEEP'
-        self._current.cancel_func = lambda: None
+        if seconds > 0:
+            self._set_timeout(seconds, 'sleep')
+            self._current.state = 'TIME_SLEEP'
+            self._current.cancel_func = lambda: None
+        else:
+            self._reschedule_task(self._current)
 
     def _trap_sigwatch(self, sigset):
         # Initialize the signal handling part of the kernel if not done already
