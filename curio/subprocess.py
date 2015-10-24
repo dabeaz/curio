@@ -3,7 +3,7 @@
 # Curio clone of the subprocess module.  
 
 from .kernel import future_wait, new_task, sleep
-from .file import File
+from .io import File
 import subprocess
 
 __all__ = [ 'run', 'Popen', 'CompletedProcess', 'CalledProcessError', 'TimeoutExpired', 'SubprocessError',
@@ -62,7 +62,10 @@ class Popen(object):
     async def communicate(self, input=b'', timeout=None):
         if input:
             assert self.stdin
-            stdin_task = await new_task(self.stdin.write(input, close_on_complete=True))
+            async def writer():
+                await self.stdin.write(input)
+                self.stdin.close()
+            stdin_task = await writer()
         else:
             stdin_task = None
 
