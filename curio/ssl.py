@@ -6,6 +6,7 @@ __all__ = []
 
 from functools import wraps, partial
 from .workers import run_blocking
+from .io import Socket
 
 try:
     import ssl as _ssl
@@ -20,12 +21,11 @@ except ImportError:
 if _ssl:
     @wraps(_ssl.wrap_socket)
     def wrap_socket(sock, *args, do_handshake_on_connect=True, **kwargs):
-        from .socket import CurioSocket
-        if isinstance(sock, CurioSocket):
+        if isinstance(sock, Socket):
             sock = sock._socket
 
         ssl_sock = _ssl.wrap_socket(sock, *args, do_handshake_on_connect=False, **kwargs)
-        cssl_sock = CurioSocket.from_sock(ssl_sock)
+        cssl_sock = Socket(ssl_sock)
         cssl_sock.do_handshake_on_connect = do_handshake_on_connect
         return cssl_sock
 
@@ -44,7 +44,7 @@ if _ssl:
 
         def wrap_socket(self, *args, do_handshake_on_connect=True, **kwargs):
             sock = self._context.wrap_socket(*args, do_handshake_on_connect=False, **kwargs)
-            csock = CurioSocket.from_sock(sock)
+            csock = Socket(sock)
             csock.do_handshake_on_connect = do_handshake_on_connect
             return csock
         
