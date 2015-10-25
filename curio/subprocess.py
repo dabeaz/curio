@@ -3,7 +3,7 @@
 # Curio clone of the subprocess module.  
 
 from .kernel import future_wait, new_task, sleep
-from .io import File
+from .io import Stream
 import subprocess
 
 __all__ = [ 'run', 'Popen', 'CompletedProcess', 'CalledProcessError', 'TimeoutExpired', 'SubprocessError',
@@ -35,11 +35,11 @@ class Popen(object):
 
         self._popen = subprocess.Popen(args, bufsize=0, **kwargs)
         if self._popen.stdin:
-            self.stdin = File(self._popen.stdin)
+            self.stdin = Stream(self._popen.stdin)
         if self._popen.stdout:
-            self.stdout = File(self._popen.stdout)
+            self.stdout = Stream(self._popen.stdout)
         if self._popen.stderr:
-            self.stderr = File(self._popen.stderr)
+            self.stderr = Stream(self._popen.stderr)
 
     def __getattr__(self, name):
         return getattr(self._popen, name)

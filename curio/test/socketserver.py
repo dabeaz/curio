@@ -67,6 +67,7 @@ class TestSocketServer(unittest.TestCase):
                 async for line in self.rfile:
                       results.append(('handler', line))
                       await self.wfile.write(line)
+                      await self.wfile.flush()
                 results.append('handler done')
 
         async def client(address):

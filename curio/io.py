@@ -19,7 +19,7 @@
 # represents a real system-level file (must have a fileno() method)
 # and can be used with the underlying I/O selector.  For example, the
 # Socket class can wrap a normal socket or an SSL socket--it doesn't
-# matter which.  Similarly, the File class can wrap normal files,
+# matter which.  Similarly, the Stream class can wrap normal files,
 # files created from sockets, pipes, and other file-like abstractions.
 #
 # No assumption is made about system compatibility (Unix vs. Windows).  
@@ -33,7 +33,7 @@ from socket import SOL_SOCKET, SO_ERROR
 import io
 import os
 
-__all__ = ['Socket', 'File']
+__all__ = ['Socket', 'Stream']
 
 # Exceptions raised for non-blocking I/O.  For normal sockets, blocking operations
 # normally just raise BlockingIOError.  For SSL sockets, more specific exceptions
@@ -164,10 +164,10 @@ class Socket(object):
                 await write_wait(self._socket, self._timeout)
 
     def makefile(self, mode, buffering=0):
-        if mode not in ['rb', 'wb', 'rwb']:
+        if 'b' not in mode:
             raise RuntimeError('File can only be created in binary mode')
-        f = self._socket.makefile(mode, 0)
-        return File(f)
+        f = self._socket.makefile(mode, buffering=buffering)
+        return Stream(f)
 
     def __getattr__(self, name):
         return getattr(self._socket, name)
@@ -179,13 +179,13 @@ class Socket(object):
     def __exit__(self, ety, eval, etb):
         self._socket.__exit__(ety, eval, etb)
 
-class File(object):
+class Stream(object):
     '''
     Wrapper around a file-like object.  File is put into non-blocking mode.
-    At the moment, the file must be unbuffered binary.
+    The underlying file must be in binary mode.  
     '''
     def __init__(self, fileobj):
-        assert isinstance(fileobj, io.RawIOBase), 'File object must be unbuffered binary'
+        assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
         self._fileobj = fileobj
         os.set_blocking(fileobj.fileno(), False)
         self._linebuffer = bytearray()
@@ -200,7 +200,7 @@ class File(object):
     async def _read(self, maxbytes=-1):
         while True:
             # In non-blocking mode, a file-like object might return None if no data is
-            # available.  Alternatively, we'll catch BlockingIOError just to be safe.
+            # available.  Alternatively, we'll catch the usual blocking exceptions just to be safe
             try:
                 data = self._fileobj.read(maxbytes)
                 if data is None:
@@ -244,6 +244,13 @@ class File(object):
                 return resp
             self._linebuffer.extend(data)
 
+
+    async def readlines(self):
+        lines = []
+        async for line in self:
+            lines.append(line)
+        return lines
+
     async def write(self, data):
         nwritten = 0
         view = memoryview(data).cast('b')
@@ -254,7 +261,10 @@ class File(object):
                     raise BlockingIOError()
                 nwritten += nbytes
                 view = view[nbytes:]
-            except WantWrite:
+            except WantWrite as e:
+                if hasattr(e, 'characters_written'):
+                    nwritten += e.characters_written
+                    view = view[e.characters_written:]
                 await write_wait(self._fileobj, timeout=self._timeout)
             except WantRead:
                 await read_wait(self._fileobj, timeout=self._timeout)
@@ -264,6 +274,15 @@ class File(object):
     async def writelines(self, lines):
         for line in lines:
             await self.write(line)
+
+    async def flush(self):
+        while True:
+            try:
+                return self._fileobj.flush() 
+            except WantWrite:
+                await write_wait(self._fileobj, timeout=self._timeout)
+            except WantRead:
+                await read_wait(self._fileobj, timeout=self._timeout)
 
     def __getattr__(self, name):
         return getattr(self._fileobj, name)

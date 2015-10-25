@@ -82,10 +82,12 @@ class TestSocket(unittest.TestCase):
 
         async def handler(client):
             results.append('handler start')
-            with client.makefile('rwb') as client_f:
-                async for line in client_f:
-                    results.append(('handler', line))
-                    await client_f.write(line)
+            with client.makefile('wb') as out_f:
+                with client.makefile('rb') as in_f:
+                    async for line in in_f:
+                        results.append(('handler', line))
+                        await out_f.write(line)
+                        await out_f.flush()
             results.append('handler done')
             client.close()
 
@@ -93,19 +95,22 @@ class TestSocket(unittest.TestCase):
             results.append('client start')
             sock = socket(AF_INET, SOCK_STREAM)
             await sock.connect(address)
-            sock_f = sock.makefile('rwb')
-            await sock_f.write(b'Msg1\n')
+            in_f = sock.makefile('rb')
+            out_f = sock.makefile('wb')
+            await out_f.write(b'Msg1\n')
+            await out_f.flush()
             await sleep(0.1)
-            resp = await sock_f.read(100)
+            resp = await in_f.read(100)
             results.append(('client', resp))
-            await sock_f.write(b'Msg2\n')
+            await out_f.write(b'Msg2\n')
+            await out_f.flush()
             await sleep(0.1)
-            resp = await sock_f.read(100)
+            resp = await in_f.read(100)
             results.append(('client', resp))
             results.append('client close')
-            sock_f.close()
+            out_f.close()
+            in_f.close()
             sock.close()
-
 
         kernel.add_task(server(('',25000)))
         kernel.add_task(client(('localhost', 25000)))
