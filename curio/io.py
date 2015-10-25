@@ -284,6 +284,15 @@ class Stream(object):
             except WantRead:
                 await read_wait(self._fileobj, timeout=self._timeout)
 
+    async def close(self):
+        while True:
+            try:
+                return self._fileobj.close()
+            except WantWrite:
+                await write_wait(self._fileobj, timeout=self._timeout)
+            except WantRead:
+                await read_wait(self._fileobj, timeout=self._timeout)
+
     def __getattr__(self, name):
         return getattr(self._fileobj, name)
         
