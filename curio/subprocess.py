@@ -64,7 +64,7 @@ class Popen(object):
             assert self.stdin
             async def writer():
                 await self.stdin.write(input)
-                self.stdin.close()
+                await self.stdin.close()
             stdin_task = await writer()
         else:
             stdin_task = None
@@ -94,13 +94,13 @@ class Popen(object):
 
     async def __aexit__(self, *args):
         if self.stdout:
-            self.stdout.close()
+            await self.stdout.close()
 
         if self.stderr:
-            self.stderr.close()
+            await self.stderr.close()
 
         if self.stdin:
-            self.stdin.close()
+            await self.stdin.close()
 
         # Wait for the process to terminate
         await self.wait()

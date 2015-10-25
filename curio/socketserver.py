@@ -199,8 +199,8 @@ class StreamRequestHandler(BaseRequestHandler):
         self.wfile = self.connection.makefile('wb')
 
     async def finish(self):
-        self.wfile.close()
-        self.rfile.close()
+        await self.wfile.close()
+        await self.rfile.close()
 
 class DatagramRequestHandler(BaseRequestHandler):
     """Define self.rfile and self.wfile for datagram sockets."""

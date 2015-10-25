@@ -285,13 +285,10 @@ class Stream(object):
                 await read_wait(self._fileobj, timeout=self._timeout)
 
     async def close(self):
-        while True:
-            try:
-                return self._fileobj.close()
-            except WantWrite:
-                await write_wait(self._fileobj, timeout=self._timeout)
-            except WantRead:
-                await read_wait(self._fileobj, timeout=self._timeout)
+        # Note: behavior of close() is broken on Python 3.5. See Issue #25476
+        # Workaround is to call flush above first
+        await self.flush()
+        self._fileobj.close()
 
     def __getattr__(self, name):
         return getattr(self._fileobj, name)
@@ -309,10 +306,9 @@ class Stream(object):
     def __iter__(self):
         raise RuntimeError('Use: async-for to iterate')
 
-    def __enter__(self):
+    async def __aenter__(self):
         self._fileobj.__enter__()
         return self
 
-    def __exit__(self, *args):
-        self._fileobj.__exit__(*args)
-
+    async def __aexit__(self, *args):
+        await self.close()

@@ -82,8 +82,8 @@ class TestSocket(unittest.TestCase):
 
         async def handler(client):
             results.append('handler start')
-            with client.makefile('wb') as out_f:
-                with client.makefile('rb') as in_f:
+            async with client.makefile('wb') as out_f:
+                async with client.makefile('rb') as in_f:
                     async for line in in_f:
                         results.append(('handler', line))
                         await out_f.write(line)
@@ -108,8 +108,8 @@ class TestSocket(unittest.TestCase):
             resp = await in_f.read(100)
             results.append(('client', resp))
             results.append('client close')
-            out_f.close()
-            in_f.close()
+            await out_f.close()
+            await in_f.close()
             sock.close()
 
         kernel.add_task(server(('',25000)))
