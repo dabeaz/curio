@@ -17,6 +17,7 @@ from collections import deque, defaultdict
 from types import coroutine
 from contextlib import contextmanager
 
+# Logger where uncaught exceptions from crashed tasks are logged
 log = logging.getLogger(__name__)
 
 # kqueue is the datatype used by the kernel for all of its queuing functionality.
@@ -169,7 +170,7 @@ class Kernel(object):
         self._notify_sock.close()
         self._wait_sock.close()
 
-    # Callback that causes the kernel to wake on non-I/O events
+    # Force the kernel to wake.  Used on non-I/O events such as completion of futures
     def _wake(self, task=None, value=None, exc=None):
         if task:
             self._reschedule_task(task, value, exc)

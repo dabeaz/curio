@@ -52,11 +52,11 @@ There are only a few methods that may be used on a ``Kernel`` outside of corouti
    and returns immediately.  The kernel will stop only after the currently running 
    task yields.
 
-Basic System Calls
-------------------
+Tasks
+-----
 
-Tasks interact with the kernel by making system calls.  These
-functions may only be used inside coroutines.
+Once the kernel is running, a coroutine can create a new task using the following
+function:
 
 .. function:: await new_task(coro [, daemon=False])
 
@@ -67,17 +67,9 @@ functions may only be used inside coroutines.
    in the background.  Note: The kernel only runs as long as there are non-daemonic
    tasks to execute.
 
-.. function:: await sleep(seconds)
-
-   Sleep for a specified number of seconds.  If the number of seconds is 0, the
-   kernel merely switches to the next task (if any).
-
-Tasks
------
-
 Tasks created by :func:`new_task()` are represented as a :class:`Task` instance.
-There is no public interface for creating a task instance.   The following methods
-are available on tasks:
+It is illegal to create a :class:`Task` instance directly by calling the class. 
+The following methods are available on tasks:
 
 .. method:: await Task.join([timeout=None])
 
@@ -109,6 +101,14 @@ are available on tasks:
 
    A tuple of exception information obtained from ``sys.exc_info()`` if the
    task crashes for some reason.  Potentially useful for debugging.
+
+If you need to make a task sleep for awhile, use the following function:
+
+.. function:: await sleep(seconds)
+
+   Sleep for a specified number of seconds.  If the number of seconds is 0, the
+   kernel merely switches to the next task (if any).
+
 
 Performing External Work
 ------------------------
@@ -328,6 +328,57 @@ don't block the kernel:
 .. function:: await gethostname()
 .. function:: await gethostbyaddr(ip_address)
 .. function:: await getnameinfo(sockaddr, flags)
+
+subprocess replacement module
+-----------------------------
+The :mod:`curio.subprocess` module provides a wrapper around the built-in :mod:`subprocess` module.
+
+.. class:: class Popen(*args, **kwargs).
+
+   A wrapper around the :class:`subprocess.Popen` class.  The same arguments are accepted.
+   On the resulting ``Popen`` instance, the ``stdin``, ``stdout``, and ``stderr`` file
+   attributes have been wrapped by the :class:`curio.io.Stream` class. You can use these
+   in an asynchronous context. 
+
+Here is an example of using ``Popen`` to read streaming output off of a subprocess with curio::
+
+    import curio
+    from curio import subprocess
+
+    async def main():
+        p = subprocess.Popen(['ping', 'www.python.org'], stdout=subprocess.PIPE)
+        async for line in p.stdout:
+            print('Got:', line.decode('ascii'), end='')
+
+    if __name__ == '__main__':
+        kernel = curio.Kernel()
+        kernel.add_task(main())
+        kernel.run()
+
+The following methods of :class:`Popen` have been replaced by asynchronous equivalents:
+
+
+.. method:: await Popen.wait(timeout=None)
+
+   Wait for a subprocess to exit.
+
+.. method:: await Popen.communicate(input=b'', timeout=None)
+
+   Communicate with the subprocess, sending the specified input on standard input.
+   Returns a tuple ``(stdout, stderr)`` with the resulting output of standard output
+   and standard error.
+
+The following functions are available.  They accept the same arguments as their
+equivalents in the :mod:`subprocess` module:
+
+.. function:: await run(args, stdin=None, input=None, stdout=None, stderr=None, shell=False, timeout=None, check=False)
+
+   Run a command in a subprocess.  Returns a :class:`subprocess.CompletedProcess` instance.
+
+.. function:: await check_output(args, stdout=None, stderr=None, shell=False, timeout=None)
+
+   Run a command in a subprocess and return the resulting output. Raises a ``subprocess.CalledProcessError``
+   exception if an error occurred.
 
 Synchronization Primitives
 --------------------------
@@ -721,9 +772,9 @@ implementing a new curio primitive.
    Wait for the arrival of a signal in a given signal set.
 
 Again, you're unlikely to use any of these functions directly.  However, here's a small taste
-of how they're used.  For example, here's the ``recv()`` method of ``socket`` objects::
+of how they're used.  For example, here's the ``recv()`` method of ``Socket`` objects::
 
-    class socket(object):
+    class Socket(object):
         ...
         def recv(self, maxbytes):
             while True:
@@ -737,7 +788,7 @@ This method first tries to receive data.  If none is available, the ``read_wait(
 put the task to sleep until reading can be performed. When it awakes, the receive operation 
 is retried.
 
-Here's an example of code that implements a lock::
+Here's an example of code that implements a mutex lock::
 
     from collections import deque
 

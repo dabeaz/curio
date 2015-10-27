@@ -30,10 +30,8 @@ class Popen(object):
     def __init__(self, args, **kwargs):
         if 'universal_newlines' in kwargs:
             raise RuntimeError('universal_newlines argument not supported')
-        if 'bufsize' in kwargs:
-            raise RuntimeError('bufsize argument not supported')
 
-        self._popen = subprocess.Popen(args, bufsize=0, **kwargs)
+        self._popen = subprocess.Popen(args, **kwargs)
         if self._popen.stdin:
             self.stdin = Stream(self._popen.stdin)
         if self._popen.stdout:

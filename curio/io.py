@@ -2,17 +2,17 @@
 #
 # I/O wrapper objects.  Let's talk about design for a moment...
 #
-# Curio is primarily concerned with the scheduling of tasks. In particular,
-# the kernel does not actually perform any I/O.   It merely blocks tasks
-# that need to wait for reading or writing.  To actually perform I/O, you
-# use the existing file and socket abstractions already provided by the Python
-# standard library.  The only difference is that you need to take extra steps
-# to manage their non-blocking behavior.
-#
-# The classes in this file provide wrappers around socket-like and file-like
-# objects. Methods responsible for reading/writing have a small amount of extra
-# logic to added to handle their scheduling.  Other methods are simply passed
-# through to the original object via delegation. 
+# Curio is primarily concerned with the scheduling of tasks. In
+# particular, the kernel does not actually perform any I/O.  It merely
+# blocks tasks that need to wait for reading or writing.  To actually
+# perform I/O, you use the existing file and socket abstractions
+# already provided by the Python standard library.  The only
+# difference is that you need to take extra steps to manage their
+# non-blocking behavior.  The classes in this file provide wrappers
+# around socket-like and file-like objects. Methods responsible for
+# reading/writing have a small amount of extra logic to added to
+# handle their scheduling.  Other methods are simply passed through to
+# the original object via delegation.
 #
 # It's important to emphasize that these classes can be applied to
 # *ANY* existing socket-like or file-like object as long as it
@@ -47,11 +47,17 @@ except ImportError:
     WantRead = BlockingIOError
     WantWrite = BlockingIOError
 
+# There is a certain amount of repetition in this class.  It can
+# probably be shortened with some sort of decorator magic. On the
+# other, the KISSS (Keep it Stupid Simple Stupid) principle might be a
+# better policy--just in case someone needs to debug it.
+
 class Socket(object):
     '''
     Non-blocking wrapper around a socket object.   The original socket is put
     into a non-blocking mode when it's wrapped.
     '''
+    __slots__ = ('_socket', '_timeout', '_fileno')
     def __init__(self, sock):
         self._socket = sock
         self._socket.setblocking(False)
@@ -211,6 +217,13 @@ class Socket(object):
             except WantWrite:
                 await write_wait(self._socket, self._timeout)
 
+            
+    # Design discussion.  Why make close() async?   Partly it's to make the
+    # programming interface highly uniform with the other methods (all of which
+    # involve an await).  It's also to provide consistency with the Stream
+    # API below which requires an asynchronous close to properly flush I/O
+    # buffers.
+
     async def close(self):
         self._socket.close()
 
@@ -232,6 +245,7 @@ class Stream(object):
     Wrapper around a file-like object.  File is put into non-blocking mode.
     The underlying file must be in binary mode.  
     '''
+    __slots__ = ('_file', '_fileno', '_linebuffer', '_timeout')
     def __init__(self, fileobj):
         assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
         self._file = fileobj
@@ -338,6 +352,10 @@ class Stream(object):
                 await write_wait(self._file, timeout=self._timeout)
             except WantRead:
                 await read_wait(self._file, timeout=self._timeout)
+
+    # Why async close()?   If the underlying file is buffered, the contents need
+    # to be flushed first--a process that might cause a BlockingIOError.  In
+    # that case, we have to suspend briefly until the buffers free up space.
 
     async def close(self):
         await self.flush()

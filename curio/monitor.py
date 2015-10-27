@@ -13,6 +13,7 @@ import atexit
 
 from .io import Stream
 from .kernel import _kernel_reference, SignalSet, CancelledError
+from . import socket
 
 def get_stack(task):
     frames = []
@@ -151,3 +152,25 @@ async def monitor():
         with sigset.ignore():
             await monrun(kernel)
 
+
+async def webmonitor(address):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+    sock.listen(1)
+    while True:
+        client, addr = await sock.accept()
+        await new_task(webmonitor_handler(client))
+
+async def webmonitor_handler(client):
+    request = []
+    async with client.makefile('rb') as client_f:
+        async for line in client_f:
+            if not line.strip():
+                break
+            request.append(line)
+
+    # Look at the request line
+    meth, path, proto = request[0].split()
+    
+             
+    
