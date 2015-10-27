@@ -24,7 +24,7 @@ Content-type: text/plain\r
 If you're seeing this, it probably worked. Yay!
 ''')
     print('Connection closed')
-    client_f.close()
+    await client_f.close()
     client.close()
 
 async def run_server(address):

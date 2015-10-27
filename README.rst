@@ -105,6 +105,7 @@ that question, but here are a few of the motivations for creating curio.
   features and is not encumbered by issues of backwards compatibility
   with legacy Python code written 15 years ago.
 
+
 * Previous libraries have often made heavy use of clever hacks and
   tricks to implement concurrent I/O.  For example, relying upon C
   extensions to support green threads, monkeypatching standard library
@@ -116,6 +117,7 @@ that question, but here are a few of the motivations for creating curio.
   clever patching, no manipulation of Python internals, and no advanced
   metaprogramming tricks.  The code does what it says it does.
 
+
 * Existing I/O libraries are largely built on event-loops and callback
   functions--this includes Python's own asyncio module. Unfortunately,
   this particular programming model invariably leads to a
@@ -125,7 +127,8 @@ that question, but here are a few of the motivations for creating curio.
   what's actually going on in a system like that.  You might as well
   abandon all hope if you ever have to debug it when things don't work
   as expected or if you ever have to explain how it works to a
-  grey-bearded C programmer.  It's too complicated.
+  grey-haired C programmer.  It's too complicated.
+
 
 * Curio is a powerful library in a small package.  However, it places
   a great emphasis on implementation simplicity above all else. Simplicity
@@ -137,6 +140,9 @@ that question, but here are a few of the motivations for creating curio.
   your code fails, you need to be able to debug it--possibly down to the
   level of individual calls to the operating system. Simplicity matters
   a lot.
+
+
+* It's fun. 
 
 Under the Covers
 ----------------

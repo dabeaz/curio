@@ -138,75 +138,142 @@ calculations and blocking operations.  Use the following functions to do that:
 
    Set the default executor used for blocking processing.
 
-Sockets
--------
-The :mod:`curio.socket` module provides a wrapper around the built-in :mod:`socket` module.
-The module provides exactly the same functionality except that certain operations have
-been replaced by coroutine equivalents.  Sockets in curio are fully compatible with 
-timeouts and other socket features.
+I/O Layer
+---------
+I/O in curio is performed by wrapper classes in :mod:`curio.io` that wrap around existing sockets and
+streams.  These classes manage the blocking behavior and delegate their methods
+to an existing socket or file.   
 
-.. class:: class socket(family=AF_INET, type=SOCK_STREAM, proto=0, fileno=None)
+The :class:`Socket` class is used to wrap existing an socket.  It is compatible with
+sockets from the built-in :mod:`socket` module as well as SSL-wrapped sockets created
+by functions by the built-in :mod:`ssl` module.  Sockets in curio should be fully
+compatible with timeouts and other common socket features.
 
-   Creates a wrapper the around :class:`socket` objects created in the built-in :mod:`socket`
-   module.  The arguments for construction are identical and have the same meaning.
-   The resulting :class:`socket` instance is set in non-blocking mode.  
+.. class:: class Socket(sockobj)
 
-.. method:: socket.from_sock(sock)
+   Creates a wrapper the around an existing socket *sockobj*.  This socket
+   is set in non-blocking mode when wrapped.
 
-   Class method.  Creates a :mod:`curio.socket` wrapper object from an existing socket.   
+The following methods are redefined on :class:`Socket` objects to be
+compatible with coroutines.  Any socket method not listed here will be
+delegated to the underlying socket and should work normally. Be aware
+that not all methods have been wrapped and that using a method not
+listed here might block the kernel.
 
-The following methods are redefined on :class:`socket` objects to be compatible with coroutines.
-Please note that all of the other :class:`socket` methods are available as well.  However,
-unless specifically listed here, those methods simply delegate to their original implementation.
-Be aware that not all methods have been wrapped and that using a method not listed here might
-block the kernel.
-
-.. method:: await socket.recv(maxbytes [, flags=0])
+.. method:: await Socket.recv(maxbytes [, flags=0])
 
    Receive up to *maxbytes* of data.
 
-.. method:: await socket.recv_into(buffer [, nbytes=0 [, flags=0]])
+.. method:: await Socket.recv_into(buffer [, nbytes=0 [, flags=0]])
 
    Receive up to *nbytes* of data into a buffer object.
 
-.. method:: await socket.recvfrom(maxsize [, flags=0])
+.. method:: await Socket.recvfrom(maxsize [, flags=0])
 
    Receive up to *maxbytes* of data.  Returns a tuple `(data, client_address)`.
 
-.. method:: await socket.recvfrom_into(buffer [, nbytes=0 [, flags=0]])
+.. method:: await Socket.recvfrom_into(buffer [, nbytes=0 [, flags=0]])
 
    Receive up to *nbytes* of data into a buffer object. 
 
-.. method:: await socket.send(data [, flags=0])
+.. method:: await Socket.send(data [, flags=0])
 
    Send data.  Returns the number of bytes of data actually sent (which may be
    less than provided in *data*).
 
-.. method:: await socket.sendall(data [, flags=0])
+.. method:: await Socket.sendall(data [, flags=0])
 
    Send all of the data in *data*.
 
-.. method:: await socket.sendto(data, address):
+.. method:: await Socket.sendto(data, address):
 
    Send data to the specified address.
 
-.. method:: await socket.accept()
+.. method:: await Socket.accept()
 
    Wait for a new connection.  Returns a tuple `(sock, address)`.
 
-.. method:: await socket.connect(address)
+.. method:: await Socket.connect(address)
 
    Make a connection.
 
-.. method:: socket.makefile(mode [, buffering=0])
+.. method:: Socket.makefile(mode [, buffering=-1])
 
    Make a file-like object that wraps the socket.  The resulting file
-   object is a :class:`curio.file.File` instance that supports non-blocking
-   I/O.   *mode* specifies the file mode which must be one of ``'rb'``, ``'wb'``,
-   or ``'rwb'``.  *buffering* is currently ignored and only provided for compatibility
-   with the :mod:`socket` module API. It might be supported in a future version.
-   Note: It is not possible to create a file with Unicode text encoding/decoding applied 
-   to it so those options are not available.
+   object is a :class:`curio.io.Stream` instance that supports
+   non-blocking I/O.  *mode* specifies the file mode which must be one
+   of ``'rb'`` or ``'wb'``.  *buffering* specifies the buffering
+   behavior.  Note: It is not possible to create a file with Unicode
+   text encoding/decoding applied to it so those options are not
+   available.
+
+
+The :class:`Stream` class puts a non-blocking wrapper around an
+existing file-like object.  Certain other functions in curio use this
+(e.g., the :func:`Socket.makefile()` method).
+
+.. class:: class Stream(fileobj)
+
+   Create a file-like wrapper around an existing file.  *fileobj* must be in
+   in binary mode.  The file is placed into non-blocking mode
+   using :mod:`os.set_blocking()`.
+
+The following methods are available on instances of :class:`Stream`:
+
+.. method:: await Stream.read([maxbytes=-1])
+
+   Read up to *maxbytes* of data on the file. If omitted, reads as 
+   much data as is currently available and returns it.
+
+.. method:: await Stream.readall()
+
+   Return all of the data that's available on a file up until an EOF is read.
+
+.. method:: await Stream.readline():
+ 
+   Read a single line of data from a file.
+
+.. method:: await Stream.write(bytes)
+
+   Write all of the data in *bytes* to the file. 
+
+.. method:: await Stream.writelines(lines)
+
+   Writes all of the lines in *lines* to the file.
+
+.. method:: await Stream.flush()
+
+   Flush any unwritten data from buffers to the file.
+
+.. method:: await Stream.close()
+
+   Flush any unwritten data and close the file.
+
+.. method:: settimeout(seconds)
+
+   Sets a timeout on all file I/O operations.  If *seconds* is None, any previously set
+   timeout is cleared. 
+
+Other file methods (e.g., ``tell()``, ``seek()``, etc.) are available
+if the supplied ``fileobj`` also has them.  Streams may be used as an asynchronous
+context manager.  For example::
+
+    async with stream:
+        #  Use the stream object
+        ...
+    # stream closed here
+
+socket replacement module
+-------------------------
+The :mod:`curio.socket` module provides a wrapper around the built-in :mod:`socket` module.
+The module provides exactly the same functionality except that certain operations have
+been replaced by coroutine equivalents. 
+
+.. function:: def socket(family=AF_INET, type=SOCK_STREAM, proto=0, fileno=None)
+
+   Creates a :class:`curio.io.Socket` wrapper the around :class:`socket` objects created in the built-in :mod:`socket`
+   module.  The arguments for construction are identical and have the same meaning.
+   The resulting :class:`socket` instance is set in non-blocking mode.  
 
 The following module-level functions have been modified so that the returned socket
 objects are compatible with curio:
@@ -225,50 +292,6 @@ don't block the kernel:
 .. function:: await gethostname()
 .. function:: await gethostbyaddr(ip_address)
 .. function:: await getnameinfo(sockaddr, flags)
-
-Files
------
-
-The :mod:`curio.file` module contains a class :class:`File` that puts a non-blocking
-wrapper around an existing file object.  Certain other functions in curio use this (e.g.,
-the :func:`socket.makefile()` method).   
-
-.. class:: class File(fileobj)
-
-   Create a file-like wrapper around an existing file.  *fileobj* must be in
-   in binary mode and unbuffered.  The file is placed into non-blocking mode
-   using :mod:`os.set_blocking()`.
-
-The following methods are available on instances of :class:`File`:
-
-.. method:: await File.read([maxbytes=-1])
-
-   Read up to *maxbytes* of data on the file. If omitted, reads as 
-   much data as is currently available and returns it.
-
-.. method:: await File.readall()
-
-   Return all of the data that's available on a file up until an EOF is read.
-
-.. method:: await File.readline():
- 
-   Read a single line of data from a file.
-
-.. method:: await File.write(bytes)
-
-   Write all of the data in *bytes* to the file. 
-
-.. method:: await File.writelines(lines)
-
-   Writes all of the lines in *lines* to the file.
-
-.. method:: settimeout(seconds)
-
-   Sets a timeout on all file I/O operations.  If *seconds* is None, any previously set
-   timeout is cleared. 
-
-Other file methods (e.g., ``tell()``, ``seek()``, etc.) are available
-if the supplied ``fileobj`` also has them.
 
 Synchronization Primitives
 --------------------------

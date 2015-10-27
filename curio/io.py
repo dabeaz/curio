@@ -7,7 +7,7 @@
 # that need to wait for reading or writing.  To actually perform I/O, you
 # use the existing file and socket abstractions already provided by the Python
 # standard library.  The only difference is that you need to take extra steps
-# to manage their behavior with non-blocking I/O.
+# to manage their non-blocking behavior.
 #
 # The classes in this file provide wrappers around socket-like and file-like
 # objects. Methods responsible for reading/writing have a small amount of extra
@@ -25,7 +25,7 @@
 # No assumption is made about system compatibility (Unix vs. Windows).  
 # The main compatibility concern would be at the level of the I/O
 # selector used by the kernel.  For example, can it detect I/O events
-# on the provide file or socket.
+# on the provided file or socket?  If so, it will probably work here.
 
 from .kernel import read_wait, write_wait
 
@@ -56,7 +56,7 @@ class Socket(object):
         self._socket = sock
         self._socket.setblocking(False)
         self._timeout = None
-
+            
     def settimeout(self, seconds):
         self._timeout = seconds
 
@@ -171,6 +171,17 @@ class Socket(object):
 
     def __getattr__(self, name):
         return getattr(self._socket, name)
+
+    # Note: Somewhat undecided on support for async-with on sockets.
+    # It's required on streams because of the non-blocking close behavior
+    # and having to flush I/O buffers.  Should it also be async here for
+    # consistency in the API?
+    def __aenter__(self):
+        self._socket.__enter__()
+        return self
+
+    def __aexit__(self, ety, eval, etb):
+        self._socket.__exit__(ety, eval, etb)
 
     def __enter__(self):
         self._socket.__enter__()
@@ -312,3 +323,6 @@ class Stream(object):
 
     async def __aexit__(self, *args):
         await self.close()
+        
+    def __enter__(self):
+        raise RuntimeError('Use async with on streams')
