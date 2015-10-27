@@ -25,7 +25,7 @@ If you're seeing this, it probably worked. Yay!
 ''')
     print('Connection closed')
     await client_f.close()
-    client.close()
+    await client.close()
 
 async def run_server(address):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

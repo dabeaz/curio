@@ -11,7 +11,7 @@ import signal
 import time
 import atexit
 
-from .file import File
+from .io import Stream
 from .kernel import _kernel_reference, SignalSet, CancelledError
 
 def get_stack(task):
@@ -76,7 +76,7 @@ def ps(kernel):
                                             widths[4], task))
 
 async def monrun(kernel):
-    stdin = File(sys.stdin.buffer.raw)
+    stdin = Stream(sys.stdin.buffer.raw)
     try:
          print('\nCurio Monitor:  %d tasks running' % len(kernel._tasks))
          print('Type help for commands')

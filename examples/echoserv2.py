@@ -9,17 +9,17 @@ async def echo_server(address):
     sock.bind(address)
     sock.listen(5)
     print('Server listening at', address)
-    with sock:
+    async with sock:
         while True:
              client, addr = await sock.accept()
              print('Connection from', addr)
              await new_task(echo_client(client))
-             del client
 
 async def echo_client(client):
-    with client.makefile('rwb') as client_f:
+    async with client.makefile('rwb') as client_f:
          async for line in client_f:
              await client_f.write(line)
+    await client.close()
     print('Connection closed')
 
 if __name__ == '__main__':

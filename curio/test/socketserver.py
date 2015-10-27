@@ -35,7 +35,7 @@ class TestSocketServer(unittest.TestCase):
             resp = await sock.recv(100)
             results.append(('client', resp))
             results.append('client close')
-            sock.close()
+            await sock.close()
 
         serv = TCPServer(('',25000), EchoHandler)
         kernel.add_task(serv.handle_request())
@@ -83,7 +83,7 @@ class TestSocketServer(unittest.TestCase):
             resp = await sock.recv(100)
             results.append(('client', resp))
             results.append('client close')
-            sock.close()
+            await sock.close()
 
         serv = TCPServer(('',25000), EchoHandler)
         kernel.add_task(serv.handle_request())

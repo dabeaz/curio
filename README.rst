@@ -25,14 +25,14 @@ Here is a simple TCP echo server implemented using sockets and curio::
         sock.bind(address)
         sock.listen(5)
         print('Server listening at', address)
-        with sock:
+        async with sock:
             while True:
                 client, addr = await sock.accept()
                 print('Connection from', addr)
                 await new_task(echo_client(client))
     
     async def echo_client(client):
-        with client:
+        async with client:
              while True:
                  data = await client.recv(1000)
                  if not data:

@@ -17,7 +17,7 @@ class TestSocket(unittest.TestCase):
             client, addr = await sock.accept()
             results.append('accept done')
             await new_task(handler(client))
-            sock.close()
+            await sock.close()
 
         async def handler(client):
             results.append('handler start')
@@ -29,7 +29,7 @@ class TestSocket(unittest.TestCase):
                 results.append(('handler', data))
                 await client.sendall(data)
             results.append('handler done')
-            client.close()
+            await client.close()
 
         async def client(address):
             results.append('client start')
@@ -44,7 +44,7 @@ class TestSocket(unittest.TestCase):
             resp = await sock.recv(100)
             results.append(('client', resp))
             results.append('client close')
-            sock.close()
+            await sock.close()
 
         kernel.add_task(server(('',25000)))
         kernel.add_task(client(('localhost', 25000)))
@@ -78,7 +78,7 @@ class TestSocket(unittest.TestCase):
             client, addr = await sock.accept()
             results.append('accept done')
             await new_task(handler(client))
-            sock.close()
+            await sock.close()
 
         async def handler(client):
             results.append('handler start')
@@ -89,7 +89,7 @@ class TestSocket(unittest.TestCase):
                         await out_f.write(line)
                         await out_f.flush()
             results.append('handler done')
-            client.close()
+            await client.close()
 
         async def client(address):
             results.append('client start')
@@ -110,7 +110,7 @@ class TestSocket(unittest.TestCase):
             results.append('client close')
             await out_f.close()
             await in_f.close()
-            sock.close()
+            await sock.close()
 
         kernel.add_task(server(('',25000)))
         kernel.add_task(client(('localhost', 25000)))
@@ -140,7 +140,7 @@ class TestSocket(unittest.TestCase):
             data, addr = await sock.recvfrom(8192)
             results.append(('server', data))
             await sock.sendto(data, addr)
-            sock.close()
+            await sock.close()
             results.append('server close')
 
         async def client(address):
@@ -150,9 +150,8 @@ class TestSocket(unittest.TestCase):
             await sock.sendto(b'Msg1', address)
             data, addr = await sock.recvfrom(8192)
             results.append(('client', data))
-            sock.close()
+            await sock.close()
             results.append('client close')
-            sock.close()
 
         kernel.add_task(server(('',25000)))
         kernel.add_task(client(('localhost', 25000)))
@@ -183,7 +182,7 @@ class TestSocket(unittest.TestCase):
                 results.append('not here')
             except TimeoutError:
                 results.append('accept timeout')
-            sock.close()
+            await sock.close()
 
         kernel.add_task(server(('',25000)))
         kernel.run()
@@ -207,7 +206,7 @@ class TestSocket(unittest.TestCase):
                 results.append('not here')
             except CancelledError:
                 results.append('accept cancel')
-            sock.close()
+            await sock.close()
 
         async def canceller():
              task = await new_task(server(('',25000)))
@@ -238,8 +237,8 @@ class TestSocket(unittest.TestCase):
                 results.append('not here')
             except TimeoutError:
                 results.append('recv timeout')
-            client.close()
-            sock.close()
+            await client.close()
+            await sock.close()
 
         async def canceller():
              task = await new_task(server(('',25000)))
@@ -247,7 +246,7 @@ class TestSocket(unittest.TestCase):
              results.append('client connect')
              await sock.connect(('localhost', 25000))
              await sleep(1.0)
-             sock.close()
+             await sock.close()
              results.append('client done')
 
         kernel.add_task(canceller())
@@ -278,8 +277,8 @@ class TestSocket(unittest.TestCase):
                 results.append('not here')
             except CancelledError:
                 results.append('recv cancel')
-            client.close()
-            sock.close()
+            await client.close()
+            await sock.close()
 
         async def canceller():
              task = await new_task(server(('',25000)))
@@ -288,7 +287,7 @@ class TestSocket(unittest.TestCase):
              await sock.connect(('localhost', 25000))
              await sleep(1.0)
              await task.cancel()
-             sock.close()
+             await sock.close()
              results.append('client done')
 
         kernel.add_task(canceller())
@@ -316,7 +315,7 @@ class TestSocket(unittest.TestCase):
                 results.append('not here')
             except TimeoutError:
                 results.append('recvfrom timeout')
-            sock.close()
+            await sock.close()
 
         async def canceller():
              await new_task(server(('',25000)))
@@ -346,7 +345,7 @@ class TestSocket(unittest.TestCase):
                 results.append('not here')
             except CancelledError:
                 results.append('recvfrom cancel')
-            sock.close()
+            await sock.close()
 
         async def canceller():
              task = await new_task(server(('',25000)))
@@ -383,13 +382,13 @@ class TestSocket(unittest.TestCase):
                 view = view[nrecv:]
 
             results.append(a)
-            
+
         s1, s2 = socketpair()
         kernel.add_task(sender(s1))
         kernel.add_task(receiver(s2))
         kernel.run()
-        s1.close()
-        s2.close()
+        s1._socket.close()
+        s2._socket.close()
 
         self.assertTrue(all(n==x for n,x in enumerate(results[0])))
 

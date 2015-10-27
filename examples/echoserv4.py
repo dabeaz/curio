@@ -8,7 +8,6 @@ class EchoHandler(StreamRequestHandler):
         print('Connection from', self.client_address)
         async for line in self.rfile:
             await self.wfile.write(line)
-            await self.wfile.flush()
 
         print('Connection closed')
 

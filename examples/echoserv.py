@@ -16,7 +16,7 @@ async def echo_server(address):
              await new_task(echo_client(client))
 
 async def echo_client(client):
-    with client:
+    async with client:
          while True:
              data = await client.recv(10000)
              if not data:

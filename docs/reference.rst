@@ -140,9 +140,13 @@ calculations and blocking operations.  Use the following functions to do that:
 
 I/O Layer
 ---------
-I/O in curio is performed by wrapper classes in :mod:`curio.io` that wrap around existing sockets and
-streams.  These classes manage the blocking behavior and delegate their methods
-to an existing socket or file.   
+I/O in curio is performed by wrapper classes in :mod:`curio.io` that
+wrap around existing sockets and streams.  These classes manage the
+blocking behavior and delegate their methods to an existing socket or
+file.
+
+Socket
+^^^^^^
 
 The :class:`Socket` class is used to wrap existing an socket.  It is compatible with
 sockets from the built-in :mod:`socket` module as well as SSL-wrapped sockets created
@@ -176,6 +180,14 @@ listed here might block the kernel.
 
    Receive up to *nbytes* of data into a buffer object. 
 
+.. method:: await Socket.recvmsg(bufsize [, ancbufsize=0 [, flags=0]])
+
+   Receive normal and ancillary data.
+
+.. method:: await Socket.recvmsg_into(buffers [, ancbufsize=0 [, flags=0]])
+
+   Receive normal and ancillary data.
+
 .. method:: await Socket.send(data [, flags=0])
 
    Send data.  Returns the number of bytes of data actually sent (which may be
@@ -185,9 +197,14 @@ listed here might block the kernel.
 
    Send all of the data in *data*.
 
-.. method:: await Socket.sendto(data, address):
+.. method:: await Socket.sendto(data, address)
+.. method:: await Socket.sendto(data, flags, address)
 
    Send data to the specified address.
+
+.. method:: await Socket.sendmsg(buffers [, ancdata=() [, flags=0 [, address=None]]])
+
+   Send normal and ancillary data to the socket.
 
 .. method:: await Socket.accept()
 
@@ -197,20 +214,38 @@ listed here might block the kernel.
 
    Make a connection.
 
-.. method:: Socket.makefile(mode [, buffering=-1])
+.. method:: await Socket.connect_ex(address)
+
+   Make a connection and return an error code instead of raising an exception.
+
+.. method:: await Socket.close()
+
+   Close the connection.
+
+.. method:: Socket.makefile(mode [, buffering=0])
 
    Make a file-like object that wraps the socket.  The resulting file
    object is a :class:`curio.io.Stream` instance that supports
    non-blocking I/O.  *mode* specifies the file mode which must be one
    of ``'rb'`` or ``'wb'``.  *buffering* specifies the buffering
-   behavior.  Note: It is not possible to create a file with Unicode
-   text encoding/decoding applied to it so those options are not
-   available.
+   behavior. By default unbuffered I/O is used.  Note: It is not currently 
+   possible to create a stream with Unicode text encoding/decoding applied to it 
+   so those options are not available.
 
+:class:`Socket` objects may be used as an asynchronous context manager. For example::
+
+    async with sock:
+        # Use the socket
+        ...
+    # socket closed here
+
+Stream
+^^^^^^
 
 The :class:`Stream` class puts a non-blocking wrapper around an
 existing file-like object.  Certain other functions in curio use this
 (e.g., the :func:`Socket.makefile()` method).
+
 
 .. class:: class Stream(fileobj)
 
@@ -255,8 +290,9 @@ The following methods are available on instances of :class:`Stream`:
    timeout is cleared. 
 
 Other file methods (e.g., ``tell()``, ``seek()``, etc.) are available
-if the supplied ``fileobj`` also has them.  Streams may be used as an asynchronous
-context manager.  For example::
+if the supplied ``fileobj`` also has them.  
+
+Streams may be used as an asynchronous context manager.  For example::
 
     async with stream:
         #  Use the stream object

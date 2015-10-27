@@ -21,7 +21,6 @@ class FibHandler(StreamRequestHandler):
                 await self.wfile.write(resp.encode('ascii'))
             except ValueError:
                 await self.wfile.write(b'Bad input\n')
-            await self.wfile.flush()
         print('Connection closed')
 
 if __name__ == '__main__':

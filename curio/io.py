@@ -56,15 +56,28 @@ class Socket(object):
         self._socket = sock
         self._socket.setblocking(False)
         self._timeout = None
+        self._fileno = sock.fileno()
+
+    def __repr__(self):
+        return '<curio.Socket %r>' % (self._socket)
+
+    def __getattr__(self, name):
+        return getattr(self._socket, name)
             
+    def fileno(self):
+        return self._fileno
+
     def settimeout(self, seconds):
         self._timeout = seconds
 
-    def __repr__(self):
-        return '<curio.socket %r>' % (self._socket)
-
     def dup(self):
         return Socket(self._socket.dup())
+
+    def makefile(self, mode, buffering=0, *, encoding=None, errors=None, newline=None):
+        if 'b' not in mode:
+            raise RuntimeError('File can only be created in binary mode')
+        f = self._socket.makefile(mode, buffering=buffering)
+        return Stream(f)
 
     async def recv(self, maxsize, flags=0):
         while True:
@@ -114,6 +127,13 @@ class Socket(object):
             except WantRead:
                 await read_wait(self._socket, self._timeout)
 
+    async def connect_ex(self, address):
+        try:
+            await self.connect(address)
+            return 0
+        except OSError as e:
+            return e.errno
+
     async def connect(self, address):
         try:
             result = self._socket.connect(address)
@@ -125,6 +145,8 @@ class Socket(object):
         err = self._socket.getsockopt(SOL_SOCKET, SO_ERROR)
         if err != 0:
             raise OSError(err, 'Connect call failed %s' % (address,))
+        if getattr(self, 'do_handshake_on_connect', False):
+            await self.do_handshake()
 
     async def recvfrom(self, buffersize, flags=0):
         while True:
@@ -144,15 +166,41 @@ class Socket(object):
             except WantWrite:
                 await write_wait(self._socket, self._timeout)
 
-    async def sendto(self, data, address):
+    async def sendto(self, bytes, flags_or_address, address=None):
+        if address:
+            flags = flags_or_address
+        else:
+            address = flags_or_address
+            flags = 0
         while True:
             try:
-                return self._socket.sendto(data, address)
+                return self._socket.sendto(bytes, flags, address)
             except WantWrite:
                 await write_wait(self._socket, self._timeout)
             except WantRead:
                 await read_wait(self._socket, self._timeout)
 
+    async def recvmsg(self, bufsize, ancbufsize=0, flags=0):
+        while True:
+            try:
+                return self._socket.recvmsg(bufsize, ancbufsize, flags)
+            except WantRead:
+                await read_wait(self._socket, self._timeout)
+
+    async def recvmsg_into(self, buffers, ancbufsize=0, flags=0):
+        while True:
+            try:
+                return self._socket.recvmsg_into(buffers, ancbufsize, flags)
+            except WantRead:
+                await read_wait(self._socket, self._timeout)
+
+    async def sendmsg(self, buffers, ancdata=(), flags=0, address=None):
+        while True:
+            try:
+                return self._socket.sendmsg(buffers, ancdata, flags, address)
+            except WantRead:
+                await write_wait(self._socket, self._timeout)
+    
     # Special functions for SSL
     async def do_handshake(self):
         while True:
@@ -163,32 +211,21 @@ class Socket(object):
             except WantWrite:
                 await write_wait(self._socket, self._timeout)
 
-    def makefile(self, mode, buffering=0):
-        if 'b' not in mode:
-            raise RuntimeError('File can only be created in binary mode')
-        f = self._socket.makefile(mode, buffering=buffering)
-        return Stream(f)
+    async def close(self):
+        self._socket.close()
 
-    def __getattr__(self, name):
-        return getattr(self._socket, name)
-
-    # Note: Somewhat undecided on support for async-with on sockets.
-    # It's required on streams because of the non-blocking close behavior
-    # and having to flush I/O buffers.  Should it also be async here for
-    # consistency in the API?
-    def __aenter__(self):
+    async def __aenter__(self):
         self._socket.__enter__()
         return self
 
-    def __aexit__(self, ety, eval, etb):
-        self._socket.__exit__(ety, eval, etb)
-
+    async def __aexit__(self, *args):
+        self._socket.__exit__(*args)
+      
     def __enter__(self):
-        self._socket.__enter__()
-        return self
+        raise RuntimeError('Use async-with for context management')
 
-    def __exit__(self, ety, eval, etb):
-        self._socket.__exit__(ety, eval, etb)
+    def __exit__(self, *args):
+        pass
 
 class Stream(object):
     '''
@@ -197,31 +234,38 @@ class Stream(object):
     '''
     def __init__(self, fileobj):
         assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
-        self._fileobj = fileobj
-        os.set_blocking(fileobj.fileno(), False)
+        self._file = fileobj
+        self._fileno = fileobj.fileno()
+        os.set_blocking(self._fileno, False)
         self._linebuffer = bytearray()
         self._timeout = None
 
-    def settimeout(self, timeout):
-        self._timeout = timeout
+    def __repr__(self):
+        return '<curio.Stream %r>' % (self._file)
+
+    def __getattr__(self, name):
+        return getattr(self._file, name)
 
     def fileno(self):
-        return self._fileobj.fileno()
+        return self._fileno
+
+    def settimeout(self, timeout):
+        self._timeout = timeout
 
     async def _read(self, maxbytes=-1):
         while True:
             # In non-blocking mode, a file-like object might return None if no data is
             # available.  Alternatively, we'll catch the usual blocking exceptions just to be safe
             try:
-                data = self._fileobj.read(maxbytes)
+                data = self._file.read(maxbytes)
                 if data is None:
-                    await read_wait(self._fileobj, timeout=self._timeout)
+                    await read_wait(self._file, timeout=self._timeout)
                 else:
                     return data
             except WantRead:
-                await read_wait(self._fileobj, timeout=self._timeout)
+                await read_wait(self._file, timeout=self._timeout)
             except WantWrite:
-                await write_wait(self._fileobj, timeout=self._timeout)
+                await write_wait(self._file, timeout=self._timeout)
 
     async def read(self, maxbytes=-1):
         if self._linebuffer:
@@ -267,7 +311,7 @@ class Stream(object):
         view = memoryview(data).cast('b')
         while view:
             try:
-                nbytes = self._fileobj.write(view)
+                nbytes = self._file.write(view)
                 if nbytes is None:
                     raise BlockingIOError()
                 nwritten += nbytes
@@ -276,9 +320,9 @@ class Stream(object):
                 if hasattr(e, 'characters_written'):
                     nwritten += e.characters_written
                     view = view[e.characters_written:]
-                await write_wait(self._fileobj, timeout=self._timeout)
+                await write_wait(self._file, timeout=self._timeout)
             except WantRead:
-                await read_wait(self._fileobj, timeout=self._timeout)
+                await read_wait(self._file, timeout=self._timeout)
 
         return nwritten
 
@@ -289,20 +333,16 @@ class Stream(object):
     async def flush(self):
         while True:
             try:
-                return self._fileobj.flush() 
+                return self._file.flush() 
             except WantWrite:
-                await write_wait(self._fileobj, timeout=self._timeout)
+                await write_wait(self._file, timeout=self._timeout)
             except WantRead:
-                await read_wait(self._fileobj, timeout=self._timeout)
+                await read_wait(self._file, timeout=self._timeout)
 
     async def close(self):
-        # Note: behavior of close() is broken on Python 3.5. See Issue #25476
-        # Workaround is to call flush above first
         await self.flush()
-        self._fileobj.close()
-
-    def __getattr__(self, name):
-        return getattr(self._fileobj, name)
+        self._file.close()
+        self._fileno = -1
         
     async def __aiter__(self):
         return self
@@ -314,15 +354,17 @@ class Stream(object):
         else:
             raise StopAsyncIteration
 
-    def __iter__(self):
-        raise RuntimeError('Use: async-for to iterate')
-
     async def __aenter__(self):
-        self._fileobj.__enter__()
         return self
 
     async def __aexit__(self, *args):
         await self.close()
-        
+
+    def __iter__(self):
+        raise RuntimeError('Use: async-for to iterate')
+
     def __enter__(self):
-        raise RuntimeError('Use async with on streams')
+        raise RuntimeError('Use: async-with for context management')
+
+    def __exit__(self, *args):
+        pass

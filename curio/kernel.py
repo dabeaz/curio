@@ -239,7 +239,7 @@ class Kernel(object):
         normally terminate shortly afterwards.   This method is also used to 
         raise timeouts.
         '''
-        assert task != self._current, "A task can't cancel itself"
+        assert task != self._current, "A task can't cancel itself (%r, %r)" % (task, self._current)
 
         # Detach the task from where it might be waiting at this moment
         if task.cancel_func:
@@ -378,6 +378,7 @@ class Kernel(object):
         Cleanly shut down the kernel.  All remaining tasks are cancelled.  Using the
         function is highly recommended prior to terminating any program.
         '''
+        self._current = None
         for task in sorted(self._tasks.values(), key=lambda t: t.id, reverse=True):
             if task.id == 1:
                 continue

@@ -102,7 +102,7 @@ class TCPServer(BaseServer):
         self.socket.listen(self.request_queue_size)
 
     def server_close(self):
-        self.socket.close()
+        self.socket._socket.close()
 
     def fileno(self):
         return self.socket.fileno()
@@ -118,7 +118,7 @@ class TCPServer(BaseServer):
         self.close_request(request)
 
     def close_request(self, request):
-        request.close()
+        request._socket.close()
 
 
 class UDPServer(TCPServer):
