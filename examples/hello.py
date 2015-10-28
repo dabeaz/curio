@@ -56,5 +56,4 @@ async def parent():
 
 if __name__ == '__main__':
     kernel = curio.Kernel(with_monitor=True)
-    kernel.add_task(parent())
-    kernel.run()
+    kernel.run(parent())

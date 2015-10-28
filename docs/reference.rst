@@ -20,6 +20,16 @@ in the main execution thread.
 
 There are only a few methods that may be used on a ``Kernel`` outside of coroutines.
 
+
+.. method:: Kernel.run(coro=None, [pdb=False [, log_errors=True]])
+  
+   Runs the kernel until all non-daemonic tasks have finished execution.
+   *coro* is a coroutine to run as a task.  If ommitted, then tasks should
+   have already been added using the ``add_task`` method below.
+   If *pdb* is ``True``, then the kernel enters the Python debugger if any
+   task crashes with an uncaught exception.  If *log_errors* is ``True``, then
+   uncaught exceptions in tasks are logged.
+
 .. method:: Kernel.add_task(coro [, daemon=False])
 
    Adds a new task to the kernel.  *coro* is a newly instantiated coroutine. 
@@ -28,22 +38,6 @@ There are only a few methods that may be used on a ``Kernel`` outside of corouti
    be used to add a task to a running kernel and may not be used inside a
    coroutine.
 
-.. method:: Kernel.run([pdb=False [, log_errors=True]])
-  
-   Runs the kernel until all non-daemonic tasks have finished execution.
-   If *pdb* is ``True``, then the kernel enters the Python debugger if any
-   task crashes with an uncaught exception.  If *log_errors* is ``True``, then
-   uncaught exceptions in tasks are logged.
-
-.. method:: Kernel.shutdown()
-
-   Performs a clean shutdown of the kernel by issuing a cancellation request to
-   all remaining tasks (including daemonic tasks).  This function will not return
-   until all tasks have terminated.  This method may only be invoked on a kernel
-   that is not actively running.  It may not be used inside coroutines or from
-   separate threads.  Normally, it is not necessary to call this method since
-   the kernel runs until all tasks have terminated anyways.
-
 .. method:: Kernel.stop()
 
    Force the kernel to stop execution.  Since the kernel normally runs in the main
@@ -51,6 +45,17 @@ There are only a few methods that may be used on a ``Kernel`` outside of corouti
    or possibly inside a coroutine.  This method merely sets a flag in the kernel
    and returns immediately.  The kernel will stop only after the currently running 
    task yields.
+
+.. method:: Kernel.shutdown()
+
+   Performs a clean shutdown of the kernel by issuing a cancellation request to
+   all remaining tasks (including daemonic tasks).  This function will not return
+   until all tasks have terminated.  This method may only be invoked on a kernel
+   that is not actively running.  It may not be used inside coroutines or from
+   separate threads.  Normally, you would not call this method since the kernel
+   runs until all tasks have terminated anyways.  The main use case would be cleaning up
+   after a premature kernel shutdown due to a crash, system exit, or some other
+   event.
 
 Tasks
 -----

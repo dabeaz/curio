@@ -322,10 +322,14 @@ class Kernel(object):
                     self._cancel_task(task, exc=TimeoutError)
 
     # Kernel central loop
-    def run(self, *, pdb=False, log_errors=True):
+    def run(self, coro=None, *, pdb=False, log_errors=True):
         '''
         Run the kernel until no more non-daemonic tasks remain.
         '''
+
+        # If a coroutine was given, add it as the first task
+        if coro:
+            self.add_task(coro)
 
         self._running = True
 

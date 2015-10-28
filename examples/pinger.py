@@ -9,5 +9,4 @@ async def main():
 
 if __name__ == '__main__':
     kernel = curio.Kernel()
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())

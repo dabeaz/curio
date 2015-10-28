@@ -42,8 +42,7 @@ Here is a simple TCP echo server implemented using sockets and curio::
 
     if __name__ == '__main__':
         kernel = Kernel()
-        kernel.add_task(echo_server(('',25000)))
-        kernel.run()
+        kernel.run(echo_server(('',25000)))
 
 Or, if you prefer something a little higher level, here is the same program written
 using the curio socketserver module::
@@ -65,12 +64,10 @@ using the curio socketserver module::
 
     if __name__ == '__main__':
         serv = TCPServer(('',25000), EchoHandler)
-        kernel = Kernel()
-        kernel.add_task(serv.serve_forever())
-        kernel.run()
+        kernel.run(serv.serve_forever())
 
-This is only a small sample of what's possible.  Read the tutorial for more
-in-depth coverage.
+This is only a small sample of what's possible.  Read the `official documentation
+<https://curio.readthedocs.org>` for more in-depth coverage.
 
 Performance
 -----------
@@ -160,6 +157,10 @@ management, scheduling, and nothing else. No part of the kernel is
 based on triggering event callback functions. In fact, the kernel
 doesn't even perform any I/O operations.   This means that it is very
 small, very fast, and relatively easy to understand.
+
+I/O operations are carried out using Python's normal socket and file 
+objects.  Curio merely places a small wrapper layer on top that handles
+non-blocking I/O and task scheduling. 
 
 Everything useful in curio is actually carried out in coroutines that
 run on top of the kernel.  This includes all I/O operations and the

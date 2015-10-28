@@ -28,14 +28,13 @@ countdown as you wait for your kid to put their shoes on::
 
     if __name__ == '__main__':
         kernel = curio.Kernel()
-        kernel.add_task(countdown(10))
-        kernel.run()
+        kernel.run(countdown(10))
 
 Run it and you'll see a countdown.  Yes, some jolly fun to be
 sure. Curio is based around the idea of tasks.  Tasks are functions
 defined as coroutines using the ``async`` syntax.  To run a task, you
-create a ``Kernel`` instance, add the task to it and then invoke the
-``run()`` method.
+create a ``Kernel`` instance, then invoke the ``run()`` method with a
+task.
 
 Tasks
 -----
@@ -66,8 +65,7 @@ Let's add a few more tasks into the mix::
 
     if __name__ == '__main__':
         kernel = curio.Kernel()
-        kernel.add_task(parent())
-        kernel.run()
+        kernel.run(parent())
 
 This program illustrates the process of creating and joining with
 tasks.  Here, the ``parent()`` task uses the ``curio.new_task()`` coroutine to 
@@ -102,8 +100,7 @@ with the monitor enabled::
     ...
     if __name__ == '__main__':
         kernel = curio.Kernel(with_monitor=True)
-        kernel.add_task(parent())
-        kernel.run()
+        kernel.run(parent())
 
 Run the program again. You'd really like to know what's happening?
 Yes?  Press Ctrl-C to enter the curio monitor::
@@ -450,8 +447,7 @@ is a simple echo server written directly with sockets using curio::
 
     if __name__ == '__main__':
         kernel = Kernel()
-        kernel.add_task(echo_server(('',25000)))
-        kernel.run()
+        kernel.run(echo_server(('',25000)))
 
 Run this program and try connecting to it using a command such as ``nc``
 or ``telnet``.  You'll see the program echoing back data to you.  Open
@@ -496,8 +492,7 @@ module. For example::
     if __name__ == '__main__':
         serv = TCPServer(('',25000), EchoHandler)
         kernel = Kernel()
-        kernel.add_task(serv.serve_forever())
-        kernel.run()
+        kernel.run(serv.serve_forever())
 
 This code mirrors the code you might write using the ``socketserver``
 standard library--again, just remember to add ``async`` and ``await`` to
@@ -537,8 +532,7 @@ Unix signal::
 
     if __name__ == '__main__':
         kernel = Kernel(with_monitor=True)
-        kernel.add_task(main(('',25000)))
-        kernel.run()
+        kernel.run(main(('',25000)))
 
 In this code, the ``main()`` coroutine launches the server, but then
 waits for the arrival of a ``SIGHUP`` signal.  When received, it 
@@ -566,8 +560,7 @@ command::
 
     if __name__ == '__main__':
         kernel = curio.Kernel()
-        kernel.add_task(main())
-        kernel.run()
+        kernel.run(main())
 
 In addition to ``Popen()``, you can also use higher level functions
 such as ``subprocess.run()`` and ``subprocess.check_output()``.  For example::
@@ -613,8 +606,7 @@ For example::
 
     if __name__ == '__main__':
         kernel = curio.Kernel()
-        kernel.add_task(main())
-        kernel.run()
+        kernel.run(main())
 
 Curio provides the same synchronization primitives as found in the built-in
 ``threading`` module.  The same techniques used by threads can be used with

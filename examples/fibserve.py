@@ -26,8 +26,7 @@ class FibHandler(StreamRequestHandler):
 if __name__ == '__main__':
     serv = TCPServer(('', 25000), FibHandler)
     kernel = Kernel()
-    kernel.add_task(serv.serve_forever())
-    kernel.run()
+    kernel.run(serv.serve_forever()))
 
 
 

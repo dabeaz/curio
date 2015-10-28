@@ -48,5 +48,4 @@ async def run_server(address):
 
 if __name__ == '__main__':
     kernel = curio.Kernel()
-    kernel.add_task(run_server(('',10000)))
-    kernel.run()
+    kernel.run(run_server(('',10000)))

@@ -9,7 +9,7 @@ async def echo_server(address):
     sock.bind(address)
     sock.listen(5)
     print('Server listening at', address)
-    with sock:
+    async with sock:
         while True:
              client, addr = await sock.accept()
              print('Connection from', addr)
@@ -26,5 +26,4 @@ async def echo_client(client):
 
 if __name__ == '__main__':
      kernel = Kernel()
-     kernel.add_task(echo_server(('',25000)))
-     kernel.run()
+     kernel.run(echo_server(('',25000)))
