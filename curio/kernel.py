@@ -205,10 +205,9 @@ class Kernel(object):
 
     # Internal task management functions. 
     def _new_task(self, coro, daemon=False):
-        '''
-        Create a new task in the kernel.  If daemon is True, the task is
-        created with no parent task.
-        '''
+        # Create a new task in the kernel.  If daemon is True, the task is
+        # created with no parent task.
+
         task = Task(coro)
         self._tasks[task.id] = task
         self._reschedule_task(task)
@@ -220,11 +219,10 @@ class Kernel(object):
         return task
 
     def _reschedule_task(self, task, value=None, exc=None):
-        '''
-        Reschedule a task, putting it back on the ready queue so that it can run.
-        value and exc specify a value or exception to send into the underlying 
-        coroutine when it is rescheduled.
-        '''
+        # Reschedule a task, putting it back on the ready queue so that it can run.
+        # value and exc specify a value or exception to send into the underlying 
+        # coroutine when it is rescheduled.
+
         assert task.id in self._tasks, 'Task %r not in the table table' % task
         self._ready.append(task)
         task.next_value = value
@@ -233,13 +231,12 @@ class Kernel(object):
         task.timeout = task.cancel_func = task.future = None
 
     def _cancel_task(self, task, exc=CancelledError):
-        '''
-        Cancel a task. This causes a CancelledError exception to raise in the
-        underlying coroutine.  The coroutine can elect to catch the exception
-        and continue to run to perform cleanup actions.  However, it would 
-        normally terminate shortly afterwards.   This method is also used to 
-        raise timeouts.
-        '''
+        # Cancel a task. This causes a CancelledError exception to raise in the
+        # underlying coroutine.  The coroutine can elect to catch the exception
+        # and continue to run to perform cleanup actions.  However, it would 
+        # normally terminate shortly afterwards.   This method is also used to 
+        # raise timeouts.
+
         assert task != self._current, "A task can't cancel itself (%r, %r)" % (task, self._current)
 
         # Detach the task from where it might be waiting at this moment
@@ -256,12 +253,11 @@ class Kernel(object):
             task.next_exc=exc()
 
     def _cleanup_task(self, task, value=None, exc=None):
-        '''
-        Cleanup task.  This is called after the underlying coroutine has
-        terminated.  value and exc give the return value or exception of
-        the coroutine.  This wakes any tasks waiting to join and removes
-        the terminated task from its parent/children.
-        '''
+        # Cleanup task.  This is called after the underlying coroutine has
+        # terminated.  value and exc give the return value or exception of
+        # the coroutine.  This wakes any tasks waiting to join and removes
+        # the terminated task from its parent/children.
+
         task.next_value = value
         if task.parent_id:
             self._njobs -=1
@@ -286,10 +282,9 @@ class Kernel(object):
         task.children = set()
 
     def _set_timeout(self, task, seconds, sleep_type='timeout'):
-        '''
-        Set a timeout value on the task.  Returns a tuple (endtime, task, sleep_type)
-        suitable for using the sleeping priority queue.
-        '''
+        # Set a timeout value on the task.  Returns a tuple (endtime, task, sleep_type)
+        # suitable for using the sleeping priority queue.
+
         task.timeout = time.monotonic() + seconds
         item = (task.timeout, task, sleep_type)
         heapq.heappush(self._sleeping, item)
@@ -398,20 +393,13 @@ class Kernel(object):
     # Traps.  These implement the low-level functionality that is triggered by coroutines.
     # You shouldn't invoke these directly. Instead, coroutines use a statement such as
     #   
-    #   yield '_trap_read_wait', sock, timeout
+    #   yield ('_trap_io', sock, EVENT_READ, 'READ_WAIT', timeout)
     #
     # To execute these methods.
 
-    def _trap_read_wait(self, current, fileobj, timeout=None):
-        self._selector.register(fileobj, EVENT_READ, current)
-        current.state = 'READ_WAIT'
-        current.cancel_func = lambda: self._selector.unregister(fileobj)
-        if timeout:
-            self._set_timeout(current, timeout)
-
-    def _trap_write_wait(self, current, fileobj, timeout=None):
-        self._selector.register(fileobj, EVENT_WRITE, current)
-        current.state = 'WRITE_WAIT'
+    def _trap_io(self, current, fileobj, event, state, timeout):
+        self._selector.register(fileobj, event, current)
+        current.state = state
         current.cancel_func = lambda: self._selector.unregister(fileobj)
         if timeout:
             self._set_timeout(current, timeout)
@@ -505,14 +493,14 @@ def read_wait(fileobj, timeout=None):
     '''
     Wait until reading can be performed.
     '''
-    yield '_trap_read_wait', fileobj, timeout
+    yield '_trap_io', fileobj, EVENT_READ, 'READ_WAIT', timeout
 
 @coroutine
 def write_wait(fileobj, timeout=None):
     '''
     Wait until writing can be performed.
     '''
-    yield '_trap_write_wait', fileobj, timeout
+    yield '_trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT', timeout
 
 @coroutine
 def future_wait(future, timeout=None):
