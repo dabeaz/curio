@@ -82,15 +82,15 @@ class Task(object):
         else:
             return self.next_value
 
-    async def cancel(self, *, timeout=None):
+    async def cancel(self, *, exc=CancelledError, timeout=None):
         '''
         Cancels a task.  Does not return until the task actually terminates.
         '''
         if not self.terminated:
             for task in list(self.children):
-                await task.cancel(timeout=timeout)
+                await task.cancel(exc=exc, timeout=timeout)
 
-            await cancel_task(self, timeout)
+            await cancel_task(self, exc, timeout)
 
 # The SignalSet class represents a set of Unix signals being monitored. 
 class SignalSet(object):
@@ -274,7 +274,7 @@ class Kernel(object):
         if parent:
             parent.children.remove(task)
 
-        # Reassign all remaining children to init task
+        # Reassign all remaining children to the parent task
         init = self._tasks[1]
         init.children.update(task.children)
         for ctask in task.children:
@@ -282,9 +282,6 @@ class Kernel(object):
         task.children = set()
 
     def _set_timeout(self, task, seconds, sleep_type='timeout'):
-        # Set a timeout value on the task.  Returns a tuple (endtime, task, sleep_type)
-        # suitable for using the sleeping priority queue.
-
         task.timeout = time.monotonic() + seconds
         item = (task.timeout, task, sleep_type)
         heapq.heappush(self._sleeping, item)
@@ -302,19 +299,20 @@ class Kernel(object):
             self._selector.unregister(key.fileobj)
             self._reschedule_task(task)
 
-        # Process sleeping tasks
-        current = time.monotonic()
-        while self._sleeping and self._sleeping[0][0] <= current:
-            tm, task, sleep_type = heapq.heappop(self._sleeping)
-            # When a task wakes, verify that the timeout value matches that stored
-            # on the task. If it differs, it means that the task completed its
-            # operation, was cancelled, or is no longer concerned with this
-            # sleep operation.  In that case, we do nothing
-            if tm == task.timeout:
-                if sleep_type == 'sleep':
-                    self._reschedule_task(task)
-                elif sleep_type == 'timeout':
-                    self._cancel_task(task, exc=TimeoutError)
+        # Process sleeping tasks (if any)
+        if self._sleeping:
+            current = time.monotonic()
+            while self._sleeping and self._sleeping[0][0] <= current:
+                tm, task, sleep_type = heapq.heappop(self._sleeping)
+                # When a task wakes, verify that the timeout value matches that stored
+                # on the task. If it differs, it means that the task completed its
+                # operation, was cancelled, or is no longer concerned with this
+                # sleep operation.  In that case, we do nothing
+                if tm == task.timeout:
+                    if sleep_type == 'sleep':
+                        self._reschedule_task(task)
+                    elif sleep_type == 'timeout':
+                        self._cancel_task(task, exc=TimeoutError)
 
     # Kernel central loop
     def run(self, coro=None, *, pdb=False, log_errors=True):
@@ -427,8 +425,8 @@ class Kernel(object):
             task.joining = kqueue()
         self._trap_wait_queue(current, task.joining, 'TASK_JOIN', timeout)
 
-    def _trap_cancel_task(self, current, task, timeout=None):
-        self._cancel_task(task)
+    def _trap_cancel_task(self, current, task, exc, timeout=None):
+        self._cancel_task(task, exc)
         self._trap_join_task(current, task, timeout)
 
     def _trap_wait_queue(self, current, queue, state, timeout=None):
@@ -493,28 +491,28 @@ def read_wait(fileobj, timeout=None):
     '''
     Wait until reading can be performed.
     '''
-    yield '_trap_io', fileobj, EVENT_READ, 'READ_WAIT', timeout
+    yield ('_trap_io', fileobj, EVENT_READ, 'READ_WAIT', timeout)
 
 @coroutine
 def write_wait(fileobj, timeout=None):
     '''
     Wait until writing can be performed.
     '''
-    yield '_trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT', timeout
+    yield ('_trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT', timeout)
 
 @coroutine
 def future_wait(future, timeout=None):
     '''
     Wait for the future of a Future to be computed.
     '''
-    yield '_trap_future_wait', future, timeout
+    yield ('_trap_future_wait', future, timeout)
 
 @coroutine
 def sleep(seconds):
     '''
     Sleep for a specified number of seconds.
     '''
-    yield '_trap_sleep', seconds
+    yield ('_trap_sleep', seconds)
 
 @coroutine
 def new_task(coro, *, daemon=False):
@@ -524,61 +522,60 @@ def new_task(coro, *, daemon=False):
     return (yield '_trap_new_task', coro, daemon)
 
 @coroutine
-def cancel_task(task, timeout=None):
+def cancel_task(task, exc=CancelledError, timeout=None):
     '''
     Cancel a task.  Causes a CancelledError exception to raise in the task.
     '''
-    yield '_trap_cancel_task', task, timeout
+    yield ('_trap_cancel_task', task, exc, timeout)
 
 @coroutine
 def join_task(task, timeout=None):
     '''
     Wait for a task to terminate.
     '''
-    yield '_trap_join_task', task, timeout
+    yield ('_trap_join_task', task, timeout)
 
-    
 @coroutine
 def wait_on_queue(queue, state, timeout=None):
     '''
     Put the task to sleep on a kernel queue.
     '''
-    yield '_trap_wait_queue', queue, state, timeout
+    yield ('_trap_wait_queue', queue, state, timeout)
 
 @coroutine
 def reschedule_tasks(queue, n=1, value=None, exc=None):
     '''
     Reschedule one or more tasks waiting on a kernel queue.
     '''
-    yield '_trap_reschedule_tasks', queue, n, value, exc
+    yield ('_trap_reschedule_tasks', queue, n, value, exc)
 
 @coroutine
 def sigwatch(sigset):
     '''
     Start monitoring a signal set
     '''
-    yield '_trap_sigwatch', sigset
+    yield ('_trap_sigwatch', sigset)
 
 @coroutine
 def sigunwatch(sigset):
     '''
     Stop watching a signal set
     '''
-    yield '_trap_sigunwatch', sigset
+    yield ('_trap_sigunwatch', sigset)
 
 @coroutine
 def sigwait(sigset, timeout=None):
     '''
     Wait for a signal to arrive.
     '''
-    yield '_trap_sigwait', sigset, timeout
+    yield ('_trap_sigwait', sigset, timeout)
 
 @coroutine
 def _kernel_reference():
     '''
     Get a reference to the running kernel
     '''
-    result = yield '_trap_kernel',
+    result = yield ('_trap_kernel',)
     return result
 
 _default_kernel = None
@@ -591,7 +588,6 @@ def get_kernel():
         _default_kernel = Kernel()
     return _default_kernel
 
-__all__ = [ 'Kernel', 'get_kernel', 'sleep', 'new_task', 
-            'SignalSet', 'TaskError', 'CancelledError' ]
+__all__ = [ 'Kernel', 'get_kernel', 'sleep', 'new_task', 'SignalSet', 'TaskError', 'CancelledError' ]
             
         

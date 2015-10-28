@@ -57,7 +57,6 @@ class Socket(object):
     Non-blocking wrapper around a socket object.   The original socket is put
     into a non-blocking mode when it's wrapped.
     '''
-    __slots__ = ('_socket', '_timeout', '_fileno')
     def __init__(self, sock):
         self._socket = sock
         self._socket.setblocking(False)
@@ -245,7 +244,6 @@ class Stream(object):
     Wrapper around a file-like object.  File is put into non-blocking mode.
     The underlying file must be in binary mode.  
     '''
-    __slots__ = ('_file', '_fileno', '_linebuffer', '_timeout')
     def __init__(self, fileobj):
         assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
         self._file = fileobj
