@@ -27,10 +27,9 @@ def fromfd(*args, **kwargs):
     return io.Socket(_socket.fromfd(*args, **kwargs))
 
 # Replacements for blocking functions related to domain names and DNS
-
 @wraps(_socket.create_connection)
-async def create_connection(*args, **kwargs):
-    sock = await run_blocking(partial(_socket.create_connection, *args, **kwargs))
+async def create_connection(*args, timeout=None, **kwargs):
+    sock = await run_blocking(partial(_socket.create_connection, *args, **kwargs), timeout=timeout)
     return io.Socket(sock)
 
 @wraps(_socket.getaddrinfo)

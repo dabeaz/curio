@@ -12,7 +12,7 @@ async def main(host, port):
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
-    sock = await network.open_tcp_connection(host, port, ssl=True, server_hostname=None, family=socket.AF_INET)
+    sock = await network.open_connection(host, port, ssl=True, server_hostname=None)
     for i in range(1000):
         msg = ('Message %d' % i).encode('ascii')
         print(msg)

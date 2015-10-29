@@ -44,7 +44,7 @@ class TaskError(CurioError):
 class Task(object):
     __slots__ = ('id', 'parent_id', 'children', 'coro', 'cycles', 'state',
                  'cancel_func', 'future', 'timeout', 'exc_info', 'next_value',
-                 'next_exc', 'joining', 'terminated')
+                 'next_exc', 'joining', 'terminated', '__weakref__')
     _lastid = 1
     def __init__(self, coro):
         self.id = Task._lastid
@@ -87,9 +87,6 @@ class Task(object):
         Cancels a task.  Does not return until the task actually terminates.
         '''
         if not self.terminated:
-            for task in list(self.children):
-                await task.cancel(exc=exc, timeout=timeout)
-
             await cancel_task(self, exc, timeout)
 
 # The SignalSet class represents a set of Unix signals being monitored. 
@@ -223,7 +220,7 @@ class Kernel(object):
         # value and exc specify a value or exception to send into the underlying 
         # coroutine when it is rescheduled.
 
-        assert task.id in self._tasks, 'Task %r not in the table table' % task
+        assert task.id in self._tasks, 'Task %r not in the task table' % task
         self._ready.append(task)
         task.next_value = value
         task.next_exc = exc

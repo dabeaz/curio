@@ -24,4 +24,4 @@ if __name__ == '__main__':
     kernel = curio.Kernel()
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
-    kernel.run(network.start_tcp_server('', 10000, handle, ssl=ssl_context))
+    kernel.run(network.run_server('', 10000, handle, ssl=ssl_context)

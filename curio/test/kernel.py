@@ -162,18 +162,20 @@ class TestKernel(unittest.TestCase):
 
         async def parent():
             try:
-                 await new_task(child())
+                 child_task = await new_task(child())
                  await sleep(0.5)
                  results.append('end parent')
             except CancelledError:
+                await child_task.cancel()
                 results.append('parent cancelled')
             
         async def grandparent():
             try:
-                await new_task(parent())
+                parent_task = await new_task(parent())
                 await sleep(0.5)
                 results.append('end grandparent')
             except CancelledError:
+                await parent_task.cancel()
                 results.append('grandparent cancelled')
 
         async def main():
