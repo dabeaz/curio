@@ -136,13 +136,13 @@ that you add ``await`` keywords to methods that might block.
 Questions and Answers
 ---------------------
 
-**Q: Is curio implemented using the ``asyncio`` module?**
+**Q: Is curio implemented using the asyncio module?**
 
 A: No. Curio is a standalone library. Although the core of the library
 uses the same basic machinery as ``asyncio`` to poll for I/O events,
 the handling of those events is done in a completely different manner.
 
-**Q: Is curio meant to be a clone of ``asyncio``?**
+**Q: Is curio meant to be a clone of asyncio?**
 
 A: No.  Although curio provides a significant amount of overlapping
 functionality, some of the APIs are slightly different.  Compatibility
@@ -182,6 +182,11 @@ that want to provide that kind of functionality.
 A: Future work on curio will primarily focus on features related to debugging, 
 diagnostics, and reliability.  A primary goal is to provide a solid 
 environment for running and controlling concurrent tasks.
+
+**Q: How big is curio?**
+
+A: The complete library currently consists of fewer than 1500 lines of
+source statements.  This does not include blank lines and comments.
 
 **Q: Can I contribute?**
 
