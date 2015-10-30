@@ -17,20 +17,6 @@ from . import socket
 
 def get_stack(task):
     frames = []
-    try:
-        # 'async def' coroutines
-        f = task.coro.cr_frame
-    except AttributeError:
-        f = task.coro.gi_frame
-    if f is not None:
-        while f is not None:
-            frames.append(f)
-            f = f.f_back
-        frames.reverse()
-    return frames
-
-def get_stack(task):
-    frames = []
     coro = task.coro
     while coro:
         f = coro.cr_frame if hasattr(coro, 'cr_frame') else coro.gi_frame

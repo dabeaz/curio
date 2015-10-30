@@ -3,7 +3,7 @@
 # Functions for performing work outside of curio.  This includes running functions
 # in thread pools, process pools, etc.
 
-from .kernel import future_wait, new_task, sleep
+from .kernel import _future_wait, new_task, sleep
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 __all__ = [ 'run_in_executor', 'run_blocking', 'run_cpu_bound', 'set_blocking_executor', 'set_cpu_executor' ]
@@ -32,7 +32,7 @@ async def run_in_executor(exc, callable, *args, timeout=None):
     Run a callable in an executor (e.g., concurrent.futures.ThreadPoolExecutor) and return the result.
     '''
     future = exc.submit(callable, *args)
-    await future_wait(future, timeout=timeout)
+    await _future_wait(future, timeout=timeout)
     return future.result()
 
 async def run_blocking(callable, *args, timeout=None):

@@ -3,12 +3,12 @@ curio - concurrent I/O
 
 Curio is a modern library for performing reliable concurrent I/O using
 Python coroutines and the explicit async/await syntax introduced in
-Python 3.5. Its programming interface is based on common system
-programming abstractions such as sockets, files, tasks, subprocesses,
-locks, and queues.  Unlike libraries that use a callback-based event loop,
-curio is implemented as a queuing system. As such, it is considerably
-easier to debug, offers a variety of advanced features, and runs
-faster.
+Python 3.5.   Its programming model is based on cooperative
+multitasking and common system programming abstractions such as
+threads, sockets, files, subprocesses, locks, and queues.  Under
+the covers, it is based on a task queuing system, not a callback-based
+event loop. As such, it is considerably easier to debug, offers a 
+variety of advanced features, and runs faster.
 
 An Example
 ----------
@@ -69,7 +69,6 @@ This is only a small sample of what's possible.  Read the `official documentatio
 
 Performance
 -----------
-
 If you run the above server and conduct a simple performance benchmark
 sending 1K messages back and forth as quickly as possible between
 processes on the same machine, you'll find that curio runs about 60%
@@ -106,7 +105,7 @@ that question, but here are a few of the motivations for creating curio.
   extensions to support green threads, monkeypatching standard library
   modules, performing dazzling acrobatic tricks with generators, and
   carrying out amazing feats of metaprogramming magic.  Many of these
-  tricks were the motivation for features added to the Python language
+  techniques were the motivation for features added to the Python language
   later.  Curio tries to avoid wild hacks. It is a pure Python library
   that uses standard features available in Python 3.5. It performs no
   clever patching, no manipulation of Python internals, and no advanced
@@ -119,7 +118,7 @@ that question, but here are a few of the motivations for creating curio.
   spaghetti-coded nightmare of gotos disguised as callback functions
   wrapped in futures running inside tasks wrapping coroutines yielding
   futures (or something sort of like that).  Nobody can reason about
-  what's actually going on in a system like that.  You might as well
+  what's actually going on inside a system like that.  You might as well
   abandon all hope if you ever have to debug it when things don't work
   as expected or if you ever have to explain how it works to a
   grey-haired C programmer.  It's too complicated.

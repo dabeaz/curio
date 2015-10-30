@@ -2,7 +2,7 @@
 #
 # Curio clone of the subprocess module.  
 
-from .kernel import future_wait, new_task, sleep
+from .kernel import  new_task, sleep
 from .io import Stream
 import subprocess
 

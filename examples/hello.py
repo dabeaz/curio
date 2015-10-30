@@ -25,7 +25,7 @@ async def kid():
             await start_evt.wait(timeout=1)
             break
         except TimeoutError:
-            pass
+            print('Wha!?!')
     try:
         print('Building the Millenium Falcon in Minecraft')
         total = 0

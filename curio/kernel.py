@@ -38,6 +38,9 @@ class CancelledError(CurioError):
 class TaskError(CurioError):
     pass
 
+class _CancelRetry(Exception):
+    pass
+
 # Task class wraps a coroutine, but provides other information about 
 # the task itself for the purposes of debugging, scheduling, timeouts, etc.
 
@@ -74,9 +77,7 @@ class Task(object):
         Waits for a task to terminate.  Returns the return value (if any)
         or raises a TaskError if the task crashed with an exception.
         '''
-        if not self.terminated:
-            await join_task(self, timeout)
-            
+        await _join_task(self, timeout)
         if self.exc_info:
             raise TaskError('Task crash') from self.exc_info[1]
         else:
@@ -86,8 +87,14 @@ class Task(object):
         '''
         Cancels a task.  Does not return until the task actually terminates.
         '''
-        if not self.terminated:
-            await cancel_task(self, exc, timeout)
+        await _cancel_task(self, exc, timeout)
+
+    async def cancel_children(self, *, exc=CancelledError, timeout=None):
+        '''
+        Cancels all of the children of this task.
+        '''
+        for task in list(self.children):
+            await _cancel_task(task, exc, timeout=timeout)
 
 # The SignalSet class represents a set of Unix signals being monitored. 
 class SignalSet(object):
@@ -100,12 +107,12 @@ class SignalSet(object):
     
     async def __aenter__(self):
         assert not self.watching
-        await sigwatch(self)
+        await _sigwatch(self)
         self.watching = True
         return self
 
     async def __aexit__(self, *args):
-        await sigunwatch(self)
+        await _sigunwatch(self)
         self.watching = False
 
     async def wait(self, *, timeout=None):
@@ -119,7 +126,7 @@ class SignalSet(object):
         while True:
             if self.pending:
                 return self.pending.popleft()
-            await sigwait(self, timeout)
+            await _sigwait(self, timeout)
 
     @contextmanager
     def ignore(self):
@@ -177,7 +184,7 @@ class Kernel(object):
     # awake for non-I/O events.  Also processes incoming signals.
     async def _init_task(self):
         while True:
-            await read_wait(self._wait_sock)
+            await _read_wait(self._wait_sock)
             data = self._wait_sock.recv(100)
 
             # Any non-null bytes received here are assumed to be received signals.
@@ -235,19 +242,32 @@ class Kernel(object):
         # raise timeouts.
 
         assert task != self._current, "A task can't cancel itself (%r, %r)" % (task, self._current)
+        
+        if task.terminated:
+            return True
+
+        if not task.cancel_func:
+            # If there is no cancellation function set. It means that
+            # the task finished whatever it might have been working on
+            # and it's sitting in the ready queue ready to run.  This
+            # presents a rather tricky corner case of
+            # cancellation. First of all, it means that the task
+            # successfully completed whatever it was waiting to do,
+            # but it has not communicated the result back.  This could
+            # be something critical like acquiring a lock.  Because of
+            # that, can't just arbitrarily nuke the task.  Instead, we
+            # have to let it be rescheduled and properly process the result of the
+            # successfully completed operation.   The return of False
+            # here means that cancellation failed and that it should be retried.
+            return False
 
         # Detach the task from where it might be waiting at this moment
-        if task.cancel_func:
-            task.cancel_func()
-
-        if task not in self._ready:
-            # Reschedule it with a pending exception
-            self._reschedule_task(task, exc=exc())
-        else:
-            # The task is sitting the ready queue right now.  Change its value
-            # to an exception, causing it to emerge with the exception set
-            task.next_value = None
-            task.next_exc=exc()
+        task.cancel_func()
+        
+        assert task not in self._ready
+        # Reschedule it with a pending exception
+        self._reschedule_task(task, exc=exc())
+        return True
 
     def _cleanup_task(self, task, value=None, exc=None):
         # Cleanup task.  This is called after the underlying coroutine has
@@ -360,6 +380,11 @@ class Kernel(object):
                         import pdb as _pdb
                         _pdb.post_mortem(current.exc_info[2])
 
+                except SystemExit:
+                    self._cleanup_task(current)
+                    raise
+
+
         self._current = None
 
     def stop(self):
@@ -381,7 +406,8 @@ class Kernel(object):
             if not task.parent_id:
                 self._njobs += 1
                 task.parent_id = -1
-            self._cancel_task(task)
+
+            assert self._cancel_task(task)
 
         self.run()
 
@@ -418,13 +444,22 @@ class Kernel(object):
         self._reschedule_task(current)
 
     def _trap_join_task(self, current, task, timeout=None):
-        if task.joining is None:
-            task.joining = kqueue()
-        self._trap_wait_queue(current, task.joining, 'TASK_JOIN', timeout)
+        if task.terminated:
+            self._reschedule_task(current)
+        else:
+            if task.joining is None:
+                task.joining = kqueue()
+            self._trap_wait_queue(current, task.joining, 'TASK_JOIN', timeout)
 
     def _trap_cancel_task(self, current, task, exc, timeout=None):
-        self._cancel_task(task, exc)
-        self._trap_join_task(current, task, timeout)
+        if self._cancel_task(task, exc):
+            self._trap_join_task(current, task, timeout)
+        else:
+            # Fail with a _CancelRetry exception to indicate that the cancel
+            # request should be attempted again.  This happens in the case
+            # that a cancellation request is issued against a task that
+            # ready to run in the ready queue.
+            self._reschedule_task(current, exc=_CancelRetry())
 
     def _trap_wait_queue(self, current, queue, state, timeout=None):
         queue.append(current)
@@ -484,84 +519,89 @@ class Kernel(object):
 # the problem you're trying to solve (e.g., Socket, File, objects, etc.)
 
 @coroutine
-def read_wait(fileobj, timeout=None):
+def _read_wait(fileobj, timeout=None):
     '''
     Wait until reading can be performed.
     '''
     yield ('_trap_io', fileobj, EVENT_READ, 'READ_WAIT', timeout)
 
 @coroutine
-def write_wait(fileobj, timeout=None):
+def _write_wait(fileobj, timeout=None):
     '''
     Wait until writing can be performed.
     '''
     yield ('_trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT', timeout)
 
 @coroutine
-def future_wait(future, timeout=None):
+def _future_wait(future, timeout=None):
     '''
     Wait for the future of a Future to be computed.
     '''
     yield ('_trap_future_wait', future, timeout)
 
 @coroutine
-def sleep(seconds):
+def _sleep(seconds):
     '''
-    Sleep for a specified number of seconds.
+    Sleep for a given number of seconds
     '''
     yield ('_trap_sleep', seconds)
 
 @coroutine
-def new_task(coro, *, daemon=False):
+def _new_task(coro, daemon):
     '''
-    Create a new task in the kernel.
+    Create a new task
     '''
     return (yield '_trap_new_task', coro, daemon)
 
 @coroutine
-def cancel_task(task, exc=CancelledError, timeout=None):
+def _cancel_task(task, exc=CancelledError, timeout=None):
     '''
     Cancel a task.  Causes a CancelledError exception to raise in the task.
     '''
-    yield ('_trap_cancel_task', task, exc, timeout)
+    while True:
+        try:
+            yield ('_trap_cancel_task', task, exc, timeout)
+            return
+        except _CancelRetry:
+            pass
 
 @coroutine
-def join_task(task, timeout=None):
+def _join_task(task, timeout=None):
     '''
     Wait for a task to terminate.
     '''
     yield ('_trap_join_task', task, timeout)
 
 @coroutine
-def wait_on_queue(queue, state, timeout=None):
+def _wait_on_queue(queue, state, timeout=None):
     '''
     Put the task to sleep on a kernel queue.
     '''
     yield ('_trap_wait_queue', queue, state, timeout)
 
 @coroutine
-def reschedule_tasks(queue, n=1, value=None, exc=None):
+def _reschedule_tasks(queue, n=1, value=None, exc=None):
     '''
     Reschedule one or more tasks waiting on a kernel queue.
     '''
     yield ('_trap_reschedule_tasks', queue, n, value, exc)
 
 @coroutine
-def sigwatch(sigset):
+def _sigwatch(sigset):
     '''
     Start monitoring a signal set
     '''
     yield ('_trap_sigwatch', sigset)
 
 @coroutine
-def sigunwatch(sigset):
+def _sigunwatch(sigset):
     '''
     Stop watching a signal set
     '''
     yield ('_trap_sigunwatch', sigset)
 
 @coroutine
-def sigwait(sigset, timeout=None):
+def _sigwait(sigset, timeout=None):
     '''
     Wait for a signal to arrive.
     '''
@@ -574,6 +614,23 @@ def _kernel_reference():
     '''
     result = yield ('_trap_kernel',)
     return result
+
+# Public-facing syscalls.  These coroutines wrap a low-level coroutine
+# with an extra layer involving an async/await function.  The main
+# reason for doing this is that the user will get proper warning
+# messages if they forget to use the required 'await' keyword.
+
+async def sleep(seconds):
+    '''
+    Sleep for a specified number of seconds.
+    '''
+    await _sleep(seconds)
+
+async def new_task(coro, *, daemon=False):
+    '''
+    Create a new task.
+    '''
+    return await _new_task(coro, daemon)
 
 _default_kernel = None
 def get_kernel():
