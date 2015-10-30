@@ -43,8 +43,13 @@ Here is a simple TCP echo server implemented using sockets and curio::
         kernel = Kernel()
         kernel.run(echo_server(('',25000)))
 
-Or, if you prefer something a little higher level, you can have curio
-create the server part for you::
+If you have programmed with threads, you find that curio looks similar.
+You'll also find that the above server can handle thousands of simultaneous 
+client connections even though no threads are being used under the covers.
+
+Of course, if you prefer something a little higher level, you can have
+curio take of the fiddly bits related to setting up the server portion
+of the code::
 
     # echoserv.py
 
