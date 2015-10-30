@@ -1,8 +1,7 @@
 # An example of a server involving a CPU-intensive task.  We'll farm the 
 # CPU-intensive work out to a separate process.
 
-from curio import Kernel, new_task, run_cpu_bound
-from curio.socketserver import *
+from curio import Kernel, new_task, run_cpu_bound, run_server
 
 def fib(n):
     if n <= 2:
@@ -10,23 +9,24 @@ def fib(n):
     else:
         return fib(n-1) + fib(n-2)
 
-class FibHandler(StreamRequestHandler):
-    async def handle(self):
-        print('Connection from', self.client_address)
-        async for line in self.rfile:
+async def fib_handler(client, addr):
+    print('Connection from', addr)
+    rfile = client.makefile('rb')
+    wfile = client.makefile('wb')
+    async with rfile, wfile:
+        async for line in rfile:
             try:
                 n = int(line)
                 result = await run_cpu_bound(fib, n)
                 resp = str(result) + '\n'
-                await self.wfile.write(resp.encode('ascii'))
+                await wfile.write(resp.encode('ascii'))
             except ValueError:
-                await self.wfile.write(b'Bad input\n')
-        print('Connection closed')
+                await wfile.write(b'Bad input\n')
+    print('Connection closed')
 
 if __name__ == '__main__':
-    serv = TCPServer(('', 25000), FibHandler)
     kernel = Kernel()
-    kernel.run(serv.serve_forever()))
+    kernel.run(run_server('', 25000, fib_handler))
 
 
 

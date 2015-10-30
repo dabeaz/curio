@@ -433,10 +433,10 @@ is a simple echo server written directly with sockets using curio::
         async with sock:
             while True:
                 client, addr = await sock.accept()
-                print('Connection from', addr)
-                await new_task(echo_client(client))
+                await new_task(echo_client(client, addr))
     
-    async def echo_client(client):
+    async def echo_client(client, addr):
+        print('Connection from', addr)
         async with client:
              while True:
                  data = await client.recv(1000)
@@ -474,75 +474,24 @@ of the existing functionality of ``socket`` is available, but all of the
 operations that might block have been replaced by coroutines and must be
 preceded by an explicit ``await``. 
 
-If writing code with low-level sockets is a bit much, you can always
-switch to the higher level ``socketserver`` interface.  Like
-``socket`` this interface mimics that of the built-in ``socketserver``
-module. For example::
+A lot of the code involving sockets is fairly repetitive.  Instead
+of writing the server component, you can simplify the above example
+by using ``run_server()`` like this::
 
-    from curio import Kernel, new_task
-    from curio.socketserver import StreamRequestHandler, TCPServer
-    
-    class EchoHandler(StreamRequestHandler):
-        async def handle(self):
-            print('Connection from', self.client_address)
-            async for line in self.rfile:
-                await self.wfile.write(line)
-            print('Connection closed')
+    from curio import Kernel, new_task, run_server
 
-    if __name__ == '__main__':
-        serv = TCPServer(('',25000), EchoHandler)
-        kernel = Kernel()
-        kernel.run(serv.serve_forever())
-
-This code mirrors the code you might write using the ``socketserver``
-standard library--again, just remember to add ``async`` and ``await`` to
-I/O operations.
-
-A Managed Echo Server
----------------------
-
-Let's make a slightly more sophisticated echo server that wraps the
-server in a manager responsible for cancelling and restarting on a
-Unix signal::
-
-    import signal
-    from curio import Kernel, new_task, SignalSet, CancelledError
-    from curio.socketserver import TCPServer, StreamRequestHandler
-
-    class EchoHandler(StreamRequestHandler):
-        async def handle(self):
-            try:
-                print('Connection from', self.client_address)
-                async for line in self.rfile:
-                    await self.wfile.write(line)
-                print('Connection closed')
-            except CancelledError:
-                await self.wfile.write(b'Server is going down now\n')
-
-    async def main(address):
+    async def echo_client(client, addr):
+        print('Connection from', addr)
         while True:
-            async with SignalSet(signal.SIGHUP) as sigset:
-                serv = TCPServer(('', 25000), EchoHandler)
-                print('Starting the server')
-                serv_task = await new_task(serv.serve_forever())
-                await sigset.wait()
-                print('Server about the restart')
-                await serv_task.cancel()
-                serv.server_close()
+            data = await client.recv(1000)
+            if not data:
+                break
+            await client.sendall(data)
+        print('Connection closed')
 
     if __name__ == '__main__':
-        kernel = Kernel(with_monitor=True)
-        kernel.run(main(('',25000)))
-
-In this code, the ``main()`` coroutine launches the server, but then
-waits for the arrival of a ``SIGHUP`` signal.  When received, it 
-cancels the server and restarts. An interesting thing about this cancellation is that
-it propagates to all of the child tasks created by the server (i.e., all
-of the connected clients).   The ``handle()`` method has been programmed to
-catch the resulting cancellation exception and perform a clean shutdown.
-Just to be clear, if there were a 1000 connected clients at the time
-the restart occurs, the server would drop all 1000 clients at once and start
-fresh with no active connections.
+        kernel = Kernel()
+        kernel.run(run_server('', 25000, echo_client))
 
 Subprocesses
 ------------

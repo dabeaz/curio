@@ -28,10 +28,10 @@ Here is a simple TCP echo server implemented using sockets and curio::
         async with sock:
             while True:
                 client, addr = await sock.accept()
-                print('Connection from', addr)
-                await new_task(echo_client(client))
+                await new_task(echo_client(client, addr))
     
-    async def echo_client(client):
+    async def echo_client(client, addr):
+        print('Connection from', addr)
         async with client:
              while True:
                  data = await client.recv(1000)
@@ -44,27 +44,25 @@ Here is a simple TCP echo server implemented using sockets and curio::
         kernel = Kernel()
         kernel.run(echo_server(('',25000)))
 
-Or, if you prefer something a little higher level, here is the same program written
-using the curio socketserver module::
+Or, if you prefer something a little higher level, you can curio create the
+server part for you::
 
     # echoserv.py
 
-    from curio import Kernel, new_task
-    from curio.socketserver import TCPServer, BaseRequestHandler
+    from curio import Kernel, new_task, run_server
 
-    class EchoHandler(BaseRequestHandler):
-        async def handle(self):
-            print('Connection from', self.client_address)
-            while True:
-                data = await self.request.recv(1000)
-                if not data:
-                    break
-                await self.request.send(data)
-            print('Connection closed')
+    async def echo_client(client, addr):
+        print('Connection from', addr)
+        while True:
+            data = await client.recv(1000)
+            if not data:
+                break
+            await client.sendall(data)
+        print('Connection closed')
 
     if __name__ == '__main__':
-        serv = TCPServer(('',25000), EchoHandler)
-        kernel.run(serv.serve_forever())
+        kernel = Kernel()
+        kernel.run(run_server('', 25000, echo_client))
 
 This is only a small sample of what's possible.  Read the `official documentation
 <https://curio.readthedocs.org>` for more in-depth coverage.

@@ -198,7 +198,7 @@ class Kernel(object):
 
     def add_task(self, coro, daemon=False):
         assert self._current is None
-        return self._new_task(coro, daemon).id
+        return self._new_task(coro, daemon)
 
     # Internal task management functions. 
     def _new_task(self, coro, daemon=False):
