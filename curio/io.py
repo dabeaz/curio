@@ -6,8 +6,6 @@
 # David Beazley (Dabeaz LLC)
 # All rights reserved.
 #
-# See LICENSE.md for details.
-#
 # Let's talk about design for a moment...
 #
 # Curio is primarily concerned with the scheduling of tasks. In

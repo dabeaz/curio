@@ -1,4 +1,5 @@
 recursive-include examples *
 recursive-include docs *
 include README.rst
-include LICENSE.md
+include LICENSE
+include CHANGES

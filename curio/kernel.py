@@ -6,8 +6,6 @@
 #
 # This is the core of curio.   Definitions for tasks, signal sets, and the kernel
 # are here.
-#
-# See LICENSE.md for details.
 
 import socket
 import heapq
