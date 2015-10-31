@@ -26,6 +26,13 @@ Contents:
 * :doc:`tutorial` 
 * :doc:`reference`
 
+Installation:
+-------------
+
+Curio requires Python 3.5 and Unix.  You can install it using ``pip``::
+
+    bash % python3 -m pip install curio
+
 An Example
 ----------
 Here is a simple TCP echo server implemented using sockets and curio::
