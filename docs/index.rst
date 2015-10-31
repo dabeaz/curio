@@ -6,9 +6,8 @@
 Curio
 =====
 
-- a rare, unusual, or intriguing object.
-- A library for concurrent I/O.
-
+- a small and unusual object that is considered interesting or attractive
+- A Python library for concurrent I/O.
 
 Curio is a modern library for performing reliable concurrent I/O using
 Python coroutines and the explicit async/await syntax introduced in

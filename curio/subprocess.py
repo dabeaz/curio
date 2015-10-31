@@ -57,7 +57,6 @@ class Popen(object):
         try:
             return await task.join(timeout=timeout)
         except TimeoutError:
-            print('waiter task timed out')
             await task.cancel()
             raise TimeoutExpired(self.args, timeout) from None
 
