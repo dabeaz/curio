@@ -3,10 +3,11 @@
 # An example of a UDP echo client
 
 import curio
-from curio import network
+from curio import socket
 
-async def main(host, port):
-    sock = await network.create_datagram_endpoint(None, (host, port))
+async def main(addr):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    await sock.connect(addr)
     for i in range(1000):
         msg = ('Message %d' % i).encode('ascii')
         print(msg)
@@ -17,4 +18,4 @@ async def main(host, port):
 
 if __name__ == '__main__':
     kernel = curio.Kernel()
-    kernel.run(main('localhost', 26000))
+    kernel.run(main(('localhost', 26000)))

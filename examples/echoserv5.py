@@ -1,3 +1,5 @@
+# Echo server with cancellation and signal handling
+
 import signal
 from curio import Kernel, new_task, SignalSet, CancelledError, run_server
 

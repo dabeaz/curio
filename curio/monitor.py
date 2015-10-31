@@ -1,5 +1,9 @@
 # curio/monitor.py
 #
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
 # Debugging monitor for curio.   At the moment, this is overly simplistic.
 # It could be expanded to do a lot of other stuff later.
 

@@ -67,7 +67,7 @@ Here is a simple TCP echo server implemented using sockets and curio::
         kernel = Kernel()
         kernel.run(echo_server(('',25000)))
 
-If you have programmed with threads, you find that curio looks similar.
+If you have programmed with threads, you'll find that curio looks similar.
 You'll also find that the above server can handle thousands of simultaneous 
 client connections even though no threads are being used under the covers.
 
@@ -114,7 +114,7 @@ I/O. So, why create yet another library?  There is no simple answer to
 that question, but here are a few of the motivations for creating curio.
 
 * Python 3 has evolved considerably as a programming language and has
-  adopted many new language features that are well-suited to cleanly
+  adopted many new features that are well-suited to cleanly
   writing a new I/O library. For example, improved support for
   non-blocking I/O, support for delegation to subgenerators (``yield from``) 
   and the introduction of explicit ``async`` and ``await`` syntax
@@ -130,13 +130,11 @@ that question, but here are a few of the motivations for creating curio.
   you have previously written synchronous code using processes or
   threads, curio will feel familiar.
 
-* Curio is a powerful library in a small package.  An emphasis is
-  placed on implementation simplicity.  Simplicity is an important
-  part of writing reliable systems software.  When your code fails, it
-  helps to be able to debug it--possibly down to the level of
-  individual calls to the operating system if necessary. Simplicity
-  matters a lot.  Simple code also tends to run faster.
-
+* Simplicity is an important part of writing reliable systems
+  software.  When your code fails, it helps to be able to debug
+  it--possibly down to the level of individual calls to the operating
+  system if necessary. Simplicity matters a lot.  Simple code also
+  tends to run faster. Simplicity is a major goal of Curio.
 
 * It's fun. 
 
@@ -154,9 +152,7 @@ into service.
 
 It's important to emphasize that the kernel is solely focused on task
 management, scheduling, and nothing else. In fact, the kernel doesn't
-even perform any I/O operations.  This means that it is very small,
-fast, and straightforward to understand.
-
+even perform any I/O operations. 
 Higher-level I/O operations are carried out by a wrapper layer that
 uses Python's normal socket and file objects. You use the
 same operations that you would normally use in synchronous code except
@@ -171,7 +167,7 @@ A: No. Curio is a standalone library. Although the core of the library
 uses the same basic machinery as ``asyncio`` to poll for I/O events,
 the handling of those events is done in a completely different manner.
 
-**Q: Is curio meant to be a clone of asyncio?**
+**Q: Is curio meant to be a compatible clone of asyncio?**
 
 A: No.  Although curio provides a significant amount of overlapping
 functionality, some of the APIs are slightly different.  Compatibility
@@ -184,8 +180,8 @@ encapsulates a generator. No threads are used. As such, you're really
 only limited by the memory of your machine--potentially you could have
 hundreds of thousands of tasks.  The I/O functionality in curio is
 implemented using the built-in ``selectors`` module.  Thus, the number
-of open sockets allowed would be subject to the limits of that library
-combined with any per-user limits imposed by the operating system.
+of open sockets allowed is subject to the limits of that library
+combined with any limits imposed by the operating system.
  
 **Q: Can curio interoperate with other event loops?**
 
@@ -194,16 +190,17 @@ something that might be added later.
 
 **Q: How fast is curio?**
 
-A: In some preliminary benchmarking of an echo server, curio runs about
-50-70% faster than ``asyncio`` and 30-40% faster than Twisted.  See
-the ``examples/benchmark`` directory of the distribution for testing code.
+A: In preliminary benchmarking of a simple echo server, curio runs about
+50-70% faster than ``asyncio``.  It runs about 30-40% faster than Twisted
+and about 10-15% slower than gevent, both running on Python 2.7. 
+See the ``examples/benchmark`` directory of the distribution for this testing code.
 
 **Q: Is curio going to evolve into a framework?**
 
 A: No. The current goal is merely to provide a small, simple library
 for performing concurrent I/O. It is not anticipated that curio would
 evolve into a framework for implementing application level protocols
-such as HTTP.  Instead, it might serve as a foundation for other packages
+such as HTTP.  Instead, serves as a foundation for other packages
 that want to provide that kind of functionality.
 
 **Q: What are future plans?**
@@ -226,15 +223,6 @@ concerning pull requests, bugs, and feature requests.
 About
 -----
 Curio was created by David Beazley (@dabeaz).  http://www.dabeaz.com
-
-It is a young project.  Contributions welcome.
-
-
-
-
-
-
-
 
  
 

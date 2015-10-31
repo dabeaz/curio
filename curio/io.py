@@ -1,6 +1,14 @@
 # curio/io.py
 #
-# I/O wrapper objects.  Let's talk about design for a moment...
+# I/O wrapper objects.
+# 
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC)
+# All rights reserved.
+#
+# See LICENSE.md for details.
+#
+# Let's talk about design for a moment...
 #
 # Curio is primarily concerned with the scheduling of tasks. In
 # particular, the kernel does not actually perform any I/O.  It merely

@@ -1,6 +1,6 @@
 # ssl_echo
 #
-# An example of a simple SSL echo client
+# An example of a simple SSL echo client.  Use ssl_echo.py for the server.
 
 import curio
 from curio import ssl

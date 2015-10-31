@@ -1,5 +1,9 @@
 # curio/workers.py
 #
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
 # Functions for performing work outside of curio.  This includes running functions
 # in thread pools, process pools, etc.
 

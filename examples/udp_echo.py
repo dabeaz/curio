@@ -3,10 +3,11 @@
 # An example of a simple UDP echo server. 
 
 import curio
-from curio import network
+from curio import socket
 
 async def main(addr):
-    sock = await network.create_datagram_endpoint(addr, None)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(addr)
     while True:
         data, addr = await sock.recvfrom(10000)
         print('Received from', addr, data)

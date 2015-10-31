@@ -1,5 +1,9 @@
 # curio/network.py
 #
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC)
+# All rights reserved.
+#
 # Some high-level functions useful for writing network code.  These are largely
 # based on their similar counterparts in the asyncio library. Some of the
 # fiddly low-level bits are borrowed.   

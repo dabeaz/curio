@@ -1,3 +1,4 @@
+# Example of launching a subprocess and reading streaming output
 
 from curio import subprocess
 import curio

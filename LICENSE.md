@@ -1,7 +1,7 @@
 Curio - Concurrent I/O
 
 Copyright (C) 2015
-David M. Beazley (Dabeaz LLC)
+David Beazley (Dabeaz LLC)
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

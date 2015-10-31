@@ -1,5 +1,9 @@
 # curio/ssl.py
 #
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
 # Wrapper around built-in SSL module
 
 __all__ = []

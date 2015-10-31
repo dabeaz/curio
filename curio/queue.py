@@ -1,10 +1,12 @@
 # curio/queue.py
-
-'''
-Implementation of a queue object that can be used to communicate
-between tasks.  This is only safe to use within curio. It is not
-thread-safe.
-'''
+#
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
+# Implementation of a queue object that can be used to communicate
+# between tasks.  This is only safe to use within curio. It is not
+# thread-safe.
 
 from .kernel import _wait_on_queue, _reschedule_tasks, kqueue
 from collections import deque

@@ -1,5 +1,9 @@
 # curio/subprocess.py
 #
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
 # Curio clone of the subprocess module.  
 
 from .kernel import  new_task, sleep

@@ -1,4 +1,4 @@
-# Example: A simple echo server written using a file-like object
+# Example: A simple echo server written using streams
 
 from curio import Kernel, new_task
 from curio.socket import *
@@ -16,9 +16,10 @@ async def echo_server(address):
              await new_task(echo_client(client))
 
 async def echo_client(client):
-    async with client.makefile('rwb') as client_f:
-         async for line in client_f:
-             await client_f.write(line)
+    reader, writer = client.make_streams()
+    async with reader, writer:
+         async for line in reader:
+             await writer.write(line)
     await client.close()
     print('Connection closed')
 

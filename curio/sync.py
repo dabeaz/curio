@@ -1,9 +1,12 @@
 # curio/sync.py
-'''
-Implementation of common task synchronization primitives such as
-events, locks, semaphores, and condition variables. These primitives
-are only safe to use in the curio framework--they are not thread safe.
-'''
+#
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
+# Implementation of common task synchronization primitives such as
+# events, locks, semaphores, and condition variables. These primitives
+# are only safe to use in the curio framework--they are not thread safe.
 
 from .kernel import _wait_on_queue, _reschedule_tasks, kqueue
 

@@ -1,7 +1,13 @@
 # kernel.py
 # 
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
 # This is the core of curio.   Definitions for tasks, signal sets, and the kernel
 # are here.
+#
+# See LICENSE.md for details.
 
 import socket
 import heapq

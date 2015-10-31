@@ -1,4 +1,6 @@
 # echoserv.py
+#
+# Echo server using the run_server() function
 
 from curio import Kernel, new_task, run_server
 

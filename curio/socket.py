@@ -1,8 +1,13 @@
 # curio/socket.py
 #
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
 # Standin for the standard socket library.  The entire contents of stdlib socket are
 # made available here.  However, the socket class is replaced by an async compatible version.
 # Certain blocking operations are also replaced by versions safe to use in async.
+#
 
 import socket as _socket
 

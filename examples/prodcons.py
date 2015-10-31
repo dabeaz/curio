@@ -1,4 +1,6 @@
 # prodcons.py
+# 
+# Example of a producer/consumer setup with queues
 
 import curio
 

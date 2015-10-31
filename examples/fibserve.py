@@ -11,8 +11,7 @@ def fib(n):
 
 async def fib_handler(client, addr):
     print('Connection from', addr)
-    rfile = client.makefile('rb')
-    wfile = client.makefile('wb')
+    rfile, wfile = client.make_streams()
     async with rfile, wfile:
         async for line in rfile:
             try:
