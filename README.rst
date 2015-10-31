@@ -170,9 +170,12 @@ something that might be added later.
 
 **Q: How fast is curio?**
 
-A: In some preliminary benchmarking of an echo server, curio runs about
-50-70% faster than ``asyncio`` and 30-40% faster than Twisted.  See
-the ``examples/benchmark`` directory of the distribution for testing code.
+A: In preliminary benchmarking of a simple echo server, curio runs
+about 50-70% faster than ``asyncio``.  It runs about 30-40% faster
+than Twisted and about 10-15% slower than gevent, both running on
+Python 2.7.  This is on OS-X so your mileage might vary. See the
+``examples/benchmark`` directory of the distribution for this testing
+code.
 
 **Q: Is curio going to evolve into a framework?**
 
