@@ -36,9 +36,10 @@ Run it and you'll see a countdown.  Yes, some jolly fun to be
 sure. Curio is based around the idea of tasks.  Tasks are functions
 defined as coroutines using the ``async`` syntax.  To run a task, you
 create a ``Kernel`` instance, then invoke the ``run()`` method with a
-task.  A task runs as a separate execution thread with one important
+task.  A task runs like a separate execution thread with one important
 difference--tasks can only be preempted on statements prefaced by an
-``await``.  This is cooperate multitasking.
+``await``.  This is cooperate multitasking.  However, just to be clear,
+curio is not using threads to implement tasks under the covers.
 
 Tasks
 -----
@@ -166,7 +167,7 @@ get on with their business::
     bash % 
 
 Debugging is an important feature of curio and by using the monitor, you see what's happening as tasks run.
-Can can find out where tasks are blocked and you can cancel any task that you want.
+You can find out where tasks are blocked and you can cancel any task that you want.
 However, it's not necessary to do this in the monitor.  Change the parent task to include a timeout
 and a cancellation request like this::
 
@@ -219,11 +220,11 @@ Now your program should produce output like this::
     Fine. Saving my work.
     Leaving!
 
-By now, you should have the basic gist of the curio task model. You
+By now, you have the basic gist of the curio task model. You
 can create tasks, join tasks, and cancel tasks.  Blocking operations
 (e.g., ``join()``) almost always have a timeout option.  Even if a
 task appears to be blocked for a long time, it can usually be cancelled
-by another task. You have a lot of control over how things work.
+by another task. You have a lot of control over the environment.
 
 Task Synchronization
 --------------------
@@ -273,7 +274,7 @@ start_evt.set()`` and to wait for an event you use ``await
 start_evt.wait()``. 
 
 All of the synchronization methods also support timeouts. So, if the
-kid wanted to be rather annoying, they could do use a timeout to
+kid wanted to be rather annoying, they could use a timeout to
 repeatedly nag like this::
 
     async def kid():
@@ -397,10 +398,10 @@ there appears to be no way to get control back.  The problem here is
 that the kid is hogging the CPU and never yields.  Important lesson:
 curio does not provide preemptive scheduling. If a task decides to
 compute large Fibonacci numbers or mine bitcoins, everything will block
-until its done.
+until it's done. Don't do that.
 
 If you know that work might take awhile, you can have it execute in a
-separate process. Change the code use ``curio.run_cpu_bound()`` like
+separate process. Change the code to use ``curio.run_cpu_bound()`` like
 this::
 
     async def kid():
@@ -452,7 +453,7 @@ outside the direct control of curio.  This means that whatever thread
 or process is handling the request will likely run until the requested
 work has been fully completed.  You can cancel a task that is waiting
 for the result, but be aware that doing so might create a kind of
-"zombie" worker behind.  In this case, the eventual result is
+"zombie" worker left behind.  In this case, the eventual result is
 discarded when the worker finally completes.
 
 A Simple Echo Server
@@ -524,11 +525,11 @@ Normally, a context manager takes care of closing a socket when you're
 done using it.  The same thing happens here.  However, because you're
 operating in an environment of cooperative multitasking, you should
 use the asynchronous variant instead.   As a general rule, all I/O
-related operations in curio will use the ``async`` form (if there is one).
+related operations in curio will use the ``async`` form.
 
-A lot of the code involving sockets is fairly repetitive.  Instead
-of writing the server component, you can simplify the above example
-by using ``run_server()`` like this::
+A lot of the above code involving sockets is fairly repetitive.  Instead
+of writing the part that sets up the server, you can simplify the above example
+using ``run_server()`` like this::
 
     from curio import Kernel, new_task, run_server
 
@@ -573,9 +574,10 @@ using a file-like stream interface.  Here is an example::
         kernel.run(run_server('', 25000, echo_client))
 
 The ``socket.make_streams()`` method can be used to create a pair of
-file-like objects for reading and writing.  One feature of streams is
-that you can easily read data line-by-line using an ``async for`` statement
-like this::
+file-like objects for reading and writing.  On this objects, you would
+now use standard file methods such as ``read()``, ``readline()``, and
+``write()``.  One feature of streams is that you can easily read data
+line-by-line using an ``async for`` statement like this::
 
     from curio import Kernel, new_task, run_server
 
@@ -621,7 +623,11 @@ to a Unix signal::
             async with SignalSet(signal.SIGHUP) as sigset:
                 print('Starting the server')
                 serv_task = await new_task(run_server(host, port, echo_client))
+
+		# Wait for a restart signal
                 await sigset.wait()
+
+		# Cancel the server and all of its child tasks
                 print('Server shutting down')
                 await serv_task.cancel_children()
                 await serv_task.cancel()
@@ -636,7 +642,8 @@ waits for the arrival of a ``SIGHUP`` signal.  When received, it first
 cancels all of the child tasks created by the server, then cancels the
 server itself, and restarts.  An interesting thing about this
 cancellation is that each task keeps a record of its active
-children (i.e., all of the connected clients).  The ``echo_client()``
+children (i.e., all of the connected clients).  The ``task.cancel_children()``
+method sends a cancellation request to the child tasks. The ``echo_client()``
 coroutine has been programmed to catch the resulting cancellation
 exception and perform a clean shutdown, sending a message back to the
 client that a shutdown is occurring.  Just to be clear, if there were
@@ -647,7 +654,7 @@ connections.
 Making Connections
 ------------------
 
-Curio provides some high-level utility functions for making connections.
+Curio provides some high-level functions for making outgoing connections.
 For example, here is a task that makes a connection to ``www.python.org``::
 
     import curio
@@ -727,16 +734,19 @@ SSL::
     import time
 
     KEYFILE = "privkey_rsa"       # Private key
-    CERTFILE = "certificate.crt"  # Server certificat
+    CERTFILE = "certificate.crt"  # Server certificate
  
     async def handler(client, addr):
         reader, writer = client.make_streams()
+
+	# Read the HTTP request
         async for line in reader:
            line = line.strip()
            if not line:
                break
            print(line)
 
+	# Send a response
         await writer.write(
     b'''HTTP/1.0 200 OK\r
     Content-type: text/plain\r
@@ -756,12 +766,12 @@ SSL::
 The ``curio.ssl`` submodule is a wrapper around the ``ssl`` module in the standard
 library.  It has been modified slightly so that functions responsible for wrapping
 sockets return a socket compatible with curio.  Otherwise, you'd use it the same
-way as the normal module.
+way as the normal ``ssl`` module.
 
 To test this out, point a browser at ``https://localhost:10000`` and see if you
 get a readable response.  The browser might yell at you with some warnings
-about the certificate if you haven't set things up correctly.  However, this
-is the basic idea.
+about the certificate if it's self-signed or misconfigured in some way. However, the
+example shows the basic steps involved in using SSL with curio.
 
 Blocking I/O
 ------------
@@ -769,7 +779,7 @@ Blocking I/O
 Normally, all of the I/O you perform in curio will be non-blocking,
 using functions that make explicit use of ``await``.  However, you may
 encounter situations where you want to interoperate with existing
-synchronous code.  To do this, you can temporarily put sockets and
+synchronous code outside of curio.  To do this, you can temporarily put sockets and
 streams into blocking mode and expose the raw socket or file
 underneath.  Use the ``blocking()`` context manager method as shown here::
 
@@ -819,6 +829,13 @@ example::
     if __name__ == '__main__':
         kernel = Kernel()
         kernel.run(run_server('', 25000, echo_client))
+
+Normally, you wouldn't do this for such a operation like ``sendall()``.  However,
+the combination of the ``blocking()`` method and ``run_blocking()`` function
+could be used to implement a hybrid server design where you use curio
+to coordinate a very large collection of mostly inactive connections and a
+thread-pool to carry operations in previously written synchronous
+code.
 
 Subprocesses
 ------------
@@ -929,6 +946,17 @@ This will usually result in a warning message::
    
     example.py:8: RuntimeWarning: coroutine 'sleep' was never awaited
 
+Another possible source of failure involves attempts to use curio-wrapped sockets
+and files with existing synchronous code.  Doing so might result in a ``TypeError`` or
+some kind of problem related to non-blocking behavior.   If you need
+to interoperate with external code, make sure you use the ``blocking()`` method
+to expose the raw socket or file being used behind the scenes. For example::
+
+    # sock is a curio socket
+    with sock.blocking() as _sock:
+        external_function(_sock)       # Pass to external function
+        ...
+
 For debugging a program that is otherwise running, but you're not
 exactly sure what it might be doing (perhaps it's hung or deadlocked),
 consider the use of the curio monitor.  For example::
@@ -948,6 +976,15 @@ when a task crashes.  Do this::
 
 Be aware that launching ``pdb`` causes the entire kernel to stop.  When
 you quit ``pdb``, the kernel will resume.
+
+More Information
+----------------
+
+The official Github page at https://github.com/dabeaz/curio should be used for bug reports,
+pull requests, and other activities. 
+
+A reference manual can be found at https://curio.readthedocs.org/en/latest/reference.html.
+
 
 
 
