@@ -218,7 +218,7 @@ source statements.  This does not include blank lines and comments.
 **Q: Can I contribute?**
 
 A: Absolutely. Please use the Github page at
-https://github/com/dabeaz/curio as the primary point of discussion
+https://github.com/dabeaz/curio as the primary point of discussion
 concerning pull requests, bugs, and feature requests.
 
 About
