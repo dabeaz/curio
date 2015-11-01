@@ -681,7 +681,8 @@ limit the number of tasks performing an operation.  For example::
 
 .. method:: await notify(n=1)
 
-   Notify one or more tasks, causing them to wake from the :meth:`wait` method.
+   Notify one or more tasks, causing them to wake from the
+   :meth:`Condition.wait` method.
 
 .. method:: await notify_all()
 
@@ -750,12 +751,12 @@ A :class:`Queue` instance supports the following methods:
 .. method:: await Queue.join(*, timeout=None)
 
    Wait for all of the elements put onto a queue to be processed. Consumers
-   must call :meth:Queue.task_done() to indicate completion.
+   must call :meth:`Queue.task_done` to indicate completion.
 
 .. method:: await Queue.task_done()
 
    Indicate that processing has finished for an item.  If all items have
-   been processed and there are tasks waiting on ``Queue.join()`` they
+   been processed and there are tasks waiting on :meth:`Queue.join` they
    will be awakened.
 
 Here is an example of using queues in a producer-consumer problem::
@@ -852,7 +853,7 @@ Exceptions
 
 .. class:: class TaskError
 
-   Exception raised by the :meth:`Task.join()` method if an uncaught exception
+   Exception raised by the :meth:`Task.join` method if an uncaught exception
    occurs in a task.  It is a chained exception. The :attr:`__cause__` attribute contains
    the exception that causes the task to fail.
 
