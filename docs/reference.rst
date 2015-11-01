@@ -13,7 +13,7 @@ and used in the main execution thread.
 
    Create an instance of a curio kernel.  If *selector* is given, it should be
    an instance of a selector from the :mod:`selectors` module.  If not given,
-   then ``selectors.DefaultSelector`` is used to poll for I/O. 
+   then ``selectors.DefaultSelector`` is used to poll for I/O.
    If *with_monitor* is ``True``, the monitor task executes in the background.
    The monitor responds to the keyboard-interrupt and allows you to inspect
    the state of the running kernel.
@@ -22,7 +22,7 @@ There are only a few methods that may be used on a ``Kernel`` outside of corouti
 
 
 .. method:: Kernel.run(coro=None, pdb=False, log_errors=True)
-  
+
    Runs the kernel until all non-daemonic tasks have finished execution.
    *coro* is a coroutine to run as a task.  If ommitted, then tasks should
    have already been added using the ``add_task`` method below.
@@ -32,7 +32,7 @@ There are only a few methods that may be used on a ``Kernel`` outside of corouti
 
 .. method:: Kernel.add_task(coro, daemon=False)
 
-   Adds a new task to the kernel.  *coro* is a newly instantiated coroutine. 
+   Adds a new task to the kernel.  *coro* is a newly instantiated coroutine.
    If *daemon* is ``True``, the task is created without a parent and runs in
    the background.   Returns a :class:`Task` instance.  This method may not
    be used to add a task to a running kernel and may not be used inside a
@@ -43,7 +43,7 @@ There are only a few methods that may be used on a ``Kernel`` outside of corouti
    Force the kernel to stop execution.  Since the kernel normally runs in the main
    thread, this operation would normally have to be performed in a separate thread
    or possibly inside a coroutine.  This method merely sets a flag in the kernel
-   and returns immediately.  The kernel will stop only after the currently running 
+   and returns immediately.  The kernel will stop only after the currently running
    task yields.
 
 .. method:: Kernel.shutdown()
@@ -73,14 +73,14 @@ function:
    tasks to execute.
 
 Tasks created by :func:`new_task()` are represented as a :class:`Task` instance.
-It is illegal to create a :class:`Task` instance directly by calling the class. 
+It is illegal to create a :class:`Task` instance directly by calling the class.
 The following methods are available on tasks:
 
 .. method:: await Task.join(timeout=None)
 
    Wait for the task to terminate.  Returns the value returned by the task or
    raises a :exc:`curio.TaskError` exception if the task failed with an exception.
-   This is a chained exception.  The `__cause__` attribute of this 
+   This is a chained exception.  The `__cause__` attribute of this
    exception contains the actual exception raised in the task.
 
 .. method:: await Task.cancel(*, timeout=None, exc=CancelledError)
@@ -118,7 +118,7 @@ The following public attributes are available of ``Task`` instances:
 .. attribute:: Task.children
 
    A set of the immediate child tasks created by this task.  Useful if writing
-   code that needs to supervise a collection of tasks.  Be aware that the 
+   code that needs to supervise a collection of tasks.  Be aware that the
    contents of the set may change as tasks are scheduled.  To safely iterate
    and perform asynchronous operations, make a copy first.
 
@@ -205,7 +205,7 @@ listed here might block the kernel or raise a ``BlockingIOError`` exception.
 
 .. method:: await Socket.recvfrom_into(buffer, nbytes=0, flags=0)
 
-   Receive up to *nbytes* of data into a buffer object. 
+   Receive up to *nbytes* of data into a buffer object.
 
 .. method:: await Socket.recvmsg(bufsize, ancbufsize=0, flags=0)
 
@@ -260,8 +260,8 @@ listed here might block the kernel or raise a ``BlockingIOError`` exception.
    object is a :class:`curio.io.Stream` instance that supports
    non-blocking I/O.  *mode* specifies the file mode which must be one
    of ``'rb'`` or ``'wb'``.  *buffering* specifies the buffering
-   behavior. By default unbuffered I/O is used.  Note: It is not currently 
-   possible to create a stream with Unicode text encoding/decoding applied to it 
+   behavior. By default unbuffered I/O is used.  Note: It is not currently
+   possible to create a stream with Unicode text encoding/decoding applied to it
    so those options are not available.
 
 .. method:: Socket.make_streams(buffering=0)
@@ -301,7 +301,7 @@ The following methods are available on instances of :class:`Stream`:
 
 .. method:: await Stream.read(maxbytes=-1)
 
-   Read up to *maxbytes* of data on the file. If omitted, reads as 
+   Read up to *maxbytes* of data on the file. If omitted, reads as
    much data as is currently available and returns it.
 
 .. method:: await Stream.readall()
@@ -309,12 +309,12 @@ The following methods are available on instances of :class:`Stream`:
    Return all of the data that's available on a file up until an EOF is read.
 
 .. method:: await Stream.readline():
- 
+
    Read a single line of data from a file.
 
 .. method:: await Stream.write(bytes)
 
-   Write all of the data in *bytes* to the file. 
+   Write all of the data in *bytes* to the file.
 
 .. method:: await Stream.writelines(lines)
 
@@ -331,7 +331,7 @@ The following methods are available on instances of :class:`Stream`:
 .. method:: Stream.settimeout(seconds)
 
    Sets a timeout on all file I/O operations.  If *seconds* is None, any previously set
-   timeout is cleared. 
+   timeout is cleared.
 
 .. method:: Stream.blocking()
 
@@ -340,7 +340,7 @@ The following methods are available on instances of :class:`Stream`:
    to pass the file to existing synchronous code.
 
 Other file methods (e.g., ``tell()``, ``seek()``, etc.) are available
-if the supplied ``fileobj`` also has them.  
+if the supplied ``fileobj`` also has them.
 
 Streams may be used as an asynchronous context manager.  For example::
 
@@ -361,7 +361,7 @@ coroutine equivalents.
 
    Creates a :class:`curio.io.Socket` wrapper the around :class:`socket` objects created in the built-in :mod:`socket`
    module.  The arguments for construction are identical and have the same meaning.
-   The resulting :class:`socket` instance is set in non-blocking mode.  
+   The resulting :class:`socket` instance is set in non-blocking mode.
 
 The following module-level functions have been modified so that the returned socket
 objects are compatible with curio:
@@ -390,7 +390,7 @@ The :mod:`curio.subprocess` module provides a wrapper around the built-in :mod:`
    A wrapper around the :class:`subprocess.Popen` class.  The same arguments are accepted.
    On the resulting ``Popen`` instance, the ``stdin``, ``stdout``, and ``stderr`` file
    attributes have been wrapped by the :class:`curio.io.Stream` class. You can use these
-   in an asynchronous context. 
+   in an asynchronous context.
 
 Here is an example of using ``Popen`` to read streaming output off of a subprocess with curio::
 
@@ -446,19 +446,19 @@ calling signature as their counterparts in the standard :mod:`ssl` module:
 .. function:: create_default_context(*args, **kwargs)
 
 The :class:`SSLContext` class is also redefined and modified so that the ``wrap_socket()`` method
-returns a socket compatible with curio. 
+returns a socket compatible with curio.
 
 Don't attempt to use the ``ssl`` module without a careful read of Python's official documentation
-at https://docs.python.org/3/library/ssl.html.  
+at https://docs.python.org/3/library/ssl.html.
 
 For the purposes of curio, it is usually easier to apply SSL to a connection using some of the
 high level network functions described in the next section.  For example, here's how you
 make an outgoing SSL connection::
 
-    sock = await curio.open_connection('www.python.org', 443, 
-                                       ssl=True, 
+    sock = await curio.open_connection('www.python.org', 443,
+                                       ssl=True,
                                        server_hostname='www.python.org')
- 
+
 Here's how you might define a server that uses SSL::
 
     import curio
@@ -466,7 +466,7 @@ Here's how you might define a server that uses SSL::
 
     KEYFILE = "privkey_rsa"       # Private key
     CERTFILE = "certificate.crt"  # Server certificat
- 
+
     async def handler(client, addr):
         ...
 
@@ -485,9 +485,9 @@ making network connections and writing servers.
 .. function:: await open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None, timeout=None)
 
    Creates an outgoing connection to a server at *host* and *port*. This connection is made using
-   the ``socket.create_connection()`` function and might be IPv4 or IPv6 depending on 
+   the ``socket.create_connection()`` function and might be IPv4 or IPv6 depending on
    the network configuration (although you're not supposed to worry about it).  *ssl* specifies
-   whether or not SSL should be used.  *ssl* can be ``True`` or an instance of an ``SSLContext`` 
+   whether or not SSL should be used.  *ssl* can be ``True`` or an instance of an ``SSLContext``
    created by the :mod:`curio.ssl` module.  *source_addr* specifies the source address to use
    on the socket.  *server_hostname* specifies the hostname to check against when making SSL
    connections.  It is highly advised that this be supplied to avoid man-in-the-middle attacks.
@@ -500,7 +500,7 @@ making network connections and writing servers.
 
    Creates a ``Server`` instance for receiving TCP connections on a given host and port.
    *client_connected_task* is a coroutine that is to be called to handle each connection.
-   Family specifies the address family and is either ``AF_INET`` or ``AF_INET6``. 
+   Family specifies the address family and is either ``AF_INET`` or ``AF_INET6``.
    *backlog* is the argument to the socket ``listen()`` method.  *ssl* specifies an
    ``SSLContext`` instance to use. *reuse_address* specifies whether to reuse a previously
    used port.   This method does not actually start running the created server.  To
@@ -556,7 +556,7 @@ primitives are safe to use with threads created by the built-in :mod:`threading`
 Here is an Event example::
 
     import curio
-   
+
     async def waiter(evt):
         print('Waiting')
         await evt.wait()
@@ -595,7 +595,7 @@ Here is an Event example::
 The preferred way to use a Lock is as an asynchronous context manager. For example::
 
     import curio
-    
+
     async def child(lck):
         async with lck:
             print('Child has the lock')
@@ -615,7 +615,7 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
 
 .. class:: class BoundedSemaphore(value=1)
 
-   This class is the same as :class:`Semaphore` except that the 
+   This class is the same as :class:`Semaphore` except that the
    semaphore value is not allowed to exceed the initial value.
 
 Semaphores support the following methods:
@@ -625,9 +625,9 @@ Semaphores support the following methods:
    Acquire the semaphore, decrementing its count.  Blocks if the count is 0.
 
 .. method:: await Semaphore.release()
- 
+
    Release the semaphore, incrementing its count. Never blocks.
-        
+
 .. method:: Semaphore.locked()
 
    Return ``True`` if the Semaphore is locked.
@@ -677,7 +677,7 @@ limit the number of tasks performing an operation.  For example::
 .. method:: await Condition.wait_for(predicate, *, timeout=None)
 
    Wait on the condition variable until a supplied predicate function returns ``True``. *predicate* is
-   a callable that takes no arguments.  
+   a callable that takes no arguments.
 
 .. method:: await notify(n=1)
 
@@ -692,7 +692,7 @@ scenario::
 
     import curio
     from collections import deque
-   
+
     items = deque()
     async def consumer(cond):
         while True:
@@ -708,7 +708,7 @@ scenario::
                   items.append(n)
                   await cond.notify()
               await curio.sleep(1)
-         
+
      async def main():
          cond = curio.Condition()
          await curio.new_task(producer(cond))
@@ -799,7 +799,7 @@ as an asynchronous context manager.  The recommended usage looks like this::
 
 For all of the statements inside the context-manager, signals will
 be queued.  The `sigset.wait()` operation will return received
-signals one at a time from the signal queue.   
+signals one at a time from the signal queue.
 
 Signals can be temporarily ignored using a normal context manager::
 
@@ -812,9 +812,9 @@ Signals can be temporarily ignored using a normal context manager::
               ...
 
 Caution: Signal handling only works if the curio kernel is running in Python's
-main execution thread.  Also, mixing signals with threads, subprocesses, and other 
-concurrency primitives is a well-known way to make your head shatter into 
-small pieces.  Tread lightly. 
+main execution thread.  Also, mixing signals with threads, subprocesses, and other
+concurrency primitives is a well-known way to make your head shatter into
+small pieces.  Tread lightly.
 
 .. class:: class SignalSet(*signals)
 
@@ -832,7 +832,7 @@ may only be used in coroutines.
    because this allows received signals to be properly queued.  It can be
    used in isolation, but be aware that this will only catch a single
    signal right at that line of code.  It's possible that you might lose
-   signals if you use this method outside of a context manager. 
+   signals if you use this method outside of a context manager.
 
 .. method:: SignalSet.ignore()
 
@@ -847,7 +847,7 @@ Exceptions
 
    Exception raised in a coroutine if it has been cancelled.  If ignored, the
    coroutine is silently terminated.  If caught, a coroutine can continue to
-   run, but should work to terminate execution.  Ignoring a cancellation 
+   run, but should work to terminate execution.  Ignoring a cancellation
    request and continuing to execute will likely cause some other task to hang.
 
 .. class:: class TaskError
@@ -887,27 +887,27 @@ implementing a new curio primitive.
    Sleep until the indicated *task* completes.  The final return value
    of the task is returned if it completed successfully. If the task
    failed with an exception, a ``curio.TaskError`` exception is
-   raised.  This is a chained exception.  The ``__cause__`` attribute of this 
+   raised.  This is a chained exception.  The ``__cause__`` attribute of this
    exception contains the actual exception raised in the task.
 
 .. function:: await _cancel_task(task, exc=CancelledError, timeout=None)
 
    Cancel the indicated *task*.  Does not return until the task actually
-   completes the cancellation.  Note: It is usually better to use 
+   completes the cancellation.  Note: It is usually better to use
    ``await task.cancel()`` instead of this function.
 
 .. function:: await _wait_on_queue(kqueue, state_name, timeout=None)
 
    Go to sleep on a queue. *kqueue* is an instance of a kernel queue
-   which is typically a ``collections.deque`` instance. *state_name* 
+   which is typically a ``collections.deque`` instance. *state_name*
    is the name of the wait state (used in debugging).
 
 .. function:: await _reschedule_tasks(kqueue, n=1, value=None, exc=None)
 
    Reschedule one or more tasks from a queue. *kqueue* is an instance of a
    kernel queue.  *n* is the number of tasks to release. *value* and *exc*
-   specify the return value or exception to raise in the task when it 
-   resumes execution.    
+   specify the return value or exception to raise in the task when it
+   resumes execution.
 
 .. function:: await _sigwatch(sigset)
 
@@ -920,7 +920,7 @@ implementing a new curio primitive.
 .. function:: await _sigwait(sigset, timeout=None)
 
    Wait for the arrival of a signal in a given signal set. Returns the signal
-   number of the received signal. 
+   number of the received signal.
 
 Again, you're unlikely to use any of these functions directly.  However, here's a small taste
 of how they're used.  For example, the ``recv()`` method of ``Socket`` objects
@@ -936,10 +936,10 @@ looks roughly like this::
                     await _read_wait(self._socket)
         ...
 
-This method first tries to receive data.  If none is available, the ``_read_wait()`` call is used to 
-put the task to sleep until reading can be performed. When it awakes, the receive operation 
+This method first tries to receive data.  If none is available, the ``_read_wait()`` call is used to
+put the task to sleep until reading can be performed. When it awakes, the receive operation
 is retried. Just to emphasize, the ``_read_wait()`` doesn't actually perform any I/O. It's just
-scheduling a task for it. 
+scheduling a task for it.
 
 Here's an example of code that implements a mutex lock::
 
@@ -962,11 +962,5 @@ Here's an example of code that implements a mutex lock::
 
 In this code you can see the low-level calls related to managing a wait queue. This
 code is not significantly different than the actual implementation of a lock
-in curio.   If you wanted to make your own task synchronization objects, the 
+in curio.   If you wanted to make your own task synchronization objects, the
 code would look similar.
-
-
-
-
-
-
