@@ -1,4 +1,4 @@
-# A simple echo server written using the socketserver API
+# A simple echo server 
 
 from curio import Kernel, new_task, run_server
 
