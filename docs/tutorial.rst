@@ -38,7 +38,7 @@ defined as coroutines using the ``async`` syntax.  To run a task, you
 create a ``Kernel`` instance, then invoke the ``run()`` method with a
 task.  A task runs like a separate execution thread with one important
 difference--tasks can only be preempted on statements prefaced by an
-``await``.  This is cooperate multitasking.  However, just to be clear,
+``await``.  This is cooperative multitasking.  However, just to be clear,
 curio is not using threads to implement tasks under the covers.
 
 Tasks
