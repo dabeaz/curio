@@ -9,7 +9,7 @@ The Kernel
 The kernel is responsible for running all of the tasks.  It should normally be created
 and used in the main execution thread.
 
-.. class:: class Kernel(selector=None, with_monitor=False)
+.. class:: Kernel(selector=None, with_monitor=False)
 
    Create an instance of a curio kernel.  If *selector* is given, it should be
    an instance of a selector from the :mod:`selectors` module.  If not given,
@@ -24,7 +24,7 @@ There are only a few methods that may be used on a ``Kernel`` outside of corouti
 .. method:: Kernel.run(coro=None, pdb=False, log_errors=True)
 
    Runs the kernel until all non-daemonic tasks have finished execution.
-   *coro* is a coroutine to run as a task.  If ommitted, then tasks should
+   *coro* is a coroutine to run as a task.  If omitted, then tasks should
    have already been added using the ``add_task`` method below.
    If *pdb* is ``True``, then the kernel enters the Python debugger if any
    task crashes with an uncaught exception.  If *log_errors* is ``True``, then
@@ -180,7 +180,7 @@ sockets from the built-in :mod:`socket` module as well as SSL-wrapped sockets cr
 by functions by the built-in :mod:`ssl` module.  Sockets in curio should be fully
 compatible with timeouts and other common socket features.
 
-.. class:: class Socket(sockobj)
+.. class:: Socket(sockobj)
 
    Creates a wrapper the around an existing socket *sockobj*.  This socket
    is set in non-blocking mode when wrapped.
@@ -291,7 +291,7 @@ existing file-like object.  Certain other functions in curio use this
 (e.g., the :func:`Socket.makefile()` method).
 
 
-.. class:: class Stream(fileobj)
+.. class:: Stream(fileobj)
 
    Create a file-like wrapper around an existing file.  *fileobj* must be in
    in binary mode.  The file is placed into non-blocking mode
@@ -385,7 +385,7 @@ subprocess wrapper module
 -------------------------
 The :mod:`curio.subprocess` module provides a wrapper around the built-in :mod:`subprocess` module.
 
-.. class:: class Popen(*args, **kwargs).
+.. class:: Popen(*args, **kwargs).
 
    A wrapper around the :class:`subprocess.Popen` class.  The same arguments are accepted.
    On the resulting ``Popen`` instance, the ``stdin``, ``stdout``, and ``stderr`` file
@@ -531,7 +531,7 @@ The following synchronization primitives are available. Their behavior is
 similar to their equivalents in the :mod:`threading` module.  None of these
 primitives are safe to use with threads created by the built-in :mod:`threading` module.
 
-.. class:: class Event()
+.. class:: Event()
 
    An event object.
 
@@ -574,7 +574,7 @@ Here is an Event example::
 	# Set the event. All waiters should wake up
 	await evt.set()
 
-.. class:: class Lock()
+.. class:: Lock()
 
    This class provides a mutex lock.  It can only be used in tasks. It is not thread safe.
 
@@ -607,13 +607,13 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
             await curio.new_task(child(lck))
             await curio.sleep(5)
 
-.. class:: class Semaphore(value=1)
+.. class:: Semaphore(value=1)
 
    Create a semaphore.  Semaphores are based on a counter.  If the count is greater
    than 0, it is decremented and the semaphore is acquired.  Otherwise, the task
    has to wait until the count is incremented by another task.
 
-.. class:: class BoundedSemaphore(value=1)
+.. class:: BoundedSemaphore(value=1)
 
    This class is the same as :class:`Semaphore` except that the
    semaphore value is not allowed to exceed the initial value.
@@ -651,7 +651,7 @@ limit the number of tasks performing an operation.  For example::
 
          # After this point, you should see two tasks at a time run. Every 5 seconds.
 
-.. class:: class Condition(lock=None)
+.. class:: Condition(lock=None)
 
    Condition variable.  *lock* is the underlying lock to use. If none is provided, then
    a :class:`Lock` object is used.
@@ -720,7 +720,7 @@ Queues
 If you want to communicate between tasks, it's usually much easier to use
 a :class:`Queue` instead.
 
-.. class:: class Queue(maxsize=0)
+.. class:: Queue(maxsize=0)
 
    Creates a queue with a maximum number of elements in *maxsize*.  If not
    specified, the queue can hold an unlimited number of items.
@@ -817,7 +817,7 @@ main execution thread.  Also, mixing signals with threads, subprocesses, and oth
 concurrency primitives is a well-known way to make your head shatter into
 small pieces.  Tread lightly.
 
-.. class:: class SignalSet(*signals)
+.. class:: SignalSet(*signals)
 
    Represents a set of one or more Unix signals.  *signals* is a list of
    signals as defined in the built-in :mod:`signal` module.
@@ -844,14 +844,14 @@ may only be used in coroutines.
 Exceptions
 ----------
 
-.. class:: class CancelledError
+.. class:: CancelledError
 
    Exception raised in a coroutine if it has been cancelled.  If ignored, the
    coroutine is silently terminated.  If caught, a coroutine can continue to
    run, but should work to terminate execution.  Ignoring a cancellation
    request and continuing to execute will likely cause some other task to hang.
 
-.. class:: class TaskError
+.. class:: TaskError
 
    Exception raised by the :meth:`Task.join` method if an uncaught exception
    occurs in a task.  It is a chained exception. The :attr:`__cause__` attribute contains
