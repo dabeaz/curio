@@ -24,7 +24,7 @@ There are only a few methods that may be used on a ``Kernel`` outside of corouti
 .. method:: Kernel.run(coro=None, pdb=False, log_errors=True)
 
    Runs the kernel until all non-daemonic tasks have finished execution.
-   *coro* is a coroutine to run as a task.  If ommitted, then tasks should
+   *coro* is a coroutine to run as a task.  If omitted, then tasks should
    have already been added using the ``add_task`` method below.
    If *pdb* is ``True``, then the kernel enters the Python debugger if any
    task crashes with an uncaught exception.  If *log_errors* is ``True``, then
