@@ -3,7 +3,7 @@ curio - concurrent I/O
 
 Curio is a modern library for performing reliable concurrent I/O using
 Python coroutines and the explicit async/await syntax introduced in
-Python 3.5.   Its programming model is based on cooperative
+Python 3.5. Its programming model is based on cooperative
 multitasking and common system programming abstractions such as
 threads, sockets, files, subprocesses, locks, and queues.  Under
 the covers, it is based on a task queuing system that is small, fast,
@@ -11,37 +11,39 @@ and powerful.
 
 An Example
 ----------
-Here is a simple TCP echo server implemented using sockets and curio::
+Here is a simple TCP echo server implemented using sockets and curio:
 
-    # echoserv.py
-    
-    from curio import Kernel, new_task
-    from curio.socket import *
-    
-    async def echo_server(address):
-        sock = socket(AF_INET, SOCK_STREAM)
-        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        sock.bind(address)
-        sock.listen(5)
-        print('Server listening at', address)
-        async with sock:
-            while True:
-                client, addr = await sock.accept()
-                await new_task(echo_client(client, addr))
-    
-    async def echo_client(client, addr):
-        print('Connection from', addr)
-        async with client:
-             while True:
-                 data = await client.recv(1000)
-                 if not data:
-                     break
-                 await client.sendall(data)
-        print('Connection closed')
+```python
+# echoserv.py
 
-    if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(echo_server(('',25000)))
+from curio import Kernel, new_task
+from curio.socket import *
+
+async def echo_server(address):
+sock = socket(AF_INET, SOCK_STREAM)
+sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+sock.bind(address)
+sock.listen(5)
+print('Server listening at', address)
+async with sock:
+    while True:
+        client, addr = await sock.accept()
+        await new_task(echo_client(client, addr))
+
+async def echo_client(client, addr):
+print('Connection from', addr)
+async with client:
+     while True:
+         data = await client.recv(1000)
+         if not data:
+             break
+         await client.sendall(data)
+print('Connection closed')
+
+if __name__ == '__main__':
+kernel = Kernel()
+kernel.run(echo_server(('',25000)))
+```
 
 If you have programmed with threads, you find that curio looks similar.
 You'll also find that the above server can handle thousands of simultaneous 
@@ -49,28 +51,30 @@ client connections even though no threads are being used under the covers.
 
 Of course, if you prefer something a little higher level, you can have
 curio take of the fiddly bits related to setting up the server portion
-of the code::
+of the code:
 
-    # echoserv.py
+```python
+# echoserv.py
 
-    from curio import Kernel, new_task, run_server
+from curio import Kernel, new_task, run_server
 
-    async def echo_client(client, addr):
-        print('Connection from', addr)
-        while True:
-            data = await client.recv(1000)
-            if not data:
-                break
-            await client.sendall(data)
-        print('Connection closed')
+async def echo_client(client, addr):
+print('Connection from', addr)
+while True:
+    data = await client.recv(1000)
+    if not data:
+        break
+    await client.sendall(data)
+print('Connection closed')
 
-    if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(run_server('', 25000, echo_client))
+if __name__ == '__main__':
+kernel = Kernel()
+kernel.run(run_server('', 25000, echo_client))
+```
 
-This is only a small sample of what's possible.  Read the `official documentation
-<https://curio.readthedocs.org>`_ for more in-depth coverage.  The `tutorial 
-<https://curio.readthedocs.org/en/latest/tutorial.html>`_ is a good starting point.
+This is only a small sample of what's possible.  Read the [official documentation](
+https://curio.readthedocs.org) for more in-depth coverage.  The [tutorial]( 
+https://curio.readthedocs.org/en/latest/tutorial.html) is a good starting point.
 
 Additional Features
 -------------------
@@ -136,7 +140,7 @@ fast, and straightforward to understand.
 Higher-level I/O operations are carried out by a wrapper layer that
 uses Python's normal socket and file objects. You use the
 same operations that you would normally use in synchronous code except
-that you add ``await`` keywords to methods that might block.
+that you add `await` keywords to methods that might block.
 
 Questions and Answers
 ---------------------
@@ -144,7 +148,7 @@ Questions and Answers
 **Q: Is curio implemented using the asyncio module?**
 
 A: No. Curio is a standalone library. Although the core of the library
-uses the same basic machinery as ``asyncio`` to poll for I/O events,
+uses the same basic machinery as `asyncio` to poll for I/O events,
 the handling of those events is done in a completely different manner.
 
 **Q: Is curio meant to be a clone of asyncio?**
@@ -155,11 +159,11 @@ with other libraries is not a goal.
 
 **Q: How many tasks can be created?**
 
-A: Each task involves an instance of a ``Task`` class that
+A: Each task involves an instance of a `Task` class that
 encapsulates a generator. No threads are used. As such, you're really
 only limited by the memory of your machine--potentially you could have
 hundreds of thousands of tasks.  The I/O functionality in curio is
-implemented using the built-in ``selectors`` module.  Thus, the number
+implemented using the built-in `selectors` module.  Thus, the number
 of open sockets allowed would be subject to the limits of that library
 combined with any per-user limits imposed by the operating system.
  
@@ -171,10 +175,10 @@ something that might be added later.
 **Q: How fast is curio?**
 
 A: In preliminary benchmarking of a simple echo server, curio runs
-about 50-70% faster than ``asyncio``.  It runs about 30-40% faster
+about 50-70% faster than `asyncio`.  It runs about 30-40% faster
 than Twisted and about 10-15% slower than gevent, both running on
 Python 2.7.  This is on OS-X so your mileage might vary. See the
-``examples/benchmark`` directory of the distribution for this testing
+`examples/benchmark` directory of the distribution for this testing
 code.
 
 **Q: Is curio going to evolve into a framework?**
