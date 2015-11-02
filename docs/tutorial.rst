@@ -448,7 +448,7 @@ library. ``curio`` already has its own sleep function so if you really need to
 sleep, use that instead.
 
 A Caution: When a task delegates work to a subprocess or thread using
-the ``run_cpu()`` or ``run_blocking()`` functions, that work runs
+the ``run_cpu_bound()`` or ``run_blocking()`` functions, that work runs
 outside the direct control of curio.  This means that whatever thread
 or process is handling the request will likely run until the requested
 work has been fully completed.  You can cancel a task that is waiting
@@ -929,7 +929,7 @@ Here are a few programming tips to keep in mind:
   ``await``.  Although these calls will work, they could potentially
   block the kernel on I/O or long-running calculations.  If you know
   that either of these are possible, consider the use of the
-  ``run_cpu()`` or ``run_blocking()`` functions to execute the work.
+  ``run_cpu_bound()`` or ``run_blocking()`` functions to execute the work.
 
 Debugging Tips
 --------------
