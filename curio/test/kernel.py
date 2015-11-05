@@ -162,18 +162,20 @@ class TestKernel(unittest.TestCase):
 
         async def parent():
             try:
-                 await new_task(child())
+                 child_task = await new_task(child())
                  await sleep(0.5)
                  results.append('end parent')
             except CancelledError:
+                await child_task.cancel()
                 results.append('parent cancelled')
             
         async def grandparent():
             try:
-                await new_task(parent())
+                parent_task = await new_task(parent())
                 await sleep(0.5)
                 results.append('end grandparent')
             except CancelledError:
+                await parent_task.cancel()
                 results.append('grandparent cancelled')
 
         async def main():
@@ -209,7 +211,9 @@ class TestKernel(unittest.TestCase):
             try:
                 results.append('child sleep')
                 await sleep(1.0)
-                results.append('child fail')
+                results.append('child slept')
+                await sleep(1.0)
+                results.append('should not see this')
             except CancelledError:
                 results.append('child cancelled')
 
@@ -219,6 +223,7 @@ class TestKernel(unittest.TestCase):
             await sleep(0.5)
             results.append('cancel start')
             await task.cancel()
+            results.append('cancel done')
             
         async def main():
             task = await new_task(parent())
@@ -233,7 +238,9 @@ class TestKernel(unittest.TestCase):
                 'child sleep',
                 'parent sleep',
                 'cancel start',
+                'child slept',
                 'child cancelled',
+                'cancel done'
                 ])
 
 class TestSignal(unittest.TestCase):

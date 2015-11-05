@@ -1,12 +1,14 @@
 # curio/queue.py
+#
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
+# Implementation of a queue object that can be used to communicate
+# between tasks.  This is only safe to use within curio. It is not
+# thread-safe.
 
-'''
-Implementation of a queue object that can be used to communicate
-between tasks.  This is only safe to use within curio. It is not
-thread-safe.
-'''
-
-from .kernel import wait_on_queue, reschedule_tasks, kqueue
+from .kernel import _wait_on_queue, _reschedule_tasks, kqueue
 from collections import deque
 
 __all__ = [ 'Queue' ]
@@ -29,23 +31,23 @@ class Queue(object):
 
     async def get(self, *, timeout=None):
         if self.empty():
-            await wait_on_queue(self._get_waiting, 'QUEUE_GET', timeout)
+            await _wait_on_queue(self._get_waiting, 'QUEUE_GET', timeout)
         result = self._queue.popleft()
         if self._put_waiting:
-            await reschedule_tasks(self._put_waiting, n=1)
+            await _reschedule_tasks(self._put_waiting, n=1)
         return result
 
     async def join(self, *, timeout=None):
         if self._task_count > 0:
-            await wait_on_queue(self._join_waiting, 'QUEUE_JOIN', timeout)
+            await _wait_on_queue(self._join_waiting, 'QUEUE_JOIN', timeout)
 
     async def put(self, item, *, timeout=None):
         if self.full():
-            await wait_on_queue(self._put_waiting, 'QUEUE_PUT', timeout)
+            await _wait_on_queue(self._put_waiting, 'QUEUE_PUT', timeout)
         self._queue.append(item)
         self._task_count += 1
         if self._get_waiting:
-            await reschedule_tasks(self._get_waiting, n=1)
+            await _reschedule_tasks(self._get_waiting, n=1)
 
     def qsize(self):
         return len(self._queue)
@@ -53,4 +55,4 @@ class Queue(object):
     async def task_done(self):
         self._task_count -= 1
         if self._task_count == 0 and self._join_waiting:
-            await reschedule_tasks(self._join_waiting, n=len(self._join_waiting))
+            await _reschedule_tasks(self._join_waiting, n=len(self._join_waiting))

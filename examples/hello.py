@@ -1,5 +1,6 @@
-# A hello world program
-
+# A hello world program. From the Curio tutorial at
+# https://curio.readthedocs.org/en/latest/tutorial.html
+#
 import curio
 import signal
 import os
@@ -25,7 +26,7 @@ async def kid():
             await start_evt.wait(timeout=1)
             break
         except TimeoutError:
-            pass
+            print('Wha!?!')
     try:
         print('Building the Millenium Falcon in Minecraft')
         total = 0

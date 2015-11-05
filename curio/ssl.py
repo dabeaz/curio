@@ -1,5 +1,9 @@
 # curio/ssl.py
 #
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
 # Wrapper around built-in SSL module
 
 __all__ = []
@@ -42,12 +46,22 @@ if _ssl:
         def __getattr__(self, name):
             return getattr(self._context, name)
 
-        def wrap_socket(self, *args, do_handshake_on_connect=True, **kwargs):
-            sock = self._context.wrap_socket(*args, do_handshake_on_connect=False, **kwargs)
+        def wrap_socket(self, sock, *args, do_handshake_on_connect=True, **kwargs):
+            sock = self._context.wrap_socket(sock._socket, *args, do_handshake_on_connect=False, **kwargs)
             csock = Socket(sock)
             csock.do_handshake_on_connect = do_handshake_on_connect
             return csock
-        
+
+        def __setattr__(self, name, value):
+            if name == '_context':
+                super().__setattr__(name, value)
+            else:
+                setattr(self._context, name, value)
+
+    # Name alias
+    def SSLContext(protocol):
+        return CurioSSLContext(_ssl.SSLContext(protocol))
+
     @wraps(_ssl.create_default_context)
     def create_default_context(*args, **kwargs):
         context = _ssl.create_default_context(*args, **kwargs)

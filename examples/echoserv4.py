@@ -1,17 +1,17 @@
-# A simple echo server written using the socketserver API with streams
+# echoserv.py
+#
+# Echo server using streams
 
-from curio import Kernel, new_task
-from curio.socketserver import *
+from curio import Kernel, new_task, run_server
 
-class EchoHandler(StreamRequestHandler):
-    async def handle(self):
-        print('Connection from', self.client_address)
-        async for line in self.rfile:
-            await self.wfile.write(line)
-
-        print('Connection closed')
+async def echo_client(client, addr):
+    print('Connection from', addr)
+    reader, writer = client.make_streams()
+    async with reader, writer:
+        async for line in reader:
+            await writer.write(line)
+    print('Connection closed')
 
 if __name__ == '__main__':
-    serv = TCPServer(('',25000), EchoHandler)
     kernel = Kernel()
-    kernel.run(serv.serve_forever())
+    kernel.run(run_server('', 25000, echo_client))

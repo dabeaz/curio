@@ -1,8 +1,12 @@
 # curio/subprocess.py
 #
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
 # Curio clone of the subprocess module.  
 
-from .kernel import future_wait, new_task, sleep
+from .kernel import  new_task, sleep
 from .io import Stream
 import subprocess
 
@@ -53,7 +57,6 @@ class Popen(object):
         try:
             return await task.join(timeout=timeout)
         except TimeoutError:
-            print('waiter task timed out')
             await task.cancel()
             raise TimeoutExpired(self.args, timeout) from None
 

@@ -1,5 +1,9 @@
 # curio/monitor.py
 #
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
 # Debugging monitor for curio.   At the moment, this is overly simplistic.
 # It could be expanded to do a lot of other stuff later.
 
@@ -14,20 +18,6 @@ import atexit
 from .io import Stream
 from .kernel import _kernel_reference, SignalSet, CancelledError
 from . import socket
-
-def get_stack(task):
-    frames = []
-    try:
-        # 'async def' coroutines
-        f = task.coro.cr_frame
-    except AttributeError:
-        f = task.coro.gi_frame
-    if f is not None:
-        while f is not None:
-            frames.append(f)
-            f = f.f_back
-        frames.reverse()
-    return frames
 
 def get_stack(task):
     frames = []

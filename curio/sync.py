@@ -1,11 +1,14 @@
 # curio/sync.py
-'''
-Implementation of common task synchronization primitives such as
-events, locks, semaphores, and condition variables. These primitives
-are only safe to use in the curio framework--they are not thread safe.
-'''
+#
+# Copyright (C) 2015
+# David Beazley (Dabeaz LLC), http://www.dabeaz.com
+# All rights reserved.
+#
+# Implementation of common task synchronization primitives such as
+# events, locks, semaphores, and condition variables. These primitives
+# are only safe to use in the curio framework--they are not thread safe.
 
-from .kernel import wait_on_queue, reschedule_tasks, kqueue
+from .kernel import _wait_on_queue, _reschedule_tasks, kqueue
 
 __all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition' ]
 
@@ -29,11 +32,11 @@ class Event(object):
     async def wait(self, *, timeout=None):
         if self._set:
             return
-        await wait_on_queue(self._waiting, 'EVENT_WAIT', timeout)
+        await _wait_on_queue(self._waiting, 'EVENT_WAIT', timeout)
 
     async def set(self):
         self._set = True
-        await reschedule_tasks(self._waiting, len(self._waiting))
+        await _reschedule_tasks(self._waiting, len(self._waiting))
 
 class _LockBase(object):
     async def __aenter__(self):
@@ -56,14 +59,14 @@ class Lock(_LockBase):
 
     async def acquire(self, *, timeout=None):
         if self._acquired:
-            await wait_on_queue(self._waiting, 'LOCK_ACQUIRE', timeout)
+            await _wait_on_queue(self._waiting, 'LOCK_ACQUIRE', timeout)
         self._acquired = True
         return True
 
     async def release(self):
         assert self._acquired, 'Lock not acquired'
         if self._waiting:
-            await reschedule_tasks(self._waiting, n=1)
+            await _reschedule_tasks(self._waiting, n=1)
         else:
             self._acquired = False
 
@@ -83,14 +86,14 @@ class Semaphore(_LockBase):
 
     async def acquire(self, *, timeout=None):
         if self._value <= 0:
-            await wait_on_queue(self._waiting, 'SEMA_ACQUIRE', timeout)
+            await _wait_on_queue(self._waiting, 'SEMA_ACQUIRE', timeout)
         else:
             self._value -= 1
         return True
 
     async def release(self):
         if self._waiting:
-            await reschedule_tasks(self._waiting, n=1)
+            await _reschedule_tasks(self._waiting, n=1)
         else:
             self._value += 1
         
@@ -136,7 +139,7 @@ class Condition(_LockBase):
             raise RuntimeError("Can't wait on unacquired lock")
         await self.release()
         try:
-            await wait_on_queue(self._waiting, 'COND_WAIT', timeout)
+            await _wait_on_queue(self._waiting, 'COND_WAIT', timeout)
         finally:
             await self.acquire()
 
@@ -150,7 +153,7 @@ class Condition(_LockBase):
     async def notify(self, n=1):
         if not self.locked():
             raise RuntimeError("Can't notify on unacquired lock")
-        await reschedule_tasks(self._waiting, n=n)
+        await _reschedule_tasks(self._waiting, n=n)
 
     async def notify_all(self):
         await self.notify(len(self._waiting))
