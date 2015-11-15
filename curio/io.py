@@ -294,6 +294,8 @@ class Stream(object):
         '''
         Allow temporary access to the underlying socket in blocking mode
         '''
+        if self._linebuffer:
+            raise IOError('There is unread buffered data.')
         try:
             os.set_blocking(self._fileno, True)
             yield self._file
