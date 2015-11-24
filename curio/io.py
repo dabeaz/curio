@@ -422,3 +422,6 @@ class Stream(object):
 
     def __exit__(self, *args):
         pass
+        
+
+    
