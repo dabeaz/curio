@@ -630,7 +630,7 @@ async def sleep(seconds):
     '''
     await _sleep(seconds)
 
-async def new_task(coro, *, daemon=False):
+async def new_task(coro, daemon=False):
     '''
     Create a new task.
     '''
