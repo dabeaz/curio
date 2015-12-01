@@ -76,6 +76,9 @@ class Task(object):
     def __str__(self):
         return self.coro.__qualname__
 
+    def __del__(self):
+        self.coro.close()
+
     async def join(self, *, timeout=None):
         '''
         Waits for a task to terminate.  Returns the return value (if any)
@@ -100,6 +103,7 @@ class Task(object):
         for task in list(self.children):
             await _cancel_task(task, exc, timeout=timeout)
 
+
 # The SignalSet class represents a set of Unix signals being monitored. 
 class SignalSet(object):
     def __init__(self, *signos):
@@ -107,7 +111,6 @@ class SignalSet(object):
         self.pending = deque()           # Pending signals received
         self.waiting = None              # Task waiting for the signals (if any)
         self.watching = False            # Are the signals being watched right now?
-
     
     async def __aenter__(self):
         assert not self.watching
@@ -144,40 +147,56 @@ class SignalSet(object):
             for signo, handler in orig_signals:
                 signal.signal(signo, handler)
 
+# ----------------------------------------------------------------------
 # Underlying kernel that drives everything
+# ----------------------------------------------------------------------
 
 class Kernel(object):
     __slots__ = ('_selector', '_ready', '_tasks', '_current', '_sleeping',
                  '_signals', '_default_signals', '_njobs', '_running',
-                 '_notify_sock', '_wait_sock')
+                 '_notify_sock', '_wait_sock', '_kernel_task_id')
 
     def __init__(self, selector=None, with_monitor=False):
         if selector is None:
             selector = DefaultSelector()
         self._selector = selector
-        self._ready = kqueue()      # Tasks ready to run
-        self._tasks = { }           # Task table
-        self._current = None        # Current task
-        self._sleeping = []         # Heap of tasks waiting on a timer for any reason
-        self._signals = None        # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
-        self._default_signals = {}  # Dict of default signal handlers
-        self._njobs = 0             # Number of non-daemonic jobs running
-        self._running = False       # Kernel running?
+        self._ready = kqueue()       # Tasks ready to run
+        self._tasks = { }            # Task table
+        self._current = None         # Current task
+        self._sleeping = []          # Heap of tasks waiting on a timer for any reason
+        self._signals = None         # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
+        self._default_signals = None # Dict of default signal handlers
+        self._njobs = 0              # Number of non-daemonic jobs running
+        self._running = False        # Kernel running?
 
-        # Create the init task responsible for waking the event loop and processing signals
-        self._notify_sock, self._wait_sock = socket.socketpair()
-        self._wait_sock.setblocking(False)
-        self._notify_sock.setblocking(False)
-        self.add_task(self._init_task(), daemon=True)
+        # Attributes related to the loopback socket (only initialized if required)
+        self._notify_sock = None
+        self._wait_sock = None
+        self._kernel_task_id = None
 
         if with_monitor and sys.stdin.isatty():
             from .monitor import monitor
             self.add_task(monitor(), daemon=True)
 
     def __del__(self):
-        self._notify_sock.close()
-        self._wait_sock.close()
+        if self._notify_sock:
+            self._notify_sock.close()
+            self._wait_sock.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.shutdown()
+
+    def _init_loopback(self):
+        # Initialize the loopback socket and launch the kernel task if needed
+        self._notify_sock, self._wait_sock = socket.socketpair()
+        self._wait_sock.setblocking(False)
+        self._notify_sock.setblocking(False)
+        task = self._new_task(self._kernel_task(), daemon=True)
+        self._kernel_task_id = task.id
+    
     # Force the kernel to wake.  Used on non-I/O events such as completion of futures
     def _wake(self, task=None, value=None, exc=None):
         if task:
@@ -185,8 +204,10 @@ class Kernel(object):
         self._notify_sock.send(b'\x00')
 
     # Internal task that monitors the loopback socket--allowing the kernel to
-    # awake for non-I/O events.  Also processes incoming signals.
-    async def _init_task(self):
+    # awake for non-I/O events.  Also processes incoming signals.  This only
+    # launches if needed to wait for external events (futures, signals, etc.)
+
+    async def _kernel_task(self):
         while True:
             await _read_wait(self._wait_sock)
             data = self._wait_sock.recv(100)
@@ -214,16 +235,19 @@ class Kernel(object):
     # Internal task management functions. 
     def _new_task(self, coro, daemon=False):
         # Create a new task in the kernel.  If daemon is True, the task is
-        # created with no parent task.
+        # created with no parent task (parent_id = -1)
 
         task = Task(coro)
         self._tasks[task.id] = task
         self._reschedule_task(task)
         if not daemon:
             self._njobs += 1
-            ptask = self._current if self._current else self._tasks[1]
-            task.parent_id = ptask.id
-            ptask.children.add(task)
+            if self._current:
+                task.parent_id = self._current.id
+                self._current.children.add(task)
+            else:
+                task.parent_id = -1
+
         return task
 
     def _reschedule_task(self, task, value=None, exc=None):
@@ -295,12 +319,9 @@ class Kernel(object):
         if parent:
             parent.children.remove(task)
 
-        # Reassign all remaining children to the parent task
-        init = self._tasks[1]
-        init.children.update(task.children)
-        for ctask in task.children:
-            ctask.parent_id = 1
-        task.children = set()
+        # Clear the parent_id on any children that are still alive
+        while task.children:
+            task.children.pop().parent_id = -1
 
     def _set_timeout(self, task, seconds, sleep_type='timeout'):
         task.timeout = time.monotonic() + seconds
@@ -340,14 +361,15 @@ class Kernel(object):
         '''
         Run the kernel until no more non-daemonic tasks remain.
         '''
-
         # If a coroutine was given, add it as the first task
         if coro:
-            self.add_task(coro)
+            maintask = self.add_task(coro)
+        else:
+            maintask = None
 
         self._running = True
 
-        while self._njobs > 0 and self._running:
+        while (self._njobs > 0 or self._ready) and self._running:
             self._current = None
 
             # Poll for I/O as long as there is nothing to run
@@ -388,8 +410,11 @@ class Kernel(object):
                     self._cleanup_task(current)
                     raise
 
-
         self._current = None
+        if maintask:
+            return maintask.next_value
+        else:
+            return None
 
     def stop(self):
         '''
@@ -399,12 +424,13 @@ class Kernel(object):
 
     def shutdown(self):
         '''
-        Cleanly shut down the kernel.  All remaining tasks are cancelled.  Using the
-        function is highly recommended prior to terminating any program.
+        Cleanly shut down the kernel.  All remaining tasks are cancelled including
+        the internal kernel task.  This operation is highly recommended prior to
+        terminating any program.
         '''
         self._current = None
         for task in sorted(self._tasks.values(), key=lambda t: t.id, reverse=True):
-            if task.id == 1:
+            if task.id == self._kernel_task_id:
                 continue
             # If the task is daemonic, force it to non-daemon status and cancel it
             if not task.parent_id:
@@ -413,7 +439,25 @@ class Kernel(object):
 
             assert self._cancel_task(task)
 
-        self.run()
+        # Run all of the daemon tasks through cancellation
+        if self._ready:
+            self.run()
+
+        # Cancel the kernel loopback task (if any)
+        task = self._tasks.pop(self._kernel_task_id, None)
+        if task:
+            task.cancel_func()
+            self._notify_sock.close()
+            self._notify_sock = None
+            self._wait_sock.close()
+            self._wait_sock = None
+            self._kernel_task_id = None
+
+        # Remove the signal handling file descriptor (if any)
+        if self._signals:
+            signal.set_wakeup_fd(-1)
+            self._signals = None
+            self._default_signals = None
 
     # Traps.  These implement the low-level functionality that is triggered by coroutines.
     # You shouldn't invoke these directly. Instead, coroutines use a statement such as
@@ -430,6 +474,9 @@ class Kernel(object):
             self._set_timeout(current, timeout)
 
     def _trap_future_wait(self, current, future, timeout=None):
+        if not self._kernel_task_id:
+            self._init_loopback()
+
         current.state = 'FUTURE_WAIT'
         current.cancel_func = lambda: future.cancel()
         current.future = future
@@ -484,8 +531,13 @@ class Kernel(object):
         # Initialize the signal handling part of the kernel if not done already
         # Note: This only works if running in the main thread
         if self._signals is None:
+            if not self._kernel_task_id:
+                self._init_loopback()
+
             self._signals = defaultdict(list)
-            signal.set_wakeup_fd(self._notify_sock.fileno())     
+            self._default_signals = { }
+            old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())     
+            assert old_fd < 0, 'Signals already initialized %d' % old_fd
             
         for signo in sigset.signos:
             if not self._signals[signo]:
@@ -515,12 +567,16 @@ class Kernel(object):
     def _trap_kernel(self, current):
         self._reschedule_task(current, value=self)
 
-# Coroutines corresponding to the kernel traps.  These functions provide the bridge from
-# tasks to the underlying kernel. This is the only place with the explicit @coroutine
-# decorator needs to be used.  All other code in curio and in user-tasks should use
-# async/await instead.   Direct use by users is allowed, but if you're working with
-# these traps directly, there is probably a higher level interface that simplifies
-# the problem you're trying to solve (e.g., Socket, File, objects, etc.)
+# ----------------------------------------------------------------------
+# Coroutines corresponding to the kernel traps.  These functions
+# provide the bridge from tasks to the underlying kernel. This is the
+# only place with the explicit @coroutine decorator needs to be used.
+# All other code in curio and in user-tasks should use async/await
+# instead.  Direct use by users is allowed, but if you're working with
+# these traps directly, there is probably a higher level interface
+# that simplifies the problem you're trying to solve (e.g., Socket,
+# File, objects, etc.)
+# ----------------------------------------------------------------------
 
 @coroutine
 def _read_wait(fileobj, timeout=None):
@@ -619,10 +675,12 @@ def _kernel_reference():
     result = yield ('_trap_kernel',)
     return result
 
+# ----------------------------------------------------------------------
 # Public-facing syscalls.  These coroutines wrap a low-level coroutine
 # with an extra layer involving an async/await function.  The main
 # reason for doing this is that the user will get proper warning
 # messages if they forget to use the required 'await' keyword.
+# -----------------------------------------------------------------------
 
 async def sleep(seconds):
     '''

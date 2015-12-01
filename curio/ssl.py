@@ -33,7 +33,7 @@ if _ssl:
         cssl_sock.do_handshake_on_connect = do_handshake_on_connect
         return cssl_sock
 
-    @wraps(_ssl.wrap_socket)
+    @wraps(_ssl.get_server_certificate)
     async def get_server_certificate(*args, **kwargs):
         return await run_blocking(partial(_ssl.get_server_certicate, *args, **kwargs))
 
