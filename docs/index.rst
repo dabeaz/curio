@@ -178,7 +178,7 @@ A: Each task involves an instance of a ``Task`` class that
 encapsulates a generator. No threads are used. As such, you're really
 only limited by the memory of your machine--potentially you could have
 hundreds of thousands of tasks.  The I/O functionality in curio is
-implemented using the built-in ``selectors`` module.  Thus, the number
+implemented using the built-in :mod:`selectors <python:selectors>` module.  Thus, the number
 of open sockets allowed is subject to the limits of that library
 combined with any limits imposed by the operating system.
  

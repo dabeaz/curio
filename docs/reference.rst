@@ -12,8 +12,8 @@ and used in the main execution thread.
 .. class:: Kernel(selector=None, with_monitor=False)
 
    Create an instance of a curio kernel.  If *selector* is given, it should be
-   an instance of a selector from the :mod:`selectors` module.  If not given,
-   then ``selectors.DefaultSelector`` is used to poll for I/O.
+   an instance of a selector from the :mod:`selectors <python:selectors>` module.  If not given,
+   then :class:`selectors.DefaultSelector <python:selectors.DefaultSelector>` is used to poll for I/O.
    If *with_monitor* is ``True``, the monitor task executes in the background.
    The monitor responds to the keyboard-interrupt and allows you to inspect
    the state of the running kernel.
