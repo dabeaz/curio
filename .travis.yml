@@ -1,0 +1,10 @@
+language: python
+python: 3.5
+
+sudo: false
+
+install:
+  - python3 setup.py install
+
+script:
+  - python3 -m curio.test
