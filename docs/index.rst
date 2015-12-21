@@ -201,10 +201,10 @@ code.
 A: No. The current goal is merely to provide a small, simple library
 for performing concurrent I/O. It is not anticipated that curio would
 evolve into a framework for implementing application level protocols
-such as HTTP.  Instead, serves as a foundation for other packages
+such as HTTP.  Instead, it serves as a foundation for other packages
 that want to provide that kind of functionality.
 
-**Q: What are future plans?**
+**Q: What are your future plans?**
 
 A: Future work on curio will primarily focus on features related to debugging, 
 diagnostics, and reliability.  A primary goal is to provide a solid 
