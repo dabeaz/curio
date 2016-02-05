@@ -18,14 +18,14 @@ and used in the main execution thread.
    The monitor responds to the keyboard-interrupt and allows you to inspect
    the state of the running kernel.
 
-There are only a few methods that may be used on a ``Kernel`` outside of coroutines.
+There are only a few methods that may be used on a :class:`Kernel` outside of coroutines.
 
 
 .. method:: Kernel.run(coro=None, pdb=False, log_errors=True)
 
    Runs the kernel until all non-daemonic tasks have finished execution.
    *coro* is a coroutine to run as a task.  If omitted, then tasks should
-   have already been added using the ``add_task`` method below.
+   have already been added using the :meth:`add_task` method below.
    If *pdb* is ``True``, then the kernel enters the Python debugger if any
    task crashes with an uncaught exception.  If *log_errors* is ``True``, then
    uncaught exceptions in tasks are logged.
@@ -63,7 +63,7 @@ Tasks
 Once the kernel is running, a coroutine can create a new task using the following
 function:
 
-.. function:: await new_task(coro, daemon=False)
+.. asyncfunction:: new_task(coro, daemon=False)
 
    Create a new task.  *coro* is a newly called coroutine.  Does not
    return to the caller until the new task has been scheduled and executed for at least
@@ -72,30 +72,32 @@ function:
    in the background.  Note: The kernel only runs as long as there are non-daemonic
    tasks to execute.
 
-Tasks created by :func:`new_task()` are represented as a :class:`Task` instance.
-It is illegal to create a :class:`Task` instance directly by calling the class.
-The following methods are available on tasks:
+.. class:: Task
 
-.. method:: await Task.join(timeout=None)
+  Tasks created by :func:`new_task` are represented as a :class:`Task` instance.
+  It is illegal to create a :class:`Task` instance directly by calling the class.
+  The following methods are available on tasks:
+
+.. asyncmethod:: Task.join(timeout=None)
 
    Wait for the task to terminate.  Returns the value returned by the task or
-   raises a :exc:`curio.TaskError` exception if the task failed with an exception.
+   raises a :exc:`TaskError` exception if the task failed with an exception.
    This is a chained exception.  The `__cause__` attribute of this
    exception contains the actual exception raised in the task.
 
-.. method:: await Task.cancel(*, timeout=None, exc=CancelledError)
+.. asyncmethod:: Task.cancel(*, timeout=None, exc=CancelledError)
 
-   Cancels the task.  This raises a :exc:`curio.CancelledError` exception in the
+   Cancels the task.  This raises a :exc:`CancelledError` exception in the
    task which may choose to handle it.  Does not return until the
    task is actually cancelled. If you want to change the exception raised,
    supply a different exception as the *exc* argument.
 
-.. method:: await Task.cancel_children(*, timeout=None, exc=CancelledError)
+.. asyncmethod:: Task.cancel_children(*, timeout=None, exc=CancelledError)
 
    Cancels all of the immediate children of this task. *exc* specifies
    a different exception if desired.
 
-The following public attributes are available of ``Task`` instances:
+The following public attributes are available of :class:`Task` instances:
 
 .. attribute:: Task.id
 
@@ -124,7 +126,7 @@ The following public attributes are available of ``Task`` instances:
 
 If you need to make a task sleep for awhile, use the following function:
 
-.. function:: await sleep(seconds)
+.. asyncfunction:: sleep(seconds)
 
    Sleep for a specified number of seconds.  If the number of seconds is 0, the
    kernel merely switches to the next task (if any).
@@ -136,17 +138,17 @@ Performing External Work
 Sometimes you need to perform work outside the kernel.  This includes CPU-intensive
 calculations and blocking operations.  Use the following functions to do that:
 
-.. function:: await run_cpu_bound(callable, *args, timeout=None)
+.. asyncfunction:: run_cpu_bound(callable, *args, timeout=None)
 
    Run ``callable(*args)`` in a process pool created by :mod:`concurrent.futures.ProcessPoolExecutor`.
    Returns the result.
 
-.. function:: await run_blocking(callable, *args, timeout=None)
+.. asyncfunction:: run_blocking(callable, *args, timeout=None)
 
    Run ``callable(*args)`` in a thread pool created by :mod:`concurrent.futures.ThreadPoolExecutor`.
    Returns the result.
 
-.. function:: await run_in_executor(exc, callable, *args, timeout=None)
+.. asyncfunction:: run_in_executor(exc, callable, *args, timeout=None)
 
    Run ``callable(*args)`` callable in a user-supplied executor and returns the result.
    *exc* is an executor from the :mod:`concurrent.Futures` module in the standard library.
@@ -167,6 +169,9 @@ If you need to pass keyword arguments use ``functools.partial()`` to do it. For 
 
 I/O Layer
 ---------
+
+.. module:: curio.io
+
 I/O in curio is performed by classes in :mod:`curio.io` that
 wrap around existing sockets and streams.  These classes manage the
 blocking behavior and delegate their methods to an existing socket or
@@ -191,68 +196,68 @@ delegated directly to the underlying socket. Be aware
 that not all methods have been wrapped and that using a method not
 listed here might block the kernel or raise a ``BlockingIOError`` exception.
 
-.. method:: await Socket.recv(maxbytes, flags=0)
+.. asyncmethod:: Socket.recv(maxbytes, flags=0)
 
    Receive up to *maxbytes* of data.
 
-.. method:: await Socket.recv_into(buffer, nbytes=0, flags=0)
+.. asyncmethod:: Socket.recv_into(buffer, nbytes=0, flags=0)
 
    Receive up to *nbytes* of data into a buffer object.
 
-.. method:: await Socket.recvfrom(maxsize, flags=0)
+.. asyncmethod:: Socket.recvfrom(maxsize, flags=0)
 
    Receive up to *maxbytes* of data.  Returns a tuple `(data, client_address)`.
 
-.. method:: await Socket.recvfrom_into(buffer, nbytes=0, flags=0)
+.. asyncmethod:: Socket.recvfrom_into(buffer, nbytes=0, flags=0)
 
    Receive up to *nbytes* of data into a buffer object.
 
-.. method:: await Socket.recvmsg(bufsize, ancbufsize=0, flags=0)
+.. asyncmethod:: Socket.recvmsg(bufsize, ancbufsize=0, flags=0)
 
    Receive normal and ancillary data.
 
-.. method:: await Socket.recvmsg_into(buffers, ancbufsize=0, flags=0)
+.. asyncmethod:: Socket.recvmsg_into(buffers, ancbufsize=0, flags=0)
 
    Receive normal and ancillary data.
 
-.. method:: await Socket.send(data, flags=0)
+.. asyncmethod:: Socket.send(data, flags=0)
 
    Send data.  Returns the number of bytes of data actually sent (which may be
    less than provided in *data*).
 
-.. method:: await Socket.sendall(data, flags=0)
+.. asyncmethod:: Socket.sendall(data, flags=0)
 
    Send all of the data in *data*.
 
-.. method:: await Socket.sendto(data, address)
-.. method:: await Socket.sendto(data, flags, address)
+.. asyncmethod:: Socket.sendto(data, address)
+.. asyncmethod:: Socket.sendto(data, flags, address)
 
    Send data to the specified address.
 
-.. method:: await Socket.sendmsg(buffers, ancdata=(), flags=0, address=None)
+.. asyncmethod:: Socket.sendmsg(buffers, ancdata=(), flags=0, address=None)
 
    Send normal and ancillary data to the socket.
 
-.. method:: await Socket.accept()
+.. asyncmethod:: Socket.accept()
 
    Wait for a new connection.  Returns a tuple `(sock, address)`.
 
-.. method:: await Socket.connect(address)
+.. asyncmethod:: Socket.connect(address)
 
    Make a connection.
 
-.. method:: await Socket.connect_ex(address)
+.. asyncmethod:: Socket.connect_ex(address)
 
    Make a connection and return an error code instead of raising an exception.
 
-.. method:: await Socket.close()
+.. asyncmethod:: Socket.close()
 
    Close the connection.
 
-.. method:: await do_handshake()
+.. asyncmethod:: do_handshake()
 
    Perform an SSL client handshake. The underlying socket must have already
-   be wrapped by SSL using the ``curio.ssl`` module.
+   be wrapped by SSL using the :mod:`curio.ssl` module.
 
 .. method:: Socket.makefile(mode, buffering=0)
 
@@ -267,7 +272,7 @@ listed here might block the kernel or raise a ``BlockingIOError`` exception.
 .. method:: Socket.make_streams(buffering=0)
 
    Make a pair of files for reading and writing.  Returns a tuple ``(reader, writer)``
-   where ``reader`` and ``writer`` are streams created by the ``Socket.makefile()`` method.
+   where ``reader`` and ``writer`` are streams created by the :meth:`makefile` method.
 
 .. method:: Socket.blocking()
 
@@ -288,7 +293,7 @@ Stream
 
 The :class:`Stream` class puts a non-blocking wrapper around an
 existing file-like object.  Certain other functions in curio use this
-(e.g., the :func:`Socket.makefile()` method).
+(e.g., the :meth:`makefile` method).
 
 
 .. class:: Stream(fileobj)
@@ -299,32 +304,32 @@ existing file-like object.  Certain other functions in curio use this
 
 The following methods are available on instances of :class:`Stream`:
 
-.. method:: await Stream.read(maxbytes=-1)
+.. asyncmethod:: Stream.read(maxbytes=-1)
 
    Read up to *maxbytes* of data on the file. If omitted, reads as
    much data as is currently available and returns it.
 
-.. method:: await Stream.readall()
+.. asyncmethod:: Stream.readall()
 
    Return all of the data that's available on a file up until an EOF is read.
 
-.. method:: await Stream.readline():
+.. asyncmethod:: Stream.readline():
 
    Read a single line of data from a file.
 
-.. method:: await Stream.write(bytes)
+.. asyncmethod:: Stream.write(bytes)
 
    Write all of the data in *bytes* to the file.
 
-.. method:: await Stream.writelines(lines)
+.. asyncmethod:: Stream.writelines(lines)
 
    Writes all of the lines in *lines* to the file.
 
-.. method:: await Stream.flush()
+.. asyncmethod:: Stream.flush()
 
    Flush any unwritten data from buffers to the file.
 
-.. method:: await Stream.close()
+.. asyncmethod:: Stream.close()
 
    Flush any unwritten data and close the file.
 
@@ -351,13 +356,16 @@ Streams may be used as an asynchronous context manager.  For example::
 
 socket wrapper module
 ---------------------
+
+.. module:: curio.socket
+
 The :mod:`curio.socket` module provides a wrapper around the built-in
-:mod:`socket` module--allowing it to be used as a standin in
+:mod:`socket` module--allowing it to be used as a stand-in in
 curio-related code.  The module provides exactly the same
 functionality except that certain operations have been replaced by
 coroutine equivalents.
 
-.. function:: def socket(family=AF_INET, type=SOCK_STREAM, proto=0, fileno=None)
+.. function:: socket(family=AF_INET, type=SOCK_STREAM, proto=0, fileno=None)
 
    Creates a :class:`curio.io.Socket` wrapper the around :class:`socket` objects created in the built-in :mod:`socket`
    module.  The arguments for construction are identical and have the same meaning.
@@ -373,16 +381,18 @@ objects are compatible with curio:
 The following module-level functions have been redefined as coroutines so that they
 don't block the kernel when interacting with DNS:
 
-.. function:: await getaddrinfo(host, port, family=0, type=0, proto=0, flags=0)
-.. function:: await getfqdn(name)
-.. function:: await gethostbyname(hostname)
-.. function:: await gethostbyname_ex(hostname)
-.. function:: await gethostname()
-.. function:: await gethostbyaddr(ip_address)
-.. function:: await getnameinfo(sockaddr, flags)
+.. asyncfunction:: getaddrinfo(host, port, family=0, type=0, proto=0, flags=0)
+.. asyncfunction:: getfqdn(name)
+.. asyncfunction:: gethostbyname(hostname)
+.. asyncfunction:: gethostbyname_ex(hostname)
+.. asyncfunction:: gethostname()
+.. asyncfunction:: gethostbyaddr(ip_address)
+.. asyncfunction:: getnameinfo(sockaddr, flags)
 
 subprocess wrapper module
 -------------------------
+.. module:: curio.subprocess
+
 The :mod:`curio.subprocess` module provides a wrapper around the built-in :mod:`subprocess` module.
 
 .. class:: Popen(*args, **kwargs).
@@ -410,11 +420,11 @@ Here is an example of using ``Popen`` to read streaming output off of a subproce
 The following methods of :class:`Popen` have been replaced by asynchronous equivalents:
 
 
-.. method:: await Popen.wait(timeout=None)
+.. asyncmethod:: Popen.wait(timeout=None)
 
    Wait for a subprocess to exit.
 
-.. method:: await Popen.communicate(input=b'', timeout=None)
+.. asyncmethod:: Popen.communicate(input=b'', timeout=None)
 
    Communicate with the subprocess, sending the specified input on standard input.
    Returns a tuple ``(stdout, stderr)`` with the resulting output of standard output
@@ -423,11 +433,11 @@ The following methods of :class:`Popen` have been replaced by asynchronous equiv
 The following functions are also available.  They accept the same arguments as their
 equivalents in the :mod:`subprocess` module:
 
-.. function:: await run(args, stdin=None, input=None, stdout=None, stderr=None, shell=False, timeout=None, check=False)
+.. asyncfunction:: run(args, stdin=None, input=None, stdout=None, stderr=None, shell=False, timeout=None, check=False)
 
    Run a command in a subprocess.  Returns a :class:`subprocess.CompletedProcess` instance.
 
-.. function:: await check_output(args, stdout=None, stderr=None, shell=False, timeout=None)
+.. asyncfunction:: check_output(args, stdout=None, stderr=None, shell=False, timeout=None)
 
    Run a command in a subprocess and return the resulting output. Raises a ``subprocess.CalledProcessError``
    exception if an error occurred.
@@ -435,20 +445,22 @@ equivalents in the :mod:`subprocess` module:
 ssl wrapper module
 ------------------
 
+.. module:: curio.ssl
+
 The :mod:`curio.ssl` module provides curio-compatible functions for creating an SSL
 layer around curio sockets.  The following functions are redefined (and have the same
 calling signature as their counterparts in the standard :mod:`ssl` module:
 
 .. function:: wrap_socket(*args, **kwargs)
 
-.. function:: await get_server_certificate(*args, **kwargs)
+.. asyncfunction:: get_server_certificate(*args, **kwargs)
 
 .. function:: create_default_context(*args, **kwargs)
 
-The :class:`SSLContext` class is also redefined and modified so that the ``wrap_socket()`` method
+The :class:`SSLContext` class is also redefined and modified so that the :meth:`wrap_socket` method
 returns a socket compatible with curio.
 
-Don't attempt to use the ``ssl`` module without a careful read of Python's official documentation
+Don't attempt to use the :mod:`curio.ssl` module without a careful read of Python's official documentation
 at https://docs.python.org/3/library/ssl.html.
 
 For the purposes of curio, it is usually easier to apply SSL to a connection using some of the
@@ -479,20 +491,22 @@ Here's how you might define a server that uses SSL::
 High Level Networking
 ---------------------
 
+.. currentmodule:: curio
+
 The following functions are provided to simplify common tasks related to
 making network connections and writing servers.
 
-.. function:: await open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None, timeout=None)
+.. asyncfunction:: open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None, timeout=None)
 
    Creates an outgoing connection to a server at *host* and *port*. This connection is made using
    the ``socket.create_connection()`` function and might be IPv4 or IPv6 depending on
    the network configuration (although you're not supposed to worry about it).  *ssl* specifies
-   whether or not SSL should be used.  *ssl* can be ``True`` or an instance of an ``SSLContext``
+   whether or not SSL should be used.  *ssl* can be ``True`` or an instance of an :class:`SSLContext`
    created by the :mod:`curio.ssl` module.  *source_addr* specifies the source address to use
    on the socket.  *server_hostname* specifies the hostname to check against when making SSL
    connections.  It is highly advised that this be supplied to avoid man-in-the-middle attacks.
 
-.. function:: await open_unix_connection(path, *, ssl=None, server_hostname=None):
+.. asyncfunction:: open_unix_connection(path, *, ssl=None, server_hostname=None):
 
    Creates a connection to a Unix domain socket with optional SSL applied.
 
@@ -505,13 +519,13 @@ making network connections and writing servers.
    ``SSLContext`` instance to use. *reuse_address* specifies whether to reuse a previously
    used port.   This method does not actually start running the created server.  To
    do that, you need to use ``await Server.serve_forever()`` method on the returned
-   ``Server`` instance.   Normally, it's easier to use ``run_server()`` instead. Only
-   use ``create_server()`` if you need to do something else with the ``Server`` instance
+   ``Server`` instance.   Normally, it's easier to use :func:`run_server` instead. Only
+   use :func:`create_server` if you need to do something else with the ``Server`` instance
    for some reason.
 
-.. function:: await run_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
+.. asyncfunction:: run_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
 
-   Creates a server using ``create_server()`` and immediately starts running it.
+   Creates a server using :func:`create_server` and immediately starts running it.
 
 .. function:: create_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
@@ -520,9 +534,9 @@ making network connections and writing servers.
    *ssl* is an optional ``SSLContext`` to use if setting up an SSL connection.   Returns a
    ``Server`` instance.  To start running the server use ``await Server.serve_forever()``.
 
-.. function:: await run_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
+.. asyncfunction:: run_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
-   Creates a Unix domain server using ``create_unix_server()`` and immediately starts running it.
+   Creates a Unix domain server using :func:`create_unix_server` and immediately starts running it.
 
 Synchronization Primitives
 --------------------------
@@ -545,11 +559,11 @@ primitives are safe to use with threads created by the built-in :mod:`threading`
 
    Clear the event.
 
-.. method:: await Event.wait(timeout=None)
+.. asyncmethod:: Event.wait(timeout=None)
 
    Wait for the event with an optional timeout.
 
-.. method:: await Event.set()
+.. asyncmethod:: Event.set()
 
    Set the event. Wake all waiting tasks (if any).
 
@@ -580,11 +594,11 @@ Here is an Event example::
 
 :class:`Lock` instances support the following methods:
 
-.. method:: await Lock.acquire(timeout=None)
+.. asyncmethod:: Lock.acquire(timeout=None)
 
    Acquire the lock.
 
-.. method:: await Lock.release()
+.. asyncmethod:: Lock.release()
 
    Release the lock.
 
@@ -620,11 +634,11 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
 
 Semaphores support the following methods:
 
-.. method:: await Semaphore.acquire(timeout=None)
+.. asyncmethod:: Semaphore.acquire(timeout=None)
 
    Acquire the semaphore, decrementing its count.  Blocks if the count is 0.
 
-.. method:: await Semaphore.release()
+.. asyncmethod:: Semaphore.release()
 
    Release the semaphore, incrementing its count. Never blocks.
 
@@ -662,29 +676,29 @@ limit the number of tasks performing an operation.  For example::
 
    Return ``True`` if the condition variable is locked.
 
-.. method:: await Condition.acquire(*, timeout=None)
+.. asyncmethod:: Condition.acquire(*, timeout=None)
 
    Acquire the condition variable lock.
 
-.. method:: await Condition.release()
+.. asyncmethod:: Condition.release()
 
    Release the condition variable lock.
 
-.. method:: await Condition.wait(*, timeout=None)
+.. asyncmethod:: Condition.wait(*, timeout=None)
 
    Wait on the condition variable with a timeout.  This releases the underlying lock.
 
-.. method:: await Condition.wait_for(predicate, *, timeout=None)
+.. asyncmethod:: Condition.wait_for(predicate, *, timeout=None)
 
    Wait on the condition variable until a supplied predicate function returns ``True``. *predicate* is
    a callable that takes no arguments.
 
-.. method:: await notify(n=1)
+.. asyncmethod:: notify(n=1)
 
    Notify one or more tasks, causing them to wake from the
    :meth:`Condition.wait` method.
 
-.. method:: await notify_all()
+.. asyncmethod:: notify_all()
 
    Notify all tasks waiting on the condition.
 
@@ -739,21 +753,21 @@ A :class:`Queue` instance supports the following methods:
 
    Return the number of items currently in the queue.
 
-.. method:: await Queue.get(*, timeout=None)
+.. asyncmethod:: Queue.get(*, timeout=None)
 
    Returns an item from the queue with an optional timeout.
 
-.. method:: await Queue.put(item, *, timeout=None)
+.. asyncmethod:: Queue.put(item, *, timeout=None)
 
    Puts an item on the queue with an optional timeout in the event
    that the queue is full.
 
-.. method:: await Queue.join(*, timeout=None)
+.. asyncmethod:: Queue.join(*, timeout=None)
 
    Wait for all of the elements put onto a queue to be processed. Consumers
    must call :meth:`Queue.task_done` to indicate completion.
 
-.. method:: await Queue.task_done()
+.. asyncmethod:: Queue.task_done()
 
    Indicate that processing has finished for an item.  If all items have
    been processed and there are tasks waiting on :meth:`Queue.join` they
@@ -825,7 +839,7 @@ small pieces.  Tread lightly.
 The following methods are available on a :class:`SignalSet` instance. They
 may only be used in coroutines.
 
-.. method:: await SignalSet.wait(*, timeout=None)
+.. asyncmethod:: SignalSet.wait(*, timeout=None)
 
    Wait for one of the signals in the signal set to arrive. Returns the
    signal number of the signal received.  *timeout* gives an optional
@@ -844,14 +858,14 @@ may only be used in coroutines.
 Exceptions
 ----------
 
-.. class:: CancelledError
+.. exception:: CancelledError
 
    Exception raised in a coroutine if it has been cancelled.  If ignored, the
    coroutine is silently terminated.  If caught, a coroutine can continue to
    run, but should work to terminate execution.  Ignoring a cancellation
    request and continuing to execute will likely cause some other task to hang.
 
-.. class:: TaskError
+.. exception:: TaskError
 
    Exception raised by the :meth:`Task.join` method if an uncaught exception
    occurs in a task.  It is a chained exception. The :attr:`__cause__` attribute contains
@@ -866,59 +880,59 @@ objects such as locks, socket wrappers, and so forth. If you find
 yourself using these, you're probably doing something wrong--or
 implementing a new curio primitive.
 
-.. function:: await _read_wait(fileobj, timeout=None)
+.. asyncfunction:: _read_wait(fileobj, timeout=None)
 
    Sleep until data is available for reading on *fileobj*.  *fileobj* is
    any file-like object with a `fileno()` method.  *timeout*
    gives an optional timeout in seconds.
 
-.. function:: await _write_wait(fileobj, timeout=None)
+.. asyncfunction:: _write_wait(fileobj, timeout=None)
 
    Sleep until data can be written on *fileobj*.  *fileobj* is
    any file-like object with a `fileno()` method. *timeout*
    gives an optional timeout in seconds.
 
-.. function:: await _future_wait(future, timeout=None)
+.. asyncfunction:: _future_wait(future, timeout=None)
 
    Sleep until a result is set on *future*.  *future* is an instance of
    :class:`Future` as found in the :mod:`concurrent.futures` module.
 
-.. function:: await _join_task(task, timeout=None)
+.. asyncfunction:: _join_task(task, timeout=None)
 
    Sleep until the indicated *task* completes.  The final return value
    of the task is returned if it completed successfully. If the task
-   failed with an exception, a ``curio.TaskError`` exception is
-   raised.  This is a chained exception.  The ``__cause__`` attribute of this
+   failed with an exception, a :exc:`TaskError` exception is
+   raised.  This is a chained exception.  The :attr:`TaskError.__cause__` attribute of this
    exception contains the actual exception raised in the task.
 
-.. function:: await _cancel_task(task, exc=CancelledError, timeout=None)
+.. asyncfunction:: _cancel_task(task, exc=CancelledError, timeout=None)
 
    Cancel the indicated *task*.  Does not return until the task actually
    completes the cancellation.  Note: It is usually better to use
    ``await task.cancel()`` instead of this function.
 
-.. function:: await _wait_on_queue(kqueue, state_name, timeout=None)
+.. asyncfunction:: _wait_on_queue(kqueue, state_name, timeout=None)
 
    Go to sleep on a queue. *kqueue* is an instance of a kernel queue
    which is typically a ``collections.deque`` instance. *state_name*
    is the name of the wait state (used in debugging).
 
-.. function:: await _reschedule_tasks(kqueue, n=1, value=None, exc=None)
+.. asyncfunction:: _reschedule_tasks(kqueue, n=1, value=None, exc=None)
 
    Reschedule one or more tasks from a queue. *kqueue* is an instance of a
    kernel queue.  *n* is the number of tasks to release. *value* and *exc*
    specify the return value or exception to raise in the task when it
    resumes execution.
 
-.. function:: await _sigwatch(sigset)
+.. asyncfunction:: _sigwatch(sigset)
 
    Tell the kernel to start queuing signals in the given signal set *sigset*.
 
-.. function:: await _sigunwatch(sigset)
+.. asyncfunction:: _sigunwatch(sigset)
 
    Tell the kernel to stop queuing signals in the given signal set.
 
-.. function:: await _sigwait(sigset, timeout=None)
+.. asyncfunction:: _sigwait(sigset, timeout=None)
 
    Wait for the arrival of a signal in a given signal set. Returns the signal
    number of the received signal.
@@ -937,9 +951,9 @@ looks roughly like this::
                     await _read_wait(self._socket)
         ...
 
-This method first tries to receive data.  If none is available, the ``_read_wait()`` call is used to
+This method first tries to receive data.  If none is available, the :func:`_read_wait` call is used to
 put the task to sleep until reading can be performed. When it awakes, the receive operation
-is retried. Just to emphasize, the ``_read_wait()`` doesn't actually perform any I/O. It's just
+is retried. Just to emphasize, the :func:`_read_wait` doesn't actually perform any I/O. It's just
 scheduling a task for it.
 
 Here's an example of code that implements a mutex lock::
