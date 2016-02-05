@@ -15,6 +15,7 @@
 import sys
 import os
 import shlex
+sys.path.append(os.getcwd())
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -30,7 +31,7 @@ import shlex
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.intersphinx',
+    'sphinx.ext.intersphinx', 'customization'
 ]
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
