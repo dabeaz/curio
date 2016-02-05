@@ -178,10 +178,10 @@ A: Each task involves an instance of a ``Task`` class that
 encapsulates a generator. No threads are used. As such, you're really
 only limited by the memory of your machine--potentially you could have
 hundreds of thousands of tasks.  The I/O functionality in curio is
-implemented using the built-in ``selectors`` module.  Thus, the number
-of open sockets allowed is subject to the limits of that library
-combined with any limits imposed by the operating system.
- 
+implemented using the built-in :mod:`selectors <python:selectors>` module.
+Thus, the number of open sockets allowed is subject to the limits of that
+library combined with any limits imposed by the operating system.
+
 **Q: Can curio interoperate with other event loops?**
 
 A: At this time, no.  However, curio is a young project. It's
@@ -206,8 +206,8 @@ that want to provide that kind of functionality.
 
 **Q: What are your future plans?**
 
-A: Future work on curio will primarily focus on features related to debugging, 
-diagnostics, and reliability.  A primary goal is to provide a solid 
+A: Future work on curio will primarily focus on features related to debugging,
+diagnostics, and reliability.  A primary goal is to provide a solid
 environment for running and controlling concurrent tasks.
 
 **Q: How big is curio?**
