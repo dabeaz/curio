@@ -103,7 +103,6 @@ class Task(object):
         for task in list(self.children):
             await _cancel_task(task, exc, timeout=timeout)
 
-
 # The SignalSet class represents a set of Unix signals being monitored. 
 class SignalSet(object):
     def __init__(self, *signos):
@@ -325,7 +324,7 @@ class Kernel(object):
 
     def _set_timeout(self, task, seconds, sleep_type='timeout'):
         task.timeout = time.monotonic() + seconds
-        item = (task.timeout, task, sleep_type)
+        item = (task.timeout, task.id, task, sleep_type)
         heapq.heappush(self._sleeping, item)
 
     # I/O 
@@ -345,7 +344,7 @@ class Kernel(object):
         if self._sleeping:
             current = time.monotonic()
             while self._sleeping and self._sleeping[0][0] <= current:
-                tm, task, sleep_type = heapq.heappop(self._sleeping)
+                tm, _, task, sleep_type = heapq.heappop(self._sleeping)
                 # When a task wakes, verify that the timeout value matches that stored
                 # on the task. If it differs, it means that the task completed its
                 # operation, was cancelled, or is no longer concerned with this

@@ -1,6 +1,9 @@
 CHANGES
 -------
 
+02/15/2016 Fixed Issue #37 where scheduling multiple tasks for sleeping
+           could potentially cause a crash in rare circumstances.
+
 Version 0.1 : October 31, 2015
 ------------------------------
 Initial version
