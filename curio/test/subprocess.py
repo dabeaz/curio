@@ -1,17 +1,20 @@
 # curio/test/workers.py
 
 import unittest
+import sys
 from .. import subprocess
 from ..kernel import *
 
 # ---- Test subprocesses and worker task related functions
+
+executable = sys.executable
 
 class TestSubprocess(unittest.TestCase):
     def test_simple(self):
         kernel = get_kernel()
         results = []
         async def subproc():
-            out = await subprocess.run(['python3', '-m', 'curio.test.slow'], stdout=subprocess.PIPE)
+            out = await subprocess.run([executable, '-m', 'curio.test.slow'], stdout=subprocess.PIPE)
             results.append(out.stdout)
             results.append(out.returncode)
 
@@ -26,7 +29,7 @@ class TestSubprocess(unittest.TestCase):
         kernel = get_kernel()
         results = []
         async def subproc():
-            out = await subprocess.check_output(['python3', '-m', 'curio.test.slow'])
+            out = await subprocess.check_output([executable, '-m', 'curio.test.slow'])
             results.append(out)
 
         kernel.add_task(subproc())
@@ -40,7 +43,7 @@ class TestSubprocess(unittest.TestCase):
         results = []
         async def subproc():
             try:
-                out = await subprocess.run(['python3', '-m', 'curio.test.bad'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                out = await subprocess.run([executable, '-m', 'curio.test.bad'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
                 results.append('what?')
             except subprocess.CalledProcessError:
                 results.append('bad command')
@@ -54,7 +57,7 @@ class TestSubprocess(unittest.TestCase):
         results = []
         async def subproc():
             try:
-                out = await subprocess.check_output(['python3', '-m', 'curio.test.bad'], stderr=subprocess.STDOUT)
+                out = await subprocess.check_output([executable, '-m', 'curio.test.bad'], stderr=subprocess.STDOUT)
                 results.append('what?')
             except subprocess.CalledProcessError:
                 results.append('bad command')
@@ -68,7 +71,7 @@ class TestSubprocess(unittest.TestCase):
         results = []
         async def subproc():
             try:
-                out = await subprocess.run(['python3', '-m', 'curio.test.slow'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
+                out = await subprocess.run([executable, '-m', 'curio.test.slow'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
                 results.append('what?')
             except subprocess.TimeoutExpired:
                 results.append('timeout')
