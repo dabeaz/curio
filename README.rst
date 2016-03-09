@@ -9,6 +9,11 @@ threads, sockets, files, subprocesses, locks, and queues.  Under
 the covers, it is based on a task queuing system that is small, fast,
 and powerful.
 
+Important Disclaimer
+--------------------
+Curio is experimental software that currently only works on Unix systems
+(OS X, Linux, etc.).  Use at your own peril. 
+
 An Example
 ----------
 Here is a simple TCP echo server implemented using sockets and curio:
