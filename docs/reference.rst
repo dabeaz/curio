@@ -517,15 +517,15 @@ making network connections and writing servers.
 
 .. function:: create_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
 
-   Creates a ``Server`` instance for receiving TCP connections on a given host and port.
+   Creates a :class:`Server` instance for receiving TCP connections on a given host and port.
    *client_connected_task* is a coroutine that is to be called to handle each connection.
-   Family specifies the address family and is either ``AF_INET`` or ``AF_INET6``.
-   *backlog* is the argument to the socket ``listen()`` method.  *ssl* specifies an
-   ``SSLContext`` instance to use. *reuse_address* specifies whether to reuse a previously
+   Family specifies the address family and is either :py:const:`socket.AF_INET` or :py:const:`socket.AF_INET6`.
+   *backlog* is the argument to the :py:meth:`socket.socket.listen` method.  *ssl* specifies an
+   :class:`curio.ssl.SSLContext` instance to use. *reuse_address* specifies whether to reuse a previously
    used port.   This method does not actually start running the created server.  To
-   do that, you need to use ``await Server.serve_forever()`` method on the returned
-   ``Server`` instance.   Normally, it's easier to use :func:`run_server` instead. Only
-   use :func:`create_server` if you need to do something else with the ``Server`` instance
+   do that, you need to use :meth:`Server.serve_forever` method on the returned
+   :class:`Server` instance.   Normally, it's easier to use :func:`run_server` instead. Only
+   use :func:`create_server` if you need to do something else with the :class:`Server` instance
    for some reason.
 
 .. asyncfunction:: run_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
@@ -535,9 +535,9 @@ making network connections and writing servers.
 .. function:: create_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
    Creates a Unix domain server on a given path. *client_connected_task* is a coroutine to
-   execute on each connection. *backlog* is the argument given to the socket ``listen()`` method.
-   *ssl* is an optional ``SSLContext`` to use if setting up an SSL connection.   Returns a
-   ``Server`` instance.  To start running the server use ``await Server.serve_forever()``.
+   execute on each connection. *backlog* is the argument given to the :py:meth:`socket.socket.listen` method.
+   *ssl* is an optional :class:`curio.ssl.SSLContext` to use if setting up an SSL connection.   Returns a
+   :class:`Server` instance.  To start running the server use :meth:`Server.serve_forever`.
 
 .. asyncfunction:: run_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
@@ -900,7 +900,7 @@ implementing a new curio primitive.
 .. asyncfunction:: _future_wait(future, timeout=None)
 
    Sleep until a result is set on *future*.  *future* is an instance of
-   :class:`Future` as found in the :mod:`concurrent.futures` module.
+   :py:class:`concurrent.futures.Future`.
 
 .. asyncfunction:: _join_task(task, timeout=None)
 
@@ -914,12 +914,12 @@ implementing a new curio primitive.
 
    Cancel the indicated *task*.  Does not return until the task actually
    completes the cancellation.  Note: It is usually better to use
-   ``await task.cancel()`` instead of this function.
+   :meth:`Task.cancel` instead of this function.
 
 .. asyncfunction:: _wait_on_queue(kqueue, state_name, timeout=None)
 
    Go to sleep on a queue. *kqueue* is an instance of a kernel queue
-   which is typically a ``collections.deque`` instance. *state_name*
+   which is typically a :py:class:`collections.deque` instance. *state_name*
    is the name of the wait state (used in debugging).
 
 .. asyncfunction:: _reschedule_tasks(kqueue, n=1, value=None, exc=None)
@@ -943,7 +943,7 @@ implementing a new curio primitive.
    number of the received signal.
 
 Again, you're unlikely to use any of these functions directly.  However, here's a small taste
-of how they're used.  For example, the ``recv()`` method of ``Socket`` objects
+of how they're used.  For example, the :meth:`curio.io.Socket.recv` method
 looks roughly like this::
 
     class Socket(object):
