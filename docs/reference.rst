@@ -114,7 +114,7 @@ The following public attributes are available of :class:`Task` instances:
 
 .. attribute:: Task.exc_info
 
-   A tuple of exception information obtained from ``sys.exc_info()`` if the
+   A tuple of exception information obtained from :py:func:`sys.exc_info` if the
    task crashes for some reason.  Potentially useful for debugging.
 
 .. attribute:: Task.children
@@ -140,18 +140,20 @@ calculations and blocking operations.  Use the following functions to do that:
 
 .. asyncfunction:: run_cpu_bound(callable, *args, timeout=None)
 
-   Run ``callable(*args)`` in a process pool created by :mod:`concurrent.futures.ProcessPoolExecutor`.
-   Returns the result.
+   Run ``callable(*args)`` in a process pool created by
+   :py:class:`concurrent.futures.ProcessPoolExecutor`. Returns the result.
 
 .. asyncfunction:: run_blocking(callable, *args, timeout=None)
 
-   Run ``callable(*args)`` in a thread pool created by :mod:`concurrent.futures.ThreadPoolExecutor`.
+   Run ``callable(*args)`` in a thread pool created by
+   :py:class:`concurrent.futures.ThreadPoolExecutor`.
    Returns the result.
 
 .. asyncfunction:: run_in_executor(exc, callable, *args, timeout=None)
 
-   Run ``callable(*args)`` callable in a user-supplied executor and returns the result.
-   *exc* is an executor from the :mod:`concurrent.Futures` module in the standard library.
+   Run ``callable(*args)`` callable in a user-supplied executor and returns the
+   result. *exc* is an executor from the :py:mod:`concurrent.futures` module
+   in the standard library.
 
 .. function:: set_cpu_executor(exc)
 
@@ -161,8 +163,9 @@ calculations and blocking operations.  Use the following functions to do that:
 
    Set the default executor used for blocking processing.
 
-Note that the callables supplied to these functions are only given positional arguments.
-If you need to pass keyword arguments use ``functools.partial()`` to do it. For example::
+Note that the callables supplied to these functions are only given positional
+arguments. If you need to pass keyword arguments use
+:py:func:`functools.partial` to do it. For example::
 
    from functools import partial
    await run_blocking(partial(callable, arg1=value, arg2=value))
@@ -194,7 +197,8 @@ The following methods are redefined on :class:`Socket` objects to be
 compatible with coroutines.  Any socket method not listed here will be
 delegated directly to the underlying socket. Be aware
 that not all methods have been wrapped and that using a method not
-listed here might block the kernel or raise a ``BlockingIOError`` exception.
+listed here might block the kernel or raise a :py:exc:`BlockingIOError`
+exception.
 
 .. asyncmethod:: Socket.recv(maxbytes, flags=0)
 
@@ -293,7 +297,7 @@ Stream
 
 The :class:`Stream` class puts a non-blocking wrapper around an
 existing file-like object.  Certain other functions in curio use this
-(e.g., the :meth:`makefile` method).
+(e.g., the :meth:`Socket.makefile` method).
 
 
 .. class:: Stream(fileobj)
@@ -395,14 +399,15 @@ subprocess wrapper module
 
 The :mod:`curio.subprocess` module provides a wrapper around the built-in :mod:`subprocess` module.
 
-.. class:: Popen(*args, **kwargs).
+.. class:: Popen(*args, **kwargs)
 
    A wrapper around the :class:`subprocess.Popen` class.  The same arguments are accepted.
-   On the resulting ``Popen`` instance, the ``stdin``, ``stdout``, and ``stderr`` file
-   attributes have been wrapped by the :class:`curio.io.Stream` class. You can use these
-   in an asynchronous context.
+   On the resulting ``Popen`` instance, the :attr:`stdin`, :attr:`stdout`, and
+   :attr:`stderr` file attributes have been wrapped by the
+   :class:`curio.io.Stream` class. You can use these in an asynchronous context.
 
-Here is an example of using ``Popen`` to read streaming output off of a subprocess with curio::
+Here is an example of using :class:`Popen` to read streaming output off of a
+subprocess with curio::
 
     import curio
     from curio import subprocess
@@ -439,8 +444,8 @@ equivalents in the :mod:`subprocess` module:
 
 .. asyncfunction:: check_output(args, stdout=None, stderr=None, shell=False, timeout=None)
 
-   Run a command in a subprocess and return the resulting output. Raises a ``subprocess.CalledProcessError``
-   exception if an error occurred.
+   Run a command in a subprocess and return the resulting output. Raises a
+   :py:exc:`subprocess.CalledProcessError` exception if an error occurred.
 
 ssl wrapper module
 ------------------
@@ -499,10 +504,10 @@ making network connections and writing servers.
 .. asyncfunction:: open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None, timeout=None)
 
    Creates an outgoing connection to a server at *host* and *port*. This connection is made using
-   the ``socket.create_connection()`` function and might be IPv4 or IPv6 depending on
+   the :py:func:`socket.create_connection` function and might be IPv4 or IPv6 depending on
    the network configuration (although you're not supposed to worry about it).  *ssl* specifies
-   whether or not SSL should be used.  *ssl* can be ``True`` or an instance of an :class:`SSLContext`
-   created by the :mod:`curio.ssl` module.  *source_addr* specifies the source address to use
+   whether or not SSL should be used.  *ssl* can be ``True`` or an instance of
+   :class:`curio.ssl.SSLContext`.  *source_addr* specifies the source address to use
    on the socket.  *server_hostname* specifies the hostname to check against when making SSL
    connections.  It is highly advised that this be supplied to avoid man-in-the-middle attacks.
 
@@ -512,15 +517,15 @@ making network connections and writing servers.
 
 .. function:: create_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
 
-   Creates a ``Server`` instance for receiving TCP connections on a given host and port.
+   Creates a :class:`Server` instance for receiving TCP connections on a given host and port.
    *client_connected_task* is a coroutine that is to be called to handle each connection.
-   Family specifies the address family and is either ``AF_INET`` or ``AF_INET6``.
-   *backlog* is the argument to the socket ``listen()`` method.  *ssl* specifies an
-   ``SSLContext`` instance to use. *reuse_address* specifies whether to reuse a previously
+   Family specifies the address family and is either :py:const:`socket.AF_INET` or :py:const:`socket.AF_INET6`.
+   *backlog* is the argument to the :py:meth:`socket.socket.listen` method.  *ssl* specifies an
+   :class:`curio.ssl.SSLContext` instance to use. *reuse_address* specifies whether to reuse a previously
    used port.   This method does not actually start running the created server.  To
-   do that, you need to use ``await Server.serve_forever()`` method on the returned
-   ``Server`` instance.   Normally, it's easier to use :func:`run_server` instead. Only
-   use :func:`create_server` if you need to do something else with the ``Server`` instance
+   do that, you need to use :meth:`Server.serve_forever` method on the returned
+   :class:`Server` instance.   Normally, it's easier to use :func:`run_server` instead. Only
+   use :func:`create_server` if you need to do something else with the :class:`Server` instance
    for some reason.
 
 .. asyncfunction:: run_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
@@ -530,9 +535,9 @@ making network connections and writing servers.
 .. function:: create_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
    Creates a Unix domain server on a given path. *client_connected_task* is a coroutine to
-   execute on each connection. *backlog* is the argument given to the socket ``listen()`` method.
-   *ssl* is an optional ``SSLContext`` to use if setting up an SSL connection.   Returns a
-   ``Server`` instance.  To start running the server use ``await Server.serve_forever()``.
+   execute on each connection. *backlog* is the argument given to the :py:meth:`socket.socket.listen` method.
+   *ssl* is an optional :class:`curio.ssl.SSLContext` to use if setting up an SSL connection.   Returns a
+   :class:`Server` instance.  To start running the server use :meth:`Server.serve_forever`.
 
 .. asyncfunction:: run_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
@@ -895,7 +900,7 @@ implementing a new curio primitive.
 .. asyncfunction:: _future_wait(future, timeout=None)
 
    Sleep until a result is set on *future*.  *future* is an instance of
-   :class:`Future` as found in the :mod:`concurrent.futures` module.
+   :py:class:`concurrent.futures.Future`.
 
 .. asyncfunction:: _join_task(task, timeout=None)
 
@@ -909,12 +914,12 @@ implementing a new curio primitive.
 
    Cancel the indicated *task*.  Does not return until the task actually
    completes the cancellation.  Note: It is usually better to use
-   ``await task.cancel()`` instead of this function.
+   :meth:`Task.cancel` instead of this function.
 
 .. asyncfunction:: _wait_on_queue(kqueue, state_name, timeout=None)
 
    Go to sleep on a queue. *kqueue* is an instance of a kernel queue
-   which is typically a ``collections.deque`` instance. *state_name*
+   which is typically a :py:class:`collections.deque` instance. *state_name*
    is the name of the wait state (used in debugging).
 
 .. asyncfunction:: _reschedule_tasks(kqueue, n=1, value=None, exc=None)
@@ -938,7 +943,7 @@ implementing a new curio primitive.
    number of the received signal.
 
 Again, you're unlikely to use any of these functions directly.  However, here's a small taste
-of how they're used.  For example, the ``recv()`` method of ``Socket`` objects
+of how they're used.  For example, the :meth:`curio.io.Socket.recv` method
 looks roughly like this::
 
     class Socket(object):
