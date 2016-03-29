@@ -334,11 +334,12 @@ class Kernel(object):
         else:
             timeout = None
 
-        events = self._selector.select(timeout)
-        for key, mask in events:
-            task = key.data
-            self._selector.unregister(key.fileobj)
-            self._reschedule_task(task)
+        if self._selector.get_map():
+            events = self._selector.select(timeout)
+            for key, mask in events:
+                task = key.data
+                self._selector.unregister(key.fileobj)
+                self._reschedule_task(task)
 
         # Process sleeping tasks (if any)
         if self._sleeping:
