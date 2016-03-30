@@ -103,8 +103,8 @@ output::
 At this point, the program appears hung.  The child is sleeping for
 the next 1000 seconds, the parent is blocked on ``join()`` and nothing
 much seems to be happening--this is the mark of all good concurrent
-programs (hanging that is).  Change the last part of the program to create the kernel
-with the monitor enabled::
+programs (hanging that is).  Change the last part of the program to
+create the kernel with the monitor enabled::
 
     ...
     if __name__ == '__main__':
@@ -112,64 +112,67 @@ with the monitor enabled::
         kernel.run(parent())
 
 Run the program again. You'd really like to know what's happening?
-Yes?  Press Ctrl-C to enter the curio monitor::
+Yes?  Open up another terminal window and connect to the monitor as
+follows::
 
-    ...
-    We're leaving!
-    ... hanging ...
-    ^C
+    bash % python3 -m curio.monitor
     Curio Monitor:  4 tasks running
     Type help for commands
     curio > 
 
-Let's see what's happening by typing ``ps``::
+See what's happening by typing ``ps``::
 
     curio > ps
     Task   State        Cycles     Timeout Task                                               
     ------ ------------ ---------- ------- --------------------------------------------------
-    1      READ_WAIT    2          None    Kernel._init_task                                 
-    2      RUNNING      6          None    monitor                                           
-    3      TASK_JOIN    5          None    parent                                            
-    4      TIME_SLEEP   1          926.016 kid                                               
+    1      TIME_SLEEP   845        0.05770 Monitor.monitor_task                              
+    2      TASK_JOIN    5          None    parent                                            
+    3      TIME_SLEEP   1          915.534 kid                                               
+    curio > 
 
 In the monitor, you can see a list of the active tasks.  You can see
 that the parent is waiting to join and that the kid is sleeping for
-another 926 seconds.  If you type ``ps`` again, you'll see the timeout
+another 915 seconds.  If you type ``ps`` again, you'll see the timeout
 value change. Although you're in the monitor--the kernel is still
 running underneath.  Actually, you'd like to know more about what's
-happening. You can get the stack trace of any task using the ``where`` command::
+happening. You can get the stack trace of any task using the ``where``
+command::
+
+    curio > where 2
+    Stack for Task(id=2, <coroutine object parent at 0x1058e7258>, state='TASK_JOIN') (most recent call last):
+      File "hello.py", line 23, in parent
+        await kid_task.join()
+      File "/Users/beazley/Desktop/Projects/curio/curio/kernel.py", line 86, in join
+        await _join_task(self, timeout)
+      File "/Users/beazley/Desktop/Projects/curio/curio/kernel.py", line 631, in _join_task
+        yield ('_trap_join_task', task, timeout)
 
     curio > where 3
-     Stack for Task(id=3, <coroutine object parent at 0x1011bee60>, state='TASK_JOIN') (most recent call last):
-      File "hello.py", line 22, in parent
-        await kid_task.join()
-      File "/usr/local/lib/python3.5/site-packages/curio/kernel.py", line 74, in join
-        await join_task(self, timeout)
-      File "/usr/local/lib/python3.5/site-packages/curio/kernel.py", line 538, in join_task
-        yield '_trap_join_task', task, timeout
-   
-    curio > where 4
-     Stack for Task(id=4, <coroutine object kid at 0x1013162b0>, state='TIME_SLEEP') (most recent call last):
-      File "hello.py", line 13, in kid
+    Stack for Task(id=3, <coroutine object kid at 0x1058e7360>, state='TIME_SLEEP') (most recent call last):
+      File "hello.py", line 12, in kid
         await curio.sleep(1000)
-      File "/usr/local/lib/python3.5/site-packages/curio/kernel.py", line 517, in sleep
-        yield '_trap_sleep', seconds
-    
+      File "/Users/beazley/Desktop/Projects/curio/curio/kernel.py", line 687, in sleep
+        await _sleep(seconds)
+      File "/Users/beazley/Desktop/Projects/curio/curio/kernel.py", line 605, in _sleep
+        yield ('_trap_sleep', seconds)
+
     curio > 
 
-Actually, that kid is just being super annoying.  Let's cancel their world and let the parent
-get on with their business::
+Actually, that kid is just being super annoying.  Let's cancel their
+world and let the parent get on with their business::
 
-    curio > cancel 4
-    Cancelling task 4
-    Leaving!
+    curio > cancel 3
+    Cancelling task 3
     curio > 
-    bash % 
 
-Debugging is an important feature of curio and by using the monitor, you see what's happening as tasks run.
-You can find out where tasks are blocked and you can cancel any task that you want.
-However, it's not necessary to do this in the monitor.  Change the parent task to include a timeout
-and a cancellation request like this::
+Back in the running program, you should see the "Leaving!" message and
+the program quit.
+
+Debugging is an important feature of curio and by using the monitor,
+you see what's happening as tasks run.  You can find out where tasks
+are blocked and you can cancel any task that you want.  However, it's
+not necessary to do this in the monitor.  Change the parent task to
+include a timeout and a cancellation request like this::
 
     async def parent():
         kid_task = await curio.new_task(kid())
@@ -340,19 +343,20 @@ program, you'll see this::
     Yes, go play
     Building the Millenium Falcon in Minecraft
 
-Don't forget, if you're wondering what's happening, you can always drop into
-the curio monitor by pressing Control-C::
+Don't forget, if you're wondering what's happening, you can always go to
+a different terminal window and drop into the curio monitor::
 
-    ^C
-    Curio Monitor:  4 tasks running
+    bash % python3 -m curio.monitor
+
+    Curio Monitor: 4 tasks running
     Type help for commands
     curio > ps
     Task   State        Cycles     Timeout Task                                               
     ------ ------------ ---------- ------- --------------------------------------------------
-    1      READ_WAIT    2          None    Kernel._init_task                                 
-    2      RUNNING      6          None    monitor                                           
-    3      SIGNAL_WAIT  5          None    parent                                            
-    4      TIME_SLEEP   2          796.593 kid                                               
+    1      TIME_SLEEP   236        0.06724 Monitor.monitor_task                              
+    2      SIGNAL_WAIT  5          None    parent                                            
+    3      TIME_SLEEP   6          980.676 kid                                               
+    4      READ_WAIT    1          None    Kernel._kernel_task                               
     curio > 
 
 Here you see the parent waiting on a signal and the kid sleeping await for another 796 seconds.
@@ -966,7 +970,8 @@ consider the use of the curio monitor.  For example::
     kernel = curio.Kernel(with_monitor=True)
 
 The monitor can show you the state of each task and you can get stack 
-traces. Remember that you enter the monitor by pressing Ctrl-C. 
+traces. Remember that you enter the monitor by running ``python3 -m curio.monitor``
+in a separate window.
 
 As another possible debugging tool, you can have curio launch ``pdb``
 when a task crashes.  Do this::
