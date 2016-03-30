@@ -15,7 +15,6 @@ import sys
 import logging
 import inspect
 import signal
-
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
 from types import coroutine
@@ -155,7 +154,7 @@ class Kernel(object):
                  '_signals', '_default_signals', '_njobs', '_running',
                  '_notify_sock', '_wait_sock', '_kernel_task_id')
 
-    def __init__(self, selector=None, with_monitor=False):
+    def __init__(self, selector=None, *, with_monitor=False):
         if selector is None:
             selector = DefaultSelector()
         self._selector = selector
@@ -173,9 +172,9 @@ class Kernel(object):
         self._wait_sock = None
         self._kernel_task_id = None
 
-        if with_monitor and sys.stdin.isatty():
-            from .monitor import monitor
-            self.add_task(monitor(), daemon=True)
+        # If a monitor is specified, launch it
+        if with_monitor or 'CURIOMONITOR' in os.environ:
+            Monitor(self)
 
     def __del__(self):
         if self._notify_sock:
@@ -705,4 +704,5 @@ def get_kernel():
 
 __all__ = [ 'Kernel', 'get_kernel', 'sleep', 'new_task', 'SignalSet', 'TaskError', 'CancelledError' ]
             
+from .monitor import Monitor
         

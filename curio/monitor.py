@@ -1,11 +1,51 @@
 # curio/monitor.py
 #
-# Copyright (C) 2015
+# Copyright (C) 2015-2016
 # David Beazley (Dabeaz LLC), http://www.dabeaz.com
 # All rights reserved.
 #
-# Debugging monitor for curio.   At the moment, this is overly simplistic.
-# It could be expanded to do a lot of other stuff later.
+# Debugging monitor for curio. To enable the monitor, create a kernel
+# with the with_monitor argument:
+#
+#    k = Kernel(with_monitor=True)
+#
+# Or run a curio program with the CURIOMONITOR environment variable set
+#
+#    env CURIOMONITOR=TRUE python3 someprog.py
+#
+# If you need to change some aspect of the monitor configuration, you
+# can do manual setup:
+#
+#    k = Kernel()
+#    Monitor(k, host, port)
+#
+# Where host and port configure the network address on which the monitor
+# operates.
+#
+# To connect to the monitor, run python3 -m curio.monitor [port]. For example:
+#
+# Theory of operation:
+# --------------------
+# The monitor works by opening up a loopback socket on the local machine and
+# allowing connections via telnet. By default, it only allows a connection
+# originating from the local machine.  Only a single monitor connection is
+# allowed at any given time.
+#
+# There are two parts to the monitor itself: a user interface and an
+# internal loop that runs on curio itself.  The user interface part
+# runs in a completely separate execution thread.  The reason for this
+# is that it allows curio to be monitored even if the curio kernel is
+# completely deadlocked, occupied with a large CPU-bound task, or
+# otherwise hosed in the some way.  At a minimum, you can connect,
+# look at the task table, and see what the tasks are doing.
+#
+# The internal monitor loop implemented on curio itself is presently
+# used to implement external task cancellation.  Manipulating any 
+# part of the kernel state or task status is unsafe from an outside thread.
+# To make it safe, the user-interface thread of the monitor hands over
+# requests requiring the involvement of the kernel to the monitor loop.
+# Since this loop runs on curio, it can safely make cancellation requests
+# and perform other kernel-related actions. 
 
 import sys
 import os
@@ -13,14 +53,25 @@ import traceback
 import linecache
 import signal
 import time
-import atexit
 import socket
 import threading
+import telnetlib
+from collections import deque
+import logging
 
-from .io import Stream
-from .kernel import _kernel_reference, SignalSet, CancelledError, get_kernel
+# --- Curio
+from . import kernel
+
+# ---
+log = logging.getLogger(__name__)
+
+MONITOR_HOST = '127.0.0.1'
+MONITOR_PORT = 48802
 
 def _get_stack(task):
+    '''
+    Extracts a list of stack frames from a chain of generator/coroutine calls
+    '''
     frames = []
     coro = task.coro
     while coro:
@@ -30,311 +81,183 @@ def _get_stack(task):
         coro = coro.cr_await if hasattr(coro, 'cr_await') else coro.gi_yieldfrom
     return frames
 
-def _print_stack(task):
-        extracted_list = []
-        checked = set()
-        for f in _get_stack(task):
-            lineno = f.f_lineno
-            co = f.f_code
-            filename = co.co_filename
-            name = co.co_name
-            if filename not in checked:
-                checked.add(filename)
-                linecache.checkcache(filename)
-            line = linecache.getline(filename, lineno, f.f_globals)
-            extracted_list.append((filename, lineno, name, line))
-        if not extracted_list:
-            print('No stack for %r' % task)
-        else:
-            print('Stack for %r (most recent call last):' % task)
-        traceback.print_list(extracted_list)
-
 def _format_stack(task):
-        extracted_list = []
-        checked = set()
-        for f in _get_stack(task):
-            lineno = f.f_lineno
-            co = f.f_code
-            filename = co.co_filename
-            name = co.co_name
-            if filename not in checked:
-                checked.add(filename)
-                linecache.checkcache(filename)
-            line = linecache.getline(filename, lineno, f.f_globals)
-            extracted_list.append((filename, lineno, name, line))
-        if not extracted_list:
-            resp = 'No stack for %r' % task 
-        else:
-            resp = 'Stack for %r (most recent call last):\n' % task
-            resp += ''.join(traceback.format_list(extracted_list))
-        return resp
+    '''
+    Formats a traceback from a stack of coroutines/generators
+    '''
+    extracted_list = []
+    checked = set()
+    for f in _get_stack(task):
+        lineno = f.f_lineno
+        co = f.f_code
+        filename = co.co_filename
+        name = co.co_name
+        if filename not in checked:
+            checked.add(filename)
+            linecache.checkcache(filename)
+        line = linecache.getline(filename, lineno, f.f_globals)
+        extracted_list.append((filename, lineno, name, line))
+    if not extracted_list:
+        resp = 'No stack for %r' % task 
+    else:
+        resp = 'Stack for %r (most recent call last):\n' % task
+        resp += ''.join(traceback.format_list(extracted_list))
+    return resp
 
 class Monitor(object):
-    def __init__(self, kernel, sin, sout):
+    '''
+    Task monitor that runs concurrently to the curio kernel in a 
+    separate thread. This can watch the kernel and provide debugging.
+    '''
+    def __init__(self, kernel, host=MONITOR_HOST, port=MONITOR_PORT):
         self.kernel = kernel
-        self.sin = sin
-        self.sout = sout
+        self.address = (host, port)
+        self.task_cancel_request = None
+        self.monitor_event = threading.Event()
+        self.monitor_event_done = threading.Event()
 
-    def loop(self):
-        self.sout.write('\nCurio Monitor: %d tasks running\n' % len(self.kernel._tasks))
-        self.sout.write('Type help for commands\n')
+        log.info('Starting Curio monitor at %s:%d', host, port)
+
+        # The monitor launches both a separate thread and helper task
+        # that runs inside curio itself to manage cancellation events
+        threading.Thread(target=self.server, daemon=True).start()
+        self.monitor_task = self.kernel.add_task(self.monitor_task(), daemon=True)
+
+    async def monitor_task(self):
+        '''
+        Asynchronous task loop for carrying out task cancellation.
+        '''
         while True:
-            self.sout.write('curio > ')
-            self.sout.flush()
-            resp = self.sin.readline()
+            if not self.monitor_event.is_set():
+                await kernel.sleep(0.1)
+                continue
+            self.monitor_event.clear()
+            if self.task_cancel_request:
+                await self.task_cancel_request.cancel()
+            self.monitor_event_done.set()
+
+    def server(self):
+        '''
+        Synchronous kernel for the monitor.  This runs in a separate thread
+        from curio itself.
+        '''
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+        sock.bind(self.address)
+        sock.listen(1)
+        while True:
+            client, addr = sock.accept()
+            sout = client.makefile('w', encoding='utf-8')
+            sin = client.makefile('r', encoding='utf-8')
+            self.interactive_loop(sout, sin)
+            client.close()
+                
+    def interactive_loop(self, sout, sin):
+        '''
+        Main interactive loop of the monitor
+        '''
+        sout.write('\nCurio Monitor: %d tasks running\n' % len(self.kernel._tasks))
+        sout.write('Type help for commands\n')
+        while True:
+            sout.write('curio > ')
+            sout.flush()
+            resp = sin.readline()
             try:
                 if not resp or resp.startswith('q'):
-                    self.sout.write('Leaving monitor\n')
+                    sout.write('Leaving monitor\n')
                     return
 
                 elif resp.startswith('p'):
-                    self.command_ps()
+                    self.command_ps(sout)
 
                 elif resp.startswith('exit'):
-                    self.command_exit()
+                    self.command_exit(sout)
 
                 elif resp.startswith('cancel'):
                     _, taskid_s = resp.split()
-                    self.command_cancel(int(taskid_s))
+                    self.command_cancel(sout, int(taskid_s))
 
                 elif resp.startswith('signal'):
                     _, signame = resp.split()
-                    self.command_signal(signame)
+                    self.command_signal(sout, signame)
 
                 elif resp.startswith('w'):
                     _, taskid_s = resp.split()
-                    self.command_where(int(taskid_s))
+                    self.command_where(sout, int(taskid_s))
 
                 elif resp.startswith('h'):
-                    self.command_help()
-
+                    self.command_help(sout)
                 else:
-                    self.sout.write('Unknown command. Type help.\n')
+                    sout.write('Unknown command. Type help.\n')
             except Exception as e:
-                self.sout.write('Bad command. %s\n' % e)
+                sout.write('Bad command. %s\n' % e)
 
-    def command_help(self):
-        self.sout.write(
+    def command_help(self, sout):
+        sout.write(
      '''Commands:
          ps               : Show task table
          where taskid     : Show stack frames for a task
-         cancel taskid    : Cancel a task
+         cancel taskid    : Cancel an indicated task
          signal signame   : Send a Unix signal
-         exit             : Raise SystemExit and terminate
          quit             : Leave the monitor
      ''')
 
-    def command_ps(self):
+    def command_ps(self, sout):
         headers = ('Task', 'State', 'Cycles', 'Timeout', 'Task')
         widths = (6, 12, 10, 7, 50)
         for h, w in zip(headers, widths):
-            self.sout.write('%-*s ' % (w, h))
-        self.sout.write('\n')
-        self.sout.write(' '.join(w*'-' for w in widths))
-        self.sout.write('\n')
+            sout.write('%-*s ' % (w, h))
+        sout.write('\n')
+        sout.write(' '.join(w*'-' for w in widths))
+        sout.write('\n')
         timestamp = time.monotonic()
         for taskid in sorted(self.kernel._tasks):
             task = self.kernel._tasks.get(taskid)
             if task:
                 remaining = format((task.timeout - timestamp), '0.6f')[:7] if task.timeout else 'None'
-                self.sout.write('%-*d %-*s %-*d %-*s %-*s\n' % (widths[0], taskid, 
+                sout.write('%-*d %-*s %-*d %-*s %-*s\n' % (widths[0], taskid, 
                                                                 widths[1], task.state,
                                                                 widths[2], task.cycles,
                                                                 widths[3], remaining,
                                                                 widths[4], task))
 
-    def command_where(self, taskid):
+    def command_where(self, sout, taskid):
         task = self.kernel._tasks.get(taskid)
         if task:
             stack = _format_stack(task)
-            self.sout.write(stack+'\n')
+            sout.write(stack+'\n')
         else:
-            self.sout.write('No task %d\n' % taskid)
-        
-    def command_exit(self):
-        pass
+            sout.write('No task %d\n' % taskid)
 
-    def command_cancel(self, taskid):
-        pass
-
-    def command_signal(self, signame):
+    def command_signal(self, sout, signame):
         if hasattr(signal, signame):
             os.kill(os.getpid(), getattr(signal, signame))
+        else:
+            sout.write('Unknown signal %s\n' % signame)
 
-async def monrun(kernel):
-    stdin = Stream(sys.stdin.buffer.raw)
-    try:
-         print('\nCurio Monitor:  %d tasks running' % len(kernel._tasks))
-         print('Type help for commands')
+    def command_cancel(self, sout, taskid):
+        self.task_cancel_request = self.kernel._tasks.get(taskid)
+        if self.task_cancel_request:
+            sout.write('Cancelling task %d\n' % taskid)
+            self.monitor_event.set()
+            self.monitor_event_done.wait()
+            self.monitor_event_done.clear()
+            
+    def command_exit(self, sout):
+        pass
 
-         while True:
-              print('curio > ', end='', flush=True)
-              resp = await stdin.readline()
-              if not resp or resp.startswith(b'q'):
-                   print('Leaving monitor')
-                   return
-              elif resp.startswith(b'p'):
-                   ps(kernel)
-              elif resp.startswith(b'exit'):
-                   raise SystemExit()
-              elif resp.startswith(b'cancel'):
-                   try:
-                        _, taskid_s = resp.split()
-                        taskid = int(taskid_s)
-                        if taskid in kernel._tasks:
-                             print('Cancelling task', taskid)
-                             await kernel._tasks[taskid].cancel()
-                        else:
-                             print('Bad task id')
-                   except Exception as e:
-                        print('Bad command')
-              elif resp.startswith(b'signal'):
-                  try:
-                      _, signame = resp.split()
-                      signame = signame.decode('ascii').strip()
-                      if hasattr(signal, signame):
-                          os.kill(os.getpid(), getattr(signal, signame))
-                  except Exception as e:
-                      print('Bad command',e )
+def monitor_client(host, port):
+    '''
+    Client to connect to the monitor via "telnet"
+    '''
+    tn = telnetlib.Telnet()
+    tn.open(host, port, timeout=0.5)
+    tn.interact()
+    tn.close()
 
-              elif resp.startswith(b'w'):
-                   try:
-                        _, taskid_s = resp.split()
-                        taskid = int(taskid_s)
-                        if taskid in kernel._tasks:
-                             _print_stack(kernel._tasks[taskid])
-                             print()
-                   except Exception as e:
-                        print('Bad command', e)
-                             
-              elif resp.startswith(b'h'):
-                   print(
-     '''Commands:
-         ps               : Show task table
-         where taskid     : Show stack frames for a task
-         cancel taskid    : Cancel a task
-         signal signame   : Send a Unix signal
-         exit             : Raise SystemExit and terminate
-         quit             : Leave the monitor
-     ''')
-              elif resp == b'\n':
-                   pass
-              else:
-                   print('Unknown command. Type help.')
-
-    finally:
-         os.set_blocking(stdin.fileno(), True)
-
-
-
-    # Debugging
-def ps(kernel):
-    headers = ('Task', 'State', 'Cycles', 'Timeout', 'Task')
-    widths = (6, 12, 10, 7, 50)
-    for h, w in zip(headers, widths):
-        print('%-*s' % (w, h), end=' ')
-    print()
-    print(' '.join(w*'-' for w in widths))
-    timestamp = time.monotonic()
-    for taskid in sorted(kernel._tasks):
-        task = kernel._tasks[taskid]
-        remaining = format((task.timeout - timestamp), '0.6f')[:7] if task.timeout else 'None'
-        print('%-*d %-*s %-*d %-*s %-*s' % (widths[0], taskid, 
-                                            widths[1], task.state,
-                                            widths[2], task.cycles,
-                                            widths[3], remaining,
-                                            widths[4], task))
-
-async def monrun(kernel):
-    stdin = Stream(sys.stdin.buffer.raw)
-    try:
-         print('\nCurio Monitor:  %d tasks running' % len(kernel._tasks))
-         print('Type help for commands')
-
-         while True:
-              print('curio > ', end='', flush=True)
-              resp = await stdin.readline()
-              if not resp or resp.startswith(b'q'):
-                   print('Leaving monitor')
-                   return
-              elif resp.startswith(b'p'):
-                   ps(kernel)
-              elif resp.startswith(b'exit'):
-                   raise SystemExit()
-              elif resp.startswith(b'cancel'):
-                   try:
-                        _, taskid_s = resp.split()
-                        taskid = int(taskid_s)
-                        if taskid in kernel._tasks:
-                             print('Cancelling task', taskid)
-                             await kernel._tasks[taskid].cancel()
-                        else:
-                             print('Bad task id')
-                   except Exception as e:
-                        print('Bad command')
-              elif resp.startswith(b'signal'):
-                  try:
-                      _, signame = resp.split()
-                      signame = signame.decode('ascii').strip()
-                      if hasattr(signal, signame):
-                          os.kill(os.getpid(), getattr(signal, signame))
-                  except Exception as e:
-                      print('Bad command',e )
-
-              elif resp.startswith(b'w'):
-                   try:
-                        _, taskid_s = resp.split()
-                        taskid = int(taskid_s)
-                        if taskid in kernel._tasks:
-                             _print_stack(kernel._tasks[taskid])
-                             print()
-                   except Exception as e:
-                        print('Bad command', e)
-                             
-              elif resp.startswith(b'h'):
-                   print(
-     '''Commands:
-         ps               : Show task table
-         where taskid     : Show stack frames for a task
-         cancel taskid    : Cancel a task
-         signal signame   : Send a Unix signal
-         exit             : Raise SystemExit and terminate
-         quit             : Leave the monitor
-''')
-              elif resp == b'\n':
-                   pass
-              else:
-                   print('Unknown command. Type help.')
-
-    finally:
-         os.set_blocking(stdin.fileno(), True)
-
-async def monitor():
-    kernel = await _kernel_reference()
-    # If the kernel monitor is being used, it's critical that it be shutdown cleanly at exit
-    atexit.register(kernel.shutdown)
-
-    sigset = SignalSet(signal.SIGINT)
-    while True:
-        await sigset.wait()
-        with sigset.ignore():
-            await monrun(kernel)
-    
-
-def _sync_monitor(kernel, host, port):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-    sock.bind((host, port))
-    sock.listen(1)
-    while True:
-        client, addr = sock.accept()
-        sin = client.makefile('r', encoding='utf-8')
-        sout = client.makefile('w', encoding='utf-8')
-        mon = Monitor(kernel, sin, sout)
-        mon.loop()
-        sin.close()
-        sout.close()
-        client.close()
-
-def sync_monitor(kernel, host='0.0.0.0', port=9000):
-    threading.Thread(target=_sync_monitor, args=(kernel, host, port), daemon=True).start()
+if __name__ == '__main__':
+    if sys.argv[1:]:
+        port = int(sys.argv[1])
+    else:
+        port = MONITOR_PORT
+    monitor_client(MONITOR_HOST, port)
