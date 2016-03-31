@@ -9,13 +9,13 @@ setup(name = "curio",
 Curio is a library for performing concurrent I/O in Python 3. 
 """,
             license="""BSD""",
-            version = "0.1",
+            version = "0.2",
             author = "David Beazley",
             author_email = "dave@dabeaz.com",
             maintainer = "David Beazley",
             maintainer_email = "dave@dabeaz.com",
             url = "https://github.com/dabeaz/curio",
-            packages = ['curio', 'curio.test'],
+            packages = ['curio'],
             classifiers = [
               'Programming Language :: Python :: 3',
               ]

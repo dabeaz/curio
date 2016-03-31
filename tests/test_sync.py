@@ -1,17 +1,14 @@
-# sync.py
+# test_sync.py
 #
 # Different test scenarios designed to run under management of a kernel
 
-import unittest
 from collections import deque
-
-from ..import *
+from curio import *
 
 # ---- Synchronization primitives
 
-class TestEvent(unittest.TestCase):
-    def test_event_get_wait(self):
-        kernel = get_kernel()
+class TestEvent:
+    def test_event_get_wait(self, kernel):
         results = []
         async def event_setter(evt, seconds):
               results.append('sleep')
@@ -32,7 +29,7 @@ class TestEvent(unittest.TestCase):
         kernel.add_task(event_waiter(evt))
         kernel.add_task(event_setter(evt, 1))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'wait_start',
                 False,
                 'sleep',
@@ -40,10 +37,9 @@ class TestEvent(unittest.TestCase):
                 'wait_done',
                 True,
                 False
-                ])
+                ]
 
-    def test_event_get_immediate(self):
-        kernel = get_kernel()
+    def test_event_get_immediate(self, kernel):
         results = []
         async def event_setter(evt):
               results.append('event_set')
@@ -60,16 +56,15 @@ class TestEvent(unittest.TestCase):
         kernel.add_task(event_waiter(evt, 1))
         kernel.add_task(event_setter(evt))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'sleep',
                 'event_set',
                 'wait_start',
                 'wait_done',
-                ])
+                ]
 
 
-    def test_event_wait_cancel(self):
-        kernel = get_kernel()
+    def test_event_wait_cancel(self, kernel):
         results = []
         async def event_waiter(evt):
               results.append('event_wait')
@@ -89,16 +84,15 @@ class TestEvent(unittest.TestCase):
 
         kernel.add_task(event_cancel(1))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'event_wait',
                 'sleep',
                 'cancel_start',
                 'event_cancel',
                 'cancel_done',
-                ])
+                ]
 
-    def test_event_wait_timeout(self):
-        kernel = get_kernel()
+    def test_event_wait_timeout(self, kernel):
         results = []
         async def event_waiter(evt):
               results.append('event_wait')
@@ -116,16 +110,14 @@ class TestEvent(unittest.TestCase):
 
         kernel.add_task(event_run(1))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'event_wait',
                 'sleep',
                 'event_timeout',
                 'sleep_done',
-                ])
+                ]
 
-
-    def test_event_wait_notimeout(self):
-        kernel = get_kernel()
+    def test_event_wait_notimeout(self, kernel):
         results = []
         async def event_waiter(evt):
               results.append('event_wait')
@@ -155,18 +147,17 @@ class TestEvent(unittest.TestCase):
 
         kernel.add_task(event_run())
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'event_wait',
                 'sleep',
                 'event_set',
                 'got event',
                 'event_set',
                 'got event'
-                ])
+                ]
 
-class TestLock(unittest.TestCase):
-    def test_lock_sequence(self):
-        kernel = get_kernel()
+class TestLock:
+    def test_lock_sequence(self, kernel):
         results = []
         async def worker(lck, label):
               results.append(label + ' wait')
@@ -181,7 +172,7 @@ class TestLock(unittest.TestCase):
         kernel.add_task(worker(lck, 'work2'))
         kernel.add_task(worker(lck, 'work3'))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'work1 wait',
                 False,
                 'work1 acquire',
@@ -194,10 +185,9 @@ class TestLock(unittest.TestCase):
                 'work3 acquire',
                 'work2 release',
                 'work3 release',
-                ])
+                ]
 
-    def test_lock_acquire_cancel(self):
-        kernel = get_kernel()
+    def test_lock_acquire_cancel(self, kernel):
         results = []
         async def worker(lck):
               results.append('lock_wait')
@@ -219,17 +209,15 @@ class TestLock(unittest.TestCase):
 
         kernel.add_task(worker_cancel(1))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'lock_wait',
                 'sleep',
                 'cancel_start',
                 'lock_cancel',
                 'cancel_done',
-                ])
+                ]
 
-
-    def test_lock_acquire_timeout(self):
-        kernel = get_kernel()
+    def test_lock_acquire_timeout(self, kernel):
         results = []
         async def worker(lck):
               results.append('lock_wait')
@@ -250,17 +238,15 @@ class TestLock(unittest.TestCase):
 
         kernel.add_task(worker_timeout(1))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'lock_wait',
                 'sleep',
                 'lock_timeout',
                 'sleep_done',
-                ])
+                ]
 
-
-class TestSemaphore(unittest.TestCase):
-    def test_sema_sequence(self):
-        kernel = get_kernel()
+class TestSemaphore:
+    def test_sema_sequence(self, kernel):
         results = []
         async def worker(sema, label):
               results.append(label + ' wait')
@@ -275,7 +261,7 @@ class TestSemaphore(unittest.TestCase):
         kernel.add_task(worker(sema, 'work2'))
         kernel.add_task(worker(sema, 'work3'))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'work1 wait',
                 False,
                 'work1 acquire',
@@ -288,10 +274,9 @@ class TestSemaphore(unittest.TestCase):
                 'work3 acquire',
                 'work2 release',
                 'work3 release',
-                ])
+                ]
 
-    def test_sema_sequence2(self):
-        kernel = get_kernel()
+    def test_sema_sequence2(self, kernel):
         results = []
         async def worker(sema, label, seconds):
               results.append(label + ' wait')
@@ -306,7 +291,7 @@ class TestSemaphore(unittest.TestCase):
         kernel.add_task(worker(sema, 'work2', 0.30))
         kernel.add_task(worker(sema, 'work3', 0.35))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'work1 wait',            # Both work1 and work2 admitted
                 False,
                 'work1 acquire',
@@ -319,10 +304,9 @@ class TestSemaphore(unittest.TestCase):
                 'work1 release',
                 'work2 release',
                 'work3 release',
-                ])
+                ]
 
-    def test_sema_acquire_cancel(self):
-        kernel = get_kernel()
+    def test_sema_acquire_cancel(self, kernel):
         results = []
         async def worker(lck):
               results.append('lock_wait')
@@ -344,16 +328,15 @@ class TestSemaphore(unittest.TestCase):
 
         kernel.add_task(worker_cancel(1))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'lock_wait',
                 'sleep',
                 'cancel_start',
                 'lock_cancel',
                 'cancel_done',
-                ])
+                ]
 
-    def test_sema_acquire_timeout(self):
-        kernel = get_kernel()
+    def test_sema_acquire_timeout(self, kernel):
         results = []
         async def worker(lck):
               results.append('lock_wait')
@@ -374,15 +357,14 @@ class TestSemaphore(unittest.TestCase):
 
         kernel.add_task(worker_timeout(1))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'lock_wait',
                 'sleep',
                 'lock_timeout',
                 'sleep_done',
-                ])
+                ]
 
-    def test_bounded(self):
-        kernel = get_kernel()
+    def test_bounded(self, kernel):
         results = []
         async def task():
             sema = BoundedSemaphore(1)
@@ -394,14 +376,12 @@ class TestSemaphore(unittest.TestCase):
 
         kernel.add_task(task())
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'value error',
-                ])
+                ]
 
-
-class TestCondition(unittest.TestCase):
-    def test_cond_sequence(self):
-        kernel = get_kernel()
+class TestCondition:
+    def test_cond_sequence(self, kernel):
         results = []
         async def consumer(cond, q, label):
               while True:
@@ -436,7 +416,7 @@ class TestCondition(unittest.TestCase):
         kernel.add_task(consumer(cond, q, 'cons2'))
         kernel.add_task(producer(cond, q, 4, 2))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'cons1 wait',
                 'cons2 wait',
                 ('producing', 0),
@@ -455,10 +435,9 @@ class TestCondition(unittest.TestCase):
                 ('cons1 done'),
                 ('ending', 1),
                 ('cons2 done')
-                ])
+                ]
 
-    def test_cond_wait_cancel(self):
-        kernel = get_kernel()
+    def test_cond_wait_cancel(self, kernel):
         results = []
         async def worker(cond):
               try:
@@ -480,16 +459,15 @@ class TestCondition(unittest.TestCase):
 
         kernel.add_task(worker_cancel(1))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'cond_wait',
                 'sleep',
                 'cancel_start',
                 'worker_cancel',
                 'cancel_done',
-                ])
+                ]
 
-    def test_cond_wait_timeout(self):
-        kernel = get_kernel()
+    def test_cond_wait_timeout(self, kernel):
         results = []
         async def worker(cond):
               try:
@@ -509,15 +487,14 @@ class TestCondition(unittest.TestCase):
 
         kernel.add_task(worker_cancel(1))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'cond_wait',
                 'sleep',
                 'worker_timeout',
                 'done'
-                ])
+                ]
 
-    def test_cond_notify_all(self):
-        kernel = get_kernel()
+    def test_cond_notify_all(self, kernel):
         results = []
         async def worker(cond):
              async with cond:
@@ -539,7 +516,7 @@ class TestCondition(unittest.TestCase):
 
         kernel.add_task(worker_notify(1))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'cond_wait',
                 'cond_wait',
                 'cond_wait',
@@ -549,10 +526,9 @@ class TestCondition(unittest.TestCase):
                 'done',
                 'wait_done',
                 'wait_done',
-                ])
+                ]
 
-    def test_cond_waitfor(self):
-        kernel = get_kernel()
+    def test_cond_waitfor(self, kernel):
         results = []
         async def consumer(cond, q, label):
              async with cond:
@@ -575,7 +551,7 @@ class TestCondition(unittest.TestCase):
         kernel.add_task(consumer(cond, q, 'cons2'))
         kernel.add_task(producer(cond, q, 4))
         kernel.run()
-        self.assertEqual(results, [
+        assert results == [
                 'cons1 waitfor',
                 'cons2 waitfor',
                 ('producing', 0),
@@ -586,7 +562,4 @@ class TestCondition(unittest.TestCase):
                 ('producing', 3),
                 ('cons2', 4),
                 'cons2 done'
-                ])
-
-if __name__ == '__main__':
-    unittest.main()
+                ]
