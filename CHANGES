@@ -1,6 +1,24 @@
 CHANGES
 -------
 
+03/31/2016 Switched test suite to py.test. All of the tests are in the
+           top-level tests directory.  Use 'python3 -m pytest' to test.
+
+03/30/2016 Improved the curio monitor.  Instead of relying on the
+           console TTY (and invoked via Ctrl-C), it now uses a socket
+           to which you must connect via a different session. To
+           enable the monitor either use:
+
+               kernel = Kernel(with_monitor=True)
+
+           or run with an environment variable
+
+               env CURIOMONITOR=TRUE python3 yourprogram.py
+
+           To connect to the monitor, use the following command:
+
+               python3 -m curio.monitor
+          
 02/15/2016 Fixed Issue #37 where scheduling multiple tasks for sleeping
            could potentially cause a crash in rare circumstances.
 
