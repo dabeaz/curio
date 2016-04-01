@@ -50,7 +50,8 @@ class _CancelRetry(Exception):
 class Task(object):
     __slots__ = ('id', 'parent_id', 'children', 'coro', 'cycles', 'state',
                  'cancel_func', 'future', 'timeout', 'exc_info', 'next_value',
-                 'next_exc', 'joining', 'terminated', '_last_io', '__weakref__')
+                 'next_exc', 'joining', 'terminated', '_last_io', '__weakref__',
+                 )
     _lastid = 1
     def __init__(self, coro):
         self.id = Task._lastid
@@ -730,17 +731,7 @@ async def new_task(coro, *, daemon=False):
     '''
     return await _new_task(coro, daemon)
 
-_default_kernel = None
-def get_kernel():
-    '''
-    Return the default kernel.
-    '''
-    global _default_kernel
-    if _default_kernel is None:
-        _default_kernel = Kernel()
-    return _default_kernel
-
-__all__ = [ 'Kernel', 'get_kernel', 'sleep', 'new_task', 'SignalSet', 'TaskError', 'CancelledError' ]
+__all__ = [ 'Kernel', 'sleep', 'new_task', 'SignalSet', 'TaskError', 'CancelledError' ]
             
 from .monitor import Monitor
         
