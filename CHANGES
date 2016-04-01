@@ -1,5 +1,9 @@
 CHANGES
 -------
+04/01/2016 Improved management of the I/O selector.  The number of
+           register/unregister operations are reduced for tasks 
+           that constantly perform I/O on the same resources.  This
+           could offer a nice performance boost in certain cases.
 
 03/31/2016 Switched test suite to py.test. All of the tests are in the
            top-level tests directory.  Use 'python3 -m pytest' to test.
