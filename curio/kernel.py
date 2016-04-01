@@ -50,7 +50,7 @@ class _CancelRetry(Exception):
 class Task(object):
     __slots__ = ('id', 'parent_id', 'children', 'coro', 'cycles', 'state',
                  'cancel_func', 'future', 'timeout', 'exc_info', 'next_value',
-                 'next_exc', 'joining', 'terminated', '__weakref__')
+                 'next_exc', 'joining', 'terminated', '_last_io', '__weakref__')
     _lastid = 1
     def __init__(self, coro):
         self.id = Task._lastid
@@ -68,6 +68,7 @@ class Task(object):
         self.next_exc = None      # Next exception to send on execution
         self.joining = None       # Optional set of tasks waiting to join with this one
         self.terminated = False   # Terminated?
+        self._last_io = None      # Last I/O operation
 
     def __repr__(self):
         return 'Task(id=%r, %r, state=%r)' % (self.id, self.coro, self.state)
@@ -336,7 +337,8 @@ class Kernel(object):
         events = self._selector.select(timeout)
         for key, mask in events:
             task = key.data
-            self._selector.unregister(key.fileobj)
+            # Please see comment regarding deferred_unregister in run()
+            task._last_io = (task.state, key.fileobj)
             self._reschedule_task(task)
 
         # Process sleeping tasks (if any)
@@ -407,6 +409,30 @@ class Kernel(object):
                 except SystemExit:
                     self._cleanup_task(current)
                     raise
+                
+                finally:
+                    # Unregister previous I/O request. Discussion follows:
+                    # 
+                    # When a task performs I/O, it registers itself with the underlying
+                    # I/O selector.  When the task is reawakened, it unregisters itself
+                    # and prepares to run.  However, in many network applications, the
+                    # task will perform a small amount of work and then go to sleep on
+                    # exactly the same I/O resource that it was waiting on before. For
+                    # example, a client handling task in a server will often spend most
+                    # of its time waiting for incoming data on a single socket. 
+                    #
+                    # Instead of always unregistering the task from the selector, we
+                    # can defer the unregistration process until after the task goes
+                    # back to sleep again.  If it happens to be sleeping on the same
+                    # resource as before, there's no need to unregister it--it will
+                    # still be registered from the last I/O operation.   
+                    #
+                    # The code here performs the unregister step for a task that 
+                    # ran, but is now sleeping for a *different* reason than repeating the
+                    # prior I/O operation.  There is coordination with code in _trap_io().
+                    if current._last_io:
+                        self._selector.unregister(current._last_io[1])
+                    current._last_io = None
 
         self._current = None
         if maintask:
@@ -465,7 +491,19 @@ class Kernel(object):
     # To execute these methods.
 
     def _trap_io(self, current, fileobj, event, state, timeout):
-        self._selector.register(fileobj, event, current)
+        # See comment about deferred unregister in run().  If the requested
+        # I/O operation is *different* than the last I/O operation that was
+        # performed by the task, we need to unregister the last I/O resource used
+        # and register a new one with the selector.  
+        if current._last_io != (state, fileobj):
+            if current._last_io:
+                self._selector.unregister(current._last_io[1])
+            self._selector.register(fileobj, event, current)
+
+        # This step indicates that we have managed any deferred I/O management
+        # for the task.  Otherwise the run() method will perform an unregistration step.
+        current._last_io = None
+
         current.state = state
         current.cancel_func = lambda: self._selector.unregister(fileobj)
         if timeout:
