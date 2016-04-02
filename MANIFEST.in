@@ -1,5 +1,6 @@
 recursive-include examples *
 recursive-include docs *
+recursive-include tests *
 include README.rst
 include LICENSE
 include CHANGES
