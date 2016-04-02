@@ -639,7 +639,8 @@ def _future_wait(future, timeout=None):
 @coroutine
 def _sleep(seconds):
     '''
-    Sleep for a given number of seconds
+    Sleep for a given number of seconds. Sleeping for 0 seconds
+    simply forces the current task to yield to the next task (if any).
     '''
     yield ('_trap_sleep', seconds)
 
