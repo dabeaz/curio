@@ -1,7 +1,7 @@
 curio - concurrent I/O
 ======================
 
-Curio is a modern library for performing reliable concurrent I/O using
+Curio is a library for performing reliable concurrent I/O using
 Python coroutines and the explicit async/await syntax introduced in
 Python 3.5.   Its programming model is based on cooperative
 multitasking and common system programming abstractions such as
@@ -11,7 +11,7 @@ and powerful.
 
 Important Disclaimer
 --------------------
-Curio is experimental software that currently only works on Unix systems
+Curio is experimental software that currently only works on POSIX systems
 (OS X, Linux, etc.).  Use at your own peril. 
 
 An Example
