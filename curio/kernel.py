@@ -15,6 +15,8 @@ import sys
 import logging
 import inspect
 import signal
+import threading
+
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
 from types import coroutine

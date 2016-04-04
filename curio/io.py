@@ -83,6 +83,18 @@ class Socket(object):
     def settimeout(self, seconds):
         self._timeout = seconds
 
+    def gettimeout(self):
+        return self._timeout
+
+    @contextmanager
+    def timeout(self, nseconds):
+        old_timeout = self._timeout
+        try:
+            self._timeout = nseconds
+            yield
+        finally:
+            self._timeout = old_timeout
+
     def dup(self):
         return Socket(self._socket.dup())
 
@@ -288,6 +300,18 @@ class Stream(object):
 
     def settimeout(self, timeout):
         self._timeout = timeout
+
+    def gettimeout(self):
+        return self._timeout
+
+    @contextmanager
+    def timeout(self, nseconds):
+        old_timeout = self._timeout
+        try:
+            self._timeout = nseconds
+            yield
+        finally:
+            self._timeout = old_timeout
 
     @contextmanager
     def blocking(self):
