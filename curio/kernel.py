@@ -156,7 +156,7 @@ class SignalSet(object):
 class Kernel(object):
     __slots__ = ('_selector', '_ready', '_tasks', '_current', '_sleeping',
                  '_signals', '_default_signals', '_njobs', '_running',
-                 '_notify_sock', '_wait_sock', '_kernel_task_id')
+                 '_notify_sock', '_wait_sock', '_kernel_task_id', '_wake_queue')
 
     def __init__(self, selector=None, *, with_monitor=False):
         if selector is None:
@@ -175,6 +175,9 @@ class Kernel(object):
         self._notify_sock = None
         self._wait_sock = None
         self._kernel_task_id = None
+
+        # Wake queue for tasks restarted by external threads
+        self._wake_queue = deque()
 
         # If a monitor is specified, launch it
         if with_monitor or 'CURIOMONITOR' in os.environ:
@@ -199,20 +202,45 @@ class Kernel(object):
         task = self._new_task(self._kernel_task(), daemon=True)
         self._kernel_task_id = task.id
     
-    # Force the kernel to wake.  Used on non-I/O events such as completion of futures
-    def _wake(self, task=None, value=None, exc=None):
+    # Force the kernel to wake, possibly scheduling a task to run.
+    # This method is called by threads running concurrently to the
+    # curio kernel.  For example, it's triggered upon completion of
+    # Futures created by thread pools and processes. It's inherently
+    # dangerous for any kind of operation on the kernel to be
+    # performed by a separate thread.  Thus, the *only* thing that
+    # gets done here is that the task gets appended to a deque and a
+    # notification message is written to the kernel notification
+    # socket.  append() and pop() operations on deques are thread safe
+    # and do not need additional locking.  See
+    # https://docs.python.org/3/library/collections.html#collections.deque
+    def _wake(self, task=None, future=None, value=None, exc=None):
         if task:
-            self._reschedule_task(task, value, exc)
+            self._wake_queue.append((task, future, value, exc))
+#            self._reschedule_task(task, value, exc)
         self._notify_sock.send(b'\x00')
+
+    # Process tasks added to the internal waking queue by self._wake().
+    # This function is executed as part of the curio event loop. The
+    # popleft() method on deques is threadsafe.
+    def _handle_waking(self):
+        while self._wake_queue:
+            task, future, value, exc = self._wake_queue.popleft()
+            # If the future associated with wakeup no longer matches
+            # the future stored on the task, wakeup is abandoned.
+            # It means that a timeout or cancellation event occurred
+            # in the time interval between the call to self._wake()
+            # and the subsequent processing of the waking task
+            if future and task.future is not future:
+                continue
+            self._reschedule_task(task, value, exc)
 
     # Internal task that monitors the loopback socket--allowing the kernel to
     # awake for non-I/O events.  Also processes incoming signals.  This only
     # launches if needed to wait for external events (futures, signals, etc.)
-
     async def _kernel_task(self):
         while True:
             await _read_wait(self._wait_sock)
-            data = self._wait_sock.recv(100)
+            data = self._wait_sock.recv(1)
 
             # Any non-null bytes received here are assumed to be received signals.
             # See if there are any pending signal sets and unblock if needed 
@@ -338,6 +366,13 @@ class Kernel(object):
             timeout = None
 
         events = self._selector.select(timeout)
+
+        # Process any waking tasks.  These are tasks that have been awakened
+        # externally to the event loop (e.g., by separate threads, Futures, etc.)
+        if self._wake_queue:
+            self._handle_waking()
+
+        # Reschedule tasks with completed I/O
         for key, mask in events:
             task = key.data
             # Please see comment regarding deferred_unregister in run()
@@ -519,7 +554,19 @@ class Kernel(object):
         current.state = 'FUTURE_WAIT'
         current.cancel_func = lambda: future.cancel()
         current.future = future
-        future.add_done_callback(lambda fut, task=current: self._wake(task) if task.future == fut else None)
+        # Discussion: Each task records the future that it is
+        # currently waiting on.  The completion callback below only
+        # attempts to wake the task if its stored Future is exactly
+        # the same one that was stored above.  Due to support for
+        # cancellation and timeouts, it's possible that a task might
+        # abandon its attempt to wait for a Future and go on to
+        # perform other operations, including waiting for different
+        # Future in the future (got it?).  However, a running thread
+        # or process still might go on to eventually complete the
+        # earlier work.  In that case, it will trigger the callback,
+        # find that the task's current Future is now different, and
+        # discard the result.
+        future.add_done_callback(lambda fut, task=current: self._wake(task, fut) if task.future is fut else None)
         if timeout:
             self._set_timeout(current, timeout)
 
