@@ -8,6 +8,7 @@
 # events, locks, semaphores, and condition variables. These primitives
 # are only safe to use in the curio framework--they are not thread safe.
 
+import threading
 from .kernel import _wait_on_queue, _reschedule_tasks, kqueue
 
 __all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition' ]
@@ -157,4 +158,3 @@ class Condition(_LockBase):
 
     async def notify_all(self):
         await self.notify(len(self._waiting))
-
