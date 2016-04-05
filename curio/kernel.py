@@ -208,7 +208,7 @@ class Kernel(object):
     # Futures created by thread pools and processes. It's inherently
     # dangerous for any kind of operation on the kernel to be
     # performed by a separate thread.  Thus, the *only* thing that
-    # gets done here is that the task gets appended to a deque and a
+    # happens here is that the task gets appended to a deque and a
     # notification message is written to the kernel notification
     # socket.  append() and pop() operations on deques are thread safe
     # and do not need additional locking.  See
@@ -220,8 +220,8 @@ class Kernel(object):
         self._notify_sock.send(b'\x00')
 
     # Process tasks added to the internal waking queue by self._wake().
-    # This function is executed as part of the curio event loop. The
-    # popleft() method on deques is threadsafe.
+    # This function is executed as part of the kernel task. The
+    # popleft() method on deques is threadsafe (see above).
     def _handle_waking(self):
         while self._wake_queue:
             task, future, value, exc = self._wake_queue.popleft()
@@ -305,7 +305,7 @@ class Kernel(object):
         # raise timeouts.
 
         assert task != self._current, "A task can't cancel itself (%r, %r)" % (task, self._current)
-
+        
         if task.terminated:
             return True
 
@@ -417,8 +417,6 @@ class Kernel(object):
             # Run everything that's ready
             while self._ready:
                 current = self._current = self._ready.popleft()
-                assert current.id in self._tasks
-                assert current.state == 'READY'
                 try:
                     current.state = 'RUNNING'
                     current.cycles += 1

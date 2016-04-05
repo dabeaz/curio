@@ -10,7 +10,6 @@
 from concurrent.futures import Future
 import multiprocessing
 import threading
-from collections import deque
 
 from .kernel import _future_wait, CancelledError
 from .sync import Semaphore
@@ -33,41 +32,55 @@ MAX_WORKER_THREADS = 16
 # threads.  As such, they're stored in thread-local storage. 
 _pools = threading.local()
 
+# A ThreadWorker represents a thread that performs work on behalf of a
+# curio task.  The execution model is purely synchronous and similar
+# to a "hand off."  A curio task initiates work by executing the
+# apply() method. This passes the request to a background thread that
+# executes it.  While this takes place, the curio task blocks, waiting
+# for a result to be set on an internal Future.
+#
+# The purely synchronous nature of the execution model simplfies the
+# implementation considerably.  The background thread merely waits on
+# an Event to know when to run.  Results are communicated back using 
+# a Future instance from the built-in concurrent.futures module. There
+# are no queues or other structures involved.
+#
+# A tricky situation arises when task cancellations/timeouts occur.
+# The apply() method used by curio tasks is able to abort and return
+# control without computing a result.  However, the background thread
+# will continue to run until its task is complete.  There is no way
+# to kill a thread once started.  So, if this happens, the worker
+# becomes unavailable--possibly forever (for example, if the worker
+# permanently blocks or never finishes for some reason).   Perhaps, the
+# best option here is to call shutdown() on the worker and to remove
+# it from further service.  Although the background thread won't stop
+# right away, this will make the thread terminate when it finally does
+# complete its work.
+
 class ThreadWorker(object):
     '''
     Worker that executes a callable on behalf of a curio task in a separate thread.
     '''
     def __init__(self):
         self.thread = None
-        self.start_evt = threading.Event()
+        self.start_evt = None
         self.request = None
 
     def _launch(self):
+        self.start_evt = threading.Event()
         self.thread = threading.Thread(target=self.run_worker, daemon=True)
         self.thread.start()
 
     def run_worker(self):
         while True:
-            # Discussion: This thread performs work on behalf of a single
-            # curio task that is blocked waiting for a result. The control
-            # flow is as follows:
-            #
-            #     1.  The apply() method below stores a request
-            #     2.  An event (start_evt) is triggered.
-            #     3.  The run_worker() method waits for the event
-            #         and runs the requested callable.
-            #     4.  The result is stored on a Future
-            #
             self.start_evt.wait()
             self.start_evt.clear()
-
             # If there is no pending request, but we were signalled to
             # start, it means that we should quit
             if not self.request:
                 return
 
             func, args, kwargs, future = self.request
-            future.set_running_or_notify_cancel()
             try:
                 result = func(*args, **kwargs)
                 future.set_result(result)
@@ -87,6 +100,7 @@ class ThreadWorker(object):
 
         # Set up a request for the worker thread
         future = Future()
+        future.set_running_or_notify_cancel()
         self.request = (func, args, kwargs, future)
         self.start_evt.set()
 
@@ -94,22 +108,25 @@ class ThreadWorker(object):
         await _future_wait(future, timeout=timeout)
         return future.result()
 
+# A ThreadPool is a collection of ThreadWorkers used to perform
+# work on behalf of curio tasks.
+
 class ThreadPool(object):
     def __init__(self, nworkers=None):
         if nworkers is None:
             nworkers = MAX_WORKER_THREADS
 
         self.nworkers = Semaphore(nworkers)
-        self.workers = deque([ThreadWorker() for n in range(nworkers)])
+        self.workers = [ThreadWorker() for n in range(nworkers)]
         
-    def __del__(self):
+    def shutdown(self):
         for worker in self.workers:
             worker.shutdown()
         self.workers = None
 
     async def apply(self, func, args=(), kwargs={}, timeout=None):
          async with self.nworkers:
-             worker = self.workers.popleft()
+             worker = self.workers.pop()
              try:
                  return await worker.apply(func, args, kwargs, timeout=timeout)
              except (CancelledError, TimeoutError) as e:
@@ -196,11 +213,11 @@ class ProcessPool(object):
         if nworkers is None:
             nworkers = multiprocessing.cpu_count()
         self.nworkers = Semaphore(nworkers)
-        self.workers = deque([ProcessWorker() for n in range(nworkers)])
+        self.workers = [ProcessWorker() for n in range(nworkers)]
 
     async def apply(self, func, args=(), kwargs={}):
          async with self.nworkers:
-             worker = self.workers.popleft()
+             worker = self.workers.pop()
              try:
                  return await worker.apply(func, args, kwargs)
              finally:
