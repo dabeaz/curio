@@ -67,6 +67,7 @@ class ThreadWorker(object):
                 return
 
             func, args, kwargs, future = self.request
+            future.set_running_or_notify_cancel()
             try:
                 result = func(*args, **kwargs)
                 future.set_result(result)

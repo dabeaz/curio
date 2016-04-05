@@ -215,8 +215,8 @@ class Kernel(object):
     # https://docs.python.org/3/library/collections.html#collections.deque
     def _wake(self, task=None, future=None, value=None, exc=None):
         if task:
-            self._wake_queue.append((task, future, value, exc))
-#            self._reschedule_task(task, value, exc)
+            if not (future and future.cancelled()):
+                self._wake_queue.append((task, future, value, exc))
         self._notify_sock.send(b'\x00')
 
     # Process tasks added to the internal waking queue by self._wake().
@@ -239,8 +239,14 @@ class Kernel(object):
     # launches if needed to wait for external events (futures, signals, etc.)
     async def _kernel_task(self):
         while True:
+
             await _read_wait(self._wait_sock)
-            data = self._wait_sock.recv(1)
+            data = self._wait_sock.recv(1000)
+
+            # Process any waking tasks.  These are tasks that have been awakened
+            # externally to the event loop (e.g., by separate threads, Futures, etc.)
+            if self._wake_queue:
+                self._handle_waking()
 
             # Any non-null bytes received here are assumed to be received signals.
             # See if there are any pending signal sets and unblock if needed 
@@ -284,7 +290,6 @@ class Kernel(object):
         # Reschedule a task, putting it back on the ready queue so that it can run.
         # value and exc specify a value or exception to send into the underlying 
         # coroutine when it is rescheduled.
-
         assert task.id in self._tasks, 'Task %r not in the task table' % task
         self._ready.append(task)
         task.next_value = value
@@ -300,7 +305,7 @@ class Kernel(object):
         # raise timeouts.
 
         assert task != self._current, "A task can't cancel itself (%r, %r)" % (task, self._current)
-        
+
         if task.terminated:
             return True
 
@@ -367,11 +372,6 @@ class Kernel(object):
 
         events = self._selector.select(timeout)
 
-        # Process any waking tasks.  These are tasks that have been awakened
-        # externally to the event loop (e.g., by separate threads, Futures, etc.)
-        if self._wake_queue:
-            self._handle_waking()
-
         # Reschedule tasks with completed I/O
         for key, mask in events:
             task = key.data
@@ -418,6 +418,7 @@ class Kernel(object):
             while self._ready:
                 current = self._current = self._ready.popleft()
                 assert current.id in self._tasks
+                assert current.state == 'READY'
                 try:
                     current.state = 'RUNNING'
                     current.cycles += 1
