@@ -156,7 +156,8 @@ class SignalSet(object):
 class Kernel(object):
     __slots__ = ('_selector', '_ready', '_tasks', '_current', '_sleeping',
                  '_signals', '_default_signals', '_njobs', '_running',
-                 '_notify_sock', '_wait_sock', '_kernel_task_id', '_wake_queue')
+                 '_notify_sock', '_wait_sock', '_kernel_task_id', '_wake_queue',
+                 '_process_pool', '_thread_pool')
 
     def __init__(self, selector=None, *, with_monitor=False):
         if selector is None:
@@ -179,6 +180,10 @@ class Kernel(object):
         # Wake queue for tasks restarted by external threads
         self._wake_queue = deque()
 
+        # Optional process/thread pools (see workers.py)
+        self._thread_pool = None
+        self._process_pool = None
+
         # If a monitor is specified, launch it
         if with_monitor or 'CURIOMONITOR' in os.environ:
             Monitor(self)
@@ -187,6 +192,10 @@ class Kernel(object):
         if self._notify_sock:
             self._notify_sock.close()
             self._wait_sock.close()
+        if self._thread_pool:
+            self._thread_pool.shutdown()
+        if self._process_pool:
+            self._process_pool.shutdown()
 
     def __enter__(self):
         return self
@@ -215,8 +224,7 @@ class Kernel(object):
     # https://docs.python.org/3/library/collections.html#collections.deque
     def _wake(self, task=None, future=None, value=None, exc=None):
         if task:
-            if not (future and future.cancelled()):
-                self._wake_queue.append((task, future, value, exc))
+            self._wake_queue.append((task, future, value, exc))
         self._notify_sock.send(b'\x00')
 
     # Process tasks added to the internal waking queue by self._wake().
@@ -546,7 +554,7 @@ class Kernel(object):
         if timeout:
             self._set_timeout(current, timeout)
 
-    def _trap_future_wait(self, current, future, timeout=None):
+    def _trap_future_wait(self, current, future, timeout=None, event=None):
         if not self._kernel_task_id:
             self._init_loopback()
 
@@ -568,6 +576,13 @@ class Kernel(object):
         future.add_done_callback(lambda fut, task=current: self._wake(task, fut) if task.future is fut else None)
         if timeout:
             self._set_timeout(current, timeout)
+
+        # An optional threading.Event object can be passed and set to
+        # start a worker thread.   This makes it possible to have a lock-free
+        # Future implementation where worker threads only start after the
+        # callback function has been set above.
+        if event:
+            event.set()
 
     def _trap_new_task(self, current, coro, daemon=False):
         task = self._new_task(coro, daemon)
@@ -649,8 +664,10 @@ class Kernel(object):
         if timeout:
             self._set_timeout(current, timeout)
 
-    def _trap_kernel(self, current):
-        self._reschedule_task(current, value=self)
+    def _trap_get_kernel(self, current):
+        self._ready.appendleft(current)
+        current.next_value = self
+        current.next_exc = None
 
 # ----------------------------------------------------------------------
 # Coroutines corresponding to the kernel traps.  These functions
@@ -678,11 +695,11 @@ def _write_wait(fileobj, timeout=None):
     yield ('_trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT', timeout)
 
 @coroutine
-def _future_wait(future, timeout=None):
+def _future_wait(future, timeout=None, event=None):
     '''
     Wait for the future of a Future to be computed.
     '''
-    yield ('_trap_future_wait', future, timeout)
+    yield ('_trap_future_wait', future, timeout, event)
 
 @coroutine
 def _sleep(seconds):
@@ -754,11 +771,11 @@ def _sigwait(sigset, timeout=None):
     yield ('_trap_sigwait', sigset, timeout)
 
 @coroutine
-def _kernel_reference():
+def _get_kernel():
     '''
-    Get a reference to the running kernel
+    Get current kernel context.  Returns a tuple (kernel, task)
     '''
-    result = yield ('_trap_kernel',)
+    result = yield ('_trap_get_kernel',)
     return result
 
 # ----------------------------------------------------------------------

@@ -13,6 +13,7 @@ import struct
 import io
 import hmac
 import multiprocessing.connection as mpc
+from contextlib import contextmanager
 
 from . import socket
 from .kernel import CurioError
@@ -29,7 +30,13 @@ CHALLENGE = mpc.CHALLENGE                   # b'#CHALLENGE#'
 WELCOME = mpc.WELCOME                       # b'#WELCOME#'
 FAILURE = mpc.FAILURE                       # b'#FAILURE#'
 
-class AuthenticationError(CurioError):
+class ChannelError(CurioError):
+    pass
+
+class AuthenticationError(ChannelError):
+    pass
+
+class ChannelRPCError(ChannelError):
     pass
 
 class Channel(object):
@@ -68,7 +75,17 @@ class Channel(object):
 
     async def __aexit__(self, *args):
         await self.close()
-        
+
+    @contextmanager
+    def timeout(self, seconds):
+        read_to = self._reader.settimeout(seconds)
+        write_to = self._writer.settimeout(seconds)
+        try:
+            yield
+        finally:
+            self._reader.settimeout(read_to)
+            self._writer.settimeout(write_to)
+    
     async def close(self):
         await self._reader.close()
         await self._writer.close()
@@ -167,8 +184,20 @@ class Channel(object):
         Perform the client-side of a remote procedure call over a channel
         '''
         msg = (func, args, kwargs)
-        await self.send(msg)
-        success, result = await self.recv()
+        try:
+            await self.send(msg)
+        except Exception as e:
+            raise ChannelRPCError('RPC send failure') from e
+        try:
+            success, result = await self.recv()
+        except TimeoutError as e:
+            raise
+        except Exception as e:
+            # Note: A custom exception is raised on recv() failure to
+            # indicate a problem with the protocol itself. This is
+            # to disambiguate from server-side exceptions that are
+            # raised by the 'raise result' statement below.
+            raise ChannelRPCError('RPC receive failure') from e
         if success:
             return result
         else:
@@ -178,12 +207,22 @@ class Channel(object):
         '''
         Perform the server-side handling of a remote procedure call
         '''
-        func, args, kwargs = await self.recv()
         try:
-            result = func(*args, **kwargs)
-            await self.send((True, result))
+            func, args, kwargs = await self.recv()
+        except TimeoutError as e:
+            raise
         except Exception as e:
-            await self.send((False, e))
+            raise ChannelRPCError('RPC receive failure') from e
+        try:
+            result = (True, func(*args, **kwargs))
+        except Exception as e:
+            result = (False, e)
+        try:
+            await self.send(result)
+        except TimeoutError as e:
+            raise
+        except Exception as e:
+            raise ChannelRPCError('RPC send error') from e
 
 class Listener(object):
     def __init__(self, address, family=socket.AF_INET, backlog=1, authkey=None):

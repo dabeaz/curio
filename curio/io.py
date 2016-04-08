@@ -81,7 +81,8 @@ class Socket(object):
         return self._fileno
 
     def settimeout(self, seconds):
-        self._timeout = seconds
+        oldtimeout, self._timeout = self._timeout, seconds
+        return oldtimeout
 
     def gettimeout(self):
         return self._timeout
@@ -298,8 +299,9 @@ class Stream(object):
     def fileno(self):
         return self._fileno
 
-    def settimeout(self, timeout):
-        self._timeout = timeout
+    def settimeout(self, seconds):
+        oldtimeout, self._timeout = self._timeout, seconds
+        return oldtimeout
 
     def gettimeout(self):
         return self._timeout
