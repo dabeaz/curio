@@ -4,8 +4,9 @@
 # David Beazley (Dabeaz LLC), http://www.dabeaz.com
 # All rights reserved.
 #
-# Functions for performing work outside of curio.  This includes running functions
-# in threads, processes, and executors from the concurrent.futures module.
+# Functions for performing work outside of curio.  This includes
+# running functions in threads, processes, and executors from the
+# concurrent.futures module.
 
 import multiprocessing
 import threading
@@ -13,7 +14,8 @@ import threading
 from .kernel import _future_wait, CancelledError, _get_kernel
 from .sync import Semaphore
 
-__all__ = [ 'run_in_executor', 'run_blocking', 'run_cpu_bound' ]
+__all__ = [ 'run_in_executor', 'run_blocking', 'run_cpu_bound',
+            'run_in_thread', 'run_in_process' ]
 
 async def run_in_executor(exc, callable, *args, timeout=None):
     '''
@@ -25,43 +27,80 @@ async def run_in_executor(exc, callable, *args, timeout=None):
     request will continue to run to completion as a kind of zombie--
     possibly rendering the executor unusable for subsequent work.
 
-    This function is provided for compatibility with concurrent.futures,
-    but is not the recommend approach for running blocking or cpu-bound
-    work in curio. Use the run_in_thread() or run_in_process() methods
-    instead.
+    This function is provided for compatibility with
+    concurrent.futures, but is not the recommend approach for running
+    blocking or cpu-bound work in curio. Use the run_in_thread() or
+    run_in_process() methods instead.
     '''
     future = exc.submit(callable, *args)
     await _future_wait(future, timeout=timeout)
     return future.result()
 
+
+MAX_WORKER_THREADS = 64
+
 async def run_in_thread(callable, *args, timeout=None):
     '''
     Run callable(*args) in a separate thread and return the result.
     If a timeout is specified, the request will be aborted and a
-    TimeoutError raised.  It's not possible to terminate threads so if
-    a timeout or cancellation occurs, the associated worker will
-    continue to run until completion as a kind of zombie.  In this
-    case, the worker will be removed from the pool of available
-    threads and terminated as soon as it completes.
+    TimeoutError raised if it takes longer than the specified time
+    period.  It's not possible to terminate threads so if a timeout or
+    cancellation occurs, the associated worker thread will continue to run
+    until completion as a kind of zombie.  When this happens, the 
+    cancelled worker will be immediately replaced by a new worker
+    thread that's able to process further requests.  The cancelled
+    worker thread will terminate when the callable completes its
+    work (the result is discarded in that case).
+
+    Note: It is advisable that all callables submitted to threads
+    have a bound on their execution time (e.g., timeout or some 
+    other mechanism).
     '''
     kernel = await _get_kernel()
     if not kernel._thread_pool:
-        kernel._thread_pool = ThreadPool()
+        kernel._thread_pool = WorkerPool(ThreadWorker, MAX_WORKER_THREADS)
     return await kernel._thread_pool.apply(callable, args, timeout=timeout)
 
 run_blocking = run_in_thread
 
-MAX_WORKER_THREADS = 16
+async def run_in_process(callable, *args, timeout=None):
+    '''
+    Run callable(*args) in a separate process and return the result.
+    If a timeout is specified, the request will be aborted and a
+    TimeoutError raised if it takes longer than the specified time
+    period.  In the event of timeout or cancellation, the worker
+    process is immediately terminated.
+
+    The worker process is created using multiprocessing.Process().
+    Communication with the process uses multiprocessing.Pipe() and an
+    asynchronous message passing channel.  All function arguments and
+    return values are seralized using the pickle module.  When
+    cancelled, the Process.terminate() method is used to kill the
+    worker process.  This results in a SIGTERM signal being sent to
+    the process.
+
+    The worker process is a separate isolated Python interpreter.
+    Nothing should be assumed about its global state including shared
+    variables, files, or connections.
+    '''
+    kernel = await _get_kernel()
+    if not kernel._process_pool:
+        kernel._process_pool = WorkerPool(ProcessWorker, 
+                                          multiprocessing.cpu_count())
+
+    return await kernel._process_pool.apply(callable, args, timeout)
+
+run_cpu_bound = run_in_process
 
 
-# The _FutureLess class is a stripped implementation of the
-# concurrent.futures.Future class that has been custom-tailored for
-# use by curio.  It is used by the ThreadWorker class below.  The main
-# reason for using this instead of the normal Future class is that
-# curio doesn't need most of the advanced features of Futures nor does
-# it require all of the internal thread-synchronization and
-# notification support.  By ditching that, the handoff between
-# curio tasks and threads is streamlined.
+# The _FutureLess class is a custom "Future" implementation solely for
+# use by curio. It is used by the ThreadWorker class below and
+# provides only the minimal set of functionality needed to transmit a
+# result back to the curio kernel.  Unlike the normal Future class,
+# this version doesn't require any thread synchronization or
+# notification support.  By eliminating that, the overhead associated
+# with the handoff between curio tasks and threads is substantially
+# faster.
 class _FutureLess(object):
     __slots__ = ('_callback', '_exception', '_result')
 
@@ -86,29 +125,10 @@ class _FutureLess(object):
         pass
 
 # A ThreadWorker represents a thread that performs work on behalf of a
-# curio task.  The execution model is purely synchronous and similar
-# to a "hand off."  A curio task initiates work by executing the
+# curio task.   A curio task initiates work by executing the
 # apply() method. This passes the request to a background thread that
 # executes it.  While this takes place, the curio task blocks, waiting
 # for a result to be set on an internal Future.
-#
-# The purely synchronous nature of the execution model simplfies the
-# implementation considerably.  The background thread merely waits on
-# an Event to know when to run.  Results are communicated back using 
-# a Future instance from the built-in concurrent.futures module. There
-# are no queues or other structures involved.
-#
-# A tricky situation arises when task cancellations/timeouts occur.
-# The apply() method used by curio tasks is able to abort and return
-# control without computing a result.  However, the background thread
-# will continue to run until its task is complete.  There is no way
-# to kill a thread once started.  So, if this happens, the worker
-# becomes unavailable--possibly forever (for example, if the worker
-# permanently blocks or never finishes for some reason).   Perhaps, the
-# best option here is to call shutdown() on the worker and to remove
-# it from further service.  Although the background thread won't stop
-# right away, this will make the thread terminate when it finally does
-# complete its work.
 
 class ThreadWorker(object):
     '''
@@ -134,9 +154,9 @@ class ThreadWorker(object):
             if not self.request:
                 return
 
-            func, args, kwargs, future = self.request
+            func, args, future = self.request
             try:
-                result = func(*args, **kwargs)
+                result = func(*args)
                 future.set_result(result)
             except Exception as e:
                 future.set_exception(e)
@@ -145,7 +165,7 @@ class ThreadWorker(object):
         self.request = None
         self.start_evt.set()
 
-    async def apply(self, func, args=(), kwargs={}, timeout=None):
+    async def apply(self, func, args=(), timeout=None):
         '''
         Run the callable func in a separate thread and return the result.
         '''
@@ -154,46 +174,13 @@ class ThreadWorker(object):
 
         # Set up a request for the worker thread
         future = _FutureLess()
-        self.request = (func, args, kwargs, future)
+        self.request = (func, args, future)
 
-        # Wait for the result to be computed
+        # Wait for the result to be computed.  Important: The
+        # start_evt passed as an argument is used to make the
+        # worker thread start processing.
         await _future_wait(future, timeout, self.start_evt)
         return future.result()
-
-# A ThreadPool is a collection of ThreadWorkers used to perform
-# work on behalf of curio tasks.
-
-class ThreadPool(object):
-    def __init__(self, nworkers=None):
-        if nworkers is None:
-            nworkers = MAX_WORKER_THREADS
-
-        self.nworkers = Semaphore(nworkers)
-        self.workers = [ThreadWorker() for n in range(nworkers)]
-        
-    def shutdown(self):
-        for worker in self.workers:
-            worker.shutdown()
-        self.workers = None
-
-    async def apply(self, func, args=(), kwargs={}, timeout=None):
-         async with self.nworkers:
-             worker = self.workers.pop()
-             try:
-                 return await worker.apply(func, args, kwargs, timeout=timeout)
-             except (CancelledError, TimeoutError) as e:
-                 # If a worker is timed out or cancelled, there is no
-                 # way to forcefully terminate the backing worker
-                 # thread. It will run to completion as some kind of
-                 # zombie.  However, we can remove the worker from the
-                 # pool of available workers and instruct it to shut
-                 # down when it completes.  Meanwhile, we'll replace
-                 # it with a fresh worker.
-                 worker.shutdown()
-                 worker = ThreadWorker()
-                 raise
-             finally:
-                 self.workers.append(worker)
 
 class ProcessWorker(object):
     '''
@@ -238,35 +225,42 @@ class ProcessWorker(object):
         with self.client_ch.timeout(timeout):
             return await self.client_ch.rpc_client(func, args, {})
 
-class ProcessPool(object):
-    def __init__(self, nworkers=None):
-        if nworkers is None:
-            nworkers = multiprocessing.cpu_count()
+
+# Pool of workers for carrying out jobs on behalf of curio tasks.
+#
+# A tricky situation arises when task cancellations/timeouts occur.
+# The apply() method used by curio tasks is able to abort and return
+# control without computing a result.  However, the background worker
+# might continue to run until its task is complete.  When this happens
+# the shutdown() method is triggered on the worker and it is removed
+# from further service--to be replaced by a fresh worker.  For process
+# workers, this results in a process termination.  For threads, the
+# thread will continue to run until it completes, at which point it
+# will terminate.
+
+class WorkerPool(object):
+    def __init__(self, workercls, nworkers):
         self.nworkers = Semaphore(nworkers)
-        self.workers = [ProcessWorker() for n in range(nworkers)]
+        self.workercls = workercls
+        self.workers = [workercls() for n in range(nworkers)]
+        
+    def shutdown(self):
+        for worker in self.workers:
+            worker.shutdown()
+        self.workers = None
 
     async def apply(self, func, args=(), timeout=None):
          async with self.nworkers:
              worker = self.workers.pop()
              try:
                  return await worker.apply(func, args, timeout)
-             except (CancelledError, TimeoutError, ChannelRPCError) as e:
+             except (CancelledError, TimeoutError) as e:
+                 # If a worker is timed out or cancelled, we shut it
+                 # down and replace it with a fresh worker.
                  worker.shutdown()
-                 worker = ProcessWorker()
+                 worker = self.workercls()
                  raise
              finally:
                  self.workers.append(worker)
-
-    def shutdown(self):
-        for worker in self.workers:
-            worker.shutdown()
-        self.workers = None
-
-
-async def run_cpu_bound(callable, *args, timeout=None):
-    kernel = await _get_kernel()
-    if not kernel._process_pool:
-        kernel._process_pool = ProcessPool()
-    return await kernel._process_pool.apply(callable, args, timeout)
 
 from .channel import Channel, ChannelRPCError
