@@ -10,8 +10,9 @@ from .kernel import  new_task, sleep
 from .io import Stream
 import subprocess
 
-__all__ = [ 'run', 'Popen', 'CompletedProcess', 'CalledProcessError', 'TimeoutExpired', 'SubprocessError',
-            'check_output', 'PIPE', 'STDOUT', 'DEVNULL' ]
+__all__ = [ 'run', 'Popen', 'CompletedProcess', 'CalledProcessError',
+            'TimeoutExpired', 'SubprocessError', 'check_output',
+            'PIPE', 'STDOUT', 'DEVNULL' ]
 
 from subprocess import (
     CompletedProcess,
