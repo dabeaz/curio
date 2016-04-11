@@ -1,5 +1,7 @@
 # test_workers.py
 
+import pytest
+
 import time
 from curio import *
 
@@ -53,7 +55,37 @@ def test_blocking(kernel):
             'sleep done',
             ]
 
-def test_blocking_timeout(kernel):
+@pytest.mark.parametrize('runner', [ run_in_thread, run_in_process ])
+def test_worker_cancel(kernel, runner):
+    results = []
+
+    async def spin(n):
+        while n > 0:
+            results.append(n)
+            await sleep(0.1)
+            n -= 1
+
+    async def blocking(n):
+         task = await new_task(runner(time.sleep, n))
+         await sleep(0.55)
+         await task.cancel()
+         try:
+             await task.join()
+         except TaskError as e:
+             if isinstance(e.__cause__, CancelledError):
+                 results.append('cancel')
+
+    kernel.add_task(spin(10))
+    kernel.add_task(blocking(5))
+    kernel.run()
+
+    assert results == [
+            10, 9, 8, 7, 6, 5, 'cancel', 4, 3, 2, 1
+            ]
+
+
+@pytest.mark.parametrize('runner', [ run_in_thread, run_in_process ])
+def test_worker_timeout(kernel, runner):
     results = []
 
     async def spin(n):
@@ -64,15 +96,16 @@ def test_blocking_timeout(kernel):
 
     async def blocking(n):
          try:
-             await run_blocking(time.sleep, n, timeout=0.55)
-         except TimeoutError:
-             results.append('timeout')
+             result = await timeout(runner(time.sleep, n),
+                                    seconds=0.55)
+         except TaskTimeout:
+             results.append('cancel')
 
     kernel.add_task(spin(10))
-    kernel.add_task(blocking(2))
+    kernel.add_task(blocking(5))
     kernel.run()
 
     assert results == [
-            10, 9, 8, 7, 6, 5, 'timeout', 4, 3, 2, 1
+            10, 9, 8, 7, 6, 5, 'cancel', 4, 3, 2, 1
             ]
 

@@ -27,7 +27,8 @@ def test_sleep(kernel):
             'start',
             'end',
             ]
-    assert (end-start) > 0.5
+    elapsed = end-start
+    assert elapsed > 0.5
 
 def test_sleep_cancel(kernel):
     results = []
@@ -132,6 +133,80 @@ def test_task_cancel(kernel):
             'cancel start',
             'cancelling',
             'cancelled',
+            'done',
+            ]
+
+
+def test_task_cancel_join(kernel):
+    results = []
+
+    async def child():
+        results.append('start')
+        await sleep(0.5)
+        results.append('end')
+
+    async def main():
+        task = await new_task(child())
+        results.append('cancel start')
+        await sleep(0.1)
+        results.append('cancelling')
+        await task.cancel()
+        # Try joining with a cancelled task. Should raise a TaskError
+        try:
+            await task.join()
+        except TaskError as e:
+            if type(e.__cause__) == CancelledError:
+                results.append('join cancel')
+            else:
+                results.append(str(e.__cause__))
+        results.append('done')
+
+    kernel.add_task(main())
+    kernel.run()
+    assert results == [
+            'start',
+            'cancel start',
+            'cancelling',
+            'join cancel',
+            'done',
+            ]
+
+
+def test_task_cancel_join_wait(kernel):
+    results = []
+
+    async def child():
+        results.append('start')
+        await sleep(0.5)
+        results.append('end')
+
+    async def canceller(task):
+        await sleep(0.1)
+        results.append('cancel')
+        await task.cancel()
+
+    async def main():
+        task = await new_task(child())
+        results.append('cancel start')
+        await new_task(canceller(task))
+        try:
+            results.append('join')
+            await task.join()     # Should raise TaskError... with CancelledError as cause
+        except TaskError as e:
+            if type(e.__cause__) == CancelledError:
+                results.append('join cancel')
+            else:
+                results.append(str(e.__cause__))
+        results.append('done')
+
+    kernel.add_task(main())
+    kernel.run()
+    assert results == [
+            'start',
+            'cancel start',
+            'join',
+            'cancel',
+            'join cancel',
             'done',
             ]
 

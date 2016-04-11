@@ -83,14 +83,19 @@ function:
    Wait for the task to terminate.  Returns the value returned by the task or
    raises a :exc:`TaskError` exception if the task failed with an exception.
    This is a chained exception.  The `__cause__` attribute of this
-   exception contains the actual exception raised in the task.
+   exception contains the actual exception raised by the task when it crashed.
+   If called on a task that has been cancelled, the `__cause__`
+   attribute is set to :exc:`CancelledError`.
 
 .. asyncmethod:: Task.cancel(*, timeout=None, exc=CancelledError)
 
    Cancels the task.  This raises a :exc:`CancelledError` exception in the
    task which may choose to handle it.  Does not return until the
    task is actually cancelled. If you want to change the exception raised,
-   supply a different exception as the *exc* argument.
+   supply a different exception as the *exc* argument.  If the task
+   has already run to completion, this method does nothing and returns
+   immediately.  Returns True if the task is actually cancelled. False
+   is returned if the task was already finished prior to cancellation.
 
 .. asyncmethod:: Task.cancel_children(*, timeout=None, exc=CancelledError)
 

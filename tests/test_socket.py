@@ -174,7 +174,7 @@ def test_accept_timeout(kernel):
         try:
             client, addr = await sock.accept()
             results.append('not here')
-        except TimeoutError:
+        except TaskTimeout:
             results.append('accept timeout')
         await sock.close()
 
@@ -227,7 +227,7 @@ def test_recv_timeout(kernel):
         try:
             data = await client.recv(8192)
             results.append('not here')
-        except TimeoutError:
+        except TaskTimeout:
             results.append('recv timeout')
         await client.close()
         await sock.close()
@@ -302,7 +302,7 @@ def test_recvfrom_timeout(kernel):
         try:
             await sock.recvfrom(8192)
             results.append('not here')
-        except TimeoutError:
+        except TaskTimeout:
             results.append('recvfrom timeout')
         await sock.close()
 

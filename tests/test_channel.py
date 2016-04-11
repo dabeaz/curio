@@ -4,6 +4,7 @@ import pytest
 from socket import *
 from curio.channel import Channel
 from curio.io import Stream
+from curio import new_task, sleep, CancelledError, TaskTimeout
 
 @pytest.fixture
 def chs():
@@ -189,28 +190,93 @@ def test_channel_from_connection(kernel):
     assert results == [ 'server hello world',
                         'client hello world' ]
 
-def add(x, y):
-    return x + y
 
-def test_channel_rpc(kernel, chs):
+def test_channel_recv_cancel(kernel, chs):
     results = []
-
-    async def server(ch):
-        async with ch:
-            results.append(await ch.rpc_client(add, (2,3), {}))
-            try:
-                await ch.rpc_client(add, (2, '3'), {})
-            except TypeError as e:
-                results.append(str(e))
 
     async def client(ch):
         async with ch:
-            await ch.rpc_serve_one()
-            await ch.rpc_serve_one()
-        
+            try:
+                msg = await ch.recv()
+                results.append(msg)
+            except CancelledError:
+                results.append('cancel')
+
+    async def main(ch):
+        task = await new_task(client(ch))
+        await sleep(1)
+        await task.cancel()
+        results.append('done cancel')
+
     ch1, ch2 = chs
-    kernel.add_task(server(ch1))
-    kernel.add_task(client(ch2))
+    task = kernel.add_task(main(ch2))
     kernel.run()
-    assert results == [ 5,
-                        "unsupported operand type(s) for +: 'int' and 'str'"]
+    assert results == [ 'cancel', 'done cancel' ]
+
+
+def test_channel_recv_timeout(kernel, chs):
+    results = []
+
+    async def client(ch):
+        with ch.timeout(1):
+            try:
+                msg = await ch.recv()
+                results.append(msg)
+            except TaskTimeout:
+                results.append('timeout')
+
+    async def main(ch):
+        task = await new_task(client(ch))
+        await task.join()
+        results.append('done')
+
+    ch1, ch2 = chs
+    task = kernel.add_task(main(ch2))
+    kernel.run()
+    assert results == [ 'timeout', 'done' ]
+
+def test_channel_send_cancel(kernel, chs):
+    results = []
+
+    async def client(ch):
+        async with ch:
+            try:
+                msg = 'x'*10000000   # Should be large enough to cause send blocking
+                await ch.send(msg)
+                results.append('success')
+            except CancelledError:
+                results.append('cancel')
+
+    async def main(ch):
+        task = await new_task(client(ch))
+        await sleep(1)
+        await task.cancel()
+        results.append('done cancel')
+
+    ch1, ch2 = chs
+    task = kernel.add_task(main(ch2))
+    kernel.run()
+    assert results == [ 'cancel', 'done cancel' ]
+
+
+def test_channel_send_timeout(kernel, chs):
+    results = []
+
+    async def client(ch):
+        with ch.timeout(1):
+            try:
+                msg = 'x'*10000000
+                await ch.send(msg)
+                results.append('success')
+            except TaskTimeout:
+                results.append('timeout')
+
+    async def main(ch):
+        task = await new_task(client(ch))
+        await task.join()
+        results.append('done')
+
+    ch1, ch2 = chs
+    task = kernel.add_task(main(ch2))
+    kernel.run()
+    assert results == [ 'timeout', 'done' ]

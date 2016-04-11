@@ -36,9 +36,6 @@ class ChannelError(CurioError):
 class AuthenticationError(ChannelError):
     pass
 
-class ChannelRPCError(ChannelError):
-    pass
-
 class Channel(object):
     '''
     A communication channel for sending size-prefixed messages of bytes
@@ -178,51 +175,6 @@ class Channel(object):
     async def authenticate_client(self, authkey):
         await self._answer_challenge(authkey)
         await self._deliver_challenge(authkey)
-
-    async def rpc_client(self, func, args, kwargs):
-        '''
-        Perform the client-side of a remote procedure call over a channel
-        '''
-        msg = (func, args, kwargs)
-        try:
-            await self.send(msg)
-        except Exception as e:
-            raise ChannelRPCError('RPC send failure') from e
-        try:
-            success, result = await self.recv()
-        except TimeoutError as e:
-            raise
-        except Exception as e:
-            # Note: A custom exception is raised on recv() failure to
-            # indicate a problem with the protocol itself. This is
-            # to disambiguate from server-side exceptions that are
-            # raised by the 'raise result' statement below.
-            raise ChannelRPCError('RPC receive failure') from e
-        if success:
-            return result
-        else:
-            raise result
-
-    async def rpc_serve_one(self):
-        '''
-        Perform the server-side handling of a remote procedure call
-        '''
-        try:
-            func, args, kwargs = await self.recv()
-        except TimeoutError as e:
-            raise
-        except Exception as e:
-            raise ChannelRPCError('RPC receive failure') from e
-        try:
-            result = (True, func(*args, **kwargs))
-        except Exception as e:
-            result = (False, e)
-        try:
-            await self.send(result)
-        except TimeoutError as e:
-            raise
-        except Exception as e:
-            raise ChannelRPCError('RPC send error') from e
 
 class Listener(object):
     def __init__(self, address, family=socket.AF_INET, backlog=1, authkey=None):

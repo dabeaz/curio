@@ -98,7 +98,7 @@ class TestEvent:
               results.append('event_wait')
               try:
                    await evt.wait(timeout=0.5)
-              except TimeoutError:
+              except TaskTimeout:
                    results.append('event_timeout')
 
         async def event_run(seconds):
@@ -124,14 +124,14 @@ class TestEvent:
               try:
                    await evt.wait(timeout=1.0)
                    results.append('got event')
-              except TimeoutError:
+              except TaskTimeout:
                    results.append('event_timeout')
               
               evt.clear()
               try:
                   await evt.wait()
                   results.append('got event')
-              except TimeoutError:
+              except TaskTimeout:
                   results.append('bad timeout')
 
         async def event_run():
@@ -225,7 +225,7 @@ class TestLock:
                   await lck.acquire(timeout=0.5)
                   results.append('never here')
                   await lck.release()
-              except TimeoutError:
+              except TaskTimeout:
                   results.append('lock_timeout')
 
         async def worker_timeout(seconds):
@@ -344,7 +344,7 @@ class TestSemaphore:
                   await lck.acquire(timeout=0.5)
                   results.append('never here')
                   await lck.release()
-              except TimeoutError:
+              except TaskTimeout:
                   results.append('lock_timeout')
 
         async def worker_timeout(seconds):
@@ -475,7 +475,7 @@ class TestCondition:
                        results.append('cond_wait')
                        await cond.wait(timeout=0.25)
                        results.append('never here')
-              except TimeoutError:
+              except TaskTimeout:
                   results.append('worker_timeout')
 
         async def worker_cancel(seconds):

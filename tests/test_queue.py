@@ -187,7 +187,7 @@ def test_queue_get_timeout(kernel):
               results.append('consumer waiting')
               item = await queue.get(timeout=0.5)
               results.append('not here')
-          except TimeoutError:
+          except TaskTimeout:
               results.append('consumer timeout')
 
     kernel.add_task(consumer())
@@ -208,7 +208,7 @@ def test_queue_put_timeout(kernel):
         try:
             await queue.put(1, timeout=0.5)
             results.append('not here')
-        except TimeoutError:
+        except TaskTimeout:
             results.append('producer timeout')
 
     kernel.add_task(producer())

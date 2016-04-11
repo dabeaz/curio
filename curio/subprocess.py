@@ -6,7 +6,7 @@
 #
 # Curio clone of the subprocess module.  
 
-from .kernel import  new_task, sleep
+from .kernel import  new_task, sleep, TaskTimeout
 from .io import Stream
 import subprocess
 
@@ -57,7 +57,7 @@ class Popen(object):
         task = await new_task(waiter())
         try:
             return await task.join(timeout=timeout)
-        except TimeoutError:
+        except TaskTimeout:
             await task.cancel()
             raise TimeoutExpired(self.args, timeout) from None
 
@@ -81,7 +81,7 @@ class Popen(object):
             stdout = await stdout_task.join(timeout=timeout) if stdout_task else b''
             stderr = await stderr_task.join(timeout=timeout) if stderr_task else b''
             return (stdout, stderr)
-        except TimeoutError:
+        except TaskTimeout:
             await stdout_task.cancel()
             await stderr_task.cancel()
             if stdin_task:
@@ -119,7 +119,7 @@ async def run(args, *, stdin=None, input=None, stdout=None, stderr=None, shell=F
     async with Popen(args, stdin=stdin, stdout=stdout, stderr=stderr, shell=shell) as process:
         try:
             stdout, stderr = await process.communicate(input, timeout)
-        except TimeoutError:
+        except TaskTimeout:
             process.kill()
             stdout, stderr = await process.communicate()
             raise TimeoutExpired(process.args, timeout, output=stdout, stderr=stderr)
