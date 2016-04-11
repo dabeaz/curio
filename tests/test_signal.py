@@ -108,7 +108,7 @@ def test_task_signal_timeout(kernel):
             try:
                 signo = await sig.wait(timeout=0.5)
                 results.append(signo)
-            except TimeoutError:
+            except TaskTimeout:
                 results.append('timeout')
 
     async def main():

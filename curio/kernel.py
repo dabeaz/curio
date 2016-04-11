@@ -40,6 +40,9 @@ class CurioError(Exception):
 class CancelledError(CurioError):
     pass
 
+class TaskTimeout(CurioError):
+    pass
+
 class TaskError(CurioError):
     pass
 
@@ -96,8 +99,14 @@ class Task(object):
     async def cancel(self, *, exc=CancelledError, timeout=None):
         '''
         Cancels a task.  Does not return until the task actually terminates.
+        Returns True if the task was actually cancelled. False is returned
+        if the task was already completed.
         '''
-        await _cancel_task(self, exc, timeout)
+        if self.terminated:
+            return False
+        else:
+            await _cancel_task(self, exc, timeout)
+            return True
 
     async def cancel_children(self, *, exc=CancelledError, timeout=None):
         '''
@@ -337,7 +346,7 @@ class Kernel(object):
         
         assert task not in self._ready
         # Reschedule it with a pending exception
-        self._reschedule_task(task, exc=exc())
+        self._reschedule_task(task, exc=exc(exc.__name__))
         return True
 
     def _cleanup_task(self, task, value=None, exc=None):
@@ -347,12 +356,13 @@ class Kernel(object):
         # the terminated task from its parent/children.
 
         task.next_value = value
+        task.next_exc = exc
         if task.parent_id:
             self._njobs -=1
 
         if task.joining:
             for wtask in task.joining:
-                self._reschedule_task(wtask, value=value, exc=exc)
+                self._reschedule_task(wtask) 
             task.joining = None
         task.terminated = True
         del self._tasks[task.id]
@@ -400,7 +410,7 @@ class Kernel(object):
                     if sleep_type == 'sleep':
                         self._reschedule_task(task)
                     elif sleep_type == 'timeout':
-                        self._cancel_task(task, exc=TimeoutError)
+                        self._cancel_task(task, exc=TaskTimeout)
 
     # Kernel central loop
     def run(self, coro=None, *, pdb=False, log_errors=True):
@@ -436,8 +446,16 @@ class Kernel(object):
                     # Execute the trap
                     getattr(self, op)(current, *args)
 
-                except (StopIteration, CancelledError) as e:
-                    self._cleanup_task(current, value = e.value if isinstance(e, StopIteration) else None)
+#                except (StopIteration, CancelledError) as e:
+#                    self._cleanup_task(current, value = e.value if isinstance(e, StopIteration) else None)
+
+                except StopIteration as e:
+                    self._cleanup_task(current, value = e.value)
+
+                except CancelledError as e:
+                    current.exc_info = sys.exc_info()
+                    current.state = 'CANCELLED'
+                    self._cleanup_task(current)
 
                 except Exception as e:
                     current.exc_info = sys.exc_info()
@@ -596,7 +614,7 @@ class Kernel(object):
 
     def _trap_join_task(self, current, task, timeout=None):
         if task.terminated:
-            self._reschedule_task(current)
+            self._reschedule_task(current, value=task.next_value, exc=task.next_exc)
         else:
             if task.joining is None:
                 task.joining = kqueue()
@@ -797,7 +815,7 @@ async def new_task(coro, *, daemon=False):
     '''
     return await _new_task(coro, daemon)
 
-__all__ = [ 'Kernel', 'sleep', 'new_task', 'SignalSet', 'TaskError', 'CancelledError' ]
+__all__ = [ 'Kernel', 'sleep', 'new_task', 'SignalSet', 'TaskError', 'TaskTimeout', 'CancelledError' ]
             
 from .monitor import Monitor
         
