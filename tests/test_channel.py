@@ -4,7 +4,7 @@ import pytest
 from socket import *
 from curio.channel import Channel
 from curio.io import Stream
-from curio import new_task, sleep, CancelledError, TaskTimeout
+from curio import new_task, sleep, CancelledError, TaskTimeout, timeout_after
 
 @pytest.fixture
 def chs():
@@ -218,12 +218,11 @@ def test_channel_recv_timeout(kernel, chs):
     results = []
 
     async def client(ch):
-        with ch.timeout(1):
-            try:
-                msg = await ch.recv()
-                results.append(msg)
-            except TaskTimeout:
-                results.append('timeout')
+        try:
+            msg = await timeout_after(1.0, ch.recv())
+            results.append(msg)
+        except TaskTimeout:
+            results.append('timeout')
 
     async def main(ch):
         task = await new_task(client(ch))
@@ -263,13 +262,12 @@ def test_channel_send_timeout(kernel, chs):
     results = []
 
     async def client(ch):
-        with ch.timeout(1):
-            try:
-                msg = 'x'*10000000
-                await ch.send(msg)
-                results.append('success')
-            except TaskTimeout:
-                results.append('timeout')
+        try:
+            msg = 'x'*10000000
+            await timeout_after(1, ch.send(msg))
+            results.append('success')
+        except TaskTimeout:
+            results.append('timeout')
 
     async def main(ch):
         task = await new_task(client(ch))

@@ -169,10 +169,9 @@ def test_accept_timeout(kernel):
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
         sock.bind(address)
         sock.listen(1)
-        sock.settimeout(0.5)
         results.append('accept wait')
         try:
-            client, addr = await sock.accept()
+            client, addr = await timeout_after(0.5, sock.accept())
             results.append('not here')
         except TaskTimeout:
             results.append('accept timeout')
@@ -223,9 +222,8 @@ def test_recv_timeout(kernel):
         results.append('accept wait')
         client, addr = await sock.accept()
         results.append('recv wait')
-        client.settimeout(0.5)
         try:
-            data = await client.recv(8192)
+            data = await timeout_after(0.5, client.recv(8192))
             results.append('not here')
         except TaskTimeout:
             results.append('recv timeout')
@@ -297,10 +295,9 @@ def test_recvfrom_timeout(kernel):
         sock = socket(AF_INET, SOCK_DGRAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
         sock.bind(address)
-        sock.settimeout(0.5)
         results.append('recvfrom wait')
         try:
-            await sock.recvfrom(8192)
+            await timeout_after(0.5, sock.recvfrom(8192))
             results.append('not here')
         except TaskTimeout:
             results.append('recvfrom timeout')

@@ -185,7 +185,7 @@ def test_queue_get_timeout(kernel):
           queue = Queue()
           try:
               results.append('consumer waiting')
-              item = await queue.get(timeout=0.5)
+              item = await timeout_after(0.5, queue.get())
               results.append('not here')
           except TaskTimeout:
               results.append('consumer timeout')
@@ -206,7 +206,7 @@ def test_queue_put_timeout(kernel):
         results.append('producer start')
         await queue.put(0)
         try:
-            await queue.put(1, timeout=0.5)
+            await timeout_after(0.5, queue.put(1))
             results.append('not here')
         except TaskTimeout:
             results.append('producer timeout')

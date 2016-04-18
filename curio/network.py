@@ -48,14 +48,14 @@ async def _wrap_ssl_client(sock, ssl, server_hostname):
         await sock.do_handshake()
     return sock
 
-async def open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None, timeout=None):
+async def open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None):
     '''
     Create a TCP connection to a given Internet host and port with optional SSL applied to it.
     '''
     if server_hostname and not ssl:
         raise ValueError('server_hostname is only applicable with SSL')
 
-    sock = await socket.create_connection((host,port), timeout, source_addr)
+    sock = await socket.create_connection((host,port), source_addr)
 
     try:
         # Apply SSL wrapping to the connection, if applicable

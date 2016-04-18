@@ -68,7 +68,6 @@ class Socket(object):
     def __init__(self, sock):
         self._socket = sock
         self._socket.setblocking(False)
-        self._timeout = None
         self._fileno = sock.fileno()
 
     def __repr__(self):
@@ -81,20 +80,10 @@ class Socket(object):
         return self._fileno
 
     def settimeout(self, seconds):
-        oldtimeout, self._timeout = self._timeout, seconds
-        return oldtimeout
+        raise RuntimeError()
 
     def gettimeout(self):
-        return self._timeout
-
-    @contextmanager
-    def timeout(self, nseconds):
-        old_timeout = self._timeout
-        try:
-            self._timeout = nseconds
-            yield
-        finally:
-            self._timeout = old_timeout
+        raise RuntimeError()
 
     def dup(self):
         return Socket(self._socket.dup())
@@ -127,27 +116,27 @@ class Socket(object):
             try:
                 return self._socket.recv(maxsize, flags)
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
             except WantWrite:
-                await _write_wait(self._socket, self._timeout)
+                await _write_wait(self._socket)
 
     async def recv_into(self, buffer, nbytes=0, flags=0):
         while True:
             try:
                 return self._socket.recv_into(buffer, nbytes, flags)
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
             except WantWrite:
-                await _write_wait(self._socket, self._timeout)
+                await _write_wait(self._socket)
 
     async def send(self, data, flags=0):
         while True:
             try:
                 return self._socket.send(data, flags)
             except WantWrite:
-                await _write_wait(self._socket, self._timeout)
+                await _write_wait(self._socket)
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
 
     async def sendall(self, data, flags=0):
         buffer = memoryview(data).cast('b')
@@ -158,9 +147,9 @@ class Socket(object):
                     return
                 buffer = buffer[nsent:]
             except WantWrite:
-                await _write_wait(self._socket, self._timeout)
+                await _write_wait(self._socket)
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
 
     async def accept(self):
         while True:
@@ -168,7 +157,7 @@ class Socket(object):
                 client, addr = self._socket.accept()
                 return Socket(client), addr
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
 
     async def connect_ex(self, address):
         try:
@@ -184,7 +173,7 @@ class Socket(object):
                 await self.do_handshake()
             return result
         except WantWrite:
-            await _write_wait(self._socket, self._timeout)
+            await _write_wait(self._socket)
         err = self._socket.getsockopt(SOL_SOCKET, SO_ERROR)
         if err != 0:
             raise OSError(err, 'Connect call failed %s' % (address,))
@@ -196,18 +185,18 @@ class Socket(object):
             try:
                 return self._socket.recvfrom(buffersize, flags)
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
             except WantWrite:
-                await _write_wait(self._socket, self._timeout)
+                await _write_wait(self._socket)
 
     async def recvfrom_into(self, buffer, bytes=0, flags=0):
         while True:
             try:
                 return self._socket.recvfrom_into(buffer, bytes, flags)
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
             except WantWrite:
-                await _write_wait(self._socket, self._timeout)
+                await _write_wait(self._socket)
 
     async def sendto(self, bytes, flags_or_address, address=None):
         if address:
@@ -219,30 +208,30 @@ class Socket(object):
             try:
                 return self._socket.sendto(bytes, flags, address)
             except WantWrite:
-                await _write_wait(self._socket, self._timeout)
+                await _write_wait(self._socket)
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
 
     async def recvmsg(self, bufsize, ancbufsize=0, flags=0):
         while True:
             try:
                 return self._socket.recvmsg(bufsize, ancbufsize, flags)
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
 
     async def recvmsg_into(self, buffers, ancbufsize=0, flags=0):
         while True:
             try:
                 return self._socket.recvmsg_into(buffers, ancbufsize, flags)
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
 
     async def sendmsg(self, buffers, ancdata=(), flags=0, address=None):
         while True:
             try:
                 return self._socket.sendmsg(buffers, ancdata, flags, address)
             except WantRead:
-                await _write_wait(self._socket, self._timeout)
+                await _write_wait(self._socket)
     
     # Special functions for SSL
     async def do_handshake(self):
@@ -250,9 +239,9 @@ class Socket(object):
             try:
                 return self._socket.do_handshake()
             except WantRead:
-                await _read_wait(self._socket, self._timeout)
+                await _read_wait(self._socket)
             except WantWrite:
-                await _write_wait(self._socket, self._timeout)
+                await _write_wait(self._socket)
 
             
     # Design discussion.  Why make close() async?   Partly it's to make the
@@ -288,7 +277,6 @@ class Stream(object):
         self._fileno = fileobj.fileno()
         os.set_blocking(self._fileno, False)
         self._linebuffer = bytearray()
-        self._timeout = None
 
     def __repr__(self):
         return '<curio.Stream %r>' % (self._file)
@@ -298,22 +286,6 @@ class Stream(object):
 
     def fileno(self):
         return self._fileno
-
-    def settimeout(self, seconds):
-        oldtimeout, self._timeout = self._timeout, seconds
-        return oldtimeout
-
-    def gettimeout(self):
-        return self._timeout
-
-    @contextmanager
-    def timeout(self, nseconds):
-        old_timeout = self._timeout
-        try:
-            self._timeout = nseconds
-            yield
-        finally:
-            self._timeout = old_timeout
 
     @contextmanager
     def blocking(self):
@@ -335,13 +307,13 @@ class Stream(object):
             try:
                 data = self._file.read(maxbytes)
                 if data is None:
-                    await _read_wait(self._file, timeout=self._timeout)
+                    await _read_wait(self._file)
                 else:
                     return data
             except WantRead:
-                await _read_wait(self._file, timeout=self._timeout)
+                await _read_wait(self._file)
             except WantWrite:
-                await _write_wait(self._file, timeout=self._timeout)
+                await _write_wait(self._file)
 
     async def read(self, maxbytes=-1):
         if self._linebuffer:
@@ -406,9 +378,9 @@ class Stream(object):
                 if hasattr(e, 'characters_written'):
                     nwritten += e.characters_written
                     view = view[e.characters_written:]
-                await _write_wait(self._file, timeout=self._timeout)
+                await _write_wait(self._file)
             except WantRead:
-                await _read_wait(self._file, timeout=self._timeout)
+                await _read_wait(self._file)
 
         return nwritten
 
@@ -421,9 +393,9 @@ class Stream(object):
             try:
                 return self._file.flush() 
             except WantWrite:
-                await _write_wait(self._file, timeout=self._timeout)
+                await _write_wait(self._file)
             except WantRead:
-                await _read_wait(self._file, timeout=self._timeout)
+                await _read_wait(self._file)
 
     # Why async close()?   If the underlying file is buffered, the contents need
     # to be flushed first--a process that might cause a BlockingIOError.  In

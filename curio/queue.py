@@ -29,21 +29,21 @@ class Queue(object):
     def full(self):
         return self.maxsize and len(self._queue) == self.maxsize
 
-    async def get(self, *, timeout=None):
+    async def get(self):
         if self.empty():
-            await _wait_on_queue(self._get_waiting, 'QUEUE_GET', timeout)
+            await _wait_on_queue(self._get_waiting, 'QUEUE_GET')
         result = self._queue.popleft()
         if self._put_waiting:
             await _reschedule_tasks(self._put_waiting, n=1)
         return result
 
-    async def join(self, *, timeout=None):
+    async def join(self):
         if self._task_count > 0:
-            await _wait_on_queue(self._join_waiting, 'QUEUE_JOIN', timeout)
+            await _wait_on_queue(self._join_waiting, 'QUEUE_JOIN')
 
-    async def put(self, item, *, timeout=None):
+    async def put(self, item):
         if self.full():
-            await _wait_on_queue(self._put_waiting, 'QUEUE_PUT', timeout)
+            await _wait_on_queue(self._put_waiting, 'QUEUE_PUT')
         self._queue.append(item)
         self._task_count += 1
         if self._get_waiting:

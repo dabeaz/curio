@@ -11,11 +11,11 @@
 import multiprocessing
 import threading
 
-from .kernel import _future_wait, CancelledError, TaskTimeout, _get_kernel, new_task, sleep
+from .kernel import _future_wait, CancelledError, TaskTimeout, _get_kernel, new_task, sleep, _get_current
 from .sync import Semaphore
 
 __all__ = [ 'run_in_executor', 'run_blocking', 'run_cpu_bound',
-            'run_in_thread', 'run_in_process', 'timeout', 'shield' ]
+            'run_in_thread', 'run_in_process' ]
 
 async def run_in_executor(exc, callable, *args, **kwargs):
     '''
@@ -85,29 +85,6 @@ async def run_in_process(callable, *args, **kwargs):
     return await kernel._process_pool.apply(callable, args, kwargs)
 
 run_cpu_bound = run_in_process
-
-async def timeout(coro, *, seconds):
-    ''' 
-    Run a coroutine and return the result with a timeout applied.
-    If the time expires, the coroutine is cancelled and a TaskTimeout
-    exception is raised.  
-    '''
-    task = await new_task(coro)
-    try:
-        return await task.join(timeout=seconds)
-    finally:
-        await task.cancel()
-
-async def shield(coro):
-    '''
-    Run a coroutine and shields it from cancellation.  The outer
-    task can be cancelled, but the specified coroutine will
-    continue to run to completion unless cancelled through some
-    other mechanism..
-    '''
-    task = await new_task(coro)
-    while True:
-        return await task.join()
 
 # The _FutureLess class is a custom "Future" implementation solely for
 # use by curio. It is used by the ThreadWorker class below and
@@ -197,7 +174,7 @@ class ThreadWorker(object):
         # Wait for the result to be computed.  Important: The
         # start_evt passed as an argument is used to make the
         # worker thread start processing.
-        await _future_wait(future, None, self.start_evt)
+        await _future_wait(future, self.start_evt)
         return future.result()
 
 class ProcessWorker(object):

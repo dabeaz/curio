@@ -1,5 +1,19 @@
 CHANGES
 -------
+04/18/2016 Major refactoring of timeout handling.  Virtually all
+           operations in curio support cancellation and timeouts.
+           However, putting an explicit "timeout" argument on
+           every API function/method greatly complicates the 
+           underlying implementation (and introduces performance
+           overhead in cases where timeouts aren't used). To
+           put a timeout on an operation, use the timeout_after()
+           function instead.  For example:
+
+               await timeout_after(5, sock.recv(1024))
+
+           This will cause a timeout to be raised after the
+           specified time interval.  
+
 04/01/2016 Improved management of the I/O selector.  The number of
            register/unregister operations are reduced for tasks 
            that constantly perform I/O on the same resources.  This

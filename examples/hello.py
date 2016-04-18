@@ -23,9 +23,9 @@ async def kid():
     while True:
         try:
             print('Can I play?')
-            await start_evt.wait(timeout=1)
+            await curio.timeout_after(1, start_evt.wait())
             break
-        except TimeoutError:
+        except curio.TaskTimeout:
             print('Wha!?!')
     try:
         print('Building the Millenium Falcon in Minecraft')
@@ -49,8 +49,8 @@ async def parent():
     await count_task.join()
     print("We're leaving!")
     try:
-        await kid_task.join(timeout=10)
-    except TimeoutError:
+        await curio.timeout_after(10, kid_task.join())
+    except curio.TaskTimeout:
         print('I warned you!')
         await kid_task.cancel()
     print("Leaving!")

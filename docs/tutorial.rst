@@ -184,8 +184,8 @@ include a timeout and a cancellation request like this::
 
         print("We're leaving!")
         try:
-            await kid_task.join(timeout=10)
-        except TimeoutError:
+            await curio.timeout_after(10, kid_task.join())
+        except curio.TaskTimeout:
             print('I warned you!')
             await kid_task.cancel()
         print("Leaving!")
@@ -223,11 +223,10 @@ Now your program should produce output like this::
     Fine. Saving my work.
     Leaving!
 
-By now, you have the basic gist of the curio task model. You
-can create tasks, join tasks, and cancel tasks.  Blocking operations
-(e.g., ``join()``) almost always have a timeout option.  Even if a
-task appears to be blocked for a long time, it can usually be cancelled
-by another task. You have a lot of control over the environment.
+By now, you have the basic gist of the curio task model. You can
+create tasks, join tasks, and cancel tasks.  Even if a task appears to
+be blocked for a long time, it can be cancelled by another task or a
+timeout. You have a lot of control over the environment.
 
 Task Synchronization
 --------------------
@@ -264,8 +263,8 @@ parent's permission to start playing::
 
         print("We're leaving!")
         try:
-            await kid_task.join(timeout=10)
-        except TimeoutError:
+            await curio.timeout_after(10, kid_task.join())
+        except curio.TaskTimeout:
             print('I warned you!')
             await kid_task.cancel()
         print("Leaving!")
@@ -284,9 +283,9 @@ repeatedly nag like this::
         while True:
 	    try:
                 print('Can I play?')
-                await start_evt.wait(timeout=1)
+                await curio.timeout_after(1, start_evt.wait())
                 break
-            except TimeoutError:
+            except curio.TaskTimeout:
 	        print('Wha!?!')
         try:
             print('Building the Millenium Falcon in Minecraft')
@@ -319,8 +318,8 @@ time to go.  Modify the code to wait on a ``SignalSet`` like this::
         await count_task.join()
         print("We're leaving!")
         try:
-            await kid_task.join(timeout=10)
-        except TimeoutError:
+            await curio.timeout_after(10, kid_task.join())
+        except curio.TaskTimeout:
             print('I warned you!')
             await kid_task.cancel()
         print("Leaving!")
