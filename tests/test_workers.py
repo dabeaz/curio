@@ -96,8 +96,7 @@ def test_worker_timeout(kernel, runner):
 
     async def blocking(n):
          try:
-             result = await timeout(runner(time.sleep, n),
-                                    seconds=0.55)
+             result = await timeout_after(0.55, runner(time.sleep, n))
          except TaskTimeout:
              results.append('cancel')
 

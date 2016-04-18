@@ -78,7 +78,7 @@ function:
   It is illegal to create a :class:`Task` instance directly by calling the class.
   The following methods are available on tasks:
 
-.. asyncmethod:: Task.join(timeout=None)
+.. asyncmethod:: Task.join()
 
    Wait for the task to terminate.  Returns the value returned by the task or
    raises a :exc:`TaskError` exception if the task failed with an exception.
@@ -87,7 +87,7 @@ function:
    If called on a task that has been cancelled, the `__cause__`
    attribute is set to :exc:`CancelledError`.
 
-.. asyncmethod:: Task.cancel(*, timeout=None, exc=CancelledError)
+.. asyncmethod:: Task.cancel(*, exc=CancelledError)
 
    Cancels the task.  This raises a :exc:`CancelledError` exception in the
    task which may choose to handle it.  Does not return until the
@@ -97,7 +97,7 @@ function:
    immediately.  Returns True if the task is actually cancelled. False
    is returned if the task was already finished prior to cancellation.
 
-.. asyncmethod:: Task.cancel_children(*, timeout=None, exc=CancelledError)
+.. asyncmethod:: Task.cancel_children(*, exc=CancelledError)
 
    Cancels all of the immediate children of this task. *exc* specifies
    a different exception if desired.
@@ -143,37 +143,19 @@ Performing External Work
 Sometimes you need to perform work outside the kernel.  This includes CPU-intensive
 calculations and blocking operations.  Use the following functions to do that:
 
-.. asyncfunction:: run_cpu_bound(callable, *args, timeout=None)
+.. asyncfunction:: run_in_process(callable, *args, **kwargs)
 
-   Run ``callable(*args)`` in a process pool created by
-   :py:class:`concurrent.futures.ProcessPoolExecutor`. Returns the result.
+   Run ``callable(*args, **kwargs)`` in a separate process and returns the result.
 
-.. asyncfunction:: run_blocking(callable, *args, timeout=None)
+.. asyncfunction:: run_in_thread(callable, *args, **kwargs)
 
-   Run ``callable(*args)`` in a thread pool created by
-   :py:class:`concurrent.futures.ThreadPoolExecutor`.
-   Returns the result.
+   Run ``callable(*args, **kwargs)`` in a separate thread and return the result.
 
-.. asyncfunction:: run_in_executor(exc, callable, *args, timeout=None)
+.. asyncfunction:: run_in_executor(exc, callable, *args, **kwargs)
 
-   Run ``callable(*args)`` callable in a user-supplied executor and returns the
+   Run ``callable(*args, **kwargs)`` callable in a user-supplied executor and returns the
    result. *exc* is an executor from the :py:mod:`concurrent.futures` module
    in the standard library.
-
-.. function:: set_cpu_executor(exc)
-
-   Set the default executor used for CPU-bound processing.
-
-.. function:: set_blocking_executor(exc)
-
-   Set the default executor used for blocking processing.
-
-Note that the callables supplied to these functions are only given positional
-arguments. If you need to pass keyword arguments use
-:py:func:`functools.partial` to do it. For example::
-
-   from functools import partial
-   await run_blocking(partial(callable, arg1=value, arg2=value))
 
 I/O Layer
 ---------
@@ -191,7 +173,7 @@ Socket
 The :class:`Socket` class is used to wrap existing an socket.  It is compatible with
 sockets from the built-in :mod:`socket` module as well as SSL-wrapped sockets created
 by functions by the built-in :mod:`ssl` module.  Sockets in curio should be fully
-compatible with timeouts and other common socket features.
+compatible most common socket features.
 
 .. class:: Socket(sockobj)
 
@@ -342,11 +324,6 @@ The following methods are available on instances of :class:`Stream`:
 
    Flush any unwritten data and close the file.
 
-.. method:: Stream.settimeout(seconds)
-
-   Sets a timeout on all file I/O operations.  If *seconds* is None, any previously set
-   timeout is cleared.
-
 .. method:: Stream.blocking()
 
    A context manager that temporarily places the stream into blocking mode and
@@ -385,7 +362,7 @@ objects are compatible with curio:
 
 .. function:: socketpair(family=AF_UNIX, type=SOCK_STREAM, proto=0)
 .. function:: fromfd(fd, family, type, proto=0)
-.. function:: create_connection(address, timeout, source_address)
+.. function:: create_connection(address, source_address)
 
 The following module-level functions have been redefined as coroutines so that they
 don't block the kernel when interacting with DNS:
@@ -569,9 +546,9 @@ primitives are safe to use with threads created by the built-in :mod:`threading`
 
    Clear the event.
 
-.. asyncmethod:: Event.wait(timeout=None)
+.. asyncmethod:: Event.wait()
 
-   Wait for the event with an optional timeout.
+   Wait for the event.
 
 .. asyncmethod:: Event.set()
 
@@ -604,7 +581,7 @@ Here is an Event example::
 
 :class:`Lock` instances support the following methods:
 
-.. asyncmethod:: Lock.acquire(timeout=None)
+.. asyncmethod:: Lock.acquire()
 
    Acquire the lock.
 
@@ -644,7 +621,7 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
 
 Semaphores support the following methods:
 
-.. asyncmethod:: Semaphore.acquire(timeout=None)
+.. asyncmethod:: Semaphore.acquire()
 
    Acquire the semaphore, decrementing its count.  Blocks if the count is 0.
 
@@ -686,7 +663,7 @@ limit the number of tasks performing an operation.  For example::
 
    Return ``True`` if the condition variable is locked.
 
-.. asyncmethod:: Condition.acquire(*, timeout=None)
+.. asyncmethod:: Condition.acquire()
 
    Acquire the condition variable lock.
 
@@ -694,11 +671,11 @@ limit the number of tasks performing an operation.  For example::
 
    Release the condition variable lock.
 
-.. asyncmethod:: Condition.wait(*, timeout=None)
+.. asyncmethod:: Condition.wait()
 
-   Wait on the condition variable with a timeout.  This releases the underlying lock.
+   Wait on the condition variable. This releases the underlying lock.
 
-.. asyncmethod:: Condition.wait_for(predicate, *, timeout=None)
+.. asyncmethod:: Condition.wait_for(predicate)
 
    Wait on the condition variable until a supplied predicate function returns ``True``. *predicate* is
    a callable that takes no arguments.
@@ -763,16 +740,15 @@ A :class:`Queue` instance supports the following methods:
 
    Return the number of items currently in the queue.
 
-.. asyncmethod:: Queue.get(*, timeout=None)
+.. asyncmethod:: Queue.get()
 
-   Returns an item from the queue with an optional timeout.
+   Returns an item from the queue.
 
-.. asyncmethod:: Queue.put(item, *, timeout=None)
+.. asyncmethod:: Queue.put(item)
 
-   Puts an item on the queue with an optional timeout in the event
-   that the queue is full.
+   Puts an item on the queue.
 
-.. asyncmethod:: Queue.join(*, timeout=None)
+.. asyncmethod:: Queue.join()
 
    Wait for all of the elements put onto a queue to be processed. Consumers
    must call :meth:`Queue.task_done` to indicate completion.
@@ -849,14 +825,14 @@ small pieces.  Tread lightly.
 The following methods are available on a :class:`SignalSet` instance. They
 may only be used in coroutines.
 
-.. asyncmethod:: SignalSet.wait(*, timeout=None)
+.. asyncmethod:: SignalSet.wait()
 
-   Wait for one of the signals in the signal set to arrive. Returns the
-   signal number of the signal received.  *timeout* gives an optional
-   timeout.  Normally this method is used inside an ``async with`` statement
-   because this allows received signals to be properly queued.  It can be
-   used in isolation, but be aware that this will only catch a single
-   signal right at that line of code.  It's possible that you might lose
+   Wait for one of the signals in the signal set to arrive. Returns
+   the signal number of the signal received.  Normally this method is
+   used inside an ``async with`` statement because this allows
+   received signals to be properly queued.  It can be used in
+   isolation, but be aware that this will only catch a single signal
+   right at that line of code.  It's possible that you might lose
    signals if you use this method outside of a context manager.
 
 .. method:: SignalSet.ignore()
@@ -890,24 +866,22 @@ objects such as locks, socket wrappers, and so forth. If you find
 yourself using these, you're probably doing something wrong--or
 implementing a new curio primitive.
 
-.. asyncfunction:: _read_wait(fileobj, timeout=None)
+.. asyncfunction:: _read_wait(fileobj)
 
    Sleep until data is available for reading on *fileobj*.  *fileobj* is
-   any file-like object with a `fileno()` method.  *timeout*
-   gives an optional timeout in seconds.
+   any file-like object with a `fileno()` method. 
 
-.. asyncfunction:: _write_wait(fileobj, timeout=None)
+.. asyncfunction:: _write_wait(fileobj)
 
    Sleep until data can be written on *fileobj*.  *fileobj* is
-   any file-like object with a `fileno()` method. *timeout*
-   gives an optional timeout in seconds.
+   any file-like object with a `fileno()` method. 
 
-.. asyncfunction:: _future_wait(future, timeout=None)
+.. asyncfunction:: _future_wait(future)
 
    Sleep until a result is set on *future*.  *future* is an instance of
    :py:class:`concurrent.futures.Future`.
 
-.. asyncfunction:: _join_task(task, timeout=None)
+.. asyncfunction:: _join_task(task)
 
    Sleep until the indicated *task* completes.  The final return value
    of the task is returned if it completed successfully. If the task
@@ -915,13 +889,13 @@ implementing a new curio primitive.
    raised.  This is a chained exception.  The :attr:`TaskError.__cause__` attribute of this
    exception contains the actual exception raised in the task.
 
-.. asyncfunction:: _cancel_task(task, exc=CancelledError, timeout=None)
+.. asyncfunction:: _cancel_task(task, exc=CancelledError)
 
    Cancel the indicated *task*.  Does not return until the task actually
    completes the cancellation.  Note: It is usually better to use
    :meth:`Task.cancel` instead of this function.
 
-.. asyncfunction:: _wait_on_queue(kqueue, state_name, timeout=None)
+.. asyncfunction:: _wait_on_queue(kqueue, state_name)
 
    Go to sleep on a queue. *kqueue* is an instance of a kernel queue
    which is typically a :py:class:`collections.deque` instance. *state_name*
@@ -942,7 +916,7 @@ implementing a new curio primitive.
 
    Tell the kernel to stop queuing signals in the given signal set.
 
-.. asyncfunction:: _sigwait(sigset, timeout=None)
+.. asyncfunction:: _sigwait(sigset)
 
    Wait for the arrival of a signal in a given signal set. Returns the signal
    number of the received signal.

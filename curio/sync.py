@@ -30,10 +30,10 @@ class Event(object):
     def clear(self):
         self._set = False
 
-    async def wait(self, *, timeout=None):
+    async def wait(self):
         if self._set:
             return
-        await _wait_on_queue(self._waiting, 'EVENT_WAIT', timeout)
+        await _wait_on_queue(self._waiting, 'EVENT_WAIT')
 
     async def set(self):
         self._set = True
@@ -58,9 +58,9 @@ class Lock(_LockBase):
         extra = 'locked' if self.locked() else 'unlocked'
         return '<{} [{},waiters:{}]>'.format(res[1:-1], extra, len(self._waiting))
 
-    async def acquire(self, *, timeout=None):
+    async def acquire(self):
         if self._acquired:
-            await _wait_on_queue(self._waiting, 'LOCK_ACQUIRE', timeout)
+            await _wait_on_queue(self._waiting, 'LOCK_ACQUIRE')
         self._acquired = True
         return True
 
@@ -85,9 +85,9 @@ class Semaphore(_LockBase):
         extra = 'locked' if self.locked() else 'unlocked'
         return '<{} [{},value:{},waiters:{}]>'.format(res[1:-1], extra, self._value, len(self._waiting))
 
-    async def acquire(self, *, timeout=None):
+    async def acquire(self):
         if self._value <= 0:
-            await _wait_on_queue(self._waiting, 'SEMA_ACQUIRE', timeout)
+            await _wait_on_queue(self._waiting, 'SEMA_ACQUIRE')
         else:
             self._value -= 1
         return True
@@ -129,27 +129,27 @@ class Condition(_LockBase):
     def locked(self):
         return self._lock.locked()
 
-    async def acquire(self, *, timeout=None):
-        await self._lock.acquire(timeout=timeout)
+    async def acquire(self):
+        await self._lock.acquire()
 
     async def release(self):
         await self._lock.release()
 
-    async def wait(self, *, timeout=None):
+    async def wait(self):
         if not self.locked():
             raise RuntimeError("Can't wait on unacquired lock")
         await self.release()
         try:
-            await _wait_on_queue(self._waiting, 'COND_WAIT', timeout)
+            await _wait_on_queue(self._waiting, 'COND_WAIT')
         finally:
             await self.acquire()
 
-    async def wait_for(self, predicate, *, timeout=None):
+    async def wait_for(self, predicate):
         while True:
             result = predicate()
             if result:
                 return result
-            await self.wait(timeout=timeout)
+            await self.wait()
 
     async def notify(self, n=1):
         if not self.locked():

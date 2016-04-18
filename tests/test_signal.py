@@ -106,7 +106,7 @@ def test_task_signal_timeout(kernel):
     async def child():
         async with SignalSet(signal.SIGUSR1, signal.SIGUSR2) as sig:
             try:
-                signo = await sig.wait(timeout=0.5)
+                signo = await timeout_after(1.0, sig.wait())
                 results.append(signo)
             except TaskTimeout:
                 results.append('timeout')

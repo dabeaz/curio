@@ -72,16 +72,6 @@ class Channel(object):
 
     async def __aexit__(self, *args):
         await self.close()
-
-    @contextmanager
-    def timeout(self, seconds):
-        read_to = self._reader.settimeout(seconds)
-        write_to = self._writer.settimeout(seconds)
-        try:
-            yield
-        finally:
-            self._reader.settimeout(read_to)
-            self._writer.settimeout(write_to)
     
     async def close(self):
         await self._reader.close()
