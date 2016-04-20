@@ -378,50 +378,279 @@ class Kernel(object):
         while task.children:
             task.children.pop().parent_id = -1
 
-    def _set_timeout(self, task, seconds, sleep_type='timeout'):
-        task.timeout = time.monotonic() + seconds
-        item = (task.timeout, task.id, sleep_type)
-        heapq.heappush(self._sleeping, item)
-
-    # I/O 
-    def _poll_for_io(self):
-        if self._sleeping:
-            timeout = self._sleeping[0][0] - time.monotonic()
-        else:
-            timeout = None
-
-        events = self._selector.select(timeout)
-
-        # Reschedule tasks with completed I/O
-        for key, mask in events:
-            task = key.data
-            # Please see comment regarding deferred_unregister in run()
-            task._last_io = (task.state, key.fileobj)
-            self._reschedule_task(task)
-
-        # Process sleeping tasks (if any)
-        if self._sleeping:
-            current = time.monotonic()
-            while self._sleeping and self._sleeping[0][0] <= current:
-                tm, taskid, sleep_type = heapq.heappop(self._sleeping)
-                if taskid in self._tasks:
-                    task = self._tasks[taskid]
-                    # When a task wakes, verify that the timeout value matches that stored
-                    # on the task. If it differs, it means that the task completed its
-                    # operation, was cancelled, or is no longer concerned with this
-                    # sleep operation.  In that case, we do nothing
-                    if tm == task.timeout:
-                        task.timeout = None
-                        if sleep_type == 'sleep':
-                            self._reschedule_task(task)
-                        elif sleep_type == 'timeout':
-                            self._cancel_task(task, exc=TaskTimeout)
-
     # Kernel central loop
     def run(self, coro=None, *, pdb=False, log_errors=True):
         '''
         Run the kernel until no more non-daemonic tasks remain.
         '''
+        # ---- Kernel State
+        current = None                 # Currently running task
+        selector = self._selector      # Event selector
+        ready = self._ready            # Ready queue
+        sleeping = self._sleeping      # Sleeping task queue
+        tasks = self._tasks            # Task table
+
+        # ---- Bound methods
+        selector_register = selector.register
+        selector_unregister = selector.unregister
+        selector_select = selector.select
+        ready_popleft = ready.popleft
+        ready_append = ready.append
+        ready_appendleft = ready.appendleft
+        time_monotonic = time.monotonic
+
+        # ---- Support Functions
+        def _reschedule_task(task, value=None, exc=None):
+            # Reschedule a task, putting it back on the ready queue so that it can run.
+            # value and exc specify a value or exception to send into the underlying 
+            # coroutine when it is rescheduled.
+            ready_append(task)
+            task.next_value = value
+            task.next_exc = exc
+            task.state = 'READY'
+            task.cancel_func = task.future = None
+
+        def _cancel_task(task, exc=CancelledError):
+            # Cancel a task. This causes a CancelledError exception to raise in the
+            # underlying coroutine.  The coroutine can elect to catch the exception
+            # and continue to run to perform cleanup actions.  However, it would 
+            # normally terminate shortly afterwards.   This method is also used to 
+            # raise timeouts.
+            assert task != self._current, "A task can't cancel itself (%r, %r)" % (task, self._current)
+
+            if task.terminated:
+                return True
+
+            if not task.cancel_func:
+                # If there is no cancellation function set. It means that
+                # the task finished whatever it might have been working on
+                # and it's sitting in the ready queue ready to run.  This
+                # presents a rather tricky corner case of
+                # cancellation. First of all, it means that the task
+                # successfully completed whatever it was waiting to do,
+                # but it has not communicated the result back.  This could
+                # be something critical like acquiring a lock.  Because of
+                # that, can't just arbitrarily nuke the task.  Instead, we
+                # have to let it be rescheduled and properly process the result of the
+                # successfully completed operation.   The return of False
+                # here means that cancellation failed and that it should be retried.
+                return False
+
+            # Detach the task from where it might be waiting at this moment
+            task.cancel_func()
+
+            assert task not in ready
+            # Reschedule it with a pending exception
+            _reschedule_task(task, exc=exc(exc.__name__))
+            return True
+
+        def _poll_for_io():
+            if sleeping:
+                timeout = sleeping[0][0] - time_monotonic()
+            else:
+                timeout = None
+
+            events = selector_select(timeout)
+
+            # Reschedule tasks with completed I/O
+            for key, mask in events:
+                task = key.data
+                # Please see comment regarding deferred_unregister in run()
+                task._last_io = (task.state, key.fileobj)
+                ready_append(task)
+                task.state = 'READY'
+                task.cancel_func = None
+                # _reschedule_task(task)
+
+            # Process sleeping tasks (if any)
+            if sleeping:
+                current_time = time_monotonic()
+                while sleeping and sleeping[0][0] <= current_time:
+                    tm, taskid, sleep_type = heapq.heappop(sleeping)
+                    if taskid in tasks:
+                        task = tasks[taskid]
+                        if sleep_type == 'sleep':
+                            if task.cancel_func:
+                                _reschedule_task(task)
+                        else:
+                            if tm == task.timeout:
+                                _cancel_task(task, exc=TaskTimeout)
+                            
+                    # When a task wakes, verify that the timeout value matches that stored
+                    # on the task. If it differs, it means that the task completed its
+                    # operation, was cancelled, or is no longer concerned with this
+                    # sleep operation.  In that case, we do nothing
+                    #if taskid in tasks:
+                    #    if tm == task.timeout:
+                    #        if sleep_type == 'sleep':
+                    #            _reschedule_task(task)
+                    #        elif sleep_type == 'timeout':
+                    #            _cancel_task(task, exc=TaskTimeout)
+
+        def _set_timeout(seconds, sleep_type='timeout'):
+            timeout = time_monotonic() + seconds
+            item = (timeout, current.id, sleep_type)
+            heapq.heappush(self._sleeping, item)
+            if sleep_type == 'timeout':
+                current.timeout = timeout
+
+        # ---- Traps
+        # These implement the low-level functionality that is triggered by coroutines.
+        # They are never invoked directly and there is no meaningful public API.
+        # Instead, coroutines use a statement such as 
+        #   
+        #   yield ('_trap_io', sock, EVENT_READ, 'READ_WAIT')
+        #
+        def _trap_io(fileobj, event, state):
+            # See comment about deferred unregister in run().  If the requested
+            # I/O operation is *different* than the last I/O operation that was
+            # performed by the task, we need to unregister the last I/O resource used
+            # and register a new one with the selector.  
+            if current._last_io != (state, fileobj):
+                if current._last_io:
+                    selector_unregister(current._last_io[1])
+                selector_register(fileobj, event, current)
+
+            # This step indicates that we have managed any deferred I/O management
+            # for the task.  Otherwise the run() method will perform an unregistration step.
+            current._last_io = None
+            current.state = state
+            current.cancel_func = lambda: selector_unregister(fileobj)
+
+        def _trap_future_wait(future, event=None):
+            if not self._kernel_task_id:
+                self._init_loopback()
+
+            current.state = 'FUTURE_WAIT'
+            current.cancel_func = lambda: future.cancel()
+            current.future = future
+            # Discussion: Each task records the future that it is
+            # currently waiting on.  The completion callback below only
+            # attempts to wake the task if its stored Future is exactly
+            # the same one that was stored above.  Due to support for
+            # cancellation and timeouts, it's possible that a task might
+            # abandon its attempt to wait for a Future and go on to
+            # perform other operations, including waiting for different
+            # Future in the future (got it?).  However, a running thread
+            # or process still might go on to eventually complete the
+            # earlier work.  In that case, it will trigger the callback,
+            # find that the task's current Future is now different, and
+            # discard the result.
+            future.add_done_callback(lambda fut, task=current: self._wake(task, fut) if task.future is fut else None)
+
+            # An optional threading.Event object can be passed and set to
+            # start a worker thread.   This makes it possible to have a lock-free
+            # Future implementation where worker threads only start after the
+            # callback function has been set above.
+            if event:
+                event.set()
+
+        def _trap_new_task(coro, daemon=False):
+            task = self._new_task(coro, daemon)
+            _reschedule_task(current, value=task)
+
+        def _trap_reschedule_tasks(queue, n=1, value=None, exc=None):
+            while n > 0:
+                self._reschedule_task(queue.popleft(), value=value, exc=exc)
+                n -= 1
+            _reschedule_task(current)
+
+        def _trap_join_task(task):
+            if task.terminated:
+                _reschedule_task(current, value=task.next_value, exc=task.next_exc)
+            else:
+                if task.joining is None:
+                    task.joining = kqueue()
+                _trap_wait_queue(task.joining, 'TASK_JOIN')
+
+        def _trap_cancel_task(task, exc):
+            if _cancel_task(task, exc):
+                _trap_join_task(task)
+            else:
+                # Fail with a _CancelRetry exception to indicate that the cancel
+                # request should be attempted again.  This happens in the case
+                # that a cancellation request is issued against a task that
+                # ready to run in the ready queue.
+                _reschedule_task(current, exc=_CancelRetry())
+
+        def _trap_wait_queue(queue, state):
+            queue.append(current)
+            current.state = state
+            current.cancel_func = lambda current=current: queue.remove(current)
+
+        def _trap_sleep(seconds):
+            if seconds > 0:
+                _set_timeout(seconds, 'sleep')
+                current.state = 'TIME_SLEEP'
+                current.cancel_func = lambda: None
+            else:
+                _reschedule_task(current)
+
+        def _trap_sigwatch(sigset):
+            # Initialize the signal handling part of the kernel if not done already
+            # Note: This only works if running in the main thread
+            if self._signals is None:
+                if not self._kernel_task_id:
+                    self._init_loopback()
+
+                self._signals = defaultdict(list)
+                self._default_signals = { }
+                old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())     
+                assert old_fd < 0, 'Signals already initialized %d' % old_fd
+
+            for signo in sigset.signos:
+                if not self._signals[signo]:
+                    self._default_signals[signo] = signal.signal(signo, lambda signo, frame:None)
+                self._signals[signo].append(sigset)
+
+            _reschedule_task(current)
+
+        def _trap_sigunwatch(sigset):
+            for signo in sigset.signos:
+                if sigset in self._signals[signo]:
+                    self._signals[signo].remove(sigset)
+
+                # If there are no active watchers for a signal, revert it back to default behavior
+                if not self._signals[signo]:
+                    signal.signal(signo, self._default_signals[signo])
+                    del self._signals[signo]
+            _reschedule_task(current)
+
+        def _trap_sigwait(sigset):
+            sigset.waiting = current
+            current.state = 'SIGNAL_WAIT'
+            current.cancel_func = lambda: setattr(sigset, 'waiting', None)
+
+        def _trap_set_timeout(seconds):
+            old_timeout = current.timeout
+            if seconds:
+                _set_timeout(seconds)
+            else:
+                current.timeout = None
+            current.next_value = old_timeout
+            current.next_exc = None
+            ready_appendleft(current)
+
+        def _trap_unset_timeout(previous):
+            current.timeout = previous
+            current.next_value = None
+            current.next_exc = None
+            ready_appendleft(current)
+
+        def _trap_get_kernel():
+            ready_appendleft(current)
+            current.next_value = self
+            current.next_exc = None
+
+        def _trap_get_current():
+            ready_appendleft(current)
+            current.next_value = current
+            current.next_exc = None
+
+        traps = { name: trap 
+                  for name, trap in locals().items()
+                  if name.startswith('_trap_') }
+        
         # If a coroutine was given, add it as the first task
         if coro:
             maintask = self.add_task(coro)
@@ -430,29 +659,84 @@ class Kernel(object):
 
         self._running = True
 
-        while (self._njobs > 0 or self._ready) and self._running:
+        # ------------------------------------------------------------
+        # Main Kernel Loop
+        # ------------------------------------------------------------
+        while (self._njobs > 0 or ready) and self._running:
             self._current = None
 
+            # --------
             # Poll for I/O as long as there is nothing to run
-            while not self._ready:
-                self._poll_for_io()
+            # --------
+            while not ready:
+                # Wait for an I/O event (or timeout)
+                timeout = (sleeping[0][0] - time_monotonic()) if sleeping else None
+                events = selector_select(timeout)
 
-            # Run everything that's ready
-            while self._ready:
-                current = self._current = self._ready.popleft()
+                # Reschedule tasks with completed I/O
+                for key, mask in events:
+                    task = key.data
+                    # Please see comment regarding deferred_unregister in run()
+                    task._last_io = (task.state, key.fileobj)
+                    task.state = 'READY'
+                    task.timeout = task.cancel_func = None
+                    ready_append(task)
+
+                # Process sleeping tasks (if any)
+                if sleeping:
+                    current_time = time_monotonic()
+                    while sleeping and sleeping[0][0] <= current_time:
+                        tm, taskid, sleep_type = heapq.heappop(sleeping)
+                        # When a task wakes, verify that the timeout value matches that stored
+                        # on the task. If it differs, it means that the task completed its
+                        # operation, was cancelled, or is no longer concerned with this
+                        # sleep operation.  In that case, we do nothing
+                        if taskid in tasks:
+                            task = tasks[taskid]
+                            if sleep_type == 'sleep':
+                                if task.cancel_func:
+                                    task.cancel_func = None
+                                    task.next_value = None
+                                    task.state = 'READY'
+                                    ready_append(task)
+                                # If there's no cancel_func, it means the task got cancelled
+                                # we do nothing.
+                            else:
+                                if tm == task.timeout:
+                                    task.cancel_func()
+                                    task.next_exc = TaskTimeout()
+                                    task.timeout = task.cancel_func = None
+                                    task.next_value = None
+                                    task.state = 'READY'
+                                    ready_append(task)
+
+                        #if taskid in tasks:
+                        #    task = tasks[taskid]
+                        #    if tm == task.timeout:
+                        #        if sleep_type == 'timeout':
+                        #            task.cancel_func()
+                        #            task.next_exc = TaskTimeout()
+                        #        task.timeout = task.cancel_func = None
+                        #        task.next_value = None
+                        #        task.state = 'READY'
+                        #        ready_append(task)
+
+            # --------
+            # Run ready tasks
+            # --------
+            while ready:
+                current = self._current = ready_popleft()
                 try:
                     current.state = 'RUNNING'
                     current.cycles += 1
                     if current.next_exc is None:
-                        op, *args = current.coro.send(current.next_value)
+                        trap = current.coro.send(current.next_value)
                     else:
-                        op, *args = current.coro.throw(current.next_exc)
+                        trap = current.coro.throw(current.next_exc)
 
+                    current.next_exc = None
                     # Execute the trap
-                    getattr(self, op)(current, *args)
-
-#                except (StopIteration, CancelledError) as e:
-#                    self._cleanup_task(current, value = e.value if isinstance(e, StopIteration) else None)
+                    traps[trap[0]](*trap[1:])
 
                 except StopIteration as e:
                     self._cleanup_task(current, value = e.value)
@@ -499,8 +783,8 @@ class Kernel(object):
                     # ran, but is now sleeping for a *different* reason than repeating the
                     # prior I/O operation.  There is coordination with code in _trap_io().
                     if current._last_io:
-                        self._selector.unregister(current._last_io[1])
-                    current._last_io = None
+                        selector_unregister(current._last_io[1])
+                        current._last_io = None
 
         self._current = None
         if maintask:
@@ -550,160 +834,6 @@ class Kernel(object):
             signal.set_wakeup_fd(-1)
             self._signals = None
             self._default_signals = None
-
-    # Traps.  These implement the low-level functionality that is triggered by coroutines.
-    # You shouldn't invoke these directly. Instead, coroutines use a statement such as
-    #   
-    #   yield ('_trap_io', sock, EVENT_READ, 'READ_WAIT')
-    #
-    # To execute these methods.
-
-    def _trap_io(self, current, fileobj, event, state):
-        # See comment about deferred unregister in run().  If the requested
-        # I/O operation is *different* than the last I/O operation that was
-        # performed by the task, we need to unregister the last I/O resource used
-        # and register a new one with the selector.  
-        if current._last_io != (state, fileobj):
-            if current._last_io:
-                self._selector.unregister(current._last_io[1])
-            self._selector.register(fileobj, event, current)
-
-        # This step indicates that we have managed any deferred I/O management
-        # for the task.  Otherwise the run() method will perform an unregistration step.
-        current._last_io = None
-
-        current.state = state
-        current.cancel_func = lambda: self._selector.unregister(fileobj)
-
-    def _trap_future_wait(self, current, future, event=None):
-        if not self._kernel_task_id:
-            self._init_loopback()
-
-        current.state = 'FUTURE_WAIT'
-        current.cancel_func = lambda: future.cancel()
-        current.future = future
-        # Discussion: Each task records the future that it is
-        # currently waiting on.  The completion callback below only
-        # attempts to wake the task if its stored Future is exactly
-        # the same one that was stored above.  Due to support for
-        # cancellation and timeouts, it's possible that a task might
-        # abandon its attempt to wait for a Future and go on to
-        # perform other operations, including waiting for different
-        # Future in the future (got it?).  However, a running thread
-        # or process still might go on to eventually complete the
-        # earlier work.  In that case, it will trigger the callback,
-        # find that the task's current Future is now different, and
-        # discard the result.
-        future.add_done_callback(lambda fut, task=current: self._wake(task, fut) if task.future is fut else None)
-
-        # An optional threading.Event object can be passed and set to
-        # start a worker thread.   This makes it possible to have a lock-free
-        # Future implementation where worker threads only start after the
-        # callback function has been set above.
-        if event:
-            event.set()
-
-    def _trap_new_task(self, current, coro, daemon=False):
-        task = self._new_task(coro, daemon)
-        self._reschedule_task(current, value=task)
-
-    def _trap_reschedule_tasks(self, current, queue, n=1, value=None, exc=None):
-        while n > 0:
-            self._reschedule_task(queue.popleft(), value=value, exc=exc)
-            n -= 1
-        self._reschedule_task(current)
-
-    def _trap_join_task(self, current, task):
-        if task.terminated:
-            self._reschedule_task(current, value=task.next_value, exc=task.next_exc)
-        else:
-            if task.joining is None:
-                task.joining = kqueue()
-            self._trap_wait_queue(current, task.joining, 'TASK_JOIN')
-
-    def _trap_cancel_task(self, current, task, exc):
-        if self._cancel_task(task, exc):
-            self._trap_join_task(current, task)
-        else:
-            # Fail with a _CancelRetry exception to indicate that the cancel
-            # request should be attempted again.  This happens in the case
-            # that a cancellation request is issued against a task that
-            # ready to run in the ready queue.
-            self._reschedule_task(current, exc=_CancelRetry())
-
-    def _trap_wait_queue(self, current, queue, state):
-        queue.append(current)
-        current.state = state
-        current.cancel_func = lambda: queue.remove(current)
-        
-    def _trap_sleep(self, current, seconds):
-        if seconds > 0:
-            self._set_timeout(current, seconds, 'sleep')
-            current.state = 'TIME_SLEEP'
-            current.cancel_func = lambda: None
-        else:
-            self._reschedule_task(current)
-
-    def _trap_sigwatch(self, current, sigset):
-        # Initialize the signal handling part of the kernel if not done already
-        # Note: This only works if running in the main thread
-        if self._signals is None:
-            if not self._kernel_task_id:
-                self._init_loopback()
-
-            self._signals = defaultdict(list)
-            self._default_signals = { }
-            old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())     
-            assert old_fd < 0, 'Signals already initialized %d' % old_fd
-            
-        for signo in sigset.signos:
-            if not self._signals[signo]:
-                self._default_signals[signo] = signal.signal(signo, lambda signo, frame:None)
-            self._signals[signo].append(sigset)
-
-        self._reschedule_task(current)
-        
-    def _trap_sigunwatch(self, current, sigset):
-        for signo in sigset.signos:
-            if sigset in self._signals[signo]:
-                self._signals[signo].remove(sigset)
-
-            # If there are no active watchers for a signal, revert it back to default behavior
-            if not self._signals[signo]:
-                signal.signal(signo, self._default_signals[signo])
-                del self._signals[signo]
-        self._reschedule_task(current)
-
-    def _trap_sigwait(self, current, sigset):
-        sigset.waiting = current
-        current.state = 'SIGNAL_WAIT'
-        current.cancel_func = lambda: setattr(sigset, 'waiting', None)
-
-    def _trap_set_timeout(self, current, seconds):
-        old_timeout = current.timeout
-        if seconds:
-            self._set_timeout(current, seconds)
-        else:
-            current.timeout = None
-        current.next_value = old_timeout
-        current.next_exc = None
-        self._ready.appendleft(current)
-
-    def _trap_unset_timeout(self, current, previous):
-        current.timeout = previous
-        current.next_value = None
-        current.next_exc = None
-        self._ready.appendleft(current)
-
-    def _trap_get_kernel(self, current):
-        self._ready.appendleft(current)
-        current.next_value = self
-        current.next_exc = None
-
-    def _trap_get_current(self, current):
-        self._ready.appendleft(current)
-        current.next_value = current
-        current.next_exc = None
 
 # ----------------------------------------------------------------------
 # Coroutines corresponding to the kernel traps.  These functions

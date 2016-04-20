@@ -53,6 +53,55 @@ def test_sleep_cancel(kernel):
             'cancelled',
             ]
 
+
+def test_sleep_timeout(kernel):
+    results = []
+
+    async def sleeper():
+        results.append('start')
+        try:
+            await timeout_after(0.5, sleep(1))
+            results.append('not here')
+        except TaskTimeout:
+            results.append('timeout')
+
+    async def main():
+        task = await new_task(sleeper())
+        await task.join()
+
+    kernel.add_task(main())
+    kernel.run()
+    assert results == [
+            'start',
+            'timeout',
+            ]
+
+def test_sleep_notimeout(kernel):
+    results = []
+
+    async def sleeper():
+        results.append('start')
+        try:
+            await timeout_after(1.5, sleep(1))
+            results.append('here')
+        except TaskTimeout:
+            results.append('not here')
+
+        await sleep(1)
+        results.append('here2')
+
+    async def main():
+        task = await new_task(sleeper())
+        await task.join()
+
+    kernel.add_task(main())
+    kernel.run()
+    assert results == [
+            'start',
+            'here',
+            'here2'
+            ]
+
 def test_task_join(kernel):
     results = []
 
