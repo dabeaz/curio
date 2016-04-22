@@ -1,6 +1,6 @@
 # kernel.py
 # 
-# Copyright (C) 2015
+# Copyright (C) 2015-2016
 # David Beazley (Dabeaz LLC), http://www.dabeaz.com
 # All rights reserved.
 #
@@ -13,9 +13,7 @@ import time
 import os
 import sys
 import logging
-import inspect
 import signal
-import threading
 
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
@@ -56,12 +54,15 @@ class Task(object):
     __slots__ = ('id', 'parent_id', 'children', 'coro', 'cycles', 'state',
                  'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
                  'next_exc', 'joining', 'terminated', '_last_io', '__weakref__',
+                 'send', 'throw',
                  )
     _lastid = 1
     def __init__(self, coro):
         self.id = Task._lastid   
         Task._lastid += 1
         self.coro = coro          # Underlying generator/coroutine
+        self.send = coro.send     # Bound coroutine methods
+        self.throw = coro.throw
         self.parent_id = None     # Parent task id
         self.children = None      # Set of child tasks (if any)
         self.cycles = 0           # Execution cycles completed
@@ -166,7 +167,7 @@ class SignalSet(object):
 
 class Kernel(object):
     __slots__ = ('_selector', '_ready', '_tasks', 
-                 '_signals', '_default_signals', '_njobs', '_running',
+                 '_signal_sets', '_default_signals', '_njobs', '_running',
                  '_notify_sock', '_wait_sock', '_kernel_task_id', '_wake_queue',
                  '_process_pool', '_thread_pool')
 
@@ -174,12 +175,12 @@ class Kernel(object):
         if selector is None:
             selector = DefaultSelector()
         self._selector = selector
-        self._ready = kqueue()       # Tasks ready to run
-        self._tasks = { }            # Task table
-        self._signals = None         # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
-        self._default_signals = None # Dict of default signal handlers
-        self._njobs = 0              # Number of non-daemonic jobs running
-        self._running = False        # Kernel running?
+        self._ready = kqueue()            # Tasks ready to run
+        self._tasks = { }                 # Task table
+        self._signal_sets = None          # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
+        self._default_signals = None      # Dict of default signal handlers
+        self._njobs = 0                   # Number of non-daemonic jobs running
+        self._running = False             # Kernel running?
 
         # Attributes related to the loopback socket (only initialized if required)
         self._notify_sock = None
@@ -224,6 +225,7 @@ class Kernel(object):
     # socket.  append() and pop() operations on deques are thread safe
     # and do not need additional locking.  See
     # https://docs.python.org/3/library/collections.html#collections.deque
+    # ----------
     def _wake(self, task=None, future=None, value=None, exc=None):
         if task:
             self._wake_queue.append((task, future, value, exc))
@@ -233,9 +235,8 @@ class Kernel(object):
     # created with no parent task (parent_id = -1).   This operation
     # is an instance method since it is used both outside and within the 
     # kernel itself
+    # ----------
     def _new_task(self, coro, daemon=False, parent=None):
-        # Create a new task in the kernel.  If daemon is True, the task is
-        # created with no parent task (parent_id = -1)
         task = Task(coro)
         self._tasks[task.id] = task
         if not daemon:
@@ -254,7 +255,8 @@ class Kernel(object):
         task.state = 'READY'
         return task
 
-    # Kernel central loop
+    # Main Kernel Loop
+    # ----------
     def run(self, coro=None, *, pdb=False, log_errors=True, shutdown=False):
         '''
         Run the kernel until no more non-daemonic tasks remain.
@@ -266,12 +268,12 @@ class Kernel(object):
         # Motto:  "What happens in the kernel stays in the kernel"
 
         # ---- Kernel State
-        current = None                 # Currently running task
-        selector = self._selector      # Event selector
-        ready = self._ready            # Ready queue
-        tasks = self._tasks            # Task table
-        sleeping = []                  # Sleeping task queue
-
+        current = None                          # Currently running task
+        selector = self._selector               # Event selector
+        ready = self._ready                     # Ready queue
+        tasks = self._tasks                     # Task table
+        sleeping = []                           # Sleeping task queue
+        
         # ---- Bound methods
         selector_register = selector.register
         selector_unregister = selector.unregister
@@ -283,9 +285,8 @@ class Kernel(object):
 
         # ---- In-kernel task used for processing signals and futures
 
+        # Initialize the loopback socket and launch the kernel task if needed
         def _init_loopback():
-            # Initialize the loopback socket and launch the kernel task if needed
-
             self._notify_sock, self._wait_sock = socket.socketpair()
             self._wait_sock.setblocking(False)
             self._notify_sock.setblocking(False)
@@ -293,11 +294,10 @@ class Kernel(object):
             _reschedule_task(task)
             self._kernel_task_id = task.id
 
+        # Internal task that monitors the loopback socket--allowing the kernel to
+        # awake for non-I/O events.  Also processes incoming signals.  This only
+        # launches if needed to wait for external events (futures, signals, etc.)
         async def _kernel_task():
-            # Internal task that monitors the loopback socket--allowing the kernel to
-            # awake for non-I/O events.  Also processes incoming signals.  This only
-            # launches if needed to wait for external events (futures, signals, etc.)
-
             while True:
                 await _read_wait(self._wait_sock)
                 data = self._wait_sock.recv(1000)
@@ -318,12 +318,12 @@ class Kernel(object):
 
                 # Any non-null bytes received here are assumed to be received signals.
                 # See if there are any pending signal sets and unblock if needed 
-                if not self._signals:
+                if not self._signal_sets:
                     continue
 
-                signals = (signal.Signals(n) for n in data if n in self._signals)
-                for signo in signals:
-                    for sigset in self._signals[signo]:
+                sigs = (signal.Signals(n) for n in data if n in self._signal_sets)
+                for signo in sigs:
+                    for sigset in self._signal_sets[signo]:
                         sigset.pending.append(signo)
                         if sigset.waiting:
                             _reschedule_task(sigset.waiting, value=signo)
@@ -331,55 +331,56 @@ class Kernel(object):
 
         # ---- Task Support Functions
 
+        # Reschedule a task, putting it back on the ready queue so that it can run.
+        # value and exc specify a value or exception to send into the underlying 
+        # coroutine when it is rescheduled.
         def _reschedule_task(task, value=None, exc=None):
-            # Reschedule a task, putting it back on the ready queue so that it can run.
-            # value and exc specify a value or exception to send into the underlying 
-            # coroutine when it is rescheduled.
             ready_append(task)
             task.next_value = value
             task.next_exc = exc
             task.state = 'READY'
             task.cancel_func = None
 
+        # Cancel a task. This causes a CancelledError exception to raise in the
+        # underlying coroutine.  The coroutine can elect to catch the exception
+        # and continue to run to perform cleanup actions.  However, it would 
+        # normally terminate shortly afterwards.   This method is also used to 
+        # raise timeouts.
         def _cancel_task(task, exc=CancelledError):
-            # Cancel a task. This causes a CancelledError exception to raise in the
-            # underlying coroutine.  The coroutine can elect to catch the exception
-            # and continue to run to perform cleanup actions.  However, it would 
-            # normally terminate shortly afterwards.   This method is also used to 
-            # raise timeouts.
-            assert task != current, "A task can't cancel itself (%r, %r)" % (task, current)
-
             if task.terminated:
                 return True
 
             if not task.cancel_func:
-                # If there is no cancellation function set. It means that
-                # the task finished whatever it might have been working on
-                # and it's sitting in the ready queue ready to run.  This
-                # presents a rather tricky corner case of
-                # cancellation. First of all, it means that the task
-                # successfully completed whatever it was waiting to do,
-                # but it has not communicated the result back.  This could
-                # be something critical like acquiring a lock.  Because of
-                # that, can't just arbitrarily nuke the task.  Instead, we
-                # have to let it be rescheduled and properly process the result of the
-                # successfully completed operation.   The return of False
-                # here means that cancellation failed and that it should be retried.
+                # All tasks set a cancellation function when they
+                # block.  If there is no cancellation function set. It
+                # means that the task finished whatever it might have
+                # been working on and it's sitting in the ready queue
+                # ready to run.  This presents a rather tricky corner
+                # case of cancellation. First, it means that the task
+                # successfully completed whatever it was waiting to
+                # do, but it has not yet communicated the result back.
+                # This could be something critical like acquiring a
+                # lock.  Because of that, can't just arbitrarily nuke
+                # the task.  Instead, we have to let it be rescheduled
+                # and properly process the result of the successfully
+                # completed operation.  The return of False here means
+                # that cancellation failed and that it should be
+                # retried.  Public facing API calls that cancel tasks
+                # need to check this return value and retry.
                 return False
 
             # Detach the task from where it might be waiting at this moment
             task.cancel_func()
 
-            assert task not in ready
             # Reschedule it with a pending exception
             _reschedule_task(task, exc=exc(exc.__name__))
             return True
 
+        # Cleanup task.  This is called after the underlying coroutine has
+        # terminated.  value and exc give the return value or exception of
+        # the coroutine.  This wakes any tasks waiting to join and removes
+        # the terminated task from its parent/children.
         def _cleanup_task(task, value=None, exc=None):
-            # Cleanup task.  This is called after the underlying coroutine has
-            # terminated.  value and exc give the return value or exception of
-            # the coroutine.  This wakes any tasks waiting to join and removes
-            # the terminated task from its parent/children.
             task.next_value = value
             task.next_exc = exc
             task.timeout = None
@@ -403,8 +404,9 @@ class Kernel(object):
             while task.children:
                 task.children.pop().parent_id = -1
 
+        # Shut down the kernel, cleaning up resources and cancelling
+        # still-running daemon tasks
         def _shutdown():
-            # Shut down the kernel, cleaning up resources and cancelling daemon tasks
             for task in sorted(tasks.values(), key=lambda t: t.id, reverse=True):
                 if task.id == self._kernel_task_id:
                     continue
@@ -431,25 +433,30 @@ class Kernel(object):
                 self._kernel_task_id = None
 
             # Remove the signal handling file descriptor (if any)
-            if self._signals:
+            if self._signal_sets:
                 signal.set_wakeup_fd(-1)
-                self._signals = None
+                self._signal_sets = None
                 self._default_signals = None
 
+        # Set a timeout or sleep event on the current task
         def _set_timeout(seconds, sleep_type='timeout'):
-            # Set a timeout or sleep event on the current task
             timeout = time_monotonic() + seconds
             item = (timeout, current.id, sleep_type)
             heapq.heappush(sleeping, item)
             setattr(current, sleep_type, timeout)
 
         # ---- Traps
-        # These implement the low-level functionality that is triggered by coroutines.
-        # They are never invoked directly and there is no public API outside the kernel.
-        # Instead, coroutines use a statement such as 
+        #
+        # These implement the low-level functionality that is
+        # triggered by coroutines.  They are never invoked directly
+        # and there is no public API outside the kernel.  Instead,
+        # coroutines use a statement such as
         #   
         #   yield ('_trap_io', sock, EVENT_READ, 'READ_WAIT')
         #
+        # to invoke a specific trap.
+
+        # Wait for I/O
         def _trap_io():
             _, fileobj, event, state = trap
             # See comment about deferred unregister in run().  If the requested
@@ -467,6 +474,7 @@ class Kernel(object):
             current.state = state
             current.cancel_func = lambda: selector_unregister(fileobj)
 
+        # Wait on a Future
         def _trap_future_wait():
             _, future, event = trap
 
@@ -474,8 +482,10 @@ class Kernel(object):
                 _init_loopback()
 
             current.state = 'FUTURE_WAIT'
-            current.cancel_func = lambda task=current: setattr(task, 'future', future.cancel() and None)
+            current.cancel_func = (lambda task=current: 
+                                   setattr(task, 'future', future.cancel() and None))
             current.future = future
+
             # Discussion: Each task records the future that it is
             # currently waiting on.  The completion callback below only
             # attempts to wake the task if its stored Future is exactly
@@ -488,7 +498,9 @@ class Kernel(object):
             # earlier work.  In that case, it will trigger the callback,
             # find that the task's current Future is now different, and
             # discard the result.
-            future.add_done_callback(lambda fut, task=current: self._wake(task, fut) if task.future is fut else None)
+
+            future.add_done_callback(lambda fut, task=current: 
+                                     self._wake(task, fut) if task.future is fut else None)
 
             # An optional threading.Event object can be passed and set to
             # start a worker thread.   This makes it possible to have a lock-free
@@ -497,11 +509,13 @@ class Kernel(object):
             if event:
                 event.set()
 
+        # Add a new task to the kernel
         def _trap_new_task():
             _, coro, daemon = trap
             task = self._new_task(coro, daemon, current)
             _reschedule_task(current, value=task)
 
+        # Reschedule one or more tasks from a queue
         def _trap_reschedule_tasks():
             _, queue, n, value, exc = trap
             while n > 0:
@@ -509,6 +523,7 @@ class Kernel(object):
                 n -= 1
             _reschedule_task(current)
 
+        # Join with a task
         def _trap_join_task():
             nonlocal trap
             _, task = trap
@@ -520,9 +535,15 @@ class Kernel(object):
                 trap = (_, task.joining, 'TASK_JOIN')
                 _trap_wait_queue()
 
+        # Cancel a task
         def _trap_cancel_task():
             nonlocal trap
             _, task, exc = trap
+            
+            if task == current:
+                _reschedule_task(current, exc=CurioError("A task can't cancel itself"))
+                return
+
             if _cancel_task(task, exc):
                 trap = (_, task)
                 _trap_join_task()
@@ -533,12 +554,14 @@ class Kernel(object):
                 # ready to run in the ready queue.
                 _reschedule_task(current, exc=_CancelRetry())
 
+        # Wait on a queue
         def _trap_wait_queue():
             _, queue, state = trap
             queue.append(current)
             current.state = state
             current.cancel_func = lambda current=current: queue.remove(current)
 
+        # Sleep for a specified period
         def _trap_sleep():
             _, seconds = trap
             if seconds > 0:
@@ -548,44 +571,47 @@ class Kernel(object):
             else:
                 _reschedule_task(current)
 
+        # Watch signals
         def _trap_sigwatch():
             _, sigset = trap
             # Initialize the signal handling part of the kernel if not done already
             # Note: This only works if running in the main thread
-            if self._signals is None:
+            if self._signal_sets is None:
+                self._signal_sets = defaultdict(list)
+                self._default_signals = { }
                 if not self._kernel_task_id:
                     _init_loopback()
-
-                self._signals = defaultdict(list)
-                self._default_signals = { }
                 old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())     
                 assert old_fd < 0, 'Signals already initialized %d' % old_fd
 
             for signo in sigset.signos:
-                if not self._signals[signo]:
+                if not self._signal_sets[signo]:
                     self._default_signals[signo] = signal.signal(signo, lambda signo, frame:None)
-                self._signals[signo].append(sigset)
+                self._signal_sets[signo].append(sigset)
 
             _reschedule_task(current)
 
+        # Unwatch signals
         def _trap_sigunwatch():
             _, sigset = trap
             for signo in sigset.signos:
-                if sigset in self._signals[signo]:
-                    self._signals[signo].remove(sigset)
+                if sigset in self._signal_sets[signo]:
+                    self._signal_sets[signo].remove(sigset)
 
                 # If there are no active watchers for a signal, revert it back to default behavior
-                if not self._signals[signo]:
+                if not self._signal_sets[signo]:
                     signal.signal(signo, self._default_signals[signo])
-                    del self._signals[signo]
+                    del self._signal_sets[signo]
             _reschedule_task(current)
 
+        # Wait for a signal
         def _trap_sigwait():
             _, sigset = trap
             sigset.waiting = current
             current.state = 'SIGNAL_WAIT'
             current.cancel_func = lambda: setattr(sigset, 'waiting', None)
 
+        # Set a timeout to be delivered to the calling task
         def _trap_set_timeout():
             _, seconds = trap
             old_timeout = current.timeout
@@ -597,6 +623,7 @@ class Kernel(object):
             current.next_exc = None
             ready_appendleft(current)
 
+        # Clear a previously set timeout
         def _trap_unset_timeout():
             _, previous = trap
             current.timeout = previous
@@ -604,11 +631,13 @@ class Kernel(object):
             current.next_exc = None
             ready_appendleft(current)
 
+        # Return the running kernel
         def _trap_get_kernel():
             ready_appendleft(current)
             current.next_value = self
             current.next_exc = None
 
+        # Return the currently running task
         def _trap_get_current():
             ready_appendleft(current)
             current.next_value = current
@@ -676,10 +705,11 @@ class Kernel(object):
                     current.state = 'RUNNING'
                     current.cycles += 1
                     if current.next_exc is None:
-                        trap = current.coro.send(current.next_value)
+                        trap = current.send(current.next_value)
                     else:
-                        trap = current.coro.throw(current.next_exc)
-                    current.next_exc = None
+                        trap = current.throw(current.next_exc)
+                        current.next_exc = None
+
                     # Execute the trap
                     traps[trap[0]]()
 
