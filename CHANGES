@@ -1,5 +1,10 @@
 CHANGES
 -------
+04/22/2016 Removed parent/child task relationship and associated
+           tracking.  It's an added complexity that's not really
+	   needed in the kernel and it can be done easily enough by
+	   the user in cases where it might be needed.
+
 04/18/2016 Major refactoring of timeout handling.  Virtually all
            operations in curio support cancellation and timeouts.
            However, putting an explicit "timeout" argument on
