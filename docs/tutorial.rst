@@ -29,17 +29,14 @@ countdown as you wait for your kid to put their shoes on::
             n -= 1
 
     if __name__ == '__main__':
-        kernel = curio.Kernel()
-        kernel.run(countdown(10))
+        curio.boot(countdown(10))
 
 Run it and you'll see a countdown.  Yes, some jolly fun to be
 sure. Curio is based around the idea of tasks.  Tasks are functions
-defined as coroutines using the ``async`` syntax.  To run a task, you
-create a ``Kernel`` instance, then invoke the ``run()`` method with a
-task.  A task runs like a separate execution thread with one important
-difference--tasks can only be preempted on statements prefaced by an
-``await``.  This is cooperative multitasking.  However, just to be clear,
-curio is not using threads to implement tasks under the covers.
+defined as coroutines using the ``async`` syntax.  To make a task
+execute, it must run inside the curio kernel.  The ``boot()`` function
+starts the kernel with an initial task.  The kernel runs until there
+are no more tasks to complete.
 
 Tasks
 -----
@@ -72,8 +69,7 @@ Let's add a few more tasks into the mix::
         print("Leaving")
 
     if __name__ == '__main__':
-        kernel = curio.Kernel()
-        kernel.run(parent())
+        curio.boot(parent())
 
 This program illustrates the process of creating and joining with
 tasks.  Here, the ``parent()`` task uses the ``curio.spawn()``
@@ -104,12 +100,11 @@ At this point, the program appears hung.  The child is sleeping for
 the next 1000 seconds, the parent is blocked on ``join()`` and nothing
 much seems to be happening--this is the mark of all good concurrent
 programs (hanging that is).  Change the last part of the program to
-create the kernel with the monitor enabled::
+boot the kernel with the monitor enabled::
 
     ...
     if __name__ == '__main__':
-        kernel = curio.Kernel(with_monitor=True)
-        kernel.run(parent())
+        curio.boot(parent(), with_monitor=True)
 
 Run the program again. You'd really like to know what's happening?
 Yes?  Open up another terminal window and connect to the monitor as
@@ -404,7 +399,7 @@ compute large Fibonacci numbers or mine bitcoins, everything will block
 until it's done. Don't do that.
 
 If you know that work might take awhile, you can have it execute in a
-separate process. Change the code to use ``curio.run_cpu_bound()`` like
+separate process. Change the code to use ``curio.run_in_process()`` like
 this::
 
     async def kid():
@@ -414,7 +409,7 @@ this::
             print('Building the Millenium Falcon in Minecraft')
             total = 0
             for n in range(50):
-                total += await curio.run_cpu_bound(fib, n)
+                total += await curio.run_in_process(fib, n)
         except curio.CancelledError:
             print('Fine. Saving my work.')
 
@@ -427,7 +422,7 @@ The problem of blocking might also apply to other operations involving
 I/O.  For example, accessing a database or calling out to other
 libraries.  In fact, any operation not preceded by an explicit
 ``await`` might block.  If you know that blocking is possible, use the
-``curio.run_blocking()`` coroutine.
+``curio.run_in_thread()`` coroutine.
 This arranges to have the computation
 carried out in a separate thread. For example::
 
@@ -440,9 +435,9 @@ carried out in a separate thread. For example::
             print('Building the Millenium Falcon in Minecraft')
             total = 0
             for n in range(50):
-                total += await curio.run_cpu_bound(fib, n)
+                total += await curio.run_in_process(fib, n)
 		# Rest for a bit
-		await curio.run_blocking(time.sleep, n)
+		await curio.run_in_thread(time.sleep, n)
         except curio.CancelledError:
             print('Fine. Saving my work.')
     
@@ -451,7 +446,7 @@ library. ``curio`` already has its own sleep function so if you really need to
 sleep, use that instead.
 
 A Caution: When a task delegates work to a subprocess or thread using
-the ``run_cpu_bound()`` or ``run_blocking()`` functions, that work runs
+the ``run_in_process()`` or ``run_in_thread()`` functions, that work runs
 outside the direct control of curio.  This means that whatever thread
 or process is handling the request will likely run until the requested
 work has been fully completed.  You can cancel a task that is waiting
@@ -465,7 +460,7 @@ A Simple Echo Server
 Now that you've got the basics down, let's look at some I/O. Here
 is a simple echo server written directly with sockets using curio::
 
-    from curio import Kernel, spawn
+    from curio import boot, spawn
     from curio.socket import *
     
     async def echo_server(address):
@@ -490,8 +485,7 @@ is a simple echo server written directly with sockets using curio::
         print('Connection closed')
 
     if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(echo_server(('',25000)))
+        boot(echo_server(('',25000)))
 
 Run this program and try connecting to it using a command such as ``nc``
 or ``telnet``.  You'll see the program echoing back data to you.  Open
@@ -534,7 +528,7 @@ A lot of the above code involving sockets is fairly repetitive.  Instead
 of writing the part that sets up the server, you can simplify the above example
 using ``run_server()`` like this::
 
-    from curio import Kernel, spawn, run_server
+    from curio import boot, spawn, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -546,8 +540,7 @@ using ``run_server()`` like this::
         print('Connection closed')
 
     if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(run_server('', 25000, echo_client))
+        boot(run_server('', 25000, echo_client))
 
 The ``run_server()`` coroutine takes care of a few low-level details 
 such as creating the server socket and binding it to an address.  It
@@ -560,7 +553,7 @@ A Stream-Based Echo Server
 In certain cases, it might be easier to work with a socket connection
 using a file-like stream interface.  Here is an example::
 
-    from curio import Kernel, spawn, run_server
+    from curio import boot, spawn, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -573,8 +566,7 @@ using a file-like stream interface.  Here is an example::
         print('Connection closed')
 
     if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(run_server('', 25000, echo_client))
+        boot(run_server('', 25000, echo_client))
 
 The ``socket.make_streams()`` method can be used to create a pair of
 file-like objects for reading and writing.  On this objects, you would
@@ -582,7 +574,7 @@ now use standard file methods such as ``read()``, ``readline()``, and
 ``write()``.  One feature of streams is that you can easily read data
 line-by-line using an ``async for`` statement like this::
 
-    from curio import Kernel, spawn, run_server
+    from curio import boot, spawn, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -594,8 +586,7 @@ line-by-line using an ``async for`` statement like this::
 	await writer.close()
 
     if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(run_server('', 25000, echo_client))
+        boot(run_server('', 25000, echo_client))
 
 This is potentially useful if you're writing code to read HTTP headers or
 some similar task.
@@ -607,7 +598,7 @@ Let's make a slightly more sophisticated echo server that responds
 to a Unix signal::
 
     import signal
-    from curio import Kernel, spawn, SignalSet, CancelledError, run_server
+    from curio import boot, spawn, SignalSet, CancelledError, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -636,8 +627,7 @@ to a Unix signal::
                 await serv_task.cancel()
 
     if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(main('', 25000))
+        boot(main('', 25000))
 
 
 In this code, the ``main()`` coroutine launches the server, but then
@@ -677,8 +667,7 @@ For example, here is a task that makes a connection to ``www.python.org``::
         print(response.decode('latin-1'))
 
     if __name__ == '__main__':
-        kernel = curio.Kernel()
-        kernel.run(main())
+        curio.boot(main())
 
 If you run this, you should get some output that looks similar to this::
 
@@ -717,8 +706,7 @@ Ah, a redirect to HTTPS.  Let's make a connection with SSL applied to it::
         print(response.decode('latin-1'))
 
     if __name__ == '__main__':
-        kernel = curio.Kernel()
-        kernel.run(main())
+        curio.boot(main())
 
 At this point it's worth noting that the primary purpose of curio is
 merely concurrency and I/O.  You can create sockets and you can apply
@@ -761,10 +749,9 @@ SSL::
 	await writer.close()
 
     if __name__ == '__main__':
-        kernel = curio.Kernel()
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
-        kernel.run(curio.run_server('', 10000, handler, ssl=ssl_context))
+        curio.boot(curio.run_server('', 10000, handler, ssl=ssl_context))
 
 The ``curio.ssl`` submodule is a wrapper around the ``ssl`` module in the standard
 library.  It has been modified slightly so that functions responsible for wrapping
@@ -786,7 +773,7 @@ synchronous code outside of curio.  To do this, you can temporarily put sockets 
 streams into blocking mode and expose the raw socket or file
 underneath.  Use the ``blocking()`` context manager method as shown here::
 
-    from curio import Kernel, spawn, run_server
+    from curio import boot, spawn, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -802,8 +789,7 @@ underneath.  Use the ``blocking()`` context manager method as shown here::
         print('Connection closed')
 
     if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(run_server('', 25000, echo_client))
+        boot(run_server('', 25000, echo_client))
 
 The ``blocking()`` method unwraps the low-level socket, places it in
 blocking mode, and returns it back to you.  In this example the
@@ -811,10 +797,10 @@ blocking mode, and returns it back to you.  In this example the
 ``socket`` module.  You could pass it to any function that expects to
 work with a normal socket.  Just be aware that any I/O operations on
 it could potentially block the curio kernel.  If you're not sure,
-combine your operation with the ``run_blocking()`` function. For
+combine your operation with the ``run_in_thread()`` function. For
 example::
 
-    from curio import Kernel, spawn, run_server, run_blocking
+    from curio import boot, spawn, run_server, run_in_thread
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -825,16 +811,15 @@ example::
 
 	    # Temporarily enter blocking mode
             with client.blocking() as _client:
-                await run_blocking(_client.sendall, data)
+                await run_in_thread(_client.sendall, data)
 
         print('Connection closed')
 
     if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(run_server('', 25000, echo_client))
+        boot(run_server('', 25000, echo_client))
 
 Normally, you wouldn't do this for such a operation like ``sendall()``.  However,
-the combination of the ``blocking()`` method and ``run_blocking()`` function
+the combination of the ``blocking()`` method and ``run_in_thread()`` function
 could be used to implement a hybrid server design where you use curio
 to coordinate a very large collection of mostly inactive connections and a
 thread-pool to carry operations in previously written synchronous
@@ -857,8 +842,7 @@ command in real time::
             print('Got:', line.decode('ascii'), end='')
 
     if __name__ == '__main__':
-        kernel = curio.Kernel()
-        kernel.run(main())
+        curio.boot(main())
 
 In addition to ``Popen()``, you can also use higher level functions
 such as ``subprocess.run()`` and ``subprocess.check_output()``.  For example::
@@ -904,8 +888,7 @@ For example::
         await cons_task.cancel()
 
     if __name__ == '__main__':
-        kernel = curio.Kernel()
-        kernel.run(main())
+        curio.boot(main())
 
 Curio provides the same synchronization primitives as found in the built-in
 ``threading`` module.  The same techniques used by threads can be used with
@@ -932,7 +915,7 @@ Here are a few programming tips to keep in mind:
   ``await``.  Although these calls will work, they could potentially
   block the kernel on I/O or long-running calculations.  If you know
   that either of these are possible, consider the use of the
-  ``run_cpu_bound()`` or ``run_blocking()`` functions to execute the work.
+  ``run_in_process()`` or ``run_in_thread()`` functions to execute the work.
 
 Debugging Tips
 --------------
@@ -966,7 +949,7 @@ consider the use of the curio monitor.  For example::
 
     import curio
     ...
-    kernel = curio.Kernel(with_monitor=True)
+    boot(..., with_monitor=True)
 
 The monitor can show you the state of each task and you can get stack 
 traces. Remember that you enter the monitor by running ``python3 -m curio.monitor``
@@ -975,8 +958,7 @@ in a separate window.
 As another possible debugging tool, you can have curio launch ``pdb``
 when a task crashes.  Do this::
 
-    kernel = curio.Kernel()
-    kernel.run(..., pdb=True)
+    boot(..., pdb=True)
 
 Be aware that launching ``pdb`` causes the entire kernel to stop.  When
 you quit ``pdb``, the kernel will resume.

@@ -18,9 +18,8 @@ def curio_test(x):
     async def main():
         for n in range(10000):
             r = await curio.run_in_process(fib, x)
-    kernel = curio.Kernel()
     start = time.time()
-    kernel.run(main())
+    curio.boot(main())
     end = time.time()
     print('Curio:', end-start)
 

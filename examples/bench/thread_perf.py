@@ -11,9 +11,8 @@ def curio_test():
     async def main():
         for n in range(10000):
             await curio.run_in_thread(time.sleep, 0)
-    kernel = curio.Kernel()
     start = time.time()
-    kernel.run(main())
+    curio.boot(main())
     end = time.time()
     print('Curio:', end-start)
 

@@ -1,6 +1,6 @@
 # A simple echo server 
 
-from curio import Kernel, run_server
+from curio import boot, run_server
 
 async def echo_handler(client, addr):
     print('Connection from', addr)
@@ -12,5 +12,4 @@ async def echo_handler(client, addr):
     print('Connection closed')
 
 if __name__ == '__main__':
-    kernel = Kernel()
-    kernel.run(run_server('', 25000, echo_handler))
+    boot(run_server('', 25000, echo_handler))

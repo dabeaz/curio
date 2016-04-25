@@ -1,13 +1,14 @@
 curio - concurrent I/O
 ======================
 
-Curio is a library for performing reliable concurrent I/O using
-Python coroutines and the explicit async/await syntax introduced in
-Python 3.5.   Its programming model is based on cooperative
-multitasking and common system programming abstractions such as
-threads, sockets, files, subprocesses, locks, and queues.  Under
-the covers, it is based on a task queuing system that is small, fast,
-and powerful.
+Curio is a library for performing concurrent I/O and common systems
+programming tasks such as controlling subprocesses and farming work
+out to thread and process pools.  It uses Python coroutines and the
+explicit async/await syntax introduced in Python 3.5.  Its programming
+model is based on cooperative multitasking and existing programming
+abstractions such as threads, sockets, files, subprocesses, locks, and
+queues.  Under the covers, it implements a task queuing system that is
+small, flexible, and fast.
 
 Important Disclaimer
 --------------------
@@ -22,7 +23,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
 
     # echoserv.py
     
-    from curio import Kernel, spawn
+    from curio import boot, spawn
     from curio.socket import *
     
     async def echo_server(address):
@@ -47,8 +48,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
         print('Connection closed')
 
     if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(echo_server(('',25000)))
+        boot(echo_server(('',25000)))
 
 If you have programmed with threads, you find that curio looks similar.
 You'll also find that the above server can handle thousands of simultaneous 
@@ -62,7 +62,7 @@ of the code:
 
     # echoserv.py
 
-    from curio import Kernel, run_server
+    from curio import boot, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -74,8 +74,7 @@ of the code:
         print('Connection closed')
 
     if __name__ == '__main__':
-        kernel = Kernel()
-        kernel.run(run_server('', 25000, echo_client))
+        boot(run_server('', 25000, echo_client))
 
 This is only a small sample of what's possible.  Read the `official documentation
 <https://curio.readthedocs.org>`_ for more in-depth coverage.  The `tutorial 
@@ -86,8 +85,8 @@ Additional Features
 
 Curio provides additional support for SSL connections, synchronization
 primitives (events, locks, semaphores, and condition variables),
-queues, Unix signals, subprocesses, as well as thread and process
-pools.  In addition, the task model fully supports cancellation,
+queues, Unix signals, subprocesses, as well as running tasks in
+threads and processes. The task model fully supports cancellation,
 timeouts, monitoring, and other features critical to writing reliable
 code.
 
@@ -129,18 +128,18 @@ Under the Covers
 ----------------
 
 Internally, curio is implemented entirely as a task queuing system--
-much in the same model as how an actual operating system kernel
-works. Tasks are represented by coroutine functions declared with the
-`async` keyword.  Each yield of a coroutine results in a low-level
-kernel "trap" or system call.  The kernel handles each trap by moving
-the current task to an appropriate waiting queue. Events (i.e., due to
+much in the same model of a microkernel based operating system.  Tasks
+are represented by coroutine functions declared with the `async`
+keyword.  Each yield of a coroutine results in a low-level kernel
+"trap" or system call.  The kernel handles each trap by moving the
+current task to an appropriate waiting queue. Events (i.e., due to
 I/O) and other operations make the tasks move from waiting queues back
 into service.
 
-It's important to emphasize that the kernel is solely focused on task
-management, scheduling, and nothing else. In fact, the kernel doesn't
-even perform any I/O operations.  This means that it is very small,
-fast, and straightforward to understand.
+It's important to emphasize that the underlying kernel is solely
+focused on task management and scheduling. In fact, the kernel doesn't
+even perform any I/O operations.  This means that it is very small and
+fast.
 
 Higher-level I/O operations are carried out by a wrapper layer that
 uses Python's normal socket and file objects. You use the
@@ -159,8 +158,8 @@ the handling of those events is done in a completely different manner.
 **Q: Is curio meant to be a clone of asyncio?**
 
 A: No.  Although curio provides a significant amount of overlapping
-functionality, some of the APIs are slightly different.  Compatibility
-with other libraries is not a goal.
+functionality, the API is different (and frankly much simpler). 
+Compatibility with other libaries is not a goal.
 
 **Q: How many tasks can be created?**
 
@@ -179,25 +178,26 @@ something that might be added later.
 
 **Q: How fast is curio?**
 
-A: In preliminary benchmarking of a simple echo server, curio runs
-about 80-100% faster than ``asyncio``.  It runs about 40-50% faster
-than Twisted and at about the same speed as gevent. This is on OS-X so
-your mileage might vary. See the ``examples/benchmark`` directory of
-the distribution for this testing code.
+A: In benchmarking of a simple echo server, curio runs more than 100%
+faster than ``asyncio``.  It runs about 50-60% faster than Twisted and
+at about the same speed as gevent. This is on OS-X so your mileage
+might vary. See the ``examples/benchmark`` directory of the
+distribution for this testing code.
 
 **Q: Is curio going to evolve into a framework?**
 
 A: No. The current goal is merely to provide a small, simple library
-for performing concurrent I/O. It is not anticipated that curio would
-evolve into a framework for implementing application level protocols
-such as HTTP.  Instead, it might serve as a foundation for other packages
-that want to provide that kind of functionality.
+for performing concurrent I/O and common systems operations involving
+interprocess communication and subprocesses. It is not anticipated
+that curio would evolve into a framework for implementing application
+level protocols such as HTTP.  Instead, it might serve as a foundation
+for other packages that want to provide that kind of functionality.
 
 **Q: What are future plans?**
 
-A: Future work on curio will primarily focus on features related to debugging, 
-diagnostics, and reliability.  A primary goal is to provide a solid 
-environment for running and controlling concurrent tasks.
+A: Future work on curio will primarily focus on features related to
+debugging, diagnostics, and reliability.  A primary goal is to provide
+a solid environment for running and controlling concurrent tasks.
 
 **Q: How big is curio?**
 

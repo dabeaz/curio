@@ -2,7 +2,7 @@
 #
 # Echo server using the run_server() function
 
-from curio import Kernel, run_server
+from curio import boot, run_server
 
 async def echo_client(client, addr):
     print('Connection from', addr)
@@ -14,5 +14,4 @@ async def echo_client(client, addr):
     print('Connection closed')
 
 if __name__ == '__main__':
-    kernel = Kernel()
-    kernel.run(run_server('', 25000, echo_client))
+    boot(run_server('', 25000, echo_client))

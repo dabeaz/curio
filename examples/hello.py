@@ -31,9 +31,9 @@ async def kid():
         print('Building the Millenium Falcon in Minecraft')
         total = 0
         for n in range(50):
-             total += await curio.run_cpu_bound(fib, n)
+             total += await curio.run_in_process(fib, n)
     except curio.CancelledError:
-        print('Fine. Saving my work.')
+        print('Fine. Saving my work. I got to', total)
 
 async def parent():
     print('Parent PID', os.getpid())
@@ -42,6 +42,7 @@ async def parent():
     print("Yes, go play")
     await start_evt.set()
 
+    print("Parent says send me a SIGHUP when you want me to leave with the kid")
     await curio.SignalSet(signal.SIGHUP).wait()
 
     print("Let's go")
@@ -56,5 +57,4 @@ async def parent():
     print("Leaving!")
 
 if __name__ == '__main__':
-    kernel = curio.Kernel(with_monitor=True)
-    kernel.run(parent())
+    curio.boot(parent(), with_monitor=True)

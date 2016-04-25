@@ -1,6 +1,6 @@
 # Example: A simple echo server written directly with sockets
 
-from curio import Kernel, spawn
+from curio import boot, spawn
 from curio.socket import *
 
 async def echo_server(address):
@@ -25,5 +25,4 @@ async def echo_client(client):
     print('Connection closed')
 
 if __name__ == '__main__':
-     kernel = Kernel()
-     kernel.run(echo_server(('',25000)))
+     boot(echo_server(('',25000)))
