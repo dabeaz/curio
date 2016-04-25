@@ -1,7 +1,7 @@
 # An example of a server involving a CPU-intensive task.  We'll farm the 
 # CPU-intensive work out to a separate process.
 
-from curio import Kernel, run_cpu_bound, run_server
+from curio import boot, run_in_process, run_server
 
 def fib(n):
     if n <= 2:
@@ -16,7 +16,7 @@ async def fib_handler(client, addr):
         async for line in rfile:
             try:
                 n = int(line)
-                result = await run_cpu_bound(fib, n)
+                result = await run_in_process(fib, n)
                 resp = str(result) + '\n'
                 await wfile.write(resp.encode('ascii'))
             except ValueError:
@@ -24,8 +24,7 @@ async def fib_handler(client, addr):
     print('Connection closed')
 
 if __name__ == '__main__':
-    kernel = Kernel()
-    kernel.run(run_server('', 25000, fib_handler))
+    boot(run_server('', 25000, fib_handler))
 
 
 

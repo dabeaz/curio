@@ -14,5 +14,4 @@ async def main(addr):
         await sock.sendto(data, addr)
 
 if __name__ == '__main__':
-    kernel = curio.Kernel()
-    kernel.run(main(('', 26000)))
+    curio.boot(main(('', 26000)))

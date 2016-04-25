@@ -17,5 +17,4 @@ async def main(addr):
     await sock.close()
 
 if __name__ == '__main__':
-    kernel = curio.Kernel()
-    kernel.run(main(('localhost', 26000)))
+    curio.boot(main(('localhost', 26000)))

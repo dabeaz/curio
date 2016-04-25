@@ -27,7 +27,6 @@ If you're seeing this, it probably worked. Yay!
         await writer.write(time.asctime().encode('ascii'))
 
 if __name__ == '__main__':
-    kernel = curio.Kernel()
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
-    kernel.run(curio.run_server('', 10000, handler, ssl=ssl_context))
+    curio.boot(curio.run_server('', 10000, handler, ssl=ssl_context))

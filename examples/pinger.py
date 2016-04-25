@@ -9,5 +9,4 @@ async def main():
         print('Got:', line.decode('ascii'), end='')
 
 if __name__ == '__main__':
-    kernel = curio.Kernel()
-    kernel.run(main())
+    curio.boot(main())

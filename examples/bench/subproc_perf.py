@@ -15,9 +15,8 @@ async def main(n):
     assert out == input
 
 def curio_test(n):
-    kernel = Kernel()
     start = time.time()
-    kernel.run(main(n))
+    boot(main(n))
     end = time.time()
     print('curio:', end-start)
 

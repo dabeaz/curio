@@ -5,7 +5,6 @@
 import curio
 from curio import ssl
 from curio import network
-import time
 from curio import socket
 
 async def main(host, port):
@@ -22,5 +21,4 @@ async def main(host, port):
     await sock.close()
 
 if __name__ == '__main__':
-    kernel = curio.Kernel()
-    kernel.run(main('localhost', 10000))
+    curio.boot(main('localhost', 10000))

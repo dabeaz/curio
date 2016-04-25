@@ -1,7 +1,7 @@
 # Echo server with cancellation and signal handling
 
 import signal
-from curio import Kernel, spawn, SignalSet, CancelledError, run_server, current_task
+from curio import boot, spawn, SignalSet, CancelledError, run_server, current_task
 
 clients = set()
 
@@ -34,5 +34,4 @@ async def main(host, port):
                 await task.cancel()
 
 if __name__ == '__main__':
-    kernel = Kernel(with_monitor=True)
-    kernel.run(main('', 25000))
+    boot(main('', 25000))

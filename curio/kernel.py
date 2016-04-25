@@ -756,7 +756,8 @@ class Kernel(object):
 
     def stop(self):
         '''
-        Stop the kernel loop.
+        Stop the kernel loop.  Merely sets an internal variable that will
+        force the loop to stop.  Returns immediately.
         '''
         self._running = False
 
@@ -925,6 +926,7 @@ class _TimeoutAfter(object):
         self._seconds = seconds
         self._ignore = ignore
         self._timeout_result = timeout_result
+        self.result = True
 
     async def __aenter__(self):
         self._prior = await _set_timeout(self._seconds)
@@ -974,20 +976,30 @@ def timeout_after(seconds, coro=None):
 def stop_after(seconds, coro=None, *, timeout_result=None):
     '''
     Stop the enclosed task or block of code after seconds have
-    elapsed.  No exception is raised.  There are two ways to use
-    this function. You can call a single coroutine like this:
+    elapsed.  No exception is raised on time expiration. There are
+    two ways to use this function. You can call a single coroutine
+    like this:
     
         if stop_after(5, coro(args)) is None:
             # A timeout occurred
             ...
 
-    or you can use it as asynchronous context manager:
+    If the time period expires, None is returned. The value can be
+    changed by passing the timeout_result keyword argument.
+
+    Alternatively, you can use this function as an async context
+    manager like this:
+
         async with stop_after(5) as r:
             await coro1(args)
             await coro2(args)
             ...
         if r.result is None:
             # A timeout occurred
+
+    When used as a context manager, the return manager object has
+    a result attribute that will be set to None if the time
+    period expires (or True otherwise).
     '''
     if coro is None:
         return _TimeoutAfter(seconds, ignore=True, timeout_result=timeout_result)
@@ -1000,8 +1012,25 @@ async def current_task():
     '''
     return await _get_current()
 
+def boot(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
+    '''
+    Boot the curio kernel with an initial task and run it until
+    termination.  Returns the tasks final result (if any). This is a
+    convenience function that should primarily be used for launching
+    the top-level task of an curio based application.  It creates an
+    entirely new kernel, runs the given task to completion, and
+    concludes by shutting down the kernel.    
+    
+    Don't use this function if you're repeatedly launching a lot of
+    new tasks to run in curio. Instead, create a Kernel instance and
+    use its run() method.
+    '''
+    kernel = Kernel(selector=selector, with_monitor=with_monitor)
+    result = kernel.run(coro, pdb=pdb, log_errors=log_errors, shutdown=True)
+    return result
+
 __all__ = [ 'Kernel', 'sleep', 'spawn', 'timeout_after', 'stop_after', 'current_task',
-            'SignalSet', 'TaskError', 'TaskTimeout', 'CancelledError' ]
+            'SignalSet', 'TaskError', 'TaskTimeout', 'CancelledError', 'boot' ]
             
 from .monitor import Monitor
         
