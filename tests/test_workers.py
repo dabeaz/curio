@@ -66,7 +66,7 @@ def test_worker_cancel(kernel, runner):
             n -= 1
 
     async def blocking(n):
-         task = await new_task(runner(time.sleep, n))
+         task = await spawn(runner(time.sleep, n))
          await sleep(0.55)
          await task.cancel()
          try:

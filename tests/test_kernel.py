@@ -42,7 +42,7 @@ def test_sleep_cancel(kernel):
             results.append('cancelled')
 
     async def main():
-        task = await new_task(sleeper())
+        task = await spawn(sleeper())
         await sleep(0.5)
         await task.cancel()
 
@@ -66,7 +66,7 @@ def test_sleep_timeout(kernel):
             results.append('timeout')
 
     async def main():
-        task = await new_task(sleeper())
+        task = await spawn(sleeper())
         await task.join()
 
     kernel.add_task(main())
@@ -91,7 +91,7 @@ def test_sleep_notimeout(kernel):
         results.append('here2')
 
     async def main():
-        task = await new_task(sleeper())
+        task = await spawn(sleeper())
         await task.join()
 
     kernel.add_task(main())
@@ -112,7 +112,7 @@ def test_task_join(kernel):
         return 37
 
     async def main():
-        task = await new_task(child())
+        task = await spawn(child())
         await sleep(0.1)
         results.append('joining')
         r = await task.join()
@@ -135,7 +135,7 @@ def test_task_join_error(kernel):
         int('bad')
 
     async def main():
-        task = await new_task(child())
+        task = await spawn(child())
         await sleep(0.1)
         results.append('joining')
         try:
@@ -168,7 +168,7 @@ def test_task_cancel(kernel):
             results.append('cancelled')
 
     async def main():
-        task = await new_task(child())
+        task = await spawn(child())
         results.append('cancel start')
         await sleep(0.1)
         results.append('cancelling')
@@ -195,7 +195,7 @@ def test_task_cancel_join(kernel):
         results.append('end')
 
     async def main():
-        task = await new_task(child())
+        task = await spawn(child())
         results.append('cancel start')
         await sleep(0.1)
         results.append('cancelling')
@@ -235,9 +235,9 @@ def test_task_cancel_join_wait(kernel):
         await task.cancel()
 
     async def main():
-        task = await new_task(child())
+        task = await spawn(child())
         results.append('cancel start')
-        await new_task(canceller(task))
+        await spawn(canceller(task))
         try:
             results.append('join')
             await task.join()     # Should raise TaskError... with CancelledError as cause
@@ -272,7 +272,7 @@ def test_task_child_cancel(kernel):
 
     async def parent():
         try:
-             child_task = await new_task(child())
+             child_task = await spawn(child())
              await sleep(0.5)
              results.append('end parent')
         except CancelledError:
@@ -281,7 +281,7 @@ def test_task_child_cancel(kernel):
 
     async def grandparent():
         try:
-            parent_task = await new_task(parent())
+            parent_task = await spawn(parent())
             await sleep(0.5)
             results.append('end grandparent')
         except CancelledError:
@@ -289,7 +289,7 @@ def test_task_child_cancel(kernel):
             results.append('grandparent cancelled')
 
     async def main():
-        task = await new_task(grandparent())
+        task = await spawn(grandparent())
         await sleep(0.1)
         results.append('cancel start')
         await sleep(0.1)
@@ -326,7 +326,7 @@ def test_task_ready_cancel(kernel):
             results.append('child cancelled')
 
     async def parent():
-        task = await new_task(child())
+        task = await spawn(child())
         results.append('parent sleep')
         await sleep(0.5)
         results.append('cancel start')
@@ -334,7 +334,7 @@ def test_task_ready_cancel(kernel):
         results.append('cancel done')
 
     async def main():
-        task = await new_task(parent())
+        task = await spawn(parent())
         await sleep(0.1)
         time.sleep(1)      # Forced block of the event loop. Both tasks should awake when we come back
         await sleep(0.1)

@@ -15,7 +15,7 @@ def test_task_signal(kernel):
             results.append(signo)
 
     async def main():
-        task = await new_task(child())
+        task = await spawn(child())
         await sleep(0.1)
         results.append('sending USR1')
         os.kill(os.getpid(), signal.SIGUSR1)
@@ -46,7 +46,7 @@ def test_task_signal_waitone(kernel):
         results.append(signo)
 
     async def main():
-        task = await new_task(child())
+        task = await spawn(child())
         await sleep(0.1)
         results.append('sending USR1')
         os.kill(os.getpid(), signal.SIGUSR1)
@@ -79,7 +79,7 @@ def test_task_signal_ignore(kernel):
              results.append('here')
 
     async def main():
-        task = await new_task(child())
+        task = await spawn(child())
         await sleep(0.1)
         results.append('sending USR1')
         os.kill(os.getpid(), signal.SIGUSR1)
@@ -112,7 +112,7 @@ def test_task_signal_timeout(kernel):
                 results.append('timeout')
 
     async def main():
-        task = await new_task(child())
+        task = await spawn(child())
         await task.join()
         results.append('done')
 

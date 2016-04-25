@@ -6,7 +6,7 @@ import time
 import subprocess
 import asyncio
 
-input = (b'aaa '*10 + b'\n')*50000
+input = (b'aaa '*10 + b'\n')*1000
 cmd = ['cat']
 
 async def main(n):

@@ -13,7 +13,7 @@ def test_tcp_echo(kernel):
         results.append('accept wait')
         client, addr = await sock.accept()
         results.append('accept done')
-        await new_task(handler(client))
+        await spawn(handler(client))
         await sock.close()
 
     async def handler(client):
@@ -73,7 +73,7 @@ def test_tcp_file_echo(kernel):
         results.append('accept wait')
         client, addr = await sock.accept()
         results.append('accept done')
-        await new_task(handler(client))
+        await spawn(handler(client))
         await sock.close()
 
     async def handler(client):
@@ -201,7 +201,7 @@ def test_accept_cancel(kernel):
         await sock.close()
 
     async def canceller():
-         task = await new_task(server(('',25000)))
+         task = await spawn(server(('',25000)))
          await sleep(0.5)
          await task.cancel()
 
@@ -231,7 +231,7 @@ def test_recv_timeout(kernel):
         await sock.close()
 
     async def canceller():
-         task = await new_task(server(('',25000)))
+         task = await spawn(server(('',25000)))
          sock = socket(AF_INET, SOCK_STREAM)
          results.append('client connect')
          await sock.connect(('localhost', 25000))
@@ -269,7 +269,7 @@ def test_recv_cancel(kernel):
         await sock.close()
 
     async def canceller():
-         task = await new_task(server(('',25000)))
+         task = await spawn(server(('',25000)))
          sock = socket(AF_INET, SOCK_STREAM)
          results.append('client connect')
          await sock.connect(('localhost', 25000))
@@ -304,7 +304,7 @@ def test_recvfrom_timeout(kernel):
         await sock.close()
 
     async def canceller():
-         await new_task(server(('',25000)))
+         await spawn(server(('',25000)))
          await sleep(1.0)
          results.append('client done')
 
@@ -332,7 +332,7 @@ def test_recvfrom_cancel(kernel):
         await sock.close()
 
     async def canceller():
-         task = await new_task(server(('',25000)))
+         task = await spawn(server(('',25000)))
          await sleep(1.0)
          await task.cancel()
          results.append('client done')

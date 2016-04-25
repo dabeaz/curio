@@ -18,8 +18,8 @@ def test_queue_simple(kernel):
     async def producer():
         queue = Queue()
         results.append('producer_start')
-        await new_task(consumer(queue, 'cons1'))
-        await new_task(consumer(queue, 'cons2'))
+        await spawn(consumer(queue, 'cons1'))
+        await spawn(consumer(queue, 'cons2'))
         await sleep(0.1)
         for n in range(4):
             await queue.put(n)
@@ -60,7 +60,7 @@ def test_queue_unbounded(kernel):
     async def producer():
         queue = Queue()
         results.append('producer_start')
-        await new_task(consumer(queue, 'cons1'))
+        await spawn(consumer(queue, 'cons1'))
         await sleep(0.1)
         for n in range(4):
             await queue.put(n)
@@ -100,7 +100,7 @@ def test_queue_bounded(kernel):
     async def producer():
         queue = Queue(maxsize=2)
         results.append('producer_start')
-        await new_task(consumer(queue, 'cons1'))
+        await spawn(consumer(queue, 'cons1'))
         await sleep(0.1)
         for n in range(4):
             await queue.put(n)
@@ -141,7 +141,7 @@ def test_queue_get_cancel(kernel):
               results.append('consumer cancelled')
 
     async def driver():
-        task = await new_task(consumer())
+        task = await spawn(consumer())
         await sleep(0.5)
         await task.cancel()
 
@@ -167,7 +167,7 @@ def test_queue_put_cancel(kernel):
             results.append('producer_cancel')
 
     async def driver():
-        task = await new_task(producer())
+        task = await spawn(producer())
         await sleep(0.5)
         await task.cancel()
 

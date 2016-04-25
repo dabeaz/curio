@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 from . import socket
 from . import ssl as curiossl
-from .kernel import new_task
+from .kernel import spawn
 
 __all__ = [ 
     'open_connection',
@@ -99,7 +99,7 @@ class Server(object):
                 if self._ssl:
                     client = self._ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
 
-                client_task = await new_task(self.run_client(client, addr))
+                client_task = await spawn(self.run_client(client, addr))
                 del client
 
     async def run_client(self, client, addr):

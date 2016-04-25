@@ -1,7 +1,7 @@
 # An example of a server involving a CPU-intensive task.  We'll farm the 
 # CPU-intensive work out to a separate process.
 
-from curio import Kernel, new_task, run_cpu_bound, run_server
+from curio import Kernel, run_cpu_bound, run_server
 
 def fib(n):
     if n <= 2:

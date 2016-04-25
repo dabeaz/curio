@@ -75,7 +75,7 @@ class TestEvent:
 
         async def event_cancel(seconds):
               evt = Event()
-              task = await new_task(event_waiter(evt))
+              task = await spawn(event_waiter(evt))
               results.append('sleep')
               await sleep(seconds)
               results.append('cancel_start')
@@ -103,7 +103,7 @@ class TestEvent:
 
         async def event_run(seconds):
               evt = Event()
-              task = await new_task(event_waiter(evt))
+              task = await spawn(event_waiter(evt))
               results.append('sleep')
               await sleep(seconds)
               results.append('sleep_done')
@@ -136,7 +136,7 @@ class TestEvent:
 
         async def event_run():
               evt = Event()
-              task = await new_task(event_waiter(evt))
+              task = await spawn(event_waiter(evt))
               results.append('sleep')
               await sleep(0.25)
               results.append('event_set')
@@ -200,7 +200,7 @@ class TestLock:
         async def worker_cancel(seconds):
               lck = Lock()
               async with lck:
-                  task = await new_task(worker(lck))
+                  task = await spawn(worker(lck))
                   results.append('sleep')
                   await sleep(seconds)
                   results.append('cancel_start')
@@ -231,7 +231,7 @@ class TestLock:
         async def worker_timeout(seconds):
               lck = Lock()
               async with lck:
-                  await new_task(worker(lck))
+                  await spawn(worker(lck))
                   results.append('sleep')
                   await sleep(seconds)
                   results.append('sleep_done')
@@ -319,7 +319,7 @@ class TestSemaphore:
         async def worker_cancel(seconds):
               lck = Semaphore()
               async with lck:
-                  task = await new_task(worker(lck))
+                  task = await spawn(worker(lck))
                   results.append('sleep')
                   await sleep(seconds)
                   results.append('cancel_start')
@@ -350,7 +350,7 @@ class TestSemaphore:
         async def worker_timeout(seconds):
               lck = Semaphore()
               async with lck:
-                  await new_task(worker(lck))
+                  await spawn(worker(lck))
                   results.append('sleep')
                   await sleep(seconds)
                   results.append('sleep_done')
@@ -450,7 +450,7 @@ class TestCondition:
 
         async def worker_cancel(seconds):
               cond = Condition()
-              task = await new_task(worker(cond))
+              task = await spawn(worker(cond))
               results.append('sleep')
               await sleep(seconds)
               results.append('cancel_start')
@@ -480,7 +480,7 @@ class TestCondition:
 
         async def worker_cancel(seconds):
               cond = Condition()
-              task = await new_task(worker(cond))
+              task = await spawn(worker(cond))
               results.append('sleep')
               await sleep(seconds)
               results.append('done')
@@ -504,9 +504,9 @@ class TestCondition:
 
         async def worker_notify(seconds):
               cond = Condition()
-              await new_task(worker(cond))
-              await new_task(worker(cond))
-              await new_task(worker(cond))
+              await spawn(worker(cond))
+              await spawn(worker(cond))
+              await spawn(worker(cond))
               results.append('sleep')
               await sleep(seconds)
               async with cond:

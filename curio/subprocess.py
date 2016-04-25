@@ -6,7 +6,7 @@
 #
 # Curio clone of the subprocess module.  
 
-from .kernel import  new_task, sleep, TaskTimeout, timeout_after
+from .kernel import  spawn, sleep, TaskTimeout, timeout_after
 from .io import Stream
 import subprocess
 
@@ -54,7 +54,7 @@ class Popen(object):
                 if retcode is not None:
                     return retcode
                 await sleep(0.0005)
-        task = await new_task(waiter())
+        task = await spawn(waiter())
         try:
             return await timeout_after(timeout, task.join())
         except TaskTimeout:
@@ -62,30 +62,21 @@ class Popen(object):
             raise TimeoutExpired(self.args, timeout) from None
 
     async def communicate(self, input=b'', timeout=None):
-        if input:
-            assert self.stdin
-            async def writer():
-                await self.stdin.write(input)
-                await self.stdin.close()
-            stdin_task = await writer()
-        else:
-            stdin_task = None
-
-        stdout_task = await new_task(self.stdout.readall()) if self.stdout else None
-        stderr_task = await new_task(self.stderr.readall()) if self.stderr else None
-
-        # Collect the output from the workers
+        stdout_task = await spawn(self.stdout.readall()) if self.stdout else None
+        stderr_task = await spawn(self.stderr.readall()) if self.stderr else None
         try:
-            if stdin_task:
-                await timeout_after(timeout, stdin_task.join())
+            if input:
+                await timeout_after(timeout, self.stdin.write(input))
+                await self.stdin.close()
+                self.stdin = None
+
+            # Collect the output from the workers
             stdout = await timeout_after(timeout, stdout_task.join()) if stdout_task else b''
             stderr = await timeout_after(timeout, stderr_task.join()) if stderr_task else b''
             return (stdout, stderr)
         except TaskTimeout:
             await stdout_task.cancel()
             await stderr_task.cancel()
-            if stdin_task:
-                await stdin_task.cancel()
             raise
 
     def __enter__(self):
@@ -133,6 +124,7 @@ async def run(args, *, stdin=None, input=None, stdout=None, stderr=None, shell=F
                                  output=stdout, stderr=stderr)
     return CompletedProcess(process.args, retcode, stdout, stderr)
 
-async def check_output(args, *, stdin=None, stderr=None, shell=False, timeout=None):
-     out = await run(args, stdout=PIPE, stdin=stdin, stderr=stderr, shell=shell, timeout=timeout, check=True)
+async def check_output(args, *, stdin=None, stderr=None, shell=False, input=None, timeout=None):
+     out = await run(args, stdout=PIPE, stdin=stdin, stderr=stderr, shell=shell, 
+                     timeout=timeout, check=True, input=input)
      return out.stdout

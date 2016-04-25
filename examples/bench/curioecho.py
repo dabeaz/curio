@@ -1,7 +1,6 @@
 # A simple echo server 
 
-from curio import Kernel, new_task, run_server
-
+from curio import Kernel, run_server
 
 async def echo_handler(client, addr):
     print('Connection from', addr)

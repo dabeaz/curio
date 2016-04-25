@@ -20,7 +20,6 @@ and used in the main execution thread.
 
 There are only a few methods that may be used on a :class:`Kernel` outside of coroutines.
 
-
 .. method:: Kernel.run(coro=None, pdb=False, log_errors=True)
 
    Runs the kernel until all non-daemonic tasks have finished execution.
@@ -63,7 +62,7 @@ Tasks
 Once the kernel is running, a coroutine can create a new task using the following
 function:
 
-.. asyncfunction:: new_task(coro, daemon=False)
+.. asyncfunction:: spawn(coro, daemon=False)
 
    Create a new task.  *coro* is a newly called coroutine.  Does not
    return to the caller until the new task has been scheduled and executed for at least
@@ -74,7 +73,7 @@ function:
 
 .. class:: Task
 
-  Tasks created by :func:`new_task` are represented as a :class:`Task` instance.
+  Tasks created by :func:`spawn` are represented as a :class:`Task` instance.
   It is illegal to create a :class:`Task` instance directly by calling the class.
   The following methods are available on tasks:
 
@@ -97,11 +96,6 @@ function:
    immediately.  Returns True if the task is actually cancelled. False
    is returned if the task was already finished prior to cancellation.
 
-.. asyncmethod:: Task.cancel_children(*, exc=CancelledError)
-
-   Cancels all of the immediate children of this task. *exc* specifies
-   a different exception if desired.
-
 The following public attributes are available of :class:`Task` instances:
 
 .. attribute:: Task.id
@@ -122,13 +116,6 @@ The following public attributes are available of :class:`Task` instances:
    A tuple of exception information obtained from :py:func:`sys.exc_info` if the
    task crashes for some reason.  Potentially useful for debugging.
 
-.. attribute:: Task.children
-
-   A set of the immediate child tasks created by this task.  Useful if writing
-   code that needs to supervise a collection of tasks.  Be aware that the
-   contents of the set may change as tasks are scheduled.  To safely iterate
-   and perform asynchronous operations, make a copy first.
-
 If you need to make a task sleep for awhile, use the following function:
 
 .. asyncfunction:: sleep(seconds)
@@ -136,6 +123,13 @@ If you need to make a task sleep for awhile, use the following function:
    Sleep for a specified number of seconds.  If the number of seconds is 0, the
    kernel merely switches to the next task (if any).
 
+If a coroutine needs to obtain a reference to the currently running task, use
+the following:
+
+.. asyncfunction:: current_task()
+
+   Returns a reference to the :class:`Task` instance corresponding to the
+   currently running task.
 
 Performing External Work
 ------------------------
@@ -483,15 +477,19 @@ High Level Networking
 The following functions are provided to simplify common tasks related to
 making network connections and writing servers.
 
-.. asyncfunction:: open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None, timeout=None)
+.. asyncfunction:: open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None)
 
-   Creates an outgoing connection to a server at *host* and *port*. This connection is made using
-   the :py:func:`socket.create_connection` function and might be IPv4 or IPv6 depending on
-   the network configuration (although you're not supposed to worry about it).  *ssl* specifies
-   whether or not SSL should be used.  *ssl* can be ``True`` or an instance of
-   :class:`curio.ssl.SSLContext`.  *source_addr* specifies the source address to use
-   on the socket.  *server_hostname* specifies the hostname to check against when making SSL
-   connections.  It is highly advised that this be supplied to avoid man-in-the-middle attacks.
+   Creates an outgoing connection to a server at *host* and
+   *port*. This connection is made using the
+   :py:func:`socket.create_connection` function and might be IPv4 or
+   IPv6 depending on the network configuration (although you're not
+   supposed to worry about it).  *ssl* specifies whether or not SSL
+   should be used.  *ssl* can be ``True`` or an instance of
+   :class:`curio.ssl.SSLContext`.  *source_addr* specifies the source
+   address to use on the socket.  *server_hostname* specifies the
+   hostname to check against when making SSL connections.  It is
+   highly advised that this be supplied to avoid man-in-the-middle
+   attacks.
 
 .. asyncfunction:: open_unix_connection(path, *, ssl=None, server_hostname=None):
 
@@ -499,16 +497,20 @@ making network connections and writing servers.
 
 .. function:: create_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
 
-   Creates a :class:`Server` instance for receiving TCP connections on a given host and port.
-   *client_connected_task* is a coroutine that is to be called to handle each connection.
-   Family specifies the address family and is either :py:const:`socket.AF_INET` or :py:const:`socket.AF_INET6`.
-   *backlog* is the argument to the :py:meth:`socket.socket.listen` method.  *ssl* specifies an
-   :class:`curio.ssl.SSLContext` instance to use. *reuse_address* specifies whether to reuse a previously
-   used port.   This method does not actually start running the created server.  To
-   do that, you need to use :meth:`Server.serve_forever` method on the returned
-   :class:`Server` instance.   Normally, it's easier to use :func:`run_server` instead. Only
-   use :func:`create_server` if you need to do something else with the :class:`Server` instance
-   for some reason.
+   Creates a :class:`Server` instance for receiving TCP connections on
+   a given host and port.  *client_connected_task* is a coroutine that
+   is to be called to handle each connection.  Family specifies the
+   address family and is either :py:const:`socket.AF_INET` or
+   :py:const:`socket.AF_INET6`.  *backlog* is the argument to the
+   :py:meth:`socket.socket.listen` method.  *ssl* specifies an
+   :class:`curio.ssl.SSLContext` instance to use. *reuse_address*
+   specifies whether to reuse a previously used port.  This method
+   does not actually start running the created server.  To do that,
+   you need to use :meth:`Server.serve_forever` method on the returned
+   :class:`Server` instance.  Normally, it's easier to use
+   :func:`run_server` instead. Only use :func:`create_server` if you
+   need to do something else with the :class:`Server` instance for
+   some reason.
 
 .. asyncfunction:: run_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
 
@@ -516,21 +518,26 @@ making network connections and writing servers.
 
 .. function:: create_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
-   Creates a Unix domain server on a given path. *client_connected_task* is a coroutine to
-   execute on each connection. *backlog* is the argument given to the :py:meth:`socket.socket.listen` method.
-   *ssl* is an optional :class:`curio.ssl.SSLContext` to use if setting up an SSL connection.   Returns a
-   :class:`Server` instance.  To start running the server use :meth:`Server.serve_forever`.
+   Creates a Unix domain server on a given
+   path. *client_connected_task* is a coroutine to execute on each
+   connection. *backlog* is the argument given to the
+   :py:meth:`socket.socket.listen` method.  *ssl* is an optional
+   :class:`curio.ssl.SSLContext` to use if setting up an SSL
+   connection.  Returns a :class:`Server` instance.  To start running
+   the server use :meth:`Server.serve_forever`.
 
 .. asyncfunction:: run_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
-   Creates a Unix domain server using :func:`create_unix_server` and immediately starts running it.
+   Creates a Unix domain server using :func:`create_unix_server` and
+   immediately starts running it.
 
 Synchronization Primitives
 --------------------------
 
-The following synchronization primitives are available. Their behavior is
-similar to their equivalents in the :mod:`threading` module.  None of these
-primitives are safe to use with threads created by the built-in :mod:`threading` module.
+The following synchronization primitives are available. Their behavior
+is similar to their equivalents in the :mod:`threading` module.  None
+of these primitives are safe to use with threads created by the
+built-in :mod:`threading` module.
 
 .. class:: Event()
 
@@ -566,9 +573,9 @@ Here is an Event example::
     async def main():
         evt = curio.Event()
 	# Create a few waiters
-        await curio.new_task(waiter(evt))
-        await curio.new_task(waiter(evt))
-        await curio.new_task(waiter(evt))
+        await curio.spawn(waiter(evt))
+        await curio.spawn(waiter(evt))
+        await curio.spawn(waiter(evt))
 
         await curio.sleep(5)
 
@@ -605,7 +612,7 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
         lck = curio.Lock()
         async with lck:
             print('Parent has the lock')
-            await curio.new_task(child(lck))
+            await curio.spawn(child(lck))
             await curio.sleep(5)
 
 .. class:: Semaphore(value=1)
@@ -648,7 +655,7 @@ limit the number of tasks performing an operation.  For example::
 
          # Launch a bunch of tasks
          for n in range(10):
-             await curio.new_task(worker(sema))
+             await curio.spawn(worker(sema))
 
          # After this point, you should see two tasks at a time run. Every 5 seconds.
 
@@ -713,8 +720,8 @@ scenario::
 
      async def main():
          cond = curio.Condition()
-         await curio.new_task(producer(cond))
-         await curio.new_task(consumer(cond))
+         await curio.spawn(producer(cond))
+         await curio.spawn(consumer(cond))
 
 Queues
 ------
@@ -777,8 +784,8 @@ Here is an example of using queues in a producer-consumer problem::
 
     async def main():
         q = curio.Queue()
-        prod_task = await curio.new_task(producer(q))
-        cons_task = await curio.new_task(consumer(q))
+        prod_task = await curio.spawn(producer(q))
+        cons_task = await curio.spawn(consumer(q))
         await prod_task.join()
         await cons_task.cancel()
 
@@ -935,10 +942,11 @@ looks roughly like this::
                     await _read_wait(self._socket)
         ...
 
-This method first tries to receive data.  If none is available, the :func:`_read_wait` call is used to
-put the task to sleep until reading can be performed. When it awakes, the receive operation
-is retried. Just to emphasize, the :func:`_read_wait` doesn't actually perform any I/O. It's just
-scheduling a task for it.
+This method first tries to receive data.  If none is available, the
+:func:`_read_wait` call is used to put the task to sleep until reading
+can be performed. When it awakes, the receive operation is
+retried. Just to emphasize, the :func:`_read_wait` doesn't actually
+perform any I/O. It's just scheduling a task for it.
 
 Here's an example of code that implements a mutex lock::
 
@@ -959,7 +967,7 @@ Here's an example of code that implements a mutex lock::
              else:
                  self._acquired = False
 
-In this code you can see the low-level calls related to managing a wait queue. This
-code is not significantly different than the actual implementation of a lock
-in curio.   If you wanted to make your own task synchronization objects, the
-code would look similar.
+In this code you can see the low-level calls related to managing a
+wait queue. This code is not significantly different than the actual
+implementation of a lock in curio.  If you wanted to make your own
+task synchronization objects, the code would look similar.
