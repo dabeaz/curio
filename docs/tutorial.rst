@@ -60,11 +60,11 @@ Let's add a few more tasks into the mix::
         await curio.sleep(1000)
 
     async def parent():
-        kid_task = await curio.new_task(kid())
+        kid_task = await curio.spawn(kid())
         await curio.sleep(5)
 
         print("Let's go")
-        count_task = await curio.new_task(countdown(10))
+        count_task = await curio.spawn(countdown(10))
         await count_task.join()
 
         print("We're leaving!")
@@ -76,7 +76,7 @@ Let's add a few more tasks into the mix::
         kernel.run(parent())
 
 This program illustrates the process of creating and joining with
-tasks.  Here, the ``parent()`` task uses the ``curio.new_task()``
+tasks.  Here, the ``parent()`` task uses the ``curio.spawn()``
 coroutine to launch a new child task.  After sleeping briefly, it then
 launches the ``countdown()`` task.  The ``join()`` method is used to
 wait for a task to finish.  In this example, the parent first joins
@@ -175,11 +175,11 @@ not necessary to do this in the monitor.  Change the parent task to
 include a timeout and a cancellation request like this::
 
     async def parent():
-        kid_task = await curio.new_task(kid())
+        kid_task = await curio.spawn(kid())
         await curio.sleep(5)
 
         print("Let's go")
-        count_task = await curio.new_task(countdown(10))
+        count_task = await curio.spawn(countdown(10))
         await count_task.join()
 
         print("We're leaving!")
@@ -250,7 +250,7 @@ parent's permission to start playing::
             print('Fine. Saving my work.')
 
     async def parent():
-        kid_task = await curio.new_task(kid())
+        kid_task = await curio.spawn(kid())
         await curio.sleep(5)
 
         print("Yes, go play")
@@ -258,7 +258,7 @@ parent's permission to start playing::
         await curio.sleep(5)
 
         print("Let's go")
-        count_task = await curio.new_task(countdown(10))
+        count_task = await curio.spawn(countdown(10))
         await count_task.join()
 
         print("We're leaving!")
@@ -305,7 +305,7 @@ time to go.  Modify the code to wait on a ``SignalSet`` like this::
 
     async def parent():
         print('Parent PID', os.getpid())
-        kid_task = await curio.new_task(kid())
+        kid_task = await curio.spawn(kid())
         await curio.sleep(5)
 
         print("Yes, go play")
@@ -314,7 +314,7 @@ time to go.  Modify the code to wait on a ``SignalSet`` like this::
         await curio.SignalSet(signal.SIGHUP).wait()
      
         print("Let's go")
-        count_task = await curio.new_task(countdown(10))
+        count_task = await curio.spawn(countdown(10))
         await count_task.join()
         print("We're leaving!")
         try:
@@ -465,7 +465,7 @@ A Simple Echo Server
 Now that you've got the basics down, let's look at some I/O. Here
 is a simple echo server written directly with sockets using curio::
 
-    from curio import Kernel, new_task
+    from curio import Kernel, spawn
     from curio.socket import *
     
     async def echo_server(address):
@@ -477,7 +477,7 @@ is a simple echo server written directly with sockets using curio::
         async with sock:
             while True:
                 client, addr = await sock.accept()
-                await new_task(echo_client(client, addr))
+                await spawn(echo_client(client, addr))
     
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -534,7 +534,7 @@ A lot of the above code involving sockets is fairly repetitive.  Instead
 of writing the part that sets up the server, you can simplify the above example
 using ``run_server()`` like this::
 
-    from curio import Kernel, new_task, run_server
+    from curio import Kernel, spawn, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -560,7 +560,7 @@ A Stream-Based Echo Server
 In certain cases, it might be easier to work with a socket connection
 using a file-like stream interface.  Here is an example::
 
-    from curio import Kernel, new_task, run_server
+    from curio import Kernel, spawn, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -582,7 +582,7 @@ now use standard file methods such as ``read()``, ``readline()``, and
 ``write()``.  One feature of streams is that you can easily read data
 line-by-line using an ``async for`` statement like this::
 
-    from curio import Kernel, new_task, run_server
+    from curio import Kernel, spawn, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -607,7 +607,7 @@ Let's make a slightly more sophisticated echo server that responds
 to a Unix signal::
 
     import signal
-    from curio import Kernel, new_task, SignalSet, CancelledError, run_server
+    from curio import Kernel, spawn, SignalSet, CancelledError, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -625,7 +625,7 @@ to a Unix signal::
         while True:
             async with SignalSet(signal.SIGHUP) as sigset:
                 print('Starting the server')
-                serv_task = await new_task(run_server(host, port, echo_client))
+                serv_task = await spawn(run_server(host, port, echo_client))
 
 		# Wait for a restart signal
                 await sigset.wait()
@@ -786,7 +786,7 @@ synchronous code outside of curio.  To do this, you can temporarily put sockets 
 streams into blocking mode and expose the raw socket or file
 underneath.  Use the ``blocking()`` context manager method as shown here::
 
-    from curio import Kernel, new_task, run_server
+    from curio import Kernel, spawn, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -814,7 +814,7 @@ it could potentially block the curio kernel.  If you're not sure,
 combine your operation with the ``run_blocking()`` function. For
 example::
 
-    from curio import Kernel, new_task, run_server, run_blocking
+    from curio import Kernel, spawn, run_server, run_blocking
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -898,8 +898,8 @@ For example::
 
     async def main():
         q = curio.Queue()
-        prod_task = await curio.new_task(producer(q))
-        cons_task = await curio.new_task(consumer(q))
+        prod_task = await curio.spawn(producer(q))
+        cons_task = await curio.spawn(consumer(q))
         await prod_task.join()
         await cons_task.cancel()
 

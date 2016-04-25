@@ -159,7 +159,7 @@ class Kernel(object):
     __slots__ = ('_selector', '_ready', '_tasks', 
                  '_signal_sets', '_default_signals', '_njobs', '_running',
                  '_notify_sock', '_wait_sock', '_kernel_task_id', '_wake_queue',
-                 '_process_pool', '_thread_pool')
+                 '_process_pool', '_thread_pool', '_crash_handler')
 
     def __init__(self, *, selector=None, with_monitor=False):
         if selector is None:
@@ -183,6 +183,9 @@ class Kernel(object):
         # Optional process/thread pools (see workers.py)
         self._thread_pool = None
         self._process_pool = None
+
+        # Optional crash handler callback
+        self._crash_handler = None
 
         # If a monitor is specified, launch it
         if with_monitor or 'CURIOMONITOR' in os.environ:
@@ -483,7 +486,7 @@ class Kernel(object):
                 event.set()
 
         # Add a new task to the kernel
-        def _trap_new_task(_, coro, daemon):
+        def _trap_spawn(_, coro, daemon):
             task = self._new_task(coro, daemon)
             _reschedule_task(current, value=task)
 
@@ -683,6 +686,10 @@ class Kernel(object):
                     _cleanup_task(current, exc=exc)
                     if log_errors:
                         log.error('Curio: Task Crash: %s' % current, exc_info=True)
+
+                    if self._crash_handler:
+                        self._crash_handler(current)
+
                     if pdb:
                         import pdb as _pdb
                         _pdb.post_mortem(current.exc_info[2])
@@ -727,6 +734,15 @@ class Kernel(object):
         else:
             return None
 
+    # ----- Public Interface
+
+    def set_crash_handler(self, callback):
+        '''
+        Set a callback function to be invoked when a Task crashes due
+        to an unexpected exception.  callback is a callable that accepts
+        a Task instance as input.
+        '''
+        self._crash_handler = callback
 
     def add_task(self, coro, daemon=False):
         '''
@@ -794,11 +810,11 @@ def _sleep(seconds):
     yield ('_trap_sleep', seconds)
 
 @coroutine
-def _new_task(coro, daemon):
+def _spawn(coro, daemon):
     '''
     Create a new task
     '''
-    return (yield '_trap_new_task', coro, daemon)
+    return (yield '_trap_spawn', coro, daemon)
 
 @coroutine
 def _cancel_task(task, exc=CancelledError):
@@ -898,23 +914,94 @@ async def sleep(seconds):
     '''
     await _sleep(seconds)
 
-async def new_task(coro, *, daemon=False):
+async def spawn(coro, *, daemon=False):
     '''
     Create a new task.
     '''
-    return await _new_task(coro, daemon)
+    return await _spawn(coro, daemon)
 
-async def timeout_after(seconds, coro):
+class _TimeoutAfter(object):
+    def __init__(self, seconds, ignore=False, timeout_result=None):
+        self._seconds = seconds
+        self._ignore = ignore
+        self._timeout_result = timeout_result
+
+    async def __aenter__(self):
+        self._prior = await _set_timeout(self._seconds)
+        return self
+
+    async def __aexit__(self, ty, val, tb):
+        await _unset_timeout(self._prior)
+        if ty == TaskTimeout:
+            self.result = self._timeout_result
+            if self._ignore:
+                return True
+
+async def _timeout_after_func(seconds, coro, ignore=False, timeout_result=None):
     '''
     Runs a coroutine with a timeout applied.
     '''
     prior = await _set_timeout(seconds)
     try:
         return await coro
+    except TaskTimeout:
+        if not ignore:
+            raise
+        return timeout_result
     finally:
         await _unset_timeout(prior)
 
-__all__ = [ 'Kernel', 'sleep', 'new_task', 'timeout_after', 'SignalSet', 'TaskError', 'TaskTimeout', 'CancelledError' ]
+def timeout_after(seconds, coro=None):
+    '''
+    Raise a TaskTimeout exception in the calling task after seconds
+    have elapsed.  This function may be used in two ways. You can
+    apply it to a single coroutine:
+
+         await timeout_after(seconds, coro(args))
+
+    or you can use it as an asynchronous context manager:
+
+         async with timeout_after(seconds):
+             await coro1(args)
+             await coro2(args)
+             ...
+    '''
+    if coro is None:
+        return _TimeoutAfter(seconds)
+    else:
+        return _timeout_after_func(seconds, coro)
+
+def stop_after(seconds, coro=None, *, timeout_result=None):
+    '''
+    Stop the enclosed task or block of code after seconds have
+    elapsed.  No exception is raised.  There are two ways to use
+    this function. You can call a single coroutine like this:
+    
+        if stop_after(5, coro(args)) is None:
+            # A timeout occurred
+            ...
+
+    or you can use it as asynchronous context manager:
+        async with stop_after(5) as r:
+            await coro1(args)
+            await coro2(args)
+            ...
+        if r.result is None:
+            # A timeout occurred
+    '''
+    if coro is None:
+        return _TimeoutAfter(seconds, ignore=True, timeout_result=timeout_result)
+    else:
+        return _timeout_after_func(seconds, coro, ignore=True, timeout_result=timeout_result)
+
+async def current_task():
+    '''
+    Returns a reference to the current task
+    '''
+    return await _get_current()
+
+__all__ = [ 'Kernel', 'sleep', 'spawn', 'timeout_after', 'stop_after', 'current_task',
+            'SignalSet', 'TaskError', 'TaskTimeout', 'CancelledError' ]
             
 from .monitor import Monitor
         

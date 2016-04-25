@@ -1,5 +1,7 @@
 CHANGES
 -------
+04/23/2016 Changed the new_task() function to spawn().
+
 04/22/2016 Removed parent/child task relationship and associated
            tracking.  It's an added complexity that's not really
 	   needed in the kernel and it can be done easily enough by

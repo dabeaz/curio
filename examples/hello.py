@@ -37,7 +37,7 @@ async def kid():
 
 async def parent():
     print('Parent PID', os.getpid())
-    kid_task = await curio.new_task(kid())
+    kid_task = await curio.spawn(kid())
     await curio.sleep(5)
     print("Yes, go play")
     await start_evt.set()
@@ -45,7 +45,7 @@ async def parent():
     await curio.SignalSet(signal.SIGHUP).wait()
 
     print("Let's go")
-    count_task = await curio.new_task(countdown(10))
+    count_task = await curio.spawn(countdown(10))
     await count_task.join()
     print("We're leaving!")
     try:

@@ -4,7 +4,7 @@ import pytest
 from socket import *
 from curio.channel import Channel
 from curio.io import Stream
-from curio import new_task, sleep, CancelledError, TaskTimeout, timeout_after
+from curio import spawn, sleep, CancelledError, TaskTimeout, timeout_after
 
 @pytest.fixture
 def chs():
@@ -203,7 +203,7 @@ def test_channel_recv_cancel(kernel, chs):
                 results.append('cancel')
 
     async def main(ch):
-        task = await new_task(client(ch))
+        task = await spawn(client(ch))
         await sleep(1)
         await task.cancel()
         results.append('done cancel')
@@ -225,7 +225,7 @@ def test_channel_recv_timeout(kernel, chs):
             results.append('timeout')
 
     async def main(ch):
-        task = await new_task(client(ch))
+        task = await spawn(client(ch))
         await task.join()
         results.append('done')
 
@@ -247,7 +247,7 @@ def test_channel_send_cancel(kernel, chs):
                 results.append('cancel')
 
     async def main(ch):
-        task = await new_task(client(ch))
+        task = await spawn(client(ch))
         await sleep(1)
         await task.cancel()
         results.append('done cancel')
@@ -270,7 +270,7 @@ def test_channel_send_timeout(kernel, chs):
             results.append('timeout')
 
     async def main(ch):
-        task = await new_task(client(ch))
+        task = await spawn(client(ch))
         await task.join()
         results.append('done')
 

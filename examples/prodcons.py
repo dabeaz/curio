@@ -18,8 +18,8 @@ async def consumer(queue):
 
 async def main():
     q = curio.Queue()
-    prod_task = await curio.new_task(producer(q))
-    cons_task = await curio.new_task(consumer(q))
+    prod_task = await curio.spawn(producer(q))
+    cons_task = await curio.spawn(consumer(q))
     await prod_task.join()
     await cons_task.cancel()
 

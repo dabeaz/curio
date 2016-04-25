@@ -22,7 +22,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
 
     # echoserv.py
     
-    from curio import Kernel, new_task
+    from curio import Kernel, spawn
     from curio.socket import *
     
     async def echo_server(address):
@@ -34,7 +34,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
         async with sock:
             while True:
                 client, addr = await sock.accept()
-                await new_task(echo_client(client, addr))
+                await spawn(echo_client(client, addr))
     
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -62,7 +62,7 @@ of the code:
 
     # echoserv.py
 
-    from curio import Kernel, new_task, run_server
+    from curio import Kernel, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)

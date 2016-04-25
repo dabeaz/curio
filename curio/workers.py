@@ -11,7 +11,7 @@
 import multiprocessing
 import threading
 
-from .kernel import _future_wait, CancelledError, TaskTimeout, _get_kernel, new_task, sleep, _get_current
+from .kernel import _future_wait, CancelledError, TaskTimeout, _get_kernel, _get_current
 from .sync import Semaphore
 
 __all__ = [ 'run_in_executor', 'run_blocking', 'run_cpu_bound',

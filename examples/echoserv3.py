@@ -2,7 +2,7 @@
 #
 # Echo server using the run_server() function
 
-from curio import Kernel, new_task, run_server
+from curio import Kernel, run_server
 
 async def echo_client(client, addr):
     print('Connection from', addr)
