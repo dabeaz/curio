@@ -1,0 +1,54 @@
+# subproc_perf.py
+
+from curio import *
+from curio.subprocess import check_output
+import time
+import subprocess
+import asyncio
+
+input = (b'aaa '*10 + b'\n')*50000
+cmd = ['cat']
+
+async def main(n):
+    for x in range(n):
+        out = await check_output(cmd, input=input)
+    assert out == input
+
+def curio_test(n):
+    kernel = Kernel()
+    start = time.time()
+    kernel.run(main(n))
+    end = time.time()
+    print('curio:', end-start)
+
+def subprocess_test(n):
+    start = time.time()
+    for x in range(n):
+        out = subprocess.check_output(cmd, input=input)
+    assert out == input
+    end = time.time()
+    print('subprocess:', end-start)
+
+def asyncio_test(n):
+    async def main(n):
+        for x in range(n):
+            proc = await asyncio.create_subprocess_exec(*cmd, 
+                                                        stdin=asyncio.subprocess.PIPE, 
+                                                        stdout=asyncio.subprocess.PIPE)
+            stdout, stderr = await proc.communicate(input=input)
+            await proc.wait()
+        assert stdout == input
+
+    loop = asyncio.get_event_loop()
+    start = time.time()
+    loop.run_until_complete(asyncio.ensure_future(main(n)))
+    end = time.time()
+    print('asyncio:', end-start)
+            
+if __name__ == '__main__':
+    curio_test(1000)
+    subprocess_test(1000)
+    asyncio_test(1000)
+
+
+
