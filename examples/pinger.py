@@ -9,4 +9,4 @@ async def main():
         print('Got:', line.decode('ascii'), end='')
 
 if __name__ == '__main__':
-    curio.boot(main())
+    curio.run(main())

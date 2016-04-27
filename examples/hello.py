@@ -57,4 +57,4 @@ async def parent():
     print("Leaving!")
 
 if __name__ == '__main__':
-    curio.boot(parent(), with_monitor=True)
+    curio.run(parent(), with_monitor=True)

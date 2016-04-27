@@ -1,6 +1,6 @@
 # Example: A simple Unix  echo server
 
-from curio import boot, run_unix_server
+from curio import run, run_unix_server
 
 async def echo_handler(client, address):
     print('Connection from', address)
@@ -17,5 +17,5 @@ if __name__ == '__main__':
           os.remove('/tmp/curiounixecho')
      except:
           pass
-     boot(run_unix_server('/tmp/curiounixecho', echo_handler))
+     run(run_unix_server('/tmp/curiounixecho', echo_handler))
           

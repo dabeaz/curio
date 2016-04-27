@@ -23,7 +23,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
 
     # echoserv.py
     
-    from curio import boot, spawn
+    from curio import run, spawn
     from curio.socket import *
     
     async def echo_server(address):
@@ -48,7 +48,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
         print('Connection closed')
 
     if __name__ == '__main__':
-        boot(echo_server(('',25000)))
+        run(echo_server(('',25000)))
 
 If you have programmed with threads, you find that curio looks similar.
 You'll also find that the above server can handle thousands of simultaneous 
@@ -62,7 +62,7 @@ of the code:
 
     # echoserv.py
 
-    from curio import boot, run_server
+    from curio import run, run_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -74,7 +74,7 @@ of the code:
         print('Connection closed')
 
     if __name__ == '__main__':
-        boot(run_server('', 25000, echo_client))
+        run(run_server('', 25000, echo_client))
 
 This is only a small sample of what's possible.  Read the `official documentation
 <https://curio.readthedocs.org>`_ for more in-depth coverage.  The `tutorial 
