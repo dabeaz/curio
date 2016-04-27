@@ -33,9 +33,11 @@ def test_tcp_echo(kernel):
         await sock.close()
         await serv.cancel()
 
-    serv = kernel.add_task(run_server('',25000,handler))
-    kernel.add_task(client(('localhost', 25000), serv))
-    kernel.run()
+    async def main():
+       serv = await spawn(run_server('',25000,handler))
+       await spawn(client(('localhost', 25000), serv))
+
+    kernel.run(main())
 
     assert results == [
             'client start',

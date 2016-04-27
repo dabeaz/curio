@@ -30,8 +30,7 @@ def test_queue_simple(kernel):
         await queue.join()
         results.append('producer_done')
 
-    kernel.add_task(producer())
-    kernel.run()
+    kernel.run(producer())
 
     assert results == [
             'producer_start',
@@ -69,8 +68,7 @@ def test_queue_unbounded(kernel):
         await queue.join()
         results.append('producer_done')
 
-    kernel.add_task(producer())
-    kernel.run()
+    kernel.run(producer())
 
     assert results == [
             'producer_start',
@@ -110,8 +108,7 @@ def test_queue_bounded(kernel):
         await queue.join()
         results.append('producer_done')
 
-    kernel.add_task(producer())
-    kernel.run()
+    kernel.run(producer())
 
     assert results == [
             'producer_start',
@@ -145,8 +142,7 @@ def test_queue_get_cancel(kernel):
         await sleep(0.5)
         await task.cancel()
 
-    kernel.add_task(driver())
-    kernel.run()
+    kernel.run(driver())
     assert results == [
             'consumer waiting',
             'consumer cancelled'
@@ -171,8 +167,7 @@ def test_queue_put_cancel(kernel):
         await sleep(0.5)
         await task.cancel()
 
-    kernel.add_task(driver())
-    kernel.run()
+    kernel.run(driver())
     assert results == [
             'producer_start',
             'producer_cancel'
@@ -190,8 +185,7 @@ def test_queue_get_timeout(kernel):
           except TaskTimeout:
               results.append('consumer timeout')
 
-    kernel.add_task(consumer())
-    kernel.run()
+    kernel.run(consumer())
     assert results == [
             'consumer waiting',
             'consumer timeout'
@@ -211,8 +205,7 @@ def test_queue_put_timeout(kernel):
         except TaskTimeout:
             results.append('producer timeout')
 
-    kernel.add_task(producer())
-    kernel.run()
+    kernel.run(producer())
     assert results == [
             'producer start',
             'producer timeout'

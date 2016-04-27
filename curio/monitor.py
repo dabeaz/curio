@@ -128,6 +128,7 @@ class Monitor(object):
         Asynchronous task loop for carrying out task cancellation.
         '''
         while True:
+
             if not self.monitor_event.is_set():
                 await kernel.sleep(0.1)
                 continue

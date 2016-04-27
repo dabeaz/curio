@@ -43,9 +43,11 @@ def test_tcp_echo(kernel):
         results.append('client close')
         await sock.close()
 
-    kernel.add_task(server(('',25000)))
-    kernel.add_task(client(('localhost', 25000)))
-    kernel.run()
+    async def main():
+        await spawn(server(('',25000)))
+        await spawn(client(('localhost',25000)))
+
+    kernel.run(main())
 
     assert results == [
             'accept wait',
@@ -108,9 +110,12 @@ def test_tcp_file_echo(kernel):
         await in_f.close()
         await sock.close()
 
-    kernel.add_task(server(('',25000)))
-    kernel.add_task(client(('localhost', 25000)))
-    kernel.run()
+
+    async def main():
+        await spawn(server(('',25000)))
+        await spawn(client(('localhost',25000)))
+
+    kernel.run(main())
 
     assert results == [
             'accept wait',
@@ -148,9 +153,12 @@ def test_udp_echo(kernel):
         await sock.close()
         results.append('client close')
 
-    kernel.add_task(server(('',25000)))
-    kernel.add_task(client(('localhost', 25000)))
-    kernel.run()
+
+    async def main():
+        await spawn(server(('',25000)))
+        await spawn(client(('localhost',25000)))
+
+    kernel.run(main())
 
     assert results == [
             'recvfrom wait',
@@ -177,8 +185,7 @@ def test_accept_timeout(kernel):
             results.append('accept timeout')
         await sock.close()
 
-    kernel.add_task(server(('',25000)))
-    kernel.run()
+    kernel.run(server(('',25000)))
 
     assert results == [
             'accept wait',
@@ -205,8 +212,7 @@ def test_accept_cancel(kernel):
          await sleep(0.5)
          await task.cancel()
 
-    kernel.add_task(canceller())
-    kernel.run()
+    kernel.run(canceller())
     assert results == [
             'accept wait',
             'accept cancel'
@@ -239,8 +245,7 @@ def test_recv_timeout(kernel):
          await sock.close()
          results.append('client done')
 
-    kernel.add_task(canceller())
-    kernel.run()
+    kernel.run(canceller())
 
     assert results == [
             'accept wait',
@@ -278,8 +283,7 @@ def test_recv_cancel(kernel):
          await sock.close()
          results.append('client done')
 
-    kernel.add_task(canceller())
-    kernel.run()
+    kernel.run(canceller())
 
     assert results == [
             'accept wait',
@@ -308,8 +312,7 @@ def test_recvfrom_timeout(kernel):
          await sleep(1.0)
          results.append('client done')
 
-    kernel.add_task(canceller())
-    kernel.run()
+    kernel.run(canceller())
 
     assert results == [
             'recvfrom wait',
@@ -337,8 +340,7 @@ def test_recvfrom_cancel(kernel):
          await task.cancel()
          results.append('client done')
 
-    kernel.add_task(canceller())
-    kernel.run()
+    kernel.run(canceller())
     
     assert results == [
             'recvfrom wait',
@@ -366,10 +368,13 @@ def test_buffer_into(kernel):
 
         results.append(a)
 
-    s1, s2 = socketpair()
-    kernel.add_task(sender(s1))
-    kernel.add_task(receiver(s2))
-    kernel.run()
+    s1, s2 = socketpair() 
+
+    async def main():
+        await spawn(sender(s1))
+        await spawn(receiver(s2))
+
+    kernel.run(main())
     s1._socket.close()
     s2._socket.close()
 

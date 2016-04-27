@@ -25,10 +25,12 @@ class TestEvent:
               evt.clear()
               results.append(evt.is_set())
 
-        evt = Event()
-        kernel.add_task(event_waiter(evt))
-        kernel.add_task(event_setter(evt, 1))
-        kernel.run()
+        async def main():
+            evt = Event()
+            await spawn(event_waiter(evt))
+            await spawn(event_setter(evt, 1))
+
+        kernel.run(main())
         assert results == [
                 'wait_start',
                 False,
@@ -52,10 +54,12 @@ class TestEvent:
               await evt.wait()
               results.append('wait_done')
 
-        evt = Event()
-        kernel.add_task(event_waiter(evt, 1))
-        kernel.add_task(event_setter(evt))
-        kernel.run()
+        async def main():
+            evt = Event()
+            await spawn(event_waiter(evt, 1))
+            await spawn(event_setter(evt))
+
+        kernel.run(main())
         assert results == [
                 'sleep',
                 'event_set',
@@ -82,8 +86,8 @@ class TestEvent:
               await task.cancel()
               results.append('cancel_done')
 
-        kernel.add_task(event_cancel(1))
-        kernel.run()
+        kernel.run(event_cancel(1))
+
         assert results == [
                 'event_wait',
                 'sleep',
@@ -108,8 +112,8 @@ class TestEvent:
               await sleep(seconds)
               results.append('sleep_done')
 
-        kernel.add_task(event_run(1))
-        kernel.run()
+        kernel.run(event_run(1))
+
         assert results == [
                 'event_wait',
                 'sleep',
@@ -145,8 +149,7 @@ class TestEvent:
               results.append('event_set')
               await evt.set()
 
-        kernel.add_task(event_run())
-        kernel.run()
+        kernel.run(event_run())
         assert results == [
                 'event_wait',
                 'sleep',
@@ -167,11 +170,13 @@ class TestLock:
                    await sleep(0.25)
               results.append(label + ' release')
 
-        lck = Lock()
-        kernel.add_task(worker(lck, 'work1'))
-        kernel.add_task(worker(lck, 'work2'))
-        kernel.add_task(worker(lck, 'work3'))
-        kernel.run()
+        async def main():
+            lck = Lock()
+            await spawn(worker(lck, 'work1'))
+            await spawn(worker(lck, 'work2'))
+            await spawn(worker(lck, 'work3'))
+
+        kernel.run(main())
         assert results == [
                 'work1 wait',
                 False,
@@ -207,8 +212,8 @@ class TestLock:
                   await task.cancel()
                   results.append('cancel_done')
 
-        kernel.add_task(worker_cancel(1))
-        kernel.run()
+        kernel.run(worker_cancel(1))
+
         assert results == [
                 'lock_wait',
                 'sleep',
@@ -236,8 +241,8 @@ class TestLock:
                   await sleep(seconds)
                   results.append('sleep_done')
 
-        kernel.add_task(worker_timeout(1))
-        kernel.run()
+        kernel.run(worker_timeout(1))
+
         assert results == [
                 'lock_wait',
                 'sleep',
@@ -256,11 +261,14 @@ class TestSemaphore:
                    await sleep(0.25)
               results.append(label + ' release')
 
-        sema = Semaphore()
-        kernel.add_task(worker(sema, 'work1'))
-        kernel.add_task(worker(sema, 'work2'))
-        kernel.add_task(worker(sema, 'work3'))
-        kernel.run()
+        async def main():
+            sema = Semaphore()
+            await spawn(worker(sema, 'work1'))
+            await spawn(worker(sema, 'work2'))
+            await spawn(worker(sema, 'work3'))
+
+        kernel.run(main())
+
         assert results == [
                 'work1 wait',
                 False,
@@ -286,11 +294,13 @@ class TestSemaphore:
                    await sleep(seconds)
               results.append(label + ' release')
 
-        sema = Semaphore(2)
-        kernel.add_task(worker(sema, 'work1', 0.25))
-        kernel.add_task(worker(sema, 'work2', 0.30))
-        kernel.add_task(worker(sema, 'work3', 0.35))
-        kernel.run()
+        async def main():
+            sema = Semaphore(2)
+            await spawn(worker(sema, 'work1', 0.25))
+            await spawn(worker(sema, 'work2', 0.30))
+            await spawn(worker(sema, 'work3', 0.35))
+
+        kernel.run(main())
         assert results == [
                 'work1 wait',            # Both work1 and work2 admitted
                 False,
@@ -326,8 +336,8 @@ class TestSemaphore:
                   await task.cancel()
                   results.append('cancel_done')
 
-        kernel.add_task(worker_cancel(1))
-        kernel.run()
+        kernel.run(worker_cancel(1))
+
         assert results == [
                 'lock_wait',
                 'sleep',
@@ -355,8 +365,8 @@ class TestSemaphore:
                   await sleep(seconds)
                   results.append('sleep_done')
 
-        kernel.add_task(worker_timeout(1))
-        kernel.run()
+        kernel.run(worker_timeout(1))
+
         assert results == [
                 'lock_wait',
                 'sleep',
@@ -374,8 +384,8 @@ class TestSemaphore:
             except ValueError:
                 results.append('value error')
 
-        kernel.add_task(task())
-        kernel.run()
+        kernel.run(task())
+
         assert results == [
                 'value error',
                 ]
@@ -410,12 +420,15 @@ class TestCondition:
                      await cond.notify()
                  await sleep(0.1)
               
-        cond = Condition()
-        q = deque()
-        kernel.add_task(consumer(cond, q, 'cons1'))
-        kernel.add_task(consumer(cond, q, 'cons2'))
-        kernel.add_task(producer(cond, q, 4, 2))
-        kernel.run()
+        async def main():
+            cond = Condition()
+            q = deque()
+            await spawn(consumer(cond, q, 'cons1'))
+            await spawn(consumer(cond, q, 'cons2'))
+            await spawn(producer(cond, q, 4, 2))
+
+        kernel.run(main())
+
         assert results == [
                 'cons1 wait',
                 'cons2 wait',
@@ -457,8 +470,8 @@ class TestCondition:
               await task.cancel()
               results.append('cancel_done')
 
-        kernel.add_task(worker_cancel(1))
-        kernel.run()
+        kernel.run(worker_cancel(1))
+
         assert results == [
                 'cond_wait',
                 'sleep',
@@ -485,8 +498,8 @@ class TestCondition:
               await sleep(seconds)
               results.append('done')
 
-        kernel.add_task(worker_cancel(1))
-        kernel.run()
+        kernel.run(worker_cancel(1))
+
         assert results == [
                 'cond_wait',
                 'sleep',
@@ -514,8 +527,8 @@ class TestCondition:
                   await cond.notify_all()
               results.append('done')
 
-        kernel.add_task(worker_notify(1))
-        kernel.run()
+        kernel.run(worker_notify(1))
+
         assert results == [
                 'cond_wait',
                 'cond_wait',
@@ -544,13 +557,15 @@ class TestCondition:
                      results.append(('producing', n))
                      await cond.notify()
                  await sleep(0.1)
-              
-        cond = Condition()
-        q = deque()
-        kernel.add_task(consumer(cond, q, 'cons1'))
-        kernel.add_task(consumer(cond, q, 'cons2'))
-        kernel.add_task(producer(cond, q, 4))
-        kernel.run()
+
+        async def main():              
+            cond = Condition()
+            q = deque()
+            await spawn(consumer(cond, q, 'cons1'))
+            await spawn(consumer(cond, q, 'cons2'))
+            await spawn(producer(cond, q, 4))
+
+        kernel.run(main())
         assert results == [
                 'cons1 waitfor',
                 'cons2 waitfor',

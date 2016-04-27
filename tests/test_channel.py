@@ -32,10 +32,11 @@ def test_channel_hello(kernel, chs):
             results.append(msg)
             await ch.send('client hello world')
         
-    ch1, ch2 = chs
-    kernel.add_task(server(ch1))
-    kernel.add_task(client(ch2))
-    kernel.run()
+    async def main(ch1, ch2):
+         await spawn(server(ch1))
+         await spawn(client(ch2))
+
+    kernel.run(main(*chs))
     assert results == [ 'server hello world',
                         'client hello world' ]
 
@@ -52,11 +53,12 @@ def test_channel_hello_bytes(kernel, chs):
             msg = await ch.recv()
             results.append(msg)
             await ch.send(b'client hello world')
-        
-    ch1, ch2 = chs
-    kernel.add_task(server(ch1))
-    kernel.add_task(client(ch2))
-    kernel.run()
+
+    async def main(ch1, ch2):
+         await spawn(server(ch1))
+         await spawn(client(ch2))
+
+    kernel.run(main(*chs))
     assert results == [ b'server hello world',
                         b'client hello world' ]
 
@@ -74,11 +76,12 @@ def test_channel_large(kernel, chs):
             msg = await ch.recv()
             results.append(msg)
             await ch.send(len(msg))
-        
-    ch1, ch2 = chs
-    kernel.add_task(server(ch1))
-    kernel.add_task(client(ch2))
-    kernel.run()
+
+    async def main(ch1, ch2):
+         await spawn(server(ch1))
+         await spawn(client(ch2))
+
+    kernel.run(main(*chs))
     assert results == [ data,
                         len(data) ]
 
@@ -97,11 +100,13 @@ def test_channel_auth(kernel, chs):
             msg = await ch.recv()
             results.append(msg)
             await ch.send('client hello world')
-        
-    ch1, ch2 = chs
-    kernel.add_task(server(ch1))
-    kernel.add_task(client(ch2))
-    kernel.run()
+
+    async def main(ch1, ch2):
+         await spawn(server(ch1))
+         await spawn(client(ch2))
+
+    kernel.run(main(*chs))
+
     assert results == [ 'server hello world',
                         'client hello world' ]
 
@@ -150,11 +155,12 @@ def test_channel_send_partial_bytes(kernel, chs):
             msg = await ch.recv_bytes()
             results.append(msg)
             await ch.send(len(msg))
-        
-    ch1, ch2 = chs
-    kernel.add_task(server(ch1))
-    kernel.add_task(client(ch2))
-    kernel.run()
+
+    async def main(ch1, ch2):
+         await spawn(server(ch1))
+         await spawn(client(ch2))
+
+    kernel.run(main(*chs))
     assert results == [ data[5:15], 10,
                         data[5:], len(data[5:]),
                         data[:10], 10,
@@ -184,9 +190,11 @@ def test_channel_from_connection(kernel):
             results.append(msg)
             await ch.send('client hello world')
         
-    kernel.add_task(server(ch1))
-    kernel.add_task(client(ch2))
-    kernel.run()
+    async def main(ch1, ch2):
+         await spawn(server(ch1))
+         await spawn(client(ch2))
+
+    kernel.run(main(ch1, ch2))
     assert results == [ 'server hello world',
                         'client hello world' ]
 
@@ -209,8 +217,7 @@ def test_channel_recv_cancel(kernel, chs):
         results.append('done cancel')
 
     ch1, ch2 = chs
-    task = kernel.add_task(main(ch2))
-    kernel.run()
+    kernel.run(main(ch2))
     assert results == [ 'cancel', 'done cancel' ]
 
 
@@ -230,8 +237,7 @@ def test_channel_recv_timeout(kernel, chs):
         results.append('done')
 
     ch1, ch2 = chs
-    task = kernel.add_task(main(ch2))
-    kernel.run()
+    kernel.run(main(ch2))
     assert results == [ 'timeout', 'done' ]
 
 def test_channel_send_cancel(kernel, chs):
@@ -253,8 +259,7 @@ def test_channel_send_cancel(kernel, chs):
         results.append('done cancel')
 
     ch1, ch2 = chs
-    task = kernel.add_task(main(ch2))
-    kernel.run()
+    kernel.run(main(ch2))
     assert results == [ 'cancel', 'done cancel' ]
 
 
@@ -275,6 +280,5 @@ def test_channel_send_timeout(kernel, chs):
         results.append('done')
 
     ch1, ch2 = chs
-    task = kernel.add_task(main(ch2))
-    kernel.run()
+    kernel.run(main(ch2))
     assert results == [ 'timeout', 'done' ]

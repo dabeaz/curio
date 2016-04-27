@@ -24,9 +24,11 @@ def test_cpu(kernel):
          r = await run_cpu_bound(fib, n)
          results.append(('fib', r))
 
-    kernel.add_task(spin(10))
-    kernel.add_task(cpu_bound(36))
-    kernel.run()
+    async def main():
+         await spawn(spin(10))
+         await spawn(cpu_bound(36))
+
+    kernel.run(main())
 
     assert results == [
             10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
@@ -46,9 +48,11 @@ def test_blocking(kernel):
          await run_blocking(time.sleep, n)
          results.append('sleep done')
 
-    kernel.add_task(spin(10))
-    kernel.add_task(blocking(2))
-    kernel.run()
+    async def main():
+         await spawn(spin(10))
+         await spawn(blocking(2))
+
+    kernel.run(main())
 
     assert results == [
             10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
@@ -75,9 +79,11 @@ def test_worker_cancel(kernel, runner):
              if isinstance(e.__cause__, CancelledError):
                  results.append('cancel')
 
-    kernel.add_task(spin(10))
-    kernel.add_task(blocking(5))
-    kernel.run()
+    async def main():
+         await spawn(spin(10))
+         await spawn(blocking(5))
+
+    kernel.run(main())
 
     assert results == [
             10, 9, 8, 7, 6, 5, 'cancel', 4, 3, 2, 1
@@ -100,9 +106,11 @@ def test_worker_timeout(kernel, runner):
          except TaskTimeout:
              results.append('cancel')
 
-    kernel.add_task(spin(10))
-    kernel.add_task(blocking(5))
-    kernel.run()
+    async def main():
+         await spawn(spin(10))
+         await spawn(blocking(5))
+
+    kernel.run(main())
 
     assert results == [
             10, 9, 8, 7, 6, 5, 'cancel', 4, 3, 2, 1

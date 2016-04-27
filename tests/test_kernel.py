@@ -8,8 +8,7 @@ def test_hello(kernel):
     async def hello():
         results.append('hello')
 
-    kernel.add_task(hello())
-    kernel.run()
+    kernel.run(hello())
     assert results == [ 'hello' ]
 
 def test_sleep(kernel):
@@ -19,9 +18,8 @@ def test_sleep(kernel):
           await sleep(0.5)
           results.append('end')
 
-    kernel.add_task(main())
     start = time.time()
-    kernel.run()
+    kernel.run(main())
     end = time.time()
     assert results == [
             'start',
@@ -46,8 +44,7 @@ def test_sleep_cancel(kernel):
         await sleep(0.5)
         await task.cancel()
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'start',
             'cancelled',
@@ -69,8 +66,7 @@ def test_sleep_timeout(kernel):
         task = await spawn(sleeper())
         await task.join()
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'start',
             'timeout',
@@ -94,8 +90,7 @@ def test_sleep_notimeout(kernel):
         task = await spawn(sleeper())
         await task.join()
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'start',
             'here',
@@ -118,8 +113,7 @@ def test_task_join(kernel):
         r = await task.join()
         results.append(r)
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'start',
             'joining',
@@ -146,8 +140,7 @@ def test_task_join_error(kernel):
             results.append(type(e))
             results.append(type(e.__cause__))
 
-    kernel.add_task(main())
-    kernel.run(log_errors=False)
+    kernel.run(main(), log_errors=False)
     assert results == [
             'start',
             'joining',
@@ -175,8 +168,7 @@ def test_task_cancel(kernel):
         await task.cancel()
         results.append('done')
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'start',
             'cancel start',
@@ -210,8 +202,7 @@ def test_task_cancel_join(kernel):
                 results.append(str(e.__cause__))
         results.append('done')
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'start',
             'cancel start',
@@ -248,8 +239,7 @@ def test_task_cancel_join_wait(kernel):
                 results.append(str(e.__cause__))
         results.append('done')
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'start',
             'cancel start',
@@ -297,8 +287,7 @@ def test_task_child_cancel(kernel):
         await task.cancel()
         results.append('done')
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
 
     assert results == [
             'start',
@@ -339,8 +328,7 @@ def test_task_ready_cancel(kernel):
         time.sleep(1)      # Forced block of the event loop. Both tasks should awake when we come back
         await sleep(0.1)
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
 
     assert results == [
             'child sleep',
