@@ -156,8 +156,8 @@ class SignalSet(object):
 # ----------------------------------------------------------------------
 
 class Kernel(object):
-    __slots__ = ('_selector', '_ready', '_tasks', 
-                 '_signal_sets', '_default_signals', '_njobs', '_running',
+    __slots__ = ('_selector', '_ready', '_tasks', '_sleeping', 
+                 '_signal_sets', '_default_signals', '_njobs', 
                  '_notify_sock', '_wait_sock', '_kernel_task_id', '_wake_queue',
                  '_process_pool', '_thread_pool', '_crash_handler')
 
@@ -169,8 +169,6 @@ class Kernel(object):
         self._tasks = { }                 # Task table
         self._signal_sets = None          # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
         self._default_signals = None      # Dict of default signal handlers
-        self._njobs = 0                   # Number of non-daemonic jobs running
-        self._running = False             # Kernel running?
 
         # Attributes related to the loopback socket (only initialized if required)
         self._notify_sock = None
@@ -179,6 +177,9 @@ class Kernel(object):
 
         # Wake queue for tasks restarted by external threads
         self._wake_queue = deque()
+
+        # Sleeping task queue
+        self._sleeping = []
 
         # Optional process/thread pools (see workers.py)
         self._thread_pool = None
@@ -201,12 +202,6 @@ class Kernel(object):
         if self._process_pool:
             self._process_pool.shutdown()
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        self.shutdown()
-
     # Main Kernel Loop
     # ----------
     def run(self, coro=None, *, pdb=False, log_errors=True, shutdown=False):
@@ -224,7 +219,10 @@ class Kernel(object):
         selector = self._selector               # Event selector
         ready = self._ready                     # Ready queue
         tasks = self._tasks                     # Task table
-        sleeping = []                           # Sleeping task queue
+        sleeping = self._sleeping               # Sleeping task queue
+
+        # ---- Number of non-daemonic tasks running
+        njobs = sum(not task.daemon for task in tasks.values())
         
         # ---- Bound methods
         selector_register = selector.register
@@ -308,10 +306,11 @@ class Kernel(object):
 
         # Create a new task. Putting it on the ready queue
         def _new_task(coro, daemon=False):
+            nonlocal njobs
             task = Task(coro, daemon)
             tasks[task.id] = task
             if not daemon:
-                self._njobs += 1
+                njobs += 1
             _reschedule_task(task)
             return task
 
@@ -364,12 +363,13 @@ class Kernel(object):
         # terminated.  value and exc give the return value or exception of
         # the coroutine.  This wakes any tasks waiting to join.
         def _cleanup_task(task, value=None, exc=None):
+            nonlocal njobs
             task.next_value = value
             task.next_exc = exc
             task.timeout = None
 
             if not task.daemon:
-                self._njobs -=1
+                njobs -=1
 
             if task.joining:
                 for wtask in task.joining:
@@ -382,13 +382,14 @@ class Kernel(object):
         # Shut down the kernel, cleaning up resources and cancelling
         # still-running daemon tasks
         def _shutdown():
+            nonlocal njobs
             for task in sorted(tasks.values(), key=lambda t: t.id, reverse=True):
                 if task.id == self._kernel_task_id:
                     continue
 
                 # If the task is daemonic, force it to non-daemon status and cancel it
                 if task.daemon:
-                    self._njobs += 1
+                    njobs += 1
                     task.daemon = False
 
                 assert _cancel_task(task)
@@ -603,12 +604,12 @@ class Kernel(object):
         # If a coroutine was given, add it as the first task
         maintask = _new_task(coro) if coro else None
 
+
+
         # ------------------------------------------------------------
         # Main Kernel Loop
         # ------------------------------------------------------------
-        self._running = True
-
-        while (self._njobs > 0 or ready) and self._running:
+        while njobs > 0:
             current = None
 
             # --------
@@ -723,28 +724,10 @@ class Kernel(object):
         if shutdown:
             _shutdown()
 
-        self._running = False
         if maintask:
             return maintask.next_value
         else:
             return None
-
-    # ----- Public Interface
-
-    def set_crash_handler(self, callback):
-        '''
-        Set a callback function to be invoked when a Task crashes due
-        to an unexpected exception.  callback is a callable that accepts
-        a Task instance as input.
-        '''
-        self._crash_handler = callback
-
-    def stop(self):
-        '''
-        Stop the kernel loop.  Merely sets an internal variable that will
-        force the loop to stop.  Returns immediately.
-        '''
-        self._running = False
 
 # ----------------------------------------------------------------------
 # Coroutines corresponding to the kernel traps.  These functions
@@ -988,25 +971,25 @@ async def current_task():
     '''
     return await _get_current()
 
-def boot(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
+def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
     '''
-    Boot the curio kernel with an initial task and run it until
-    termination.  Returns the tasks final result (if any). This is a
-    convenience function that should primarily be used for launching
-    the top-level task of an curio based application.  It creates an
-    entirely new kernel, runs the given task to completion, and
-    concludes by shutting down the kernel.    
+    Run the curio kernel with an initial task and execute until all
+    tasks terminate.  Returns the task's final result (if any). This
+    is a convenience function that should primarily be used for
+    launching the top-level task of an curio-based application.  It
+    creates an entirely new kernel, runs the given task to completion,
+    and concludes by shutting down the kernel, releasing all resources used.
     
     Don't use this function if you're repeatedly launching a lot of
     new tasks to run in curio. Instead, create a Kernel instance and
-    use its run() method.
+    use its run() method instead.
     '''
     kernel = Kernel(selector=selector, with_monitor=with_monitor)
     result = kernel.run(coro, pdb=pdb, log_errors=log_errors, shutdown=True)
     return result
 
 __all__ = [ 'Kernel', 'sleep', 'spawn', 'timeout_after', 'stop_after', 'current_task',
-            'SignalSet', 'TaskError', 'TaskTimeout', 'CancelledError', 'boot' ]
+            'SignalSet', 'TaskError', 'TaskTimeout', 'CancelledError', 'run' ]
             
 from .monitor import Monitor
         

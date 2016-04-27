@@ -109,8 +109,8 @@ class Monitor(object):
     Task monitor that runs concurrently to the curio kernel in a 
     separate thread. This can watch the kernel and provide debugging.
     '''
-    def __init__(self, kernel, host=MONITOR_HOST, port=MONITOR_PORT):
-        self.kernel = kernel
+    def __init__(self, kern, host=MONITOR_HOST, port=MONITOR_PORT):
+        self.kernel = kern
         self.address = (host, port)
         self.task_cancel_request = None
         self.monitor_event = threading.Event()
@@ -121,7 +121,9 @@ class Monitor(object):
         # The monitor launches both a separate thread and helper task
         # that runs inside curio itself to manage cancellation events
         threading.Thread(target=self.server, daemon=True).start()
-        self.monitor_task = self.kernel.add_task(self.monitor_task(), daemon=True)
+        monitor_task = kernel.Task(self.monitor_task(), daemon=True)
+        kern._ready.append(monitor_task)
+        kern._tasks[monitor_task.id] = monitor_task
 
     async def monitor_task(self):
         '''

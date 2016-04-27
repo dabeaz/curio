@@ -12,7 +12,7 @@ def curio_test():
         for n in range(10000):
             await curio.run_in_thread(time.sleep, 0)
     start = time.time()
-    curio.boot(main())
+    curio.run(main())
     end = time.time()
     print('Curio:', end-start)
 

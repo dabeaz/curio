@@ -16,7 +16,7 @@ async def main(n):
 
 def curio_test(n):
     start = time.time()
-    boot(main(n))
+    run(main(n))
     end = time.time()
     print('curio:', end-start)
 

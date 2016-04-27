@@ -19,4 +19,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    curio.boot(main())
+    curio.run(main())

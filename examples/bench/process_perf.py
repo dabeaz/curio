@@ -19,7 +19,7 @@ def curio_test(x):
         for n in range(10000):
             r = await curio.run_in_process(fib, x)
     start = time.time()
-    curio.boot(main())
+    curio.run(main())
     end = time.time()
     print('Curio:', end-start)
 

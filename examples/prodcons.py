@@ -24,4 +24,4 @@ async def main():
     await cons_task.cancel()
 
 if __name__ == '__main__':
-    curio.boot(main())
+    curio.run(main())
