@@ -11,50 +11,25 @@ and used in the main execution thread.
 
 .. class:: Kernel(selector=None, with_monitor=False)
 
-   Create an instance of a curio kernel.  If *selector* is given, it should be
-   an instance of a selector from the :mod:`selectors <python:selectors>` module.  If not given,
-   then :class:`selectors.DefaultSelector <python:selectors.DefaultSelector>` is used to poll for I/O.
-   If *with_monitor* is ``True``, the monitor task executes in the background.
-   The monitor responds to the keyboard-interrupt and allows you to inspect
-   the state of the running kernel.
+   Create an instance of a curio kernel.  If *selector* is given, it
+   should be an instance of a selector from the :mod:`selectors
+   <python:selectors>` module.  If not given, then
+   :class:`selectors.DefaultSelector
+   <python:selectors.DefaultSelector>` is used to poll for I/O.  If
+   *with_monitor* is ``True``, the monitor task executes in the
+   background. 
 
 There are only a few methods that may be used on a :class:`Kernel` outside of coroutines.
 
-.. method:: Kernel.run(coro=None, pdb=False, log_errors=True)
+.. method:: Kernel.run(coro=None, pdb=False, log_errors=True, shutdown=False)
 
-   Runs the kernel until all non-daemonic tasks have finished execution.
-   *coro* is a coroutine to run as a task.  If omitted, then tasks should
-   have already been added using the :meth:`add_task` method below.
-   If *pdb* is ``True``, then the kernel enters the Python debugger if any
-   task crashes with an uncaught exception.  If *log_errors* is ``True``, then
-   uncaught exceptions in tasks are logged.
-
-.. method:: Kernel.add_task(coro, daemon=False)
-
-   Adds a new task to the kernel.  *coro* is a newly instantiated coroutine.
-   If *daemon* is ``True``, the task is created without a parent and runs in
-   the background.   Returns a :class:`Task` instance.  This method may not
-   be used to add a task to a running kernel and may not be used inside a
-   coroutine.
-
-.. method:: Kernel.stop()
-
-   Force the kernel to stop execution.  Since the kernel normally runs in the main
-   thread, this operation would normally have to be performed in a separate thread
-   or possibly inside a coroutine.  This method merely sets a flag in the kernel
-   and returns immediately.  The kernel will stop only after the currently running
-   task yields.
-
-.. method:: Kernel.shutdown()
-
-   Performs a clean shutdown of the kernel by issuing a cancellation request to
-   all remaining tasks (including daemonic tasks).  This function will not return
-   until all tasks have terminated.  This method may only be invoked on a kernel
-   that is not actively running.  It may not be used inside coroutines or from
-   separate threads.  Normally, you would not call this method since the kernel
-   runs until all tasks have terminated anyways.  The main use case would be cleaning up
-   after a premature kernel shutdown due to a crash, system exit, or some other
-   event.
+   Runs the kernel until all non-daemonic tasks have finished
+   execution.  *coro* is a coroutine to run as a task.  If *pdb* is
+   ``True``, then the kernel enters the Python debugger if any task
+   crashes with an uncaught exception.  If *log_errors* is ``True``,
+   then uncaught exceptions in tasks are logged.  If *shutdown* is
+   ``True``, the kernel will cancel all daemonic tasks and perform a clean
+   shutdown once all regular tasks have completed.
 
 Tasks
 -----

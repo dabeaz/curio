@@ -18,8 +18,7 @@ def test_simple(kernel):
         results.append(out.stdout)
         results.append(out.returncode)
 
-    kernel.add_task(subproc())
-    kernel.run()
+    kernel.run(subproc())
     assert results == [
             b't-minus 4\nt-minus 3\nt-minus 2\nt-minus 1\n',
             0,
@@ -32,8 +31,7 @@ def test_simple_check_output(kernel):
         out = await subprocess.check_output([executable, os.path.join(dirname, 'child.py')])
         results.append(out)
 
-    kernel.add_task(subproc())
-    kernel.run()
+    kernel.run(subproc())
     assert results == [
             b't-minus 4\nt-minus 3\nt-minus 2\nt-minus 1\n',
             ]
@@ -47,8 +45,7 @@ def test_bad_cmd(kernel):
         except subprocess.CalledProcessError:
             results.append('bad command')
 
-    kernel.add_task(subproc())
-    kernel.run()
+    kernel.run(subproc())
     assert results == ['bad command']
 
 def test_bad_cmd_check_output(kernel):
@@ -60,8 +57,7 @@ def test_bad_cmd_check_output(kernel):
         except subprocess.CalledProcessError:
             results.append('bad command')
 
-    kernel.add_task(subproc())
-    kernel.run()
+    kernel.run(subproc())
     assert results == [ 'bad command' ]
 
 def test_timeout(kernel):
@@ -74,6 +70,5 @@ def test_timeout(kernel):
         except subprocess.TimeoutExpired:
             results.append('timeout')
 
-    kernel.add_task(subproc())
-    kernel.run()
+    kernel.run(subproc())
     assert results == [ 'timeout' ]

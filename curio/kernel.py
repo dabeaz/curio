@@ -206,37 +206,6 @@ class Kernel(object):
 
     def __exit__(self, *args):
         self.shutdown()
-    
-    # Force the kernel to wake, possibly scheduling a task to run.
-    # This method is called by threads running concurrently to the
-    # curio kernel.  For example, it's triggered upon completion of
-    # Futures created by thread pools and processes. It's inherently
-    # dangerous for any kind of operation on the kernel to be
-    # performed by a separate thread.  Thus, the *only* thing that
-    # happens here is that the task gets appended to a deque and a
-    # notification message is written to the kernel notification
-    # socket.  append() and pop() operations on deques are thread safe
-    # and do not need additional locking.  See
-    # https://docs.python.org/3/library/collections.html#collections.deque
-    # ----------
-    def _wake(self, task=None, future=None):
-        if task:
-            self._wake_queue.append((task, future))
-        self._notify_sock.send(b'\x00')
-
-    # Create a new task in the kernel.  This operation is an instance
-    # method since it is used both outside and within the kernel itself
-    # ----------
-    def _new_task(self, coro, daemon=False):
-        task = Task(coro, daemon)
-        self._tasks[task.id] = task
-        if not daemon:
-            self._njobs += 1
-
-        # Schedule the task
-        self._ready.append(task)
-        task.state = 'READY'
-        return task
 
     # Main Kernel Loop
     # ----------
@@ -267,6 +236,23 @@ class Kernel(object):
         time_monotonic = time.monotonic
 
         # ---- In-kernel task used for processing signals and futures
+
+        # Force the kernel to wake, possibly scheduling a task to run.
+        # This method is called by threads running concurrently to the
+        # curio kernel.  For example, it's triggered upon completion of
+        # Futures created by thread pools and processes. It's inherently
+        # dangerous for any kind of operation on the kernel to be
+        # performed by a separate thread.  Thus, the *only* thing that
+        # happens here is that the task gets appended to a deque and a
+        # notification message is written to the kernel notification
+        # socket.  append() and pop() operations on deques are thread safe
+        # and do not need additional locking.  See
+        # https://docs.python.org/3/library/collections.html#collections.deque
+        # ----------
+        def _wake(task=None, future=None):
+            if task:
+                self._wake_queue.append((task, future))
+            self._notify_sock.send(b'\x00')
 
         # Initialize the loopback socket and launch the kernel task if needed
         def _init_loopback():
@@ -319,6 +305,15 @@ class Kernel(object):
                             sigset.waiting = None
 
         # ---- Task Support Functions
+
+        # Create a new task. Putting it on the ready queue
+        def _new_task(coro, daemon=False):
+            task = Task(coro, daemon)
+            tasks[task.id] = task
+            if not daemon:
+                self._njobs += 1
+            _reschedule_task(task)
+            return task
 
         # Reschedule a task, putting it back on the ready queue so that it can run.
         # value and exc specify a value or exception to send into the underlying 
@@ -476,7 +471,7 @@ class Kernel(object):
             # find that the task's current Future is now different, and
             # discard the result.
             future.add_done_callback(lambda fut, task=current: 
-                                     self._wake(task, fut) if task.future is fut else None)
+                                     _wake(task, fut) if task.future is fut else None)
 
             # An optional threading.Event object can be passed and set to
             # start a worker thread.   This makes it possible to have a lock-free
@@ -487,7 +482,7 @@ class Kernel(object):
 
         # Add a new task to the kernel
         def _trap_spawn(_, coro, daemon):
-            task = self._new_task(coro, daemon)
+            task = _new_task(coro, daemon)
             _reschedule_task(current, value=task)
 
         # Reschedule one or more tasks from a queue
@@ -606,7 +601,7 @@ class Kernel(object):
                   if name.startswith('_trap_') }
         
         # If a coroutine was given, add it as the first task
-        maintask = self.add_task(coro) if coro else None
+        maintask = _new_task(coro) if coro else None
 
         # ------------------------------------------------------------
         # Main Kernel Loop
@@ -744,31 +739,12 @@ class Kernel(object):
         '''
         self._crash_handler = callback
 
-    def add_task(self, coro, daemon=False):
-        '''
-        Add a new coroutine to the kernel.  This method can only
-        be called on a non-executing kernel prior to the invocation
-        of the kernel.run() method.   If daemon is True, the kernel
-        will stop executing prior to the completion of the task.
-        '''
-        assert not self._running, "Kernel can't be running"
-        return self._new_task(coro, daemon)
-
     def stop(self):
         '''
         Stop the kernel loop.  Merely sets an internal variable that will
         force the loop to stop.  Returns immediately.
         '''
         self._running = False
-
-    def shutdown(self):
-        '''
-        Cleanly shut down the kernel.  All remaining tasks are cancelled including
-        the internal kernel task.  This operation is highly recommended prior to
-        terminating any program.   The kernel must be stopped prior to shutdown().
-        '''
-        assert not self._running, 'Kernel must be stopped before shutdown'
-        self.run(shutdown=True)
 
 # ----------------------------------------------------------------------
 # Coroutines corresponding to the kernel traps.  These functions

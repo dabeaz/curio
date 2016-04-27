@@ -25,8 +25,7 @@ def test_task_signal(kernel):
         await sleep(0.1)
         results.append('done')
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'sending USR1',
             signal.SIGUSR1,
@@ -56,8 +55,7 @@ def test_task_signal_waitone(kernel):
         await sleep(0.1)
         results.append('done')
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'sending USR1',
             signal.SIGUSR1,
@@ -90,8 +88,7 @@ def test_task_signal_ignore(kernel):
         await task.join()
         results.append('done')
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'sending USR1',
             signal.SIGUSR1,
@@ -116,8 +113,7 @@ def test_task_signal_timeout(kernel):
         await task.join()
         results.append('done')
 
-    kernel.add_task(main())
-    kernel.run()
+    kernel.run(main())
     assert results == [
             'timeout',
             'done',
