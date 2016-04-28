@@ -61,6 +61,7 @@ import logging
 
 # --- Curio
 from . import kernel
+from .workers import run_in_thread
 
 # ---
 log = logging.getLogger(__name__)
@@ -130,10 +131,7 @@ class Monitor(object):
         Asynchronous task loop for carrying out task cancellation.
         '''
         while True:
-
-            if not self.monitor_event.is_set():
-                await kernel.sleep(0.1)
-                continue
+            await run_in_thread(self.monitor_event.wait)
             self.monitor_event.clear()
             if self.task_cancel_request:
                 await self.task_cancel_request.cancel()
@@ -203,7 +201,7 @@ class Monitor(object):
          cancel taskid    : Cancel an indicated task
          signal signame   : Send a Unix signal
          quit             : Leave the monitor
-     ''')
+''')
 
     def command_ps(self, sout):
         headers = ('Task', 'State', 'Cycles', 'Timeout', 'Task')
