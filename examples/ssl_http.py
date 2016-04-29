@@ -29,4 +29,4 @@ If you're seeing this, it probably worked. Yay!
 if __name__ == '__main__':
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
-    curio.run(curio.run_server('', 10000, handler, ssl=ssl_context))
+    curio.run(curio.tcp_server('', 10000, handler, ssl=ssl_context))

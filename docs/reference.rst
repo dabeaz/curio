@@ -442,7 +442,7 @@ Here's how you might define a server that uses SSL::
         kernel = curio.Kernel()
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
-        kernel.run(curio.run_server('', 10000, handler, ssl=ssl_context))
+        kernel.run(curio.tcp_server('', 10000, handler, ssl=ssl_context))
 
 High Level Networking
 ---------------------
@@ -470,41 +470,25 @@ making network connections and writing servers.
 
    Creates a connection to a Unix domain socket with optional SSL applied.
 
-.. function:: create_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
+.. asyncfunction:: tcp_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
 
-   Creates a :class:`Server` instance for receiving TCP connections on
+   Creates a server for receiving TCP connections on
    a given host and port.  *client_connected_task* is a coroutine that
    is to be called to handle each connection.  Family specifies the
    address family and is either :py:const:`socket.AF_INET` or
    :py:const:`socket.AF_INET6`.  *backlog* is the argument to the
    :py:meth:`socket.socket.listen` method.  *ssl* specifies an
    :class:`curio.ssl.SSLContext` instance to use. *reuse_address*
-   specifies whether to reuse a previously used port.  This method
-   does not actually start running the created server.  To do that,
-   you need to use :meth:`Server.serve_forever` method on the returned
-   :class:`Server` instance.  Normally, it's easier to use
-   :func:`run_server` instead. Only use :func:`create_server` if you
-   need to do something else with the :class:`Server` instance for
-   some reason.
+   specifies whether to reuse a previously used port.
 
-.. asyncfunction:: run_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
-
-   Creates a server using :func:`create_server` and immediately starts running it.
-
-.. function:: create_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
+.. asyncfunction:: unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
    Creates a Unix domain server on a given
    path. *client_connected_task* is a coroutine to execute on each
    connection. *backlog* is the argument given to the
    :py:meth:`socket.socket.listen` method.  *ssl* is an optional
    :class:`curio.ssl.SSLContext` to use if setting up an SSL
-   connection.  Returns a :class:`Server` instance.  To start running
-   the server use :meth:`Server.serve_forever`.
-
-.. asyncfunction:: run_unix_server(path, client_connected_task, *, backlog=100, ssl=None)
-
-   Creates a Unix domain server using :func:`create_unix_server` and
-   immediately starts running it.
+   connection.  
 
 Synchronization Primitives
 --------------------------

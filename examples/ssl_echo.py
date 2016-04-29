@@ -22,5 +22,5 @@ async def handle(client, addr):
 if __name__ == '__main__':
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
-    curio.run(network.run_server('', 10000, handle, ssl=ssl_context))
+    curio.run(network.tcp_server('', 10000, handle, ssl=ssl_context))
 

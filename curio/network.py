@@ -4,12 +4,9 @@
 # David Beazley (Dabeaz LLC)
 # All rights reserved.
 #
-# Some high-level functions useful for writing network code.  These are largely
+# Some high-level functions useful for writing network code.  These are loosely
 # based on their similar counterparts in the asyncio library. Some of the
 # fiddly low-level bits are borrowed.   
-#
-# Note: Not sure this module will be retained in future of curio.  Currently
-# experimental.
 
 import logging
 log = logging.getLogger(__name__)
@@ -20,11 +17,9 @@ from .kernel import spawn
 
 __all__ = [ 
     'open_connection',
-    'create_server',
-    'run_server',
+    'tcp_server',
     'open_unix_connection',
-    'create_unix_server',
-    'run_unix_server'
+    'unix_server'
     ]
 
 async def _wrap_ssl_client(sock, ssl, server_hostname):
@@ -109,9 +104,23 @@ class Server(object):
     async def cancel(self):
         if self._task:
             await self._task.cancel()
+
+
+async def _run_server(sock, client_connected_task, ssl=None):
+    async def run_client(client, addr):
+        async with client:
+              await client_connected_task(client, addr)
+
+    async with sock:
+        while True:
+            client, addr = await sock.accept()
+            if ssl:
+                client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
+            client_task = await spawn(run_client(client, addr))
+            del client
         
-def create_server(host, port, client_connected_task, *, 
-                        family=socket.AF_INET, backlog=100, ssl=None, reuse_address=True):
+async def tcp_server(host, port, client_connected_task, *, 
+                     family=socket.AF_INET, backlog=100, ssl=None, reuse_address=True):
 
     if ssl and not isinstance(ssl, curiossl.CurioSSLContext):
         raise ValueError('ssl argument must be a curio.ssl.SSLContext instance')
@@ -123,17 +132,12 @@ def create_server(host, port, client_connected_task, *,
 
         sock.bind((host, port))
         sock.listen(backlog)
-        serv = Server(sock, client_connected_task, ssl)
-        return serv
+        await _run_server(sock, client_connected_task, ssl)
     except Exception:
         sock._socket.close()
         raise
-
-async def run_server(*args, **kwargs):
-    serv = create_server(*args, **kwargs)
-    await serv.serve_forever()
-
-def create_unix_server(path, client_connected_task, *, backlog=100, ssl=None):
+    
+async def unix_server(path, client_connected_task, *, backlog=100, ssl=None):
     if ssl and not isinstance(ssl, curiossl.CurioSSLContext):
         raise ValueError('ssl argument must be a curio.ssl.SSLContext instance')
   
@@ -141,12 +145,7 @@ def create_unix_server(path, client_connected_task, *, backlog=100, ssl=None):
     try:
         sock.bind(path)
         sock.listen(backlog)
-        serv = Server(sock, client_connected_task, ssl)
-        return serv
+        await _run_server(sock, client_connected_task, ssl)
     except Exception:
         sock._socket.close()
         raise
-
-async def run_unix_server(*args, **kwargs):
-    serv = create_unix_server(*args, **kwargs)
-    await serv.serve_forever()

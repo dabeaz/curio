@@ -62,7 +62,7 @@ of the code:
 
     # echoserv.py
 
-    from curio import run, run_server
+    from curio import run, tcp_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -74,7 +74,7 @@ of the code:
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(run_server('', 25000, echo_client))
+        run(tcp_server('', 25000, echo_client))
 
 This is only a small sample of what's possible.  Read the `official documentation
 <https://curio.readthedocs.org>`_ for more in-depth coverage.  The `tutorial 
