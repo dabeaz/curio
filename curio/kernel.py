@@ -156,11 +156,6 @@ class SignalSet(object):
 # ----------------------------------------------------------------------
 
 class Kernel(object):
-    __slots__ = ('_selector', '_ready', '_tasks', '_sleeping', 
-                 '_signal_sets', '_default_signals', '_njobs', 
-                 '_notify_sock', '_wait_sock', '_kernel_task_id', '_wake_queue',
-                 '_process_pool', '_thread_pool', '_crash_handler')
-
     def __init__(self, *, selector=None, with_monitor=False):
         if selector is None:
             selector = DefaultSelector()
@@ -220,6 +215,7 @@ class Kernel(object):
         ready = self._ready                     # Ready queue
         tasks = self._tasks                     # Task table
         sleeping = self._sleeping               # Sleeping task queue
+        wake_queue = self._wake_queue           # External wake queue
 
         # ---- Number of non-daemonic tasks running
         njobs = sum(not task.daemon for task in tasks.values())
@@ -249,7 +245,7 @@ class Kernel(object):
         # ----------
         def _wake(task=None, future=None):
             if task:
-                self._wake_queue.append((task, future))
+                wake_queue.append((task, future))
             self._notify_sock.send(b'\x00')
 
         # Initialize the loopback socket and launch the kernel task if needed
@@ -265,7 +261,6 @@ class Kernel(object):
         # awake for non-I/O events.  Also processes incoming signals.  This only
         # launches if needed to wait for external events (futures, signals, etc.)
         async def _kernel_task():
-            wake_queue = self._wake_queue
             wake_queue_popleft = wake_queue.popleft
             wait_sock = self._wait_sock
 
@@ -604,14 +599,10 @@ class Kernel(object):
         # If a coroutine was given, add it as the first task
         maintask = _new_task(coro) if coro else None
 
-
-
         # ------------------------------------------------------------
         # Main Kernel Loop
         # ------------------------------------------------------------
         while njobs > 0:
-            current = None
-
             # --------
             # Poll for I/O as long as there is nothing to run
             # --------
@@ -714,20 +705,16 @@ class Kernel(object):
                     # The code here performs the unregister step for a task that 
                     # ran, but is now sleeping for a *different* reason than repeating the
                     # prior I/O operation.  There is coordination with code in _trap_io().
+
                     if current._last_io:
                         selector_unregister(current._last_io[1])
                         current._last_io = None
-
-        current = None
-
+                    
         # If kernel shutdown has been requested, issue a cancellation request to all remaining tasks
         if shutdown:
             _shutdown()
 
-        if maintask:
-            return maintask.next_value
-        else:
-            return None
+        return maintask.next_value if maintask else None
 
 # ----------------------------------------------------------------------
 # Coroutines corresponding to the kernel traps.  These functions
