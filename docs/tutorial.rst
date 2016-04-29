@@ -526,9 +526,9 @@ related operations in curio will use the ``async`` form.
 
 A lot of the above code involving sockets is fairly repetitive.  Instead
 of writing the part that sets up the server, you can simplify the above example
-using ``run_server()`` like this::
+using ``tcp_server()`` like this::
 
-    from curio import run, spawn, run_server
+    from curio import run, spawn, tcp_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -540,9 +540,9 @@ using ``run_server()`` like this::
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(run_server('', 25000, echo_client))
+        run(tcp_server('', 25000, echo_client))
 
-The ``run_server()`` coroutine takes care of a few low-level details 
+The ``tcp_server()`` coroutine takes care of a few low-level details 
 such as creating the server socket and binding it to an address.  It
 also takes care of properly closing the client socket so you no longer
 need the extra ``async with client`` statement from before.
@@ -553,7 +553,7 @@ A Stream-Based Echo Server
 In certain cases, it might be easier to work with a socket connection
 using a file-like stream interface.  Here is an example::
 
-    from curio import run, spawn, run_server
+    from curio import run, spawn, tcp_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -566,7 +566,7 @@ using a file-like stream interface.  Here is an example::
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(run_server('', 25000, echo_client))
+        run(tcp_server('', 25000, echo_client))
 
 The ``socket.make_streams()`` method can be used to create a pair of
 file-like objects for reading and writing.  On this objects, you would
@@ -574,7 +574,7 @@ now use standard file methods such as ``read()``, ``readline()``, and
 ``write()``.  One feature of streams is that you can easily read data
 line-by-line using an ``async for`` statement like this::
 
-    from curio import run, spawn, run_server
+    from curio import run, spawn, tcp_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -586,7 +586,7 @@ line-by-line using an ``async for`` statement like this::
 	await writer.close()
 
     if __name__ == '__main__':
-        run(run_server('', 25000, echo_client))
+        run(tcp_server('', 25000, echo_client))
 
 This is potentially useful if you're writing code to read HTTP headers or
 some similar task.
@@ -598,7 +598,7 @@ Let's make a slightly more sophisticated echo server that responds
 to a Unix signal::
 
     import signal
-    from curio import run, spawn, SignalSet, CancelledError, run_server
+    from curio import run, spawn, SignalSet, CancelledError, tcp_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -616,7 +616,7 @@ to a Unix signal::
         while True:
             async with SignalSet(signal.SIGHUP) as sigset:
                 print('Starting the server')
-                serv_task = await spawn(run_server(host, port, echo_client))
+                serv_task = await spawn(tcp_server(host, port, echo_client))
 
 		# Wait for a restart signal
                 await sigset.wait()
@@ -751,7 +751,7 @@ SSL::
     if __name__ == '__main__':
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
-        curio.run(curio.run_server('', 10000, handler, ssl=ssl_context))
+        curio.run(curio.tcp_server('', 10000, handler, ssl=ssl_context))
 
 The ``curio.ssl`` submodule is a wrapper around the ``ssl`` module in the standard
 library.  It has been modified slightly so that functions responsible for wrapping
@@ -773,7 +773,7 @@ synchronous code outside of curio.  To do this, you can temporarily put sockets 
 streams into blocking mode and expose the raw socket or file
 underneath.  Use the ``blocking()`` context manager method as shown here::
 
-    from curio import run, spawn, run_server
+    from curio import run, spawn, tcp_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -789,7 +789,7 @@ underneath.  Use the ``blocking()`` context manager method as shown here::
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(run_server('', 25000, echo_client))
+        run(tcp_server('', 25000, echo_client))
 
 The ``blocking()`` method unwraps the low-level socket, places it in
 blocking mode, and returns it back to you.  In this example the
@@ -800,7 +800,7 @@ it could potentially block the curio kernel.  If you're not sure,
 combine your operation with the ``run_in_thread()`` function. For
 example::
 
-    from curio import run, spawn, run_server, run_in_thread
+    from curio import run, spawn, tcp_server, run_in_thread
 
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -816,7 +816,7 @@ example::
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(run_server('', 25000, echo_client))
+        run(tcp_server('', 25000, echo_client))
 
 Normally, you wouldn't do this for such a operation like ``sendall()``.  However,
 the combination of the ``blocking()`` method and ``run_in_thread()`` function

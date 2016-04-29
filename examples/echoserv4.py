@@ -2,7 +2,7 @@
 #
 # Echo server using streams
 
-from curio import run, run_server
+from curio import run, tcp_server
 
 async def echo_client(client, addr):
     print('Connection from', addr)
@@ -13,4 +13,4 @@ async def echo_client(client, addr):
     print('Connection closed')
 
 if __name__ == '__main__':
-    run(run_server('', 25000, echo_client))
+    run(tcp_server('', 25000, echo_client))
