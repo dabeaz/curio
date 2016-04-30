@@ -1,21 +1,18 @@
 # curio/workers.py
 #
-# Copyright (C) 2015
-# David Beazley (Dabeaz LLC), http://www.dabeaz.com
-# All rights reserved.
-#
 # Functions for performing work outside of curio.  This includes
 # running functions in threads, processes, and executors from the
 # concurrent.futures module.
 
+__all__ = [ 'run_in_executor', 'run_in_thread', 'run_in_process' ]
+
 import multiprocessing
 import threading
 
-from .kernel import _future_wait, CancelledError, TaskTimeout, _get_kernel, _get_current
+from .errors import CancelledError, TaskTimeout
+from .traps import _future_wait, _get_kernel, _get_current
 from .sync import Semaphore
-
-__all__ = [ 'run_in_executor', 'run_blocking', 'run_cpu_bound',
-            'run_in_thread', 'run_in_process' ]
+from .channel import Channel
 
 async def run_in_executor(exc, callable, *args, **kwargs):
     '''
@@ -83,8 +80,6 @@ async def run_in_process(callable, *args, **kwargs):
                                           multiprocessing.cpu_count())
 
     return await kernel._process_pool.apply(callable, args, kwargs)
-
-run_cpu_bound = run_in_process
 
 # The _FutureLess class is a custom "Future" implementation solely for
 # use by curio. It is used by the ThreadWorker class below and
@@ -262,4 +257,5 @@ class WorkerPool(object):
              finally:
                  self.workers.append(worker)
 
-from .channel import Channel
+
+

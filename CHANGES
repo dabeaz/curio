@@ -1,5 +1,8 @@
 CHANGES
 -------
+04/30/2016 The run_blocking() and run_cpu_bound() calls are now
+           called run_in_thread() and run_in_process().
+
 04/23/2016 Changed the new_task() function to spawn().
 
 04/22/2016 Removed parent/child task relationship and associated

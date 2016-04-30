@@ -1,19 +1,8 @@
 # curio/network.py
 #
-# Copyright (C) 2015
-# David Beazley (Dabeaz LLC)
-# All rights reserved.
-#
 # Some high-level functions useful for writing network code.  These are loosely
 # based on their similar counterparts in the asyncio library. Some of the
 # fiddly low-level bits are borrowed.   
-
-import logging
-log = logging.getLogger(__name__)
-
-from . import socket
-from . import ssl as curiossl
-from .kernel import spawn
 
 __all__ = [ 
     'open_connection',
@@ -21,6 +10,10 @@ __all__ = [
     'open_unix_connection',
     'unix_server'
     ]
+
+from . import socket
+from . import ssl as curiossl
+from .task import spawn
 
 async def _wrap_ssl_client(sock, ssl, server_hostname):
     # Applies SSL to a client connection. Returns an SSL socket.

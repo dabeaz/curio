@@ -1,18 +1,14 @@
 # curio/subprocess.py
 #
-# Copyright (C) 2015
-# David Beazley (Dabeaz LLC), http://www.dabeaz.com
-# All rights reserved.
-#
-# Curio clone of the subprocess module.  
-
-from .kernel import  spawn, sleep, TaskTimeout, timeout_after
-from .io import Stream
-import subprocess
+# A curio-compatible standin for the subprocess module.  Provides
+# asynchronous compatible versions of Popen(), check_output(),
+# and run() functions.
 
 __all__ = [ 'run', 'Popen', 'CompletedProcess', 'CalledProcessError',
             'TimeoutExpired', 'SubprocessError', 'check_output',
             'PIPE', 'STDOUT', 'DEVNULL' ]
+
+import subprocess
 
 from subprocess import (
     CompletedProcess,
@@ -23,6 +19,10 @@ from subprocess import (
     STDOUT,
     DEVNULL,
     )
+
+from .task import spawn, sleep, timeout_after
+from .errors import TaskTimeout
+from .io import Stream
 
 class Popen(object):
     '''
@@ -80,7 +80,7 @@ class Popen(object):
             raise
 
     def __enter__(self):
-        raise RuntimeError('Use async-with')
+        raise RuntimeError('Use async with')
 
     async def __aenter__(self):
         return self
@@ -125,6 +125,9 @@ async def run(args, *, stdin=None, input=None, stdout=None, stderr=None, shell=F
     return CompletedProcess(process.args, retcode, stdout, stderr)
 
 async def check_output(args, *, stdin=None, stderr=None, shell=False, input=None, timeout=None):
+     '''
+     Curio compatible version of subprocess.check_output()
+     '''
      out = await run(args, stdout=PIPE, stdin=stdin, stderr=stderr, shell=shell, 
                      timeout=timeout, check=True, input=input)
      return out.stdout

@@ -3,9 +3,8 @@
 # Support for a message passing channel that can send bytes or pickled
 # Python objects on a stream.  Compatible with the Connection class in the
 # multiprocessing module, but rewritten for a purely asynchronous runtime.
-#
-# WARNING: This module is experimental, undocumented, and may be removed
-# or rewritten at any time.
+
+__all__ = ['Channel', 'Listener', 'Client']
 
 import os
 import pickle
@@ -16,12 +15,10 @@ import multiprocessing.connection as mpc
 from contextlib import contextmanager
 
 from . import socket
-from .kernel import CurioError
+from .errors import CurioError
 from .io import Stream
 
-__all__ = ['Channel', 'Listener', 'Client']
-
-# Authentication parameters (from multiprocessing)
+# Authentication parameters (copied from multiprocessing)
 
 import multiprocessing.connection as mpc
 
