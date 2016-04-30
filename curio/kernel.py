@@ -1,11 +1,6 @@
-# kernel.py
-# 
-# Copyright (C) 2015-2016
-# David Beazley (Dabeaz LLC), http://www.dabeaz.com
-# All rights reserved.
+# curio/kernel.py
 #
-# This is the core of curio.   Definitions for tasks, signal sets, and the kernel
-# are here.
+# Main execution kernel.
 
 import socket
 import heapq
@@ -14,14 +9,16 @@ import os
 import sys
 import logging
 import signal
-
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
-from types import coroutine
-from contextlib import contextmanager
 
 # Logger where uncaught exceptions from crashed tasks are logged
 log = logging.getLogger(__name__)
+
+from .errors import *
+from .errors import _CancelRetry
+from .task import Task
+from .traps import _read_wait
 
 # kqueue is the datatype used by the kernel for all of its queuing functionality.
 # Any time a task queue is needed, use this type instead of directly hard-coding the
@@ -29,127 +26,6 @@ log = logging.getLogger(__name__)
 # queue type is changed later.
 
 kqueue = deque
-
-# --- Curio specific exceptions
-
-class CurioError(Exception):
-    pass
-
-class CancelledError(CurioError):
-    pass
-
-class TaskTimeout(CurioError):
-    pass
-
-class TaskError(CurioError):
-    pass
-
-class _CancelRetry(Exception):
-    pass
-
-# Task class wraps a coroutine, but provides other information about 
-# the task itself for the purposes of debugging, scheduling, timeouts, etc.
-
-class Task(object):
-    __slots__ = ('id', 'daemon',  'coro', 'send', 'throw', 'cycles', 'state',
-                 'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
-                 'next_exc', 'joining', 'terminated', '_last_io', '__weakref__',
-                 )
-    _lastid = 1
-    def __init__(self, coro, daemon=False):
-        self.id = Task._lastid   
-        Task._lastid += 1
-        self.coro = coro          # Underlying generator/coroutine
-        self.send = coro.send     # Bound coroutine methods
-        self.throw = coro.throw
-        self.daemon = daemon      # Daemonic flag
-        self.cycles = 0           # Execution cycles completed
-        self.state = 'INITIAL'    # Execution state
-        self.cancel_func = None   # Cancellation function
-        self.future = None        # Pending Future (if any)
-        self.sleep = None         # Pending sleep (if any)
-        self.timeout = None       # Pending timeout (if any)
-        self.exc_info = None      # Exception info (if any on crash)
-        self.next_value = None    # Next value to send on execution
-        self.next_exc = None      # Next exception to send on execution
-        self.joining = None       # Optional set of tasks waiting to join with this one
-        self.terminated = False   # Terminated?
-        self._last_io = None      # Last I/O operation performed
-
-    def __repr__(self):
-        return 'Task(id=%r, %r, state=%r)' % (self.id, self.coro, self.state)
-
-    def __str__(self):
-        return self.coro.__qualname__
-
-    def __del__(self):
-        self.coro.close()
-
-    async def join(self):
-        '''
-        Waits for a task to terminate.  Returns the return value (if any)
-        or raises a TaskError if the task crashed with an exception.
-        '''
-        await _join_task(self)
-        if self.exc_info:
-            raise TaskError('Task crash') from self.exc_info[1]
-        else:
-            return self.next_value
-
-    async def cancel(self, *, exc=CancelledError):
-        '''
-        Cancels a task.  Does not return until the task actually terminates.
-        Returns True if the task was actually cancelled. False is returned
-        if the task was already completed.
-        '''
-        if self.terminated:
-            return False
-        else:
-            await _cancel_task(self, exc)
-            return True
-
-# The SignalSet class represents a set of Unix signals being monitored. 
-class SignalSet(object):
-    def __init__(self, *signos):
-        self.signos = signos             # List of all signal numbers being tracked
-        self.pending = deque()           # Pending signals received
-        self.waiting = None              # Task waiting for the signals (if any)
-        self.watching = False            # Are the signals being watched right now?
-    
-    async def __aenter__(self):
-        assert not self.watching
-        await _sigwatch(self)
-        self.watching = True
-        return self
-
-    async def __aexit__(self, *args):
-        await _sigunwatch(self)
-        self.watching = False
-
-    async def wait(self):
-        '''
-        Wait for a single signal from the signal set to arrive.
-        '''
-        if not self.watching:
-            async with self:
-                return await self.wait()
-
-        while True:
-            if self.pending:
-                return self.pending.popleft()
-            await _sigwait(self)
-
-    @contextmanager
-    def ignore(self):
-        '''
-        Context manager. Temporarily ignores all signals in the signal set. 
-        '''
-        try:
-            orig_signals = [ (signo, signal.signal(signo, signal.SIG_IGN)) for signo in self.signos ]
-            yield
-        finally:
-            for signo, handler in orig_signals:
-                signal.signal(signo, handler)
 
 # ----------------------------------------------------------------------
 # Underlying kernel that drives everything
@@ -649,9 +525,9 @@ class Kernel(object):
                     current.state = 'RUNNING'
                     current.cycles += 1
                     if current.next_exc is None:
-                        trap = current.send(current.next_value)
+                        trap = current._send(current.next_value)
                     else:
-                        trap = current.throw(current.next_exc)
+                        trap = current._throw(current.next_exc)
                         current.next_exc = None
 
                     # Execute the trap
@@ -716,248 +592,6 @@ class Kernel(object):
 
         return maintask.next_value if maintask else None
 
-# ----------------------------------------------------------------------
-# Coroutines corresponding to the kernel traps.  These functions
-# provide the bridge from tasks to the underlying kernel. This is the
-# only place with the explicit @coroutine decorator needs to be used.
-# All other code in curio and in user-tasks should use async/await
-# instead.  Direct use by users is allowed, but if you're working with
-# these traps directly, there is probably a higher level interface
-# that simplifies the problem you're trying to solve (e.g., Socket,
-# File, objects, etc.)
-# ----------------------------------------------------------------------
-
-@coroutine
-def _read_wait(fileobj):
-    '''
-    Wait until reading can be performed.
-    '''
-    yield ('_trap_io', fileobj, EVENT_READ, 'READ_WAIT')
-
-@coroutine
-def _write_wait(fileobj):
-    '''
-    Wait until writing can be performed.
-    '''
-    yield ('_trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT')
-
-@coroutine
-def _future_wait(future, event=None):
-    '''
-    Wait for the future of a Future to be computed.
-    '''
-    yield ('_trap_future_wait', future, event)
-
-@coroutine
-def _sleep(seconds):
-    '''
-    Sleep for a given number of seconds. Sleeping for 0 seconds
-    simply forces the current task to yield to the next task (if any).
-    '''
-    yield ('_trap_sleep', seconds)
-
-@coroutine
-def _spawn(coro, daemon):
-    '''
-    Create a new task
-    '''
-    return (yield '_trap_spawn', coro, daemon)
-
-@coroutine
-def _cancel_task(task, exc=CancelledError):
-    '''
-    Cancel a task.  Causes a CancelledError exception to raise in the task.
-    '''
-    while True:
-        try:
-            yield ('_trap_cancel_task', task, exc)
-            return
-        except _CancelRetry:
-            pass
-
-@coroutine
-def _join_task(task):
-    '''
-    Wait for a task to terminate.
-    '''
-    yield ('_trap_join_task', task)
-
-@coroutine
-def _wait_on_queue(queue, state):
-    '''
-    Put the task to sleep on a kernel queue.
-    '''
-    yield ('_trap_wait_queue', queue, state)
-
-@coroutine
-def _reschedule_tasks(queue, n=1, value=None, exc=None):
-    '''
-    Reschedule one or more tasks waiting on a kernel queue.
-    '''
-    yield ('_trap_reschedule_tasks', queue, n, value, exc)
-
-@coroutine
-def _sigwatch(sigset):
-    '''
-    Start monitoring a signal set
-    '''
-    yield ('_trap_sigwatch', sigset)
-
-@coroutine
-def _sigunwatch(sigset):
-    '''
-    Stop watching a signal set
-    '''
-    yield ('_trap_sigunwatch', sigset)
-
-@coroutine
-def _sigwait(sigset):
-    '''
-    Wait for a signal to arrive.
-    '''
-    yield ('_trap_sigwait', sigset)
-
-@coroutine
-def _get_kernel():
-    '''
-    Get the kernel executing the task.
-    '''
-    result = yield ('_trap_get_kernel',)
-    return result
-
-@coroutine
-def _get_current():
-    '''
-    Get the currently executing task
-    '''
-    result = yield ('_trap_get_current',)
-    return result
-
-@coroutine
-def _set_timeout(seconds):
-    '''
-    Set a timeout for the current task.  
-    '''
-    result = yield ('_trap_set_timeout', seconds)
-    return result
-
-@coroutine
-def _unset_timeout(previous):
-    '''
-    Restore the previous timeout for the current task.
-    '''
-    yield ('_trap_unset_timeout', previous)
-
-# ----------------------------------------------------------------------
-# Public-facing syscalls.  These coroutines wrap a low-level coroutine
-# with an extra layer involving an async/await function.  The main
-# reason for doing this is that the user will get proper warning
-# messages if they forget to use the required 'await' keyword.
-# -----------------------------------------------------------------------
-
-async def sleep(seconds):
-    '''
-    Sleep for a specified number of seconds.
-    '''
-    await _sleep(seconds)
-
-async def spawn(coro, *, daemon=False):
-    '''
-    Create a new task.
-    '''
-    return await _spawn(coro, daemon)
-
-class _TimeoutAfter(object):
-    def __init__(self, seconds, ignore=False, timeout_result=None):
-        self._seconds = seconds
-        self._ignore = ignore
-        self._timeout_result = timeout_result
-        self.result = True
-
-    async def __aenter__(self):
-        self._prior = await _set_timeout(self._seconds)
-        return self
-
-    async def __aexit__(self, ty, val, tb):
-        await _unset_timeout(self._prior)
-        if ty == TaskTimeout:
-            self.result = self._timeout_result
-            if self._ignore:
-                return True
-
-async def _timeout_after_func(seconds, coro, ignore=False, timeout_result=None):
-    '''
-    Runs a coroutine with a timeout applied.
-    '''
-    prior = await _set_timeout(seconds)
-    try:
-        return await coro
-    except TaskTimeout:
-        if not ignore:
-            raise
-        return timeout_result
-    finally:
-        await _unset_timeout(prior)
-
-def timeout_after(seconds, coro=None):
-    '''
-    Raise a TaskTimeout exception in the calling task after seconds
-    have elapsed.  This function may be used in two ways. You can
-    apply it to a single coroutine:
-
-         await timeout_after(seconds, coro(args))
-
-    or you can use it as an asynchronous context manager:
-
-         async with timeout_after(seconds):
-             await coro1(args)
-             await coro2(args)
-             ...
-    '''
-    if coro is None:
-        return _TimeoutAfter(seconds)
-    else:
-        return _timeout_after_func(seconds, coro)
-
-def stop_after(seconds, coro=None, *, timeout_result=None):
-    '''
-    Stop the enclosed task or block of code after seconds have
-    elapsed.  No exception is raised on time expiration. There are
-    two ways to use this function. You can call a single coroutine
-    like this:
-    
-        if stop_after(5, coro(args)) is None:
-            # A timeout occurred
-            ...
-
-    If the time period expires, None is returned. The value can be
-    changed by passing the timeout_result keyword argument.
-
-    Alternatively, you can use this function as an async context
-    manager like this:
-
-        async with stop_after(5) as r:
-            await coro1(args)
-            await coro2(args)
-            ...
-        if r.result is None:
-            # A timeout occurred
-
-    When used as a context manager, the return manager object has
-    a result attribute that will be set to None if the time
-    period expires (or True otherwise).
-    '''
-    if coro is None:
-        return _TimeoutAfter(seconds, ignore=True, timeout_result=timeout_result)
-    else:
-        return _timeout_after_func(seconds, coro, ignore=True, timeout_result=timeout_result)
-
-async def current_task():
-    '''
-    Returns a reference to the current task
-    '''
-    return await _get_current()
-
 def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
     '''
     Run the curio kernel with an initial task and execute until all
@@ -975,8 +609,7 @@ def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
     result = kernel.run(coro, pdb=pdb, log_errors=log_errors, shutdown=True)
     return result
 
-__all__ = [ 'Kernel', 'sleep', 'spawn', 'timeout_after', 'stop_after', 'current_task',
-            'SignalSet', 'TaskError', 'TaskTimeout', 'CancelledError', 'run' ]
+__all__ = [ 'Kernel', 'run' ]
             
 from .monitor import Monitor
         

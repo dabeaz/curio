@@ -1,9 +1,5 @@
 # curio/ssl.py
 #
-# Copyright (C) 2015
-# David Beazley (Dabeaz LLC), http://www.dabeaz.com
-# All rights reserved.
-#
 # Wrapper around built-in SSL module
 
 __all__ = []
@@ -16,6 +12,8 @@ try:
     import ssl as _ssl
     from ssl import *
 except ImportError:
+    _ssl = None
+
     # We need these exceptions defined, even if ssl is not available.
     class SSLWantReadError(Exception):
         pass

@@ -1,17 +1,15 @@
 # curio/sync.py
 #
-# Copyright (C) 2015
-# David Beazley (Dabeaz LLC), http://www.dabeaz.com
-# All rights reserved.
-#
 # Implementation of common task synchronization primitives such as
 # events, locks, semaphores, and condition variables. These primitives
 # are only safe to use in the curio framework--they are not thread safe.
 
-import threading
-from .kernel import _wait_on_queue, _reschedule_tasks, kqueue
-
 __all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition' ]
+
+import threading
+
+from .traps import _wait_on_queue, _reschedule_tasks
+from .kernel import kqueue
 
 class Event(object):
     __slots__ = ('_set', '_waiting')
@@ -46,6 +44,12 @@ class _LockBase(object):
 
     async def __aexit__(self, exc_type, exc, tb):
         await self.release()
+
+    def __enter__(self):
+        raise RuntimeError('Use async with')
+
+    def __exit__(self, *args):
+        pass
 
 class Lock(_LockBase):
     __slots__ = ('_acquired', '_waiting')

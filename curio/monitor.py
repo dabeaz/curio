@@ -61,6 +61,7 @@ import logging
 
 # --- Curio
 from . import kernel
+from .task import Task
 from .workers import run_in_thread
 
 # ---
@@ -122,7 +123,7 @@ class Monitor(object):
         # The monitor launches both a separate thread and helper task
         # that runs inside curio itself to manage cancellation events
         threading.Thread(target=self.server, daemon=True).start()
-        monitor_task = kernel.Task(self.monitor_task(), daemon=True)
+        monitor_task = Task(self.monitor_task(), daemon=True)
         kern._ready.append(monitor_task)
         kern._tasks[monitor_task.id] = monitor_task
 

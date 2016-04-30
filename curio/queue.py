@@ -1,20 +1,20 @@
 # curio/queue.py
 #
-# Copyright (C) 2015
-# David Beazley (Dabeaz LLC), http://www.dabeaz.com
-# All rights reserved.
-#
 # Implementation of a queue object that can be used to communicate
 # between tasks.  This is only safe to use within curio. It is not
 # thread-safe.
 
-from .kernel import _wait_on_queue, _reschedule_tasks, kqueue
-from collections import deque
-
 __all__ = [ 'Queue' ]
 
+from collections import deque
+
+from .traps import _wait_on_queue, _reschedule_tasks
+from .kernel import kqueue
+
 class Queue(object):
-    __slots__ = ('maxsize', '_queue', '_get_waiting', '_put_waiting', '_join_waiting', '_task_count')
+    __slots__ = ('maxsize', '_queue', '_get_waiting', 
+                 '_put_waiting', '_join_waiting', '_task_count')
+
     def __init__(self, maxsize=0):
         self.maxsize = maxsize
         self._queue = deque()

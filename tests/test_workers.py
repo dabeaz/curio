@@ -21,7 +21,7 @@ def test_cpu(kernel):
             n -= 1
 
     async def cpu_bound(n):
-         r = await run_cpu_bound(fib, n)
+         r = await run_in_process(fib, n)
          results.append(('fib', r))
 
     async def main():
@@ -45,7 +45,7 @@ def test_blocking(kernel):
             n -= 1
 
     async def blocking(n):
-         await run_blocking(time.sleep, n)
+         await run_in_thread(time.sleep, n)
          results.append('sleep done')
 
     async def main():

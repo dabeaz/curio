@@ -1,13 +1,5 @@
 # curio/io.py
 #
-# I/O wrapper objects.
-# 
-# Copyright (C) 2015
-# David Beazley (Dabeaz LLC)
-# All rights reserved.
-#
-# Let's talk about design for a moment...
-#
 # Curio is primarily concerned with the scheduling of tasks. In
 # particular, the kernel does not actually perform any I/O.  It merely
 # blocks tasks that need to wait for reading or writing.  To actually
@@ -33,15 +25,14 @@
 # selector used by the kernel.  For example, can it detect I/O events
 # on the provided file or socket?  If so, it will probably work here.
 
-from .kernel import _read_wait, _write_wait
+__all__ = ['Socket', 'Stream']
 
 from socket import SOL_SOCKET, SO_ERROR
 from contextlib import contextmanager
-
 import io
 import os
 
-__all__ = ['Socket', 'Stream']
+from .traps import _read_wait, _write_wait
 
 # Exceptions raised for non-blocking I/O.  For normal sockets, blocking operations
 # normally just raise BlockingIOError.  For SSL sockets, more specific exceptions
@@ -80,10 +71,10 @@ class Socket(object):
         return self._fileno
 
     def settimeout(self, seconds):
-        raise RuntimeError()
+        raise RuntimeError('Use timeout_after() to set a timeout')
 
     def gettimeout(self):
-        raise RuntimeError()
+        return None
 
     def dup(self):
         return Socket(self._socket.dup())
@@ -261,8 +252,8 @@ class Socket(object):
         self._socket.__exit__(*args)
       
     def __enter__(self):
-        raise RuntimeError('Use async-with for context management')
-
+        raise RuntimeError('Use async with')
+    
     def __exit__(self, *args):
         pass
 
