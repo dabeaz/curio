@@ -178,7 +178,7 @@ class _contextadapt(object):
 
 def abide(op, *args, **kwargs):
     '''
-    Make async abide by the execution requirements of a given
+    Make curio abide by the execution requirements of a given
     function, coroutine, or context manager.  If op is coroutine
     function, it is called with the given arguments.  If op is an
     asynchronous context manager, it is returned unmodified.  If op is
@@ -212,6 +212,9 @@ def abide(op, *args, **kwargs):
 
     if hasattr(op, '__exit__'):
         return _contextadapt(op)
+
+    if not callable(op):
+        raise TypeError('%r object is not callable' % type(op).__name__)
 
     return workers.run_in_thread(op, *args, **kwargs)
 
