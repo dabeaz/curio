@@ -140,7 +140,7 @@ def test_task_join_error(kernel):
             results.append(type(e))
             results.append(type(e.__cause__))
 
-    kernel.run(main(), log_errors=False)
+    kernel.run(main())
     assert results == [
             'start',
             'joining',

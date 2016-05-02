@@ -6,30 +6,44 @@ This manual lists the basic functionality provided by curio.
 The Kernel
 ----------
 
-The kernel is responsible for running all of the tasks.  It should normally be created
-and used in the main execution thread.
+All tasks in curio are executed by an underlying kernel.  Normally, you would
+run a top-level coroutine using the following function:
 
-.. class:: Kernel(selector=None, with_monitor=False)
+.. function:: run(coro, *, pdb=False, log_errors=True, selector=None, with_monitor=False)
 
-   Create an instance of a curio kernel.  If *selector* is given, it
-   should be an instance of a selector from the :mod:`selectors
+   Run the coroutine *coro* to completion and return its final return
+   value.  If *pdb* is ``True``, pdb is launched if any task crashes.
+   If *log_errors* is ``True``, a traceback is written to the log on
+   crash.  If *with_monitor* is ``True``, then the monitor debugging
+   task executes in the background.  If *selector* is given, it should
+   be an instance of a selector from the :mod:`selectors
+   <python:selector>` module.
+   
+If you are going to repeatedly run coroutines one after the other, it
+will be more efficient to create a ``Kernel`` instance and submit
+tasks using its run() method as described below:
+
+.. class:: Kernel(pdb=False, log_errors=True, selector=None, with_monitor=False)
+
+   Create an instance of a curio kernel.  If *pdb* is ``True``, then
+   the kernel enters the Python debugger if any task crashes with an
+   uncaught exception.  If *log_errors* is ``True``, then uncaught
+   exceptions in tasks are logged. If *selector* is given, it should
+   be an instance of a selector from the :mod:`selectors
    <python:selectors>` module.  If not given, then
    :class:`selectors.DefaultSelector
    <python:selectors.DefaultSelector>` is used to poll for I/O.  If
    *with_monitor* is ``True``, the monitor task executes in the
-   background. 
+   background.
 
-There are only a few methods that may be used on a :class:`Kernel` outside of coroutines.
+There is only one method that may be used on a :class:`Kernel` outside of coroutines.
 
-.. method:: Kernel.run(coro=None, pdb=False, log_errors=True, shutdown=False)
+.. method:: Kernel.run(coro=None, shutdown=False)
 
    Runs the kernel until all non-daemonic tasks have finished
-   execution.  *coro* is a coroutine to run as a task.  If *pdb* is
-   ``True``, then the kernel enters the Python debugger if any task
-   crashes with an uncaught exception.  If *log_errors* is ``True``,
-   then uncaught exceptions in tasks are logged.  If *shutdown* is
-   ``True``, the kernel will cancel all daemonic tasks and perform a clean
-   shutdown once all regular tasks have completed.
+   execution.  *coro* is a coroutine to run as a task.  If *shutdown*
+   is ``True``, the kernel will cancel all daemonic tasks and perform
+   a clean shutdown once all regular tasks have completed.
 
 Tasks
 -----
@@ -98,8 +112,8 @@ If you need to make a task sleep for awhile, use the following function:
    Sleep for a specified number of seconds.  If the number of seconds is 0, the
    kernel merely switches to the next task (if any).
 
-If a coroutine needs to obtain a reference to the currently running task, use
-the following:
+If a coroutine needs to obtain a reference to its enclosing ``Task`` instance, 
+use the following:
 
 .. asyncfunction:: current_task()
 
@@ -374,7 +388,6 @@ subprocess with curio::
         kernel.run()
 
 The following methods of :class:`Popen` have been replaced by asynchronous equivalents:
-
 
 .. asyncmethod:: Popen.wait(timeout=None)
 
@@ -830,7 +843,8 @@ The following system calls are available, but not typically used
 directly in user code.  They are used to implement higher level
 objects such as locks, socket wrappers, and so forth. If you find
 yourself using these, you're probably doing something wrong--or
-implementing a new curio primitive.
+implementing a new curio primitive.   These calls are found in the
+``curio.traps`` submodule.
 
 .. asyncfunction:: _read_wait(fileobj)
 
@@ -886,6 +900,25 @@ implementing a new curio primitive.
 
    Wait for the arrival of a signal in a given signal set. Returns the signal
    number of the received signal.
+
+.. asyncfunction:: _get_kernel()
+
+   Get a reference to the running ``Kernel`` object.
+
+.. asyncfunction:: _get_current()
+
+   Get a reference to the currently running ``Task`` instance.
+
+.. asyncfunction:: _set_timeout(seconds)
+
+   Set a timeout in the currently running task. Returns the 
+   previous timeout (if any)
+
+.. asyncfunction:: _unset_timeout(previous)
+
+   Unset a timeout in the currently running task. *previous*
+   is the value returned by the _set_timeout() call used to
+   set the timeout.
 
 Again, you're unlikely to use any of these functions directly.  However, here's a small taste
 of how they're used.  For example, the :meth:`curio.io.Socket.recv` method

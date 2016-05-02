@@ -4,12 +4,14 @@
 # events, locks, semaphores, and condition variables. These primitives
 # are only safe to use in the curio framework--they are not thread safe.
 
-__all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition' ]
+__all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide' ]
 
 import threading
+from inspect import iscoroutinefunction
 
 from .traps import _wait_on_queue, _reschedule_tasks
 from .kernel import kqueue
+from . import workers
 
 class Event(object):
     __slots__ = ('_set', '_waiting')
@@ -162,3 +164,54 @@ class Condition(_LockBase):
 
     async def notify_all(self):
         await self.notify(len(self._waiting))
+
+
+class _contextadapt(object):
+    def __init__(self, manager):
+        self.manager = manager
+
+    async def __aenter__(self):
+        return await workers.run_in_thread(self.manager.__enter__)
+
+    async def __aexit__(self, *args):
+        return await workers.run_in_thread(self.manager.__exit__, *args)
+
+def abide(op, *args, **kwargs):
+    '''
+    Make async abide by the execution requirements of a given
+    function, coroutine, or context manager.  If op is coroutine
+    function, it is called with the given arguments.  If op is an
+    asynchronous context manager, it is returned unmodified.  If op is
+    a synchronous function, run_in_thread(op, *args, **kwargs) is
+    returned.  If op is a synchronous context manager, it is wrapped
+    by an asynchronous context manager that executes the __enter__()
+    and __exit__() methods in threads.
+
+    The main use of this function is in code that wants to safely
+    synchronize curio with threads and processes. For example, if you
+    write code this like:
+
+        async with abide(lck):
+            statements
+
+    The code will work correctly if lck is an async lock defined by curio or
+    a foreign lock defined by the threading or multiprocessing modules.
+
+    You can also use abide() with method calls. For example:
+
+        await abide(q.put, item)
+
+    would safely execute a put(item) method on a queue regardless of
+    whether or not q is a curio queue or a queue used for threads.
+    '''
+    if iscoroutinefunction(op):
+        return op(*args, **kwargs)
+
+    if hasattr(op, '__aexit__'):
+        return op
+
+    if hasattr(op, '__exit__'):
+        return _contextadapt(op)
+
+    return workers.run_in_thread(op, *args, **kwargs)
+
