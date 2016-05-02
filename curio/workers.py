@@ -54,7 +54,7 @@ async def run_in_thread(callable, *args, **kwargs):
         kernel._thread_pool = WorkerPool(ThreadWorker, MAX_WORKER_THREADS)
     return await kernel._thread_pool.apply(callable, args, kwargs)
 
-run_blocking = run_in_thread
+MAX_WORKER_PROCESSES = multiprocessing.cpu_count()
 
 async def run_in_process(callable, *args, **kwargs):
     '''
@@ -77,7 +77,7 @@ async def run_in_process(callable, *args, **kwargs):
     kernel = await _get_kernel()
     if not kernel._process_pool:
         kernel._process_pool = WorkerPool(ProcessWorker, 
-                                          multiprocessing.cpu_count())
+                                          MAX_WORKER_PROCESSES)
 
     return await kernel._process_pool.apply(callable, args, kwargs)
 

@@ -55,14 +55,15 @@ import signal
 import time
 import socket
 import threading
+import queue
 import telnetlib
 from collections import deque
 import logging
 
 # --- Curio
-from . import kernel
 from .task import Task
 from .workers import run_in_thread
+from .sync import abide
 
 # ---
 log = logging.getLogger(__name__)
@@ -114,9 +115,7 @@ class Monitor(object):
     def __init__(self, kern, host=MONITOR_HOST, port=MONITOR_PORT):
         self.kernel = kern
         self.address = (host, port)
-        self.task_cancel_request = None
-        self.monitor_event = threading.Event()
-        self.monitor_event_done = threading.Event()
+        self.monitor_queue = queue.Queue()
 
         log.info('Starting Curio monitor at %s:%d', host, port)
 
@@ -132,11 +131,9 @@ class Monitor(object):
         Asynchronous task loop for carrying out task cancellation.
         '''
         while True:
-            await run_in_thread(self.monitor_event.wait)
-            self.monitor_event.clear()
-            if self.task_cancel_request:
-                await self.task_cancel_request.cancel()
-            self.monitor_event_done.set()
+            task = await abide(self.monitor_queue.get)
+            await task.cancel()
+            await abide(self.monitor_queue.task_done)
 
     def server(self):
         '''
@@ -238,12 +235,11 @@ class Monitor(object):
             sout.write('Unknown signal %s\n' % signame)
 
     def command_cancel(self, sout, taskid):
-        self.task_cancel_request = self.kernel._tasks.get(taskid)
-        if self.task_cancel_request:
+        task = self.kernel._tasks.get(taskid)
+        if task:
             sout.write('Cancelling task %d\n' % taskid)
-            self.monitor_event.set()
-            self.monitor_event_done.wait()
-            self.monitor_event_done.clear()
+            self.monitor_queue.put(task)
+            self.monitor_queue.join()
             
     def command_exit(self, sout):
         pass

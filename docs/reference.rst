@@ -25,16 +25,8 @@ tasks using its run() method as described below:
 
 .. class:: Kernel(pdb=False, log_errors=True, selector=None, with_monitor=False)
 
-   Create an instance of a curio kernel.  If *pdb* is ``True``, then
-   the kernel enters the Python debugger if any task crashes with an
-   uncaught exception.  If *log_errors* is ``True``, then uncaught
-   exceptions in tasks are logged. If *selector* is given, it should
-   be an instance of a selector from the :mod:`selectors
-   <python:selectors>` module.  If not given, then
-   :class:`selectors.DefaultSelector
-   <python:selectors.DefaultSelector>` is used to poll for I/O.  If
-   *with_monitor* is ``True``, the monitor task executes in the
-   background.
+   Create an instance of a curio kernel.  The arguments are the same 
+   as described above for the :func:`run()` function.
 
 There is only one method that may be used on a :class:`Kernel` outside of coroutines.
 
@@ -43,28 +35,42 @@ There is only one method that may be used on a :class:`Kernel` outside of corout
    Runs the kernel until all non-daemonic tasks have finished
    execution.  *coro* is a coroutine to run as a task.  If *shutdown*
    is ``True``, the kernel will cancel all daemonic tasks and perform
-   a clean shutdown once all regular tasks have completed.
+   a clean shutdown once all regular tasks have completed.  Calling
+   this method with no coroutine and *shutdown* set to ``True`` 
+   will make the kernel cancel all remaining tasks and perform a 
+   clean shut down.
 
 Tasks
 -----
 
-Once the kernel is running, a coroutine can create a new task using the following
-function:
+The following functions are defined to help manage the execution of tasks.
 
 .. asyncfunction:: spawn(coro, daemon=False)
 
    Create a new task.  *coro* is a newly called coroutine.  Does not
-   return to the caller until the new task has been scheduled and executed for at least
-   one cycle.  Returns a :class:`Task` instance as a result.  The *daemon* option,
-   if supplied, creates the new task without a parent.  The task will run indefinitely
-   in the background.  Note: The kernel only runs as long as there are non-daemonic
-   tasks to execute.
+   return to the caller until the new task has been scheduled and
+   executed for at least one cycle.  Returns a :class:`Task` instance
+   as a result.  The *daemon* option, if supplied, specifies that the
+   new task will run indefinitely in the background.  Curio only runs
+   as long as there are non-daemonic tasks to execute.  Note: a
+   daemonic task will still be cancelled if the underlying kernel is
+   shut down.
 
-.. class:: Task
+.. asyncfunction:: sleep(seconds)
 
-  Tasks created by :func:`spawn` are represented as a :class:`Task` instance.
-  It is illegal to create a :class:`Task` instance directly by calling the class.
-  The following methods are available on tasks:
+   Sleep for a specified number of seconds.  If the number of seconds is 0, the
+   kernel merely switches to the next task (if any).
+
+.. asyncfunction:: current_task()
+
+   Returns a reference to the :class:`Task` instance corresponding to the
+   caller.  A coroutine can use this to get a self-reference to its
+   current :class:`Task` instance if needed.
+
+The :func:`spawn` and :func:`current_task` both return a :class:`Task` instance
+that serves as a kind of wrapper around the underlying coroutine that's executing.
+:class:`Task` instances are not created directly, but they have the following 
+methods that can be used in coroutines:
 
 .. asyncmethod:: Task.join()
 
@@ -82,8 +88,8 @@ function:
    task is actually cancelled. If you want to change the exception raised,
    supply a different exception as the *exc* argument.  If the task
    has already run to completion, this method does nothing and returns
-   immediately.  Returns True if the task is actually cancelled. False
-   is returned if the task was already finished prior to cancellation.
+   immediately.  Returns ``True`` if the task was actually cancelled. ``False``
+   is returned if the task was already finished prior to the cancellation request.
 
 The following public attributes are available of :class:`Task` instances:
 
@@ -93,32 +99,99 @@ The following public attributes are available of :class:`Task` instances:
 
 .. attribute:: Task.coro
 
-   The coroutine associated with the task.
+   The underlying coroutine associated with the task.
+
+.. attribute:: Task.daemon
+
+   Boolean flag that indicates whether or not a task is daemonic.
 
 .. attribute:: Task.state
 
    The name of the task's current state.  Printing it can be potentially useful
    for debugging.
 
+.. attribute:: Task.cycles
+
+   The number of scheduling cycles the task has completed. This might be useful
+   if you're trying to figure out if a task is running or not. Or if you're
+   trying to monitor a task's progress.
+
 .. attribute:: Task.exc_info
 
    A tuple of exception information obtained from :py:func:`sys.exc_info` if the
    task crashes for some reason.  Potentially useful for debugging.
 
-If you need to make a task sleep for awhile, use the following function:
+.. attribute:: Task.terminated
 
-.. asyncfunction:: sleep(seconds)
+   A boolean flag that indicates whether or not the task has run to completion.
 
-   Sleep for a specified number of seconds.  If the number of seconds is 0, the
-   kernel merely switches to the next task (if any).
+Timeouts
+--------
+Any blocking operation in curio can be cancelled after a timeout.  The following
+functions can be used for this purpose:
 
-If a coroutine needs to obtain a reference to its enclosing ``Task`` instance, 
-use the following:
+.. asyncfunction:: timeout_after(seconds, coro=None)
 
-.. asyncfunction:: current_task()
+   Execute the specified coroutine and return its result. However,
+   issue a cancellation request to the calling task after *seconds*
+   have elapsed.  When this happens, a :py:exc:`TaskTimeout` exception
+   is raised.  If *coro* is ``None``, the result of this function serves
+   as an asynchronous context manager that applies a timeout to a block
+   of statements.
 
-   Returns a reference to the :class:`Task` instance corresponding to the
-   currently running task.
+.. asyncfunction:: stop_after(seconds, coro=None, *, timeout_result=None)
+
+   Execute the specified coroutine and return its result. Issue a
+   cancellation request after *seconds* have elapsed.  When a timeout
+   occurs, no exception is raised.  Instead, ``None`` or the value of
+   *timeout_result* is returned.  If *coro* is ``None``, the result is
+   an asynchronous context manager that applies a timeout to a block
+   of statements.  For the context manager case, ``result`` attribute
+   of the manager is set to ``None`` or the value of *timeout_result*
+   if the block was cancelled.
+
+Here is an example that shows how these functions can be used::
+
+    # Execute coro(args) with a 5 second timeout
+    try:
+        result = await timeout_after(5, coro(args))
+    except TaskTimeout as e:
+        result = None
+
+    # Execute multiple statements with a 5 second timeout
+    try:
+        async with timeout_after(5):
+             await coro1(args)
+             await coro2(args)
+             ...
+    except TaskTimeout as e:
+        # Handle the timeout
+        ...
+
+The difference between :func:`timeout_after` and :func:`stop_after` concerns
+the exception handling behavior when time expires.  The latter function
+returns ``None`` instead of raising an exception which might be more
+convenient in certain cases. For example::
+
+    result = await stop_after(5, coro(args))
+    if result is None:
+        # Timeout occurred
+        ...
+
+    # Execute multiple statements with a 5 second timeout
+    async with stop_after(5) as s:
+        await coro1(args)
+        await coro2(args)
+        ...
+        s.result = successful_result
+
+    if s.result is None:
+        # Timeout occurred
+
+It's important to note that every curio operation can be cancelled by timeout.
+Rather than having every possible call take an explicit *timeout* argument,
+you should wrap the call using :func:`timeout_after` or :func:`stop_after` as
+appropriate.
 
 Performing External Work
 ------------------------
@@ -128,17 +201,55 @@ calculations and blocking operations.  Use the following functions to do that:
 
 .. asyncfunction:: run_in_process(callable, *args, **kwargs)
 
-   Run ``callable(*args, **kwargs)`` in a separate process and returns the result.
+   Run ``callable(*args, **kwargs)`` in a separate process and returns
+   the result.  If the calling task is cancelled, the underlying
+   worker process (if started) is immediately cancelled by a ``SIGTERM``
+   signal.
 
 .. asyncfunction:: run_in_thread(callable, *args, **kwargs)
 
-   Run ``callable(*args, **kwargs)`` in a separate thread and return the result.
+   Run ``callable(*args, **kwargs)`` in a separate thread and return
+   the result.  If the calling task is cancelled, the underlying
+   worker thread (if started) is set aside and sent a termination
+   request.  However, since there is no underlying mechanism to
+   forcefully kill threads, the thread won't recognize the termination
+   request until it runs the requested work to completion.  It's
+   important to note that a cancellation won't block other tasks
+   from using threads. Instead, cancellation produces a kind of
+   "zombie thread" that executes the requested work, discards the
+   result, and then disappears.  For reliability, work submitted to
+   threads should have a timeout or some other mechanism that
+   puts a bound on execution time.
 
 .. asyncfunction:: run_in_executor(exc, callable, *args, **kwargs)
 
-   Run ``callable(*args, **kwargs)`` callable in a user-supplied executor and returns the
-   result. *exc* is an executor from the :py:mod:`concurrent.futures` module
-   in the standard library.
+   Run ``callable(*args, **kwargs)`` callable in a user-supplied
+   executor and returns the result. *exc* is an executor from the
+   :py:mod:`concurrent.futures` module in the standard library.  This
+   executor is expected to implement a :py:meth:`submit` method that
+   executes the given callable and returns a :class:`Future` instance
+   for collecting its result.
+
+When performing external work, it's almost always better to use the
+:func:`run_in_process` and :func:`run_in_thread` functions instead
+of :func:`run_in_executor`.  These functions have no external library
+dependencies, have substantially less communication overhead, and more
+predictable cancellation semantics.
+
+The following values in :mod:`curio.workers` define how many 
+worker threads and processes are used.  If you are going to
+change these values, do it before any tasks are executed.
+
+.. data:: MAX_WORKER_THREADS
+
+   Specifies the maximum number of threads used by a single kernel
+   using the :func:`run_in_thread` function.  Default value is 64.
+   
+.. data:: MAX_WORKER_PROCESSES
+
+   Specifies the maximum number of processes used by a single kernel
+   using the :func:`run_in_process` function. Default value is the
+   number of CPUs on the host system.
 
 I/O Layer
 ---------
@@ -287,7 +398,7 @@ The following methods are available on instances of :class:`Stream`:
 
    Return all of the data that's available on a file up until an EOF is read.
 
-.. asyncmethod:: Stream.readline():
+.. asyncmethod:: Stream.readline()
 
    Read a single line of data from a file.
 
@@ -358,58 +469,6 @@ don't block the kernel when interacting with DNS:
 .. asyncfunction:: gethostbyaddr(ip_address)
 .. asyncfunction:: getnameinfo(sockaddr, flags)
 
-subprocess wrapper module
--------------------------
-.. module:: curio.subprocess
-
-The :mod:`curio.subprocess` module provides a wrapper around the built-in :mod:`subprocess` module.
-
-.. class:: Popen(*args, **kwargs)
-
-   A wrapper around the :class:`subprocess.Popen` class.  The same arguments are accepted.
-   On the resulting ``Popen`` instance, the :attr:`stdin`, :attr:`stdout`, and
-   :attr:`stderr` file attributes have been wrapped by the
-   :class:`curio.io.Stream` class. You can use these in an asynchronous context.
-
-Here is an example of using :class:`Popen` to read streaming output off of a
-subprocess with curio::
-
-    import curio
-    from curio import subprocess
-
-    async def main():
-        p = subprocess.Popen(['ping', 'www.python.org'], stdout=subprocess.PIPE)
-        async for line in p.stdout:
-            print('Got:', line.decode('ascii'), end='')
-
-    if __name__ == '__main__':
-        kernel = curio.Kernel()
-        kernel.add_task(main())
-        kernel.run()
-
-The following methods of :class:`Popen` have been replaced by asynchronous equivalents:
-
-.. asyncmethod:: Popen.wait(timeout=None)
-
-   Wait for a subprocess to exit.
-
-.. asyncmethod:: Popen.communicate(input=b'', timeout=None)
-
-   Communicate with the subprocess, sending the specified input on standard input.
-   Returns a tuple ``(stdout, stderr)`` with the resulting output of standard output
-   and standard error.
-
-The following functions are also available.  They accept the same arguments as their
-equivalents in the :mod:`subprocess` module:
-
-.. asyncfunction:: run(args, stdin=None, input=None, stdout=None, stderr=None, shell=False, timeout=None, check=False)
-
-   Run a command in a subprocess.  Returns a :class:`subprocess.CompletedProcess` instance.
-
-.. asyncfunction:: check_output(args, stdout=None, stderr=None, shell=False, timeout=None)
-
-   Run a command in a subprocess and return the resulting output. Raises a
-   :py:exc:`subprocess.CalledProcessError` exception if an error occurred.
 
 ssl wrapper module
 ------------------
@@ -479,7 +538,7 @@ making network connections and writing servers.
    highly advised that this be supplied to avoid man-in-the-middle
    attacks.
 
-.. asyncfunction:: open_unix_connection(path, *, ssl=None, server_hostname=None):
+.. asyncfunction:: open_unix_connection(path, *, ssl=None, server_hostname=None)
 
    Creates a connection to a Unix domain socket with optional SSL applied.
 
@@ -503,8 +562,62 @@ making network connections and writing servers.
    :class:`curio.ssl.SSLContext` to use if setting up an SSL
    connection.  
 
+subprocess wrapper module
+-------------------------
+.. module:: curio.subprocess
+
+The :mod:`curio.subprocess` module provides a wrapper around the built-in :mod:`subprocess` module.
+
+.. class:: Popen(*args, **kwargs)
+
+   A wrapper around the :class:`subprocess.Popen` class.  The same arguments are accepted.
+   On the resulting ``Popen`` instance, the :attr:`stdin`, :attr:`stdout`, and
+   :attr:`stderr` file attributes have been wrapped by the
+   :class:`curio.io.Stream` class. You can use these in an asynchronous context.
+
+Here is an example of using :class:`Popen` to read streaming output off of a
+subprocess with curio::
+
+    import curio
+    from curio import subprocess
+
+    async def main():
+        p = subprocess.Popen(['ping', 'www.python.org'], stdout=subprocess.PIPE)
+        async for line in p.stdout:
+            print('Got:', line.decode('ascii'), end='')
+
+    if __name__ == '__main__':
+        kernel = curio.Kernel()
+        kernel.add_task(main())
+        kernel.run()
+
+The following methods of :class:`Popen` have been replaced by asynchronous equivalents:
+
+.. asyncmethod:: Popen.wait(timeout=None)
+
+   Wait for a subprocess to exit.
+
+.. asyncmethod:: Popen.communicate(input=b'', timeout=None)
+
+   Communicate with the subprocess, sending the specified input on standard input.
+   Returns a tuple ``(stdout, stderr)`` with the resulting output of standard output
+   and standard error.
+
+The following functions are also available.  They accept the same arguments as their
+equivalents in the :mod:`subprocess` module:
+
+.. asyncfunction:: run(args, stdin=None, input=None, stdout=None, stderr=None, shell=False, timeout=None, check=False)
+
+   Run a command in a subprocess.  Returns a :class:`subprocess.CompletedProcess` instance.
+
+.. asyncfunction:: check_output(args, stdout=None, stderr=None, shell=False, timeout=None)
+
+   Run a command in a subprocess and return the resulting output. Raises a
+   :py:exc:`subprocess.CalledProcessError` exception if an error occurred.
+
 Synchronization Primitives
 --------------------------
+.. currentmodule:: None
 
 The following synchronization primitives are available. Their behavior
 is similar to their equivalents in the :mod:`threading` module.  None
@@ -554,6 +667,8 @@ Here is an Event example::
 	# Set the event. All waiters should wake up
 	await evt.set()
 
+    curio.run(main)
+
 .. class:: Lock()
 
    This class provides a mutex lock.  It can only be used in tasks. It is not thread safe.
@@ -586,6 +701,8 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
             print('Parent has the lock')
             await curio.spawn(child(lck))
             await curio.sleep(5)
+
+    curio.run(main())
 
 .. class:: Semaphore(value=1)
 
@@ -630,6 +747,8 @@ limit the number of tasks performing an operation.  For example::
              await curio.spawn(worker(sema))
 
          # After this point, you should see two tasks at a time run. Every 5 seconds.
+ 
+    curio.run(main())
 
 .. class:: Condition(lock=None)
 
@@ -694,6 +813,8 @@ scenario::
          cond = curio.Condition()
          await curio.spawn(producer(cond))
          await curio.spawn(consumer(cond))
+
+     curio.run(main())
 
 Queues
 ------
@@ -761,6 +882,99 @@ Here is an example of using queues in a producer-consumer problem::
         await prod_task.join()
         await cons_task.cancel()
 
+    curio.run(main())
+
+Synchronizing with Threads and Processes
+----------------------------------------
+Curio's synchronization primitives aren't safe to use with externel threads or
+processes.   However, Curio can work with existing thread or process-level
+synchronization primitives if you use the :func:`abide` function. 
+
+.. asyncfunction:: abide(op, *args, **kwargs)
+
+   Makes curio abide by the execution requirements of a given
+   function, coroutine, or context manager.  If *op* is coroutine
+   function, it is called with the given arguments and returned.  If *op* is an
+   asynchronous context manager, it is returned unmodified.  If *op* is
+   a synchronous function, ``run_in_thread(op, *args, **kwargs)`` is
+   returned.  If *op* is a synchronous context manager, it is wrapped by
+   an asynchronous context manager that executes the ``__enter__()`` and
+   ``__exit__()`` methods in threads.
+
+The main use of this function is in code that wants to safely
+synchronize curio with threads and processes. For example, here is
+how you would synchronize a thread with a curio task using a threading lock::
+
+    import curio
+    import threading
+    import time
+
+    # A curio task
+    async def child(lock):
+        async with curio.abide(lock):
+            print('Child has the lock')
+
+    # A thread
+    def parent(lock):
+        with lock:
+             print('Parent has the lock')
+             time.sleep(5)
+
+    lock = threading.Lock()
+    threading.Thread(target=parent, args=(lock,)).start()
+    curio.run(child(lock))
+
+Here is how you would implement a producer/consumer problem between
+threads and curio using a standard thread queue::
+
+    import curio
+    import threading
+    import queue
+
+    # A thread
+    def producer(queue):
+        for n in range(10):
+            queue.put(n)
+        queue.join()
+        print('Producer done')
+	queue.put(None)
+
+    # A curio task
+    async def consumer(queue):
+        while True:
+            item = await curio.abide(queue.get)
+	    if item is None:
+	        break
+            print('Consumer got', item)
+            await curio.abide(queue.task_done)
+        print('Consumer done')
+
+    q = queue.Queue()
+    threading.Thread(target=producer, args=(q,)).start()
+    curio.run(consumer(q))
+
+A notable feature of :func:`abide()` is that it also accepts Curio's
+own synchronization primitives.  Thus, you can write code that
+works independently of the lock type.  For example, the first locking
+example could be rewritten as follows and the child would still work::
+
+    import curio
+
+    # A curio task (works with any lock)
+    async def child(lock):
+        async with curio.abide(lock):
+            print('Child has the lock')
+
+    # Another curio task
+    async def main():
+        lock = curio.Lock()
+        async with lock:
+             print('Parent has the lock')
+             await curio.spawn(child(lock))
+             await curio.sleep(5)
+
+    curio.run(main())
+
 Signals
 -------
 
@@ -822,6 +1036,7 @@ may only be used in coroutines.
 
 Exceptions
 ----------
+The following exceptions are defined. All are subclasses of the :class:`CurioError` base class.
 
 .. exception:: CancelledError
 
@@ -829,6 +1044,10 @@ Exceptions
    coroutine is silently terminated.  If caught, a coroutine can continue to
    run, but should work to terminate execution.  Ignoring a cancellation
    request and continuing to execute will likely cause some other task to hang.
+
+.. exception:: TaskTimeout
+
+   Exception raised in a coroutine if it has been cancelled by timeout.
 
 .. exception:: TaskError
 
@@ -838,6 +1057,7 @@ Exceptions
 
 Low-level Kernel System Calls
 -----------------------------
+.. module:: curio.traps
 
 The following system calls are available, but not typically used
 directly in user code.  They are used to implement higher level
