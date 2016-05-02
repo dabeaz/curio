@@ -2,7 +2,7 @@
 #
 # Task class and task related functions.
 
-__all__ = [ 'sleep', 'current_task', 'spawn', 'timeout_after', 'stop_after' ]
+__all__ = [ 'sleep', 'current_task', 'spawn', 'gather', 'timeout_after', 'stop_after' ]
 
 from .errors import CancelledError, TaskTimeout, TaskError
 from .traps import *
@@ -98,6 +98,21 @@ async def spawn(coro, *, daemon=False):
     forever as a background task.
     '''
     return await _spawn(coro, daemon)
+
+async def gather(tasks, *, return_exceptions=False):
+    '''
+    Wait for and gather results from a collection of tasks.
+    '''
+    results = []
+    for task in tasks:
+        try:
+            results.append(await task.join())
+        except Exception as e:
+            if return_exceptions:
+                results.append(e)
+            else:
+                raise
+    return results
 
 # Helper class for running timeouts as a context manager
 class _TimeoutAfter(object):

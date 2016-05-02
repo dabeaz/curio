@@ -5,6 +5,9 @@
 from collections import deque
 from curio import *
 
+import threading
+import time
+
 # ---- Synchronization primitives
 
 class TestEvent:
@@ -577,4 +580,132 @@ class TestCondition:
                 ('producing', 3),
                 ('cons2', 4),
                 'cons2 done'
+                ]
+
+
+class TestAbide:
+    def test_abide_async(self, kernel):
+        results = []
+        async def waiter(lck, evt):
+              await abide(lck.acquire)
+              results.append('acquired')
+              await abide(lck.release)
+              results.append('released')
+              await abide(evt.set)
+
+        async def tester(lck, evt):
+              async with lck:
+                  results.append('tester')
+                  await sleep(0.1)
+              await evt.wait()
+              async with lck:
+                  results.append('tester finish')
+
+        async def main():
+            lck = Lock()
+            evt = Event()
+            await spawn(tester(lck, evt))
+            await spawn(waiter(lck, evt))
+
+        kernel.run(main())
+        assert results == [
+                'tester',
+                'acquired',
+                'released',
+                'tester finish'
+                ]
+
+    def test_abide_async_with(self, kernel):
+        results = []
+        async def waiter(lck, evt):
+              async with abide(lck):
+                  results.append('acquired')
+              results.append('released')
+              await abide(evt.set)
+
+        async def tester(lck, evt):
+              async with lck:
+                  results.append('tester')
+                  await sleep(0.1)
+              await evt.wait()
+              async with lck:
+                  results.append('tester finish')
+
+        async def main():
+            lck = Lock()
+            evt = Event()
+            await spawn(tester(lck, evt))
+            await spawn(waiter(lck, evt))
+
+        kernel.run(main())
+        assert results == [
+                'tester',
+                'acquired',
+                'released',
+                'tester finish'
+                ]
+
+    def test_abide_sync(self, kernel):
+        results = []
+        async def waiter(lck, evt):
+              await abide(lck.acquire)
+              results.append('acquired')
+              await abide(lck.release)
+              results.append('released')
+              await abide(evt.set)
+
+        # Synchronous code. Runs in a thread
+        def tester(lck, evt):
+              with lck:
+                  results.append('tester')
+                  time.sleep(0.1)
+              evt.wait()
+              with lck:
+                  results.append('tester finish')
+
+        async def main():
+            lck = threading.Lock()
+            evt = threading.Event()
+            await spawn(run_in_thread(tester, lck, evt))
+            await sleep(0.01)
+            await spawn(waiter(lck, evt))
+
+        kernel.run(main())
+        assert results == [
+                'tester',
+                'acquired',
+                'released',
+                'tester finish'
+                ]
+
+    def test_abide_sync_with(self, kernel):
+        results = []
+        async def waiter(lck, evt):
+              async with abide(lck):
+                  results.append('acquired')
+              results.append('released')
+              await abide(evt.set)
+
+        # Synchronous code. Runs in a thread
+        def tester(lck, evt):
+              with lck:
+                  results.append('tester')
+                  time.sleep(0.1)
+              evt.wait()
+              with lck:
+                  results.append('tester finish')
+
+        async def main():
+            lck = threading.Lock()
+            evt = threading.Event()
+            await spawn(run_in_thread(tester, lck, evt))
+            await sleep(0.01)
+            await spawn(waiter(lck, evt))
+
+        kernel.run(main())
+        assert results == [
+                'tester',
+                'acquired',
+                'released',
+                'tester finish'
                 ]

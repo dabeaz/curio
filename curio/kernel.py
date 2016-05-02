@@ -32,7 +32,7 @@ kqueue = deque
 # ----------------------------------------------------------------------
 
 class Kernel(object):
-    def __init__(self, *, selector=None, with_monitor=False):
+    def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=False):
         if selector is None:
             selector = DefaultSelector()
         self._selector = selector
@@ -59,6 +59,9 @@ class Kernel(object):
         # Optional crash handler callback
         self._crash_handler = None
 
+        self._pdb = pdb
+        self._log_errors = log_errors
+
         # If a monitor is specified, launch it
         if with_monitor or 'CURIOMONITOR' in os.environ:
             Monitor(self)
@@ -75,12 +78,11 @@ class Kernel(object):
 
     # Main Kernel Loop
     # ----------
-    def run(self, coro=None, *, pdb=False, log_errors=True, shutdown=False):
+    def run(self, coro=None, *, shutdown=False):
         '''
-        Run the kernel until no more non-daemonic tasks remain.
-        If pdb is True, pdb is launched when a task crash occurs.
-        If log_errors is True, uncaught exceptions in tasks are logged.
-        If shutdown is True, the kernel cleans up after itself after all tasks complete.
+        Run the kernel until no more non-daemonic tasks remain.  If
+        shutdown is True, the kernel cleans up after itself after all
+        tasks complete.
         '''
         
         # Motto:  "What happens in the kernel stays in the kernel"
@@ -547,13 +549,13 @@ class Kernel(object):
                     exc = TaskError('Task Crashed')
                     exc.__cause__ = e
                     _cleanup_task(current, exc=exc)
-                    if log_errors:
+                    if self._log_errors:
                         log.error('Curio: Task Crash: %s' % current, exc_info=True)
 
                     if self._crash_handler:
                         self._crash_handler(current)
 
-                    if pdb:
+                    if self._pdb:
                         import pdb as _pdb
                         _pdb.post_mortem(current.exc_info[2])
 
@@ -605,8 +607,9 @@ def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
     new tasks to run in curio. Instead, create a Kernel instance and
     use its run() method instead.
     '''
-    kernel = Kernel(selector=selector, with_monitor=with_monitor)
-    result = kernel.run(coro, pdb=pdb, log_errors=log_errors, shutdown=True)
+    kernel = Kernel(selector=selector, with_monitor=with_monitor, 
+                    log_errors=log_errors, pdb=pdb)
+    result = kernel.run(coro, shutdown=True)
     return result
 
 __all__ = [ 'Kernel', 'run' ]
