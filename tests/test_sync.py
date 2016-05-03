@@ -709,3 +709,43 @@ class TestAbide:
                 'released',
                 'tester finish'
                 ]
+
+
+    def test_abide_sync_with_cancel(self, kernel):
+        results = []
+        async def waiter(lck, evt):
+              try:
+                  async with timeout_after(0.5):       
+                      async with abide(lck):
+                          results.append('acquired')
+                      results.append('released')
+              except TaskTimeout:
+                  results.append('timeout')
+              await abide(evt.set)
+
+        # Synchronous code. Runs in a thread
+        def tester(lck, evt):
+              with lck:
+                  results.append('tester')
+                  time.sleep(1)
+              time.sleep(0.1)
+              with lck:
+                  results.append('tester2')
+              evt.wait()
+              with lck:
+                  results.append('tester finish')
+
+        async def main():
+            lck = threading.Lock()
+            evt = threading.Event()
+            await spawn(run_in_thread(tester, lck, evt))
+            await sleep(0.01)
+            await spawn(waiter(lck, evt))
+
+        kernel.run(main())
+        assert results == [
+                'tester',
+                'timeout',
+                'tester2',
+                'tester finish'
+                ]

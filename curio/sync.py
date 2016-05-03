@@ -12,6 +12,8 @@ from inspect import iscoroutinefunction
 from .traps import _wait_on_queue, _reschedule_tasks
 from .kernel import kqueue
 from . import workers
+from .errors import CancelledError, TaskTimeout
+from .task import spawn, timeout_after
 
 class Event(object):
     __slots__ = ('_set', '_waiting')
@@ -165,13 +167,24 @@ class Condition(_LockBase):
     async def notify_all(self):
         await self.notify(len(self._waiting))
 
-
+# Class that adapts a synchronous context-manager to an asynchronous manager
 class _contextadapt(object):
     def __init__(self, manager):
         self.manager = manager
 
     async def __aenter__(self):
-        return await workers.run_in_thread(self.manager.__enter__)
+        task = await spawn(workers.run_in_thread(self.manager.__enter__))
+        try:
+            return await task.join()
+        except (CancelledError, TaskTimeout) as err:
+            # An interesting corner case... if we're cancelled why waiting to
+            # enter, we'd better arrange to exit in case it eventually succeeds.
+            async def manager_release(task, err):
+                  await task.join()
+                  await workers.run_in_thread(self.manager.__exit__, type(err), err, err.__traceback__)
+
+            await spawn(manager_release(task, err))
+            raise
 
     async def __aexit__(self, *args):
         return await workers.run_in_thread(self.manager.__exit__, *args)
@@ -182,10 +195,10 @@ def abide(op, *args, **kwargs):
     function, coroutine, or context manager.  If op is coroutine
     function, it is called with the given arguments.  If op is an
     asynchronous context manager, it is returned unmodified.  If op is
-    a synchronous function, run_in_thread(op, *args, **kwargs) is
-    returned.  If op is a synchronous context manager, it is wrapped
-    by an asynchronous context manager that executes the __enter__()
-    and __exit__() methods in threads.
+    a synchronous function, it is executed in a separate thread.  If
+    op is a synchronous context manager, it is wrapped by an
+    asynchronous context manager that executes the __enter__() and
+    __exit__() methods in threads.
 
     The main use of this function is in code that wants to safely
     synchronize curio with threads and processes. For example, if you
@@ -217,4 +230,3 @@ def abide(op, *args, **kwargs):
         raise TypeError('%r object is not callable' % type(op).__name__)
 
     return workers.run_in_thread(op, *args, **kwargs)
-
