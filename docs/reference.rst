@@ -3,6 +3,33 @@ Curio Reference Manual
 
 This manual lists the basic functionality provided by curio.
 
+Coroutines
+----------
+
+Curio is mainly concerned with the execution of coroutines.  A coroutine
+is a function defined using ``async def``.  For example::
+  
+    async def hello(name):
+          return 'Hello ' + name
+
+Coroutines call other coroutines using ``await``. For example::
+
+    async def main():
+          s = await hello('Guido')
+          print(s)
+
+However, unlike a normal function, a coroutine can never run all on
+its own.  It always has to execute under the supervision of some kind
+of managing code (e.g., an event-loop, a kernel, etc.).  In curio,
+an initial coroutine is executed by a low-level kernel using the ``run()``
+function. For example::
+
+    import curio
+    curio.run(main())
+
+When executed in curio, a coroutine is considered to be a "Task."  Whenever
+the word "task" is used in curio, it refers to the execution of a coroutine.
+
 The Kernel
 ----------
 
