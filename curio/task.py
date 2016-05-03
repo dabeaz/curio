@@ -2,7 +2,7 @@
 #
 # Task class and task related functions.
 
-__all__ = [ 'sleep', 'current_task', 'spawn', 'gather', 'timeout_after', 'stop_after' ]
+__all__ = [ 'sleep', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after' ]
 
 from .errors import CancelledError, TaskTimeout, TaskError
 from .traps import *
@@ -15,7 +15,7 @@ class Task(object):
     __slots__ = (
         'id', 'daemon',  'coro', '_send', '_throw', 'cycles', 'state',
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
-        'next_exc', 'joining', 'terminated', '_last_io', '__weakref__',
+        'next_exc', 'joining', 'cancelled', 'terminated', '_last_io', '__weakref__',
         )
     _lastid = 1
     def __init__(self, coro, daemon=False):
@@ -33,6 +33,7 @@ class Task(object):
         self.next_value = None     # Next value to send on execution
         self.next_exc = None       # Next exception to send on execution
         self.joining = None        # Optional set of tasks waiting to join with this one
+        self.cancelled = False     # Cancelled?
         self.terminated = False    # Terminated?
         self._last_io = None       # Last I/O operation performed
         self._send = coro.send     # Bound coroutine methods
@@ -165,21 +166,21 @@ def timeout_after(seconds, coro=None):
     else:
         return _timeout_after_func(seconds, coro)
 
-def stop_after(seconds, coro=None, *, timeout_result=None):
+def ignore_after(seconds, coro=None, *, timeout_result=None):
     '''
     Stop the enclosed task or block of code after seconds have
     elapsed.  No exception is raised when time expires. Instead, None
     is returned.  This is often more convenient that catching an
     exception.  You can apply the function to a single coroutine:
     
-        if stop_after(5, coro(args)) is None:
+        if ignore_after(5, coro(args)) is None:
             # A timeout occurred
             ...
 
     Alternatively, you can use this function as an async context
     manager on a block of statements like this:
 
-        async with stop_after(5) as r:
+        async with ignore_after(5) as r:
             await coro1(args)
             await coro2(args)
             ...

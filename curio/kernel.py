@@ -32,7 +32,7 @@ kqueue = deque
 # ----------------------------------------------------------------------
 
 class Kernel(object):
-    def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=False):
+    def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=True):
         if selector is None:
             selector = DefaultSelector()
         self._selector = selector
@@ -381,7 +381,8 @@ class Kernel(object):
                 _reschedule_task(current, exc=CurioError("A task can't cancel itself"))
                 return
 
-            if _cancel_task(task, exc):
+            if task.cancelled or _cancel_task(task, exc):
+                task.cancelled = True
                 _trap_join_task(_, task)
 
             else:

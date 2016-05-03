@@ -72,6 +72,32 @@ def test_sleep_timeout(kernel):
             'timeout',
             ]
 
+def test_sleep_ignore_timeout(kernel):
+    results = []
+
+    async def sleeper():
+        results.append('start')
+        if await ignore_after(0.5, sleep(1)) is None:
+            results.append('timeout')
+
+        async with ignore_after(0.5) as s:
+            await sleep(1)
+
+        if s.result is None:
+            results.append('timeout2')
+
+
+    async def main():
+        task = await spawn(sleeper())
+        await task.join()
+
+    kernel.run(main())
+    assert results == [
+            'start',
+            'timeout',
+            'timeout2',
+            ]
+
 def test_sleep_notimeout(kernel):
     results = []
 
@@ -338,3 +364,37 @@ def test_task_ready_cancel(kernel):
             'child cancelled',
             'cancel done'
             ]
+
+
+def test_double_cancel(kernel):
+    results = []
+
+    async def sleeper():
+        results.append('start')
+        try:
+            await sleep(1)
+            results.append('not here')
+        except CancelledError:
+            results.append('cancel request')
+            await sleep(1)
+            results.append('cancelled')
+
+    async def main():
+        task = await spawn(sleeper())
+        await sleep(0.5)
+        try:
+            await timeout_after(1, task.cancel())
+        except TaskTimeout:
+            results.append('retry')
+            await task.cancel()    # This second cancel should not abort any operation in sleeper
+            results.append('done cancel')
+
+    kernel.run(main())
+    assert results == [
+            'start',
+            'cancel request',
+            'retry',
+            'cancelled',
+            'done cancel'
+            ]
+

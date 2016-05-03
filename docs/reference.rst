@@ -1,12 +1,12 @@
 Curio Reference Manual
 ======================
 
-This manual lists the basic functionality provided by curio.
+This manual describes the basic concepts and functionality provided by curio.
 
 Coroutines
 ----------
 
-Curio is mainly concerned with the execution of coroutines.  A coroutine
+Curio is solely concerned with the execution of coroutines.  A coroutine
 is a function defined using ``async def``.  For example::
   
     async def hello(name):
@@ -18,22 +18,22 @@ Coroutines call other coroutines using ``await``. For example::
           s = await hello('Guido')
           print(s)
 
-However, unlike a normal function, a coroutine can never run all on
-its own.  It always has to execute under the supervision of some kind
-of managing code (e.g., an event-loop, a kernel, etc.).  In curio,
-an initial coroutine is executed by a low-level kernel using the ``run()``
-function. For example::
+Unlike a normal function, a coroutine can never run all on its own.
+It always has to execute under the supervision of a manager (e.g., an
+event-loop, a kernel, etc.).  In curio, an initial coroutine is
+executed by a low-level kernel using the ``run()`` function. For
+example::
 
     import curio
     curio.run(main())
 
-When executed in curio, a coroutine is considered to be a "Task."  Whenever
-the word "task" is used in curio, it refers to the execution of a coroutine.
+When executed by curio, a coroutine is considered to be a "Task."  Whenever
+the word "task" is used, it refers to the execution of a coroutine.
 
 The Kernel
 ----------
 
-All tasks in curio are executed by an underlying kernel.  Normally, you would
+All coroutines in curio are executed by an underlying kernel.  Normally, you would
 run a top-level coroutine using the following function:
 
 .. function:: run(coro, *, pdb=False, log_errors=True, selector=None, with_monitor=False)
@@ -48,7 +48,7 @@ run a top-level coroutine using the following function:
    
 If you are going to repeatedly run coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
-tasks using its run() method as described below:
+them using its ``run()`` method as described below:
 
 .. class:: Kernel(pdb=False, log_errors=True, selector=None, with_monitor=False)
 
@@ -74,7 +74,7 @@ The following functions are defined to help manage the execution of tasks.
 
 .. asyncfunction:: spawn(coro, daemon=False)
 
-   Create a new task.  *coro* is a newly called coroutine.  Does not
+   Create a new task that runs the coroutine *coro*.  Does not
    return to the caller until the new task has been scheduled and
    executed for at least one cycle.  Returns a :class:`Task` instance
    as a result.  The *daemon* option, if supplied, specifies that the
@@ -110,13 +110,18 @@ methods that can be used in coroutines:
 
 .. asyncmethod:: Task.cancel(*, exc=CancelledError)
 
-   Cancels the task.  This raises a :exc:`CancelledError` exception in the
-   task which may choose to handle it.  Does not return until the
-   task is actually cancelled. If you want to change the exception raised,
-   supply a different exception as the *exc* argument.  If the task
-   has already run to completion, this method does nothing and returns
-   immediately.  Returns ``True`` if the task was actually cancelled. ``False``
-   is returned if the task was already finished prior to the cancellation request.
+   Cancels the task.  This raises a :exc:`CancelledError` exception in
+   the task which may choose to handle it in order to perform cleanup
+   actions.  Does not return until the task actually terminates. If
+   you want to change the exception raised, supply a different
+   exception as the *exc* argument.  Curio only allows a task to be
+   cancelled once.  If this method is somehow invoked more than once
+   on a still running task, the second request will merely wait until
+   the task is cancelled from the first request.  If the task has
+   already run to completion, this method does nothing and returns
+   immediately.  Returns ``True`` if the task was actually
+   cancelled. ``False`` is returned if the task was already finished
+   prior to the cancellation request.
 
 The following public attributes are available of :class:`Task` instances:
 
@@ -148,6 +153,10 @@ The following public attributes are available of :class:`Task` instances:
    A tuple of exception information obtained from :py:func:`sys.exc_info` if the
    task crashes for some reason.  Potentially useful for debugging.
 
+.. attribute:: Task.cancelled
+
+   A boolean flag that indicates whether or not the task was cancelled.
+
 .. attribute:: Task.terminated
 
    A boolean flag that indicates whether or not the task has run to completion.
@@ -166,7 +175,7 @@ functions can be used for this purpose:
    as an asynchronous context manager that applies a timeout to a block
    of statements.
 
-.. asyncfunction:: stop_after(seconds, coro=None, *, timeout_result=None)
+.. asyncfunction:: ignore_after(seconds, coro=None, *, timeout_result=None)
 
    Execute the specified coroutine and return its result. Issue a
    cancellation request after *seconds* have elapsed.  When a timeout
@@ -195,18 +204,18 @@ Here is an example that shows how these functions can be used::
         # Handle the timeout
         ...
 
-The difference between :func:`timeout_after` and :func:`stop_after` concerns
+The difference between :func:`timeout_after` and :func:`ignore_after` concerns
 the exception handling behavior when time expires.  The latter function
 returns ``None`` instead of raising an exception which might be more
 convenient in certain cases. For example::
 
-    result = await stop_after(5, coro(args))
+    result = await ignore_after(5, coro(args))
     if result is None:
-        # Timeout occurred
+        # Timeout occurred (if you care)
         ...
 
     # Execute multiple statements with a 5 second timeout
-    async with stop_after(5) as s:
+    async with ignore_after(5) as s:
         await coro1(args)
         await coro2(args)
         ...
@@ -217,7 +226,7 @@ convenient in certain cases. For example::
 
 It's important to note that every curio operation can be cancelled by timeout.
 Rather than having every possible call take an explicit *timeout* argument,
-you should wrap the call using :func:`timeout_after` or :func:`stop_after` as
+you should wrap the call using :func:`timeout_after` or :func:`ignore_after` as
 appropriate.
 
 Performing External Work
@@ -929,8 +938,9 @@ synchronization primitives if you use the :func:`abide` function.
    ``__exit__()`` methods in threads.
 
 The main use of this function is in code that wants to safely
-synchronize curio with threads and processes. For example, here is
-how you would synchronize a thread with a curio task using a threading lock::
+synchronize curio with threads and processes. For example, here is how
+you would synchronize a thread with a curio task using a threading
+lock::
 
     import curio
     import threading
@@ -1001,6 +1011,26 @@ example could be rewritten as follows and the child would still work::
              await curio.sleep(5)
 
     curio.run(main())
+
+A special circle of hell is reserved for code that combines the use of
+the ``abide()`` function with task cancellation.  Although
+cancellation is supported, there are a few things to keep in mind
+about it.  First, if you are using ``abide(func, arg1, arg2, ...)`` to
+run a synchronous function, that function will fully run to completion
+in a separate thread regardless of the cancellation.  So, if there are
+any side-effects associated with that code executing, you'll need to
+take them into account.  Second, if you are using ``async with
+abide(lock)`` with a thread-lock and a cancellation request is
+received while waiting for the ``lock.__enter__()`` method to execute,
+Curio spawns a background task that takes over and waits for
+completion.  This task then immediately initiates the corresponding
+``lock.__exit__()`` call.  Without this, task cancellation would
+surely cause a deadlock of threads waiting to use the same lock.  It's entirely
+possible that this could also cause Curio to never exit in the event
+that the lock is never released as well.
+
+All things considered, it's probably best to try and avoid code that
+synchronizes Curio tasks with threads.  However, if you must, Curio abides.
 
 Signals
 -------

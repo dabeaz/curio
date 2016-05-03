@@ -257,5 +257,6 @@ class WorkerPool(object):
              finally:
                  self.workers.append(worker)
 
-
-
+# Pool definitions should anyone want to use them directly
+ProcessPool = lambda nworkers: WorkerPool(ProcessWorker, nworkers)
+ThreadPool = lambda nworkers: WorkerPool(ThreadWorker, nworkers)
