@@ -80,12 +80,10 @@ def test_tcp_file_echo(kernel):
 
     async def handler(client):
         results.append('handler start')
-        async with client.makefile('wb') as out_f:
-            async with client.makefile('rb') as in_f:
-                async for line in in_f:
-                    results.append(('handler', line))
-                    await out_f.write(line)
-                    await out_f.flush()
+        stream = client.as_stream()
+        async for line in stream:
+            results.append(('handler', line))
+            await stream.write(line)
         results.append('handler done')
         await client.close()
 
@@ -93,23 +91,17 @@ def test_tcp_file_echo(kernel):
         results.append('client start')
         sock = socket(AF_INET, SOCK_STREAM)
         await sock.connect(address)
-        in_f = sock.makefile('rb')
-        out_f = sock.makefile('wb')
-        await out_f.write(b'Msg1\n')
-        await out_f.flush()
+        stream = sock.as_stream()
+        await stream.write(b'Msg1\n')
         await sleep(0.1)
-        resp = await in_f.read(100)
+        resp = await stream.read(100)
         results.append(('client', resp))
-        await out_f.write(b'Msg2\n')
-        await out_f.flush()
+        await stream.write(b'Msg2\n')
         await sleep(0.1)
-        resp = await in_f.read(100)
+        resp = await stream.read(100)
         results.append(('client', resp))
         results.append('client close')
-        await out_f.close()
-        await in_f.close()
         await sock.close()
-
 
     async def main():
         await spawn(server(('',25000)))

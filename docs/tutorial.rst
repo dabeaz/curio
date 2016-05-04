@@ -557,33 +557,33 @@ using a file-like stream interface.  Here is an example::
 
     async def echo_client(client, addr):
         print('Connection from', addr)
-        reader, writer = client.make_streams()
+        client_f = client.make_stream()
         while True:
-            data = await reader.read(1000)
+            data = await client_f.read(1000)
             if not data:
                 break
-            await writer.write(data)
+            await client_f.write(data)
+        await client.close()
         print('Connection closed')
 
     if __name__ == '__main__':
         run(tcp_server('', 25000, echo_client))
 
-The ``socket.make_streams()`` method can be used to create a pair of
-file-like objects for reading and writing.  On this objects, you would
+The ``socket.make_stream()`` method can be used to create a 
+file-like object for reading and writing.  On this object, you would
 now use standard file methods such as ``read()``, ``readline()``, and
-``write()``.  One feature of streams is that you can easily read data
+``write()``.  One feature of a stream is that you can easily read data
 line-by-line using an ``async for`` statement like this::
 
     from curio import run, spawn, tcp_server
 
     async def echo_client(client, addr):
         print('Connection from', addr)
-        reader, writer = client.make_streams()
-        async for line in reader:
-            await writer.write(line)
+        client_f = client.make_stream()
+        async for line in client_f:
+            await client_f.write(line)
         print('Connection closed')
-	await reader.close()
-	await writer.close()
+	await client.close()
 
     if __name__ == '__main__':
         run(tcp_server('', 25000, echo_client))
@@ -728,25 +728,24 @@ SSL::
     CERTFILE = "certificate.crt"  # Server certificate
  
     async def handler(client, addr):
-        reader, writer = client.make_streams()
+        client_f = client.make_stream()
 
 	# Read the HTTP request
-        async for line in reader:
+        async for line in client_f:
            line = line.strip()
            if not line:
                break
            print(line)
 
 	# Send a response
-        await writer.write(
+        await client_f.write(
     b'''HTTP/1.0 200 OK\r
     Content-type: text/plain\r
     \r
     If you're seeing this, it probably worked. Yay!
     ''')
-        await writer.write(time.asctime().encode('ascii'))
-	await reader.close()
-	await writer.close()
+        await client_f.write(time.asctime().encode('ascii'))
+	await client.close()
 
     if __name__ == '__main__':
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)

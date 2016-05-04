@@ -7,14 +7,13 @@ async def echo_handler(client, addr):
         client.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
     except (OSError, NameError):
         pass
-    reader, writer = client.make_streams()
-    async with reader, writer:
-        while True:
-            data = await reader.read(102400)
-            if not data:
-                break
-            await writer.write(data)
-    await client.close()
+    s = client.as_stream()
+    while True:
+        data = await s.read(102400)
+        if not data:
+            break
+        await s.write(data)
+    await s.close()
     print('Connection closed')
 
 if __name__ == '__main__':

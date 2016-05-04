@@ -16,7 +16,7 @@ from contextlib import contextmanager
 
 from . import socket
 from .errors import CurioError
-from .io import Stream
+from .io import StreamBase, FileStream
 
 # Authentication parameters (copied from multiprocessing)
 
@@ -40,7 +40,7 @@ class Channel(object):
     streams for performing the underlying communication.
     '''
     def __init__(self, reader, writer):
-        assert isinstance(reader, Stream) and isinstance(writer, Stream)
+        assert isinstance(reader, StreamBase) and isinstance(writer, StreamBase)
         self._reader = reader
         self._writer = writer
 
@@ -59,8 +59,8 @@ class Channel(object):
 
         '''
         assert isinstance(conn, mpc._ConnectionBase)
-        reader = Stream(open(conn._handle, 'rb', buffering=0))
-        writer = Stream(open(conn._handle, 'wb', buffering=0, closefd=False))
+        reader = FileStream(open(conn._handle, 'rb', buffering=0))
+        writer = FileStream(open(conn._handle, 'wb', buffering=0, closefd=False))
         conn._handle = None
         return cls(reader, writer)
 
@@ -175,8 +175,8 @@ class Listener(object):
     async def accept(self):
         client, addr = await self._sock.accept()
         fileno = client.detach()
-        ch = Channel(Stream(open(fileno, 'rb', buffering=0)),
-                     Stream(open(fileno, 'wb', buffering=0, closefd=False)))
+        ch = Channel(FileStream(open(fileno, 'rb', buffering=0)),
+                     FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
         if self._authkey:
             await ch.authenticate_server(self._authkey)
         return ch
@@ -188,8 +188,8 @@ async def Client(address, family=socket.AF_INET, authkey=None):
     sock = socket.socket(family, socket.SOCK_STREAM)
     await sock.connect(address)
     fileno = sock.detach()
-    ch = Channel(Stream(open(fileno, 'rb', buffering=0)),
-                 Stream(open(fileno, 'wb', buffering=0, closefd=False)))
+    ch = Channel(FileStream(open(fileno, 'rb', buffering=0)),
+                 FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
     if authkey:
         await ch.authenticate_client(authkey)
     return ch
