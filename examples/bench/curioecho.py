@@ -1,11 +1,13 @@
 # A simple echo server 
 
 from curio import run, tcp_server
+from curio.socket import IPPROTO_TCP, TCP_NODELAY
 
 async def echo_handler(client, addr):
     print('Connection from', addr)
+    client.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
     while True:
-        data = await client.recv(10000)
+        data = await client.recv(1000000)
         if not data:
             break
         await client.sendall(data)
