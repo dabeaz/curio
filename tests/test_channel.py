@@ -3,11 +3,18 @@
 import pytest
 from socket import *
 from curio.channel import Channel
-from curio.io import Stream
+from curio.io import SocketStream
 from curio import spawn, sleep, CancelledError, TaskTimeout, timeout_after
 
 @pytest.fixture
 def chs():
+    sock1, sock2 = socketpair()
+    sock1_s = SocketStream(sock1)
+    sock2_s = SocketStream(sock2)
+    ch1 = Channel(sock1_s, sock1_s)
+    ch2 = Channel(sock2_s, sock2_s)
+    return (ch1, ch2)
+
     sock1, sock2 = socketpair()
     fileno1 = sock1.detach()
     ch1 = Channel(Stream(open(fileno1, 'rb', buffering=0)),

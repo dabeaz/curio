@@ -11,17 +11,17 @@ def fib(n):
 
 async def fib_handler(client, addr):
     print('Connection from', addr)
-    rfile, wfile = client.make_streams()
-    async with rfile, wfile:
-        async for line in rfile:
-            try:
-                n = int(line)
-                result = await run_in_process(fib, n)
-                resp = str(result) + '\n'
-                await wfile.write(resp.encode('ascii'))
-            except ValueError:
-                await wfile.write(b'Bad input\n')
+    s = client.as_stream()
+    async for line in s:
+        try:
+            n = int(line)
+            result = await run_in_process(fib, n)
+            resp = str(result) + '\n'
+            await s.write(resp.encode('ascii'))
+        except ValueError:
+            await s.write(b'Bad input\n')
     print('Connection closed')
+    await client.close()
 
 if __name__ == '__main__':
     run(tcp_server('', 25000, fib_handler))

@@ -6,11 +6,11 @@ from curio import run, tcp_server
 
 async def echo_client(client, addr):
     print('Connection from', addr)
-    reader, writer = client.make_streams()
-    async with reader, writer:
-        async for line in reader:
-            await writer.write(line)
+    s = client.as_stream()
+    async for line in s:
+        await s.write(line)
     print('Connection closed')
+    await s.close()
 
 if __name__ == '__main__':
     run(tcp_server('', 25000, echo_client))

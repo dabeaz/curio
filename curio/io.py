@@ -25,7 +25,7 @@
 # selector used by the kernel.  For example, can it detect I/O events
 # on the provided file or socket?  If so, it will probably work here.
 
-__all__ = ['Socket', 'Stream']
+__all__ = ['Socket', 'FileStream', 'SocketStream']
 
 from socket import SOL_SOCKET, SO_ERROR, socket as SocketType
 from contextlib import contextmanager
@@ -91,14 +91,8 @@ class Socket(object):
         f = self._socket.makefile(mode, buffering=buffering)
         return Stream(f)
 
-    def make_stream(self):
+    def as_stream(self):
         return SocketStream(self._socket)
-
-    def make_streams(self, buffering=0):
-        return (
-            self.make_stream(),
-            self.make_stream()
-            )
 
     @contextmanager
     def blocking(self):
@@ -435,228 +429,17 @@ class Stream(object):
     def __exit__(self, *args):
         pass
 
-class Stream(object):
+class StreamBase(object):
     def __init__(self, fileobj):
-        if isinstance(fileobj, SocketType):
-            self.__class__ = SocketStream
-            SocketStream.__init__(self, fileobj)
-        else:
-            self.__class__ = FileStream
-            FileStream.__init__(self, fileobj)
-
-class FileStream(Stream):
-    '''
-    Wrapper around a file-like object.  File is put into non-blocking mode.
-    The underlying file must be in binary mode.  
-    '''
-
-    def __init__(self, fileobj):
-        assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
         self._file = fileobj
         self._fileno = fileobj.fileno()
-        os.set_blocking(self._fileno, False)
         self._buffer = bytearray()
 
-        # Common bound methods
-        self._file_read = fileobj.read
-        self._file_write = fileobj.write
-
     def __repr__(self):
-        return '<curio.FileStream %r>' % (self._file)
-
-    def __getattr__(self, name):
-        return getattr(self._file, name)
+        return '<curio.%s %r>' % (type(self).__name__, self._file)
 
     def fileno(self):
         return self._fileno
-
-    @contextmanager
-    def blocking(self):
-        '''
-        Allow temporary access to the underlying socket in blocking mode
-        '''
-        if self._buffer:
-            raise IOError('There is unread buffered data.')
-        try:
-            os.set_blocking(self._fileno, True)
-            yield self._file
-        finally:
-            os.set_blocking(self._fileno, False)
-
-    async def _read(self, maxbytes=-1):
-        while True:
-            # In non-blocking mode, a file-like object might return None if no data is
-            # available.  Alternatively, we'll catch the usual blocking exceptions just to be safe
-            try:
-                data = self._file_read(maxbytes)
-                if data is None:
-                    await _read_wait(self._fileno)
-                else:
-                    return data
-            except WantRead:
-                await _read_wait(self._fileno)
-            except WantWrite:
-                await _write_wait(self._fileno)
-
-    async def read(self, maxbytes=-1):
-        buf = self._buffer
-        if buf:
-            if maxbytes < 0 or len(buf) <= maxbytes:
-                data = bytes(buf)
-                buf.clear()
-            else:
-                data = bytes(buf[:n])
-                del buf[:n]
-        else:
-            data = await self._read(maxbytes)
-        return data
-
-    async def readall(self):
-        chunks = []
-        if self._buffer:
-            chunks.append(bytes(self._buffer))
-            self._buffer.clear()
-        while True:
-            chunk = await self.read()
-            if not chunk:
-                return b''.join(chunks)
-            chunks.append(chunk)
-
-    async def read_exactly(self, nbytes):
-        buffer = io.BytesIO()        
-        while nbytes > 0:
-            chunk = await self.read(nbytes)
-            if not chunk:
-                raise EOFError('Unexpected end of data')
-            buffer.write(chunk)
-            nbytes -= len(chunk)
-        return buffer.getvalue()
-
-    async def readline(self):
-        while True:
-            nl_index = self._buffer.find(b'\n')
-            if nl_index >= 0:
-                resp = bytes(self._buffer[:nl_index+1])
-                del self._buffer[:nl_index+1]
-                return resp
-            data = await self._read(65536)
-            if data == b'':
-                resp = bytes(self._buffer)
-                self._buffer.clear()
-                return resp
-            self._buffer.extend(data)
-
-    async def readlines(self):
-        lines = []
-        async for line in self:
-            lines.append(line)
-        return lines
-
-    async def write(self, data):
-        nwritten = 0
-        view = memoryview(data).cast('b')
-        while view:
-            try:
-                nbytes = self._file_write(view)
-                if nbytes is None:
-                    raise BlockingIOError()
-                nwritten += nbytes
-                view = view[nbytes:]
-            except WantWrite as e:
-                if hasattr(e, 'characters_written'):
-                    nwritten += e.characters_written
-                    view = view[e.characters_written:]
-                await _write_wait(self._fileno)
-            except WantRead:
-                await _read_wait(self._fileno)
-
-        return nwritten
-
-    async def writelines(self, lines):
-        for line in lines:
-            await self.write(line)
-
-    async def flush(self):
-        while True:
-            try:
-                return self._file.flush() 
-            except WantWrite:
-                await _write_wait(self._fileno)
-            except WantRead:
-                await _read_wait(self._fileno)
-
-    # Why async close()?   If the underlying file is buffered, the contents need
-    # to be flushed first--a process that might cause a BlockingIOError.  In
-    # that case, we have to suspend briefly until the buffers free up space.
-
-    async def close(self):
-        await self.flush()
-        self._file.close()
-        self._fileno = -1
-        
-    async def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        line = await self.readline()
-        if line:
-            return line
-        else:
-            raise StopAsyncIteration
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *args):
-        await self.close()
-
-    def __iter__(self):
-        raise RuntimeError('Use: async-for to iterate')
-
-    def __enter__(self):
-        raise RuntimeError('Use: async-with for context management')
-
-    def __exit__(self, *args):
-        pass
-
-RECV_LIMIT = 65536
-
-class SocketStream(Stream):
-    '''
-    Stream wrapper for a socket.
-    '''
-    def __init__(self, sock):
-        self._socket = sock
-        self._fileno = sock.fileno()
-        self._socket.setblocking(False)
-        self._buffer = bytearray()
-
-        # Common bound methods
-        self._socket_recv = sock.recv
-        self._socket_send = sock.send
-
-    def __repr__(self):
-        return '<curio.SocketStream %r>' % (self._file)
-
-    def fileno(self):
-        return self._fileno
-
-    @contextmanager
-    def blocking(self):
-        '''
-        Allow temporary access to the underlying socket in blocking mode
-        '''
-        raise NotImplemented()
-
-    async def _read(self, maxbytes=-1):
-        while True:
-            try:
-                data = self._socket_recv(maxbytes if maxbytes > 0 else RECV_LIMIT)
-                return data
-            except WantRead:
-                await _read_wait(self._fileno)
-            except WantWrite:
-                await _write_wait(self._fileno)
 
     async def read(self, maxbytes=-1):
         buf = self._buffer
@@ -699,7 +482,7 @@ class SocketStream(Stream):
                 resp = bytes(self._buffer[:nl_index+1])
                 del self._buffer[:nl_index+1]
                 return resp
-            data = await self._read()
+            data = await self._read(65536)
             if data == b'':
                 resp = bytes(self._buffer)
                 self._buffer.clear()
@@ -712,28 +495,10 @@ class SocketStream(Stream):
             lines.append(line)
         return lines
 
-    async def write(self, data):
-        nwritten = 0
-        view = memoryview(data).cast('b')
-        while view:
-            try:
-                nbytes = self._socket_send(view)
-                nwritten += nbytes
-                view = view[nbytes:]
-            except WantWrite:
-                await _write_wait(self._fileno)
-            except WantRead:
-                await _read_wait(self._fileno)
-        return nwritten
-
     async def writelines(self, lines):
         for line in lines:
             await self.write(line)
 
-    async def close(self):
-        self._socket = None
-        self._fileno = -1
-        
     async def __aiter__(self):
         return self
 
@@ -759,4 +524,140 @@ class SocketStream(Stream):
     def __exit__(self, *args):
         pass
 
+class FileStream(StreamBase):
+    '''
+    Wrapper around a file-like object.  File is put into non-blocking mode.
+    The underlying file must be in binary mode.  
+    '''
+    def __init__(self, fileobj):
+        assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
+        super().__init__(fileobj)
+        os.set_blocking(self._fileno, False)
+
+        # Common bound methods
+        self._file_read = fileobj.read
+        self._file_write = fileobj.write
+
+    def __getattr__(self, name):
+        return getattr(self._file, name)
+
+    @contextmanager
+    def blocking(self):
+        '''
+        Allow temporary access to the underlying file in blocking mode
+        '''
+        if self._buffer:
+            raise IOError('There is unread buffered data.')
+        try:
+            os.set_blocking(self._fileno, True)
+            yield self._file
+        finally:
+            os.set_blocking(self._fileno, False)
+
+    async def _read(self, maxbytes=-1):
+        while True:
+            # In non-blocking mode, a file-like object might return None if no data is
+            # available.  Alternatively, we'll catch the usual blocking exceptions just to be safe
+            try:
+                data = self._file_read(maxbytes)
+                if data is None:
+                    await _read_wait(self._fileno)
+                else:
+                    return data
+            except WantRead:
+                await _read_wait(self._fileno)
+            except WantWrite:
+                await _write_wait(self._fileno)
+
+    async def write(self, data):
+        nwritten = 0
+        view = memoryview(data).cast('b')
+        while view:
+            try:
+                nbytes = self._file_write(view)
+                if nbytes is None:
+                    raise BlockingIOError()
+                nwritten += nbytes
+                view = view[nbytes:]
+            except WantWrite as e:
+                if hasattr(e, 'characters_written'):
+                    nwritten += e.characters_written
+                    view = view[e.characters_written:]
+                await _write_wait(self._fileno)
+            except WantRead:
+                await _read_wait(self._fileno)
+
+        return nwritten
+
+    async def flush(self):
+        while True:
+            try:
+                return self._file.flush() 
+            except WantWrite:
+                await _write_wait(self._fileno)
+            except WantRead:
+                await _read_wait(self._fileno)
+
+    # Why async close()?   If the underlying file is buffered, the contents need
+    # to be flushed first--a process that might cause a BlockingIOError.  In
+    # that case, we have to suspend briefly until the buffers free up space.
+    async def close(self):
+        await self.flush()
+        self._file.close()
+        self._file = None
+        self._fileno = -1
+
+RECV_LIMIT = 65536
+class SocketStream(StreamBase):
+    '''
+    Stream wrapper for a socket.
+    '''
+    def __init__(self, sock):
+        super().__init__(sock)
+        sock.setblocking(False)
+
+        # Common bound methods
+        self._socket_recv = sock.recv
+        self._socket_send = sock.send
+
+    @contextmanager
+    def blocking(self):
+        '''
+        Allow temporary access to the underlying file in blocking mode
+        '''
+        if self._buffer:
+            raise IOError('There is unread buffered data.')
+        try:
+            self._file.setblocking(True)
+            yield self._file
+        finally:
+            self._file.setblocking(False)
+
+    async def _read(self, maxbytes=-1):
+        while True:
+            try:
+                data = self._socket_recv(maxbytes if maxbytes > 0 else RECV_LIMIT)
+                return data
+            except WantRead:
+                await _read_wait(self._fileno)
+            except WantWrite:
+                await _write_wait(self._fileno)
+
+    async def write(self, data):
+        nwritten = 0
+        view = memoryview(data).cast('b')
+        while view:
+            try:
+                nbytes = self._socket_send(view)
+                nwritten += nbytes
+                view = view[nbytes:]
+            except WantWrite:
+                await _write_wait(self._fileno)
+            except WantRead:
+                await _read_wait(self._fileno)
+        return nwritten
+
+    async def close(self):
+        self._socket = None
+        self._fileno = -1
     

@@ -16,10 +16,9 @@ async def echo_server(address):
              await spawn(echo_client(client))
 
 async def echo_client(client):
-    reader, writer = client.make_streams()
-    async with reader, writer:
-         async for line in reader:
-             await writer.write(line)
+    s = client.as_stream()
+    async for line in s:
+        await s.write(line)
     await client.close()
     print('Connection closed')
 
