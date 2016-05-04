@@ -17,6 +17,7 @@ msg = b'x'*MSGSIZE
 
 sock = socket(AF_INET, SOCK_STREAM)
 sock.connect(('localhost', 25000))
+sock.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
 
 N = 0
 results = []

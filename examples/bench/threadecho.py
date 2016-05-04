@@ -16,7 +16,7 @@ def echo_handler(client, addr):
     print('Connection from', addr)
     with client:
         while True:
-            data = client.recv(10000)
+            data = client.recv(100000)
             if not data:
                 break
             client.sendall(data)

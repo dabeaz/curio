@@ -17,6 +17,7 @@ async def echo_server(loop, address):
              loop.create_task(echo_client(loop, client))
 
 async def echo_client(loop, client):
+    client.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
     with client:
          while True:
              data = await loop.sock_recv(client, 10000)
@@ -26,6 +27,8 @@ async def echo_client(loop, client):
     print('Connection closed')
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.set_debug(False)
     loop.create_task(echo_server(loop, ('',25000)))
     loop.run_forever()
