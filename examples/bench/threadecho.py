@@ -14,6 +14,7 @@ def echo_server(addr):
 
 def echo_handler(client, addr):
     print('Connection from', addr)
+    client.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
     with client:
         while True:
             data = client.recv(100000)
