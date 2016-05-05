@@ -7,7 +7,7 @@ Python 3.5.  Its programming model is based on cooperative
 multitasking and common system programming abstractions such as
 threads, sockets, files, subprocesses, locks, and queues.  Under
 the covers, it is based on a task queuing system, not a callback-based
-event loop.  
+event loop.  If you've programmed with threads, curio will feel familiar.
 
 This tutorial will take you through the basics of creating and 
 managing tasks in curio as well as some useful debugging features. 
@@ -557,19 +557,18 @@ using a file-like stream interface.  Here is an example::
 
     async def echo_client(client, addr):
         print('Connection from', addr)
-        client_f = client.make_stream()
+        s = client.as_stream()
         while True:
-            data = await client_f.read(1000)
+            data = await s.read(1000)
             if not data:
                 break
-            await client_f.write(data)
-        await client.close()
+            await s.write(data)
         print('Connection closed')
 
     if __name__ == '__main__':
         run(tcp_server('', 25000, echo_client))
 
-The ``socket.make_stream()`` method can be used to create a 
+The ``socket.as_stream()`` method can be used to wrap the socket in a
 file-like object for reading and writing.  On this object, you would
 now use standard file methods such as ``read()``, ``readline()``, and
 ``write()``.  One feature of a stream is that you can easily read data
@@ -579,11 +578,10 @@ line-by-line using an ``async for`` statement like this::
 
     async def echo_client(client, addr):
         print('Connection from', addr)
-        client_f = client.make_stream()
-        async for line in client_f:
-            await client_f.write(line)
+        s = client.as_stream()
+        async for line in s:
+            await s.write(line)
         print('Connection closed')
-	await client.close()
 
     if __name__ == '__main__':
         run(tcp_server('', 25000, echo_client))
@@ -598,9 +596,13 @@ Let's make a slightly more sophisticated echo server that responds
 to a Unix signal::
 
     import signal
-    from curio import run, spawn, SignalSet, CancelledError, tcp_server
+    from curio import run, spawn, SignalSet, CancelledError, tcp_server, current_task
+
+    clients = set()
 
     async def echo_client(client, addr):
+        task = await current_task()
+        clients.add(task)
         print('Connection from', addr)
         try:
             while True:
@@ -611,38 +613,35 @@ to a Unix signal::
             print('Connection closed')
         except CancelledError:
             await client.sendall(b'Server going down\n')
+        finally:
+            clients.remove(task)
     
     async def main(host, port):
         while True:
             async with SignalSet(signal.SIGHUP) as sigset:
                 print('Starting the server')
                 serv_task = await spawn(tcp_server(host, port, echo_client))
-
-		# Wait for a restart signal
                 await sigset.wait()
-
-		# Cancel the server and all of its child tasks
                 print('Server shutting down')
-                await serv_task.cancel_children()
                 await serv_task.cancel()
+
+                for task in list(clients):
+                    await task.cancel()
 
     if __name__ == '__main__':
         run(main('', 25000))
 
-
 In this code, the ``main()`` coroutine launches the server, but then
-waits for the arrival of a ``SIGHUP`` signal.  When received, it first
-cancels all of the child tasks created by the server, then cancels the
-server itself, and restarts.  An interesting thing about this
-cancellation is that each task keeps a record of its active
-children (i.e., all of the connected clients).  The ``task.cancel_children()``
-method sends a cancellation request to the child tasks. The ``echo_client()``
-coroutine has been programmed to catch the resulting cancellation
-exception and perform a clean shutdown, sending a message back to the
-client that a shutdown is occurring.  Just to be clear, if there were
-a 1000 connected clients at the time the restart occurs, the server
-would drop all 1000 clients at once and start fresh with no active
-connections.   
+waits for the arrival of a ``SIGHUP`` signal.  When received, it
+cancels the server and then all children created by the server.  An
+interesting thing about this cancellation is that each child task
+adds/removes itself from a set of the active children (the ``clients``
+set).  The ``echo_client()`` coroutine has been programmed to catch
+the resulting cancellation exception and perform a clean shutdown,
+sending a message back to the client that a shutdown is occurring.
+Just to be clear, if there were a 1000 connected clients at the time
+the restart occurs, the server would drop all 1000 clients at once and
+start fresh with no active connections.
 
 Making Connections
 ------------------
@@ -728,7 +727,7 @@ SSL::
     CERTFILE = "certificate.crt"  # Server certificate
  
     async def handler(client, addr):
-        client_f = client.make_stream()
+        client_f = client.as_stream()
 
 	# Read the HTTP request
         async for line in client_f:
