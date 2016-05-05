@@ -22,7 +22,7 @@ from subprocess import (
 
 from .task import spawn, sleep, timeout_after
 from .errors import TaskTimeout
-from .io import Stream
+from .io import FileStream
 
 class Popen(object):
     '''
@@ -38,11 +38,11 @@ class Popen(object):
 
         self._popen = subprocess.Popen(args, **kwargs)
         if self._popen.stdin:
-            self.stdin = Stream(self._popen.stdin)
+            self.stdin = FileStream(self._popen.stdin)
         if self._popen.stdout:
-            self.stdout = Stream(self._popen.stdout)
+            self.stdout = FileStream(self._popen.stdout)
         if self._popen.stderr:
-            self.stderr = Stream(self._popen.stderr)
+            self.stderr = FileStream(self._popen.stderr)
 
     def __getattr__(self, name):
         return getattr(self._popen, name)

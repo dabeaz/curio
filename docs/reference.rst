@@ -303,12 +303,13 @@ Socket
 The :class:`Socket` class is used to wrap existing an socket.  It is compatible with
 sockets from the built-in :mod:`socket` module as well as SSL-wrapped sockets created
 by functions by the built-in :mod:`ssl` module.  Sockets in curio should be fully
-compatible most common socket features.
+compatible most common socket features. 
 
 .. class:: Socket(sockobj)
 
    Creates a wrapper the around an existing socket *sockobj*.  This socket
-   is set in non-blocking mode when wrapped.
+   is set in non-blocking mode when wrapped.  *sockobj* is not closed unless
+   the created instance is explicitly closed or used as a context manager.
 
 The following methods are redefined on :class:`Socket` objects to be
 compatible with coroutines.  Any socket method not listed here will be
@@ -373,7 +374,7 @@ exception.
 
 .. asyncmethod:: Socket.close()
 
-   Close the connection.
+   Close the connection.  This method is not called on garbage collection.
 
 .. asyncmethod:: do_handshake()
 
@@ -383,17 +384,20 @@ exception.
 .. method:: Socket.makefile(mode, buffering=0)
 
    Make a file-like object that wraps the socket.  The resulting file
-   object is a :class:`curio.io.Stream` instance that supports
+   object is a :class:`curio.io.FileStream` instance that supports
    non-blocking I/O.  *mode* specifies the file mode which must be one
    of ``'rb'`` or ``'wb'``.  *buffering* specifies the buffering
    behavior. By default unbuffered I/O is used.  Note: It is not currently
    possible to create a stream with Unicode text encoding/decoding applied to it
-   so those options are not available.
+   so those options are not available.   If you are trying to put a file-like
+   interface on a socket, it is usually better to use the :meth:`Socket.as_stream`
+   method below.
 
-.. method:: Socket.make_streams(buffering=0)
+.. method:: Socket.as_stream()
 
-   Make a pair of files for reading and writing.  Returns a tuple ``(reader, writer)``
-   where ``reader`` and ``writer`` are streams created by the :meth:`makefile` method.
+   Wrap the socket as a stream using :class:`curio.io.SocketStream`. The
+   result is a file-like object that can be used for both reading and
+   writing on the socket.
 
 .. method:: Socket.blocking()
 
@@ -401,60 +405,63 @@ exception.
    returns the raw socket object used internally.  This can be used if you need
    to pass the socket to existing synchronous code.
 
-:class:`Socket` objects may be used as an asynchronous context manager which
-causes it to be closed when done. For example::
+:class:`Socket` objects may be used as an asynchronous context manager
+which cause the underlying socket to be closed when done. For
+example::
 
     async with sock:
         # Use the socket
         ...
     # socket closed here
 
-Stream
-^^^^^^
+FileStream
+^^^^^^^^^^
 
-The :class:`Stream` class puts a non-blocking wrapper around an
+The :class:`FileStream` class puts a non-blocking wrapper around an
 existing file-like object.  Certain other functions in curio use this
 (e.g., the :meth:`Socket.makefile` method).
 
-
-.. class:: Stream(fileobj)
+.. class:: FileStream(fileobj)
 
    Create a file-like wrapper around an existing file.  *fileobj* must be in
    in binary mode.  The file is placed into non-blocking mode
-   using :mod:`os.set_blocking(fileobj.fileno())`.
+   using :mod:`os.set_blocking(fileobj.fileno())`.  *fileobj* is not
+   closed unless the resulting instance is explicitly closed or used
+   as a context manager.
 
-The following methods are available on instances of :class:`Stream`:
+The following methods are available on instances of :class:`FileStream`:
 
-.. asyncmethod:: Stream.read(maxbytes=-1)
+.. asyncmethod:: FileStream.read(maxbytes=-1)
 
    Read up to *maxbytes* of data on the file. If omitted, reads as
    much data as is currently available and returns it.
 
-.. asyncmethod:: Stream.readall()
+.. asyncmethod:: FileStream.readall()
 
    Return all of the data that's available on a file up until an EOF is read.
 
-.. asyncmethod:: Stream.readline()
+.. asyncmethod:: FileStream.readline()
 
    Read a single line of data from a file.
 
-.. asyncmethod:: Stream.write(bytes)
+.. asyncmethod:: FileStream.write(bytes)
 
    Write all of the data in *bytes* to the file.
 
-.. asyncmethod:: Stream.writelines(lines)
+.. asyncmethod:: FileStream.writelines(lines)
 
    Writes all of the lines in *lines* to the file.
 
-.. asyncmethod:: Stream.flush()
+.. asyncmethod:: FileStream.flush()
 
    Flush any unwritten data from buffers to the file.
 
-.. asyncmethod:: Stream.close()
+.. asyncmethod:: FileStream.close()
 
-   Flush any unwritten data and close the file.
+   Flush any unwritten data and close the file.  This method is not 
+   called on garbage collection.
 
-.. method:: Stream.blocking()
+.. method:: FileStream.blocking()
 
    A context manager that temporarily places the stream into blocking mode and
    returns the raw file object used internally.  This can be used if you need
@@ -463,12 +470,38 @@ The following methods are available on instances of :class:`Stream`:
 Other file methods (e.g., ``tell()``, ``seek()``, etc.) are available
 if the supplied ``fileobj`` also has them.
 
-Streams may be used as an asynchronous context manager.  For example::
+A ``FileStream`` may be used as an asynchronous context manager.  For example::
 
     async with stream:
         #  Use the stream object
         ...
     # stream closed here
+
+SocketStream
+^^^^^^^^^^^^
+
+The :class:`SocketStream` class puts a non-blocking file-like interface
+around a socket.  This is normally created by the :meth:`Socket.as_stream()` method.
+
+.. class:: SocketStream(sock)
+
+   Create a file-like wrapper around an existing socket.  *sock* must be a
+   ``socket`` instance from Python's built-in ``socket`` module. The
+   socket is placed into non-blocking mode.  *sock* is not closed unless
+   the resulting instance is explicitly closed or used as a context manager.
+
+A ``SocketStream`` instance supports the same methods as ``FileStream`` above.
+One subtle issue concerns the ``blocking()`` method below.
+
+.. method:: SocketStream.blocking()
+
+   A context manager that temporarily places the stream into blocking
+   mode and returns a raw file object that wraps the underlying
+   socket.  It is important to note that the return value of this
+   operation is a file created ``open(sock.fileno(), 'rb+',
+   closefd=False)``.  You can pass this object to code that is
+   expecting to work with a file.  The file is not closed when garbage
+   collected.
 
 socket wrapper module
 ---------------------
@@ -609,7 +642,7 @@ The :mod:`curio.subprocess` module provides a wrapper around the built-in :mod:`
    A wrapper around the :class:`subprocess.Popen` class.  The same arguments are accepted.
    On the resulting ``Popen`` instance, the :attr:`stdin`, :attr:`stdout`, and
    :attr:`stderr` file attributes have been wrapped by the
-   :class:`curio.io.Stream` class. You can use these in an asynchronous context.
+   :class:`curio.io.FileStream` class. You can use these in an asynchronous context.
 
 Here is an example of using :class:`Popen` to read streaming output off of a
 subprocess with curio::
