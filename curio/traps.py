@@ -35,16 +35,6 @@ def _write_wait(fileobj):
     Wait until writing can be performed.
     '''
     yield ('_trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT')
-
-# Experimental
-EVENT_READWRITE = EVENT_READ | EVENT_WRITE
-@coroutine
-def _readwrite_wait(fileobj):
-    '''
-    Wait until reading or writing can be performed
-    '''
-    mask = yield ('_trap_io', fileobj, EVENT_READWRITE, 'READWRITE_WAIT')
-    return bool(mask & EVENT_READ), bool(mask & EVENT_WRITE)
     
 @coroutine
 def _future_wait(future, event=None):

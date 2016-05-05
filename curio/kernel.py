@@ -497,7 +497,6 @@ class Kernel(object):
                     task._last_io = (task.state, key.fileobj)
                     task.state = 'READY'
                     task.cancel_func = None
-                    task.next_value = mask
                     ready_append(task)
 
                 # Process sleeping tasks (if any)
