@@ -125,27 +125,13 @@ that question, but here are a few of the motivations for creating curio.
 
 * It's fun. 
 
-Under the Covers
-----------------
+News
+----
 
-Internally, curio is implemented entirely as a task queuing system--
-much in the same model of a microkernel based operating system.  Tasks
-are represented by coroutine functions declared with the `async`
-keyword.  Each yield of a coroutine results in a low-level kernel
-"trap" or system call.  The kernel handles each trap by moving the
-current task to an appropriate waiting queue. Events (i.e., due to
-I/O) and other operations make the tasks move from waiting queues back
-into service.
-
-It's important to emphasize that the underlying kernel is solely
-focused on task queuing and scheduling. In fact, the kernel doesn't
-even perform any I/O operations or do much of anything.  This means
-that it is very small and fast.
-
-Higher-level I/O operations are carried out by a wrapper layer that
-uses Python's normal socket and file objects. You use the
-same operations that you would normally use in synchronous code except
-that you add ``await`` keywords to methods that might block.
+The version 0.2 release of curio cleans up a lot of APIs and makes a wide
+variety of performance improvements. If you were using version 0.1, a lot of
+stuff is probably going to break.  Sorry about that.  However, curio is still
+in its infancy.  APIs are going to change--hopefully for the better though.
 
 Questions and Answers
 ---------------------

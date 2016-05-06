@@ -108,20 +108,18 @@ methods that can be used in coroutines:
    If called on a task that has been cancelled, the `__cause__`
    attribute is set to :exc:`CancelledError`.
 
-.. asyncmethod:: Task.cancel(*, exc=CancelledError)
+.. asyncmethod:: Task.cancel()
 
    Cancels the task.  This raises a :exc:`CancelledError` exception in
    the task which may choose to handle it in order to perform cleanup
-   actions.  Does not return until the task actually terminates. If
-   you want to change the exception raised, supply a different
-   exception as the *exc* argument.  Curio only allows a task to be
-   cancelled once.  If this method is somehow invoked more than once
-   on a still running task, the second request will merely wait until
-   the task is cancelled from the first request.  If the task has
-   already run to completion, this method does nothing and returns
-   immediately.  Returns ``True`` if the task was actually
-   cancelled. ``False`` is returned if the task was already finished
-   prior to the cancellation request.
+   actions.  Does not return until the task actually terminates.
+   Curio only allows a task to be cancelled once.  If this method is
+   somehow invoked more than once on a still running task, the second
+   request will merely wait until the task is cancelled from the first
+   request.  If the task has already run to completion, this method
+   does nothing and returns immediately.  Returns ``True`` if the task
+   was actually cancelled. ``False`` is returned if the task was
+   already finished prior to the cancellation request.
 
 The following public attributes are available of :class:`Task` instances:
 
@@ -1179,7 +1177,7 @@ implementing a new curio primitive.   These calls are found in the
    raised.  This is a chained exception.  The :attr:`TaskError.__cause__` attribute of this
    exception contains the actual exception raised in the task.
 
-.. asyncfunction:: _cancel_task(task, exc=CancelledError)
+.. asyncfunction:: _cancel_task(task)
 
    Cancel the indicated *task*.  Does not return until the task actually
    completes the cancellation.  Note: It is usually better to use

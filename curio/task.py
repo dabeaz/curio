@@ -18,9 +18,11 @@ class Task(object):
         'next_exc', 'joining', 'cancelled', 'terminated', '_last_io', '__weakref__',
         )
     _lastid = 1
-    def __init__(self, coro, daemon=False):
-        self.id = Task._lastid   
-        Task._lastid += 1
+    def __init__(self, coro, daemon=False, taskid=None):
+        if taskid is None:
+            taskid = Task._lastid   
+            Task._lastid += 1
+        self.id = taskid
         self.coro = coro           # Underlying generator/coroutine
         self.daemon = daemon       # Daemonic flag
         self.cycles = 0            # Execution cycles completed
@@ -59,18 +61,17 @@ class Task(object):
         else:
             return self.next_value
 
-    async def cancel(self, *, exc=CancelledError):
+    async def cancel(self):
         '''
         Cancel a task by raising a CancelledError exception.  Does not
         return until the task actually terminates.  Returns True if
         the task was actually cancelled. False is returned if the task
-        was already completed.  Change the exception raised in the task
-        by specifying a different exception with the exc argument.
+        was already completed.  
         '''
         if self.terminated:
             return False
         else:
-            await _cancel_task(self, exc)
+            await _cancel_task(self)
             return True
 
 # ----------------------------------------------------------------------
