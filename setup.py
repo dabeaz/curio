@@ -6,7 +6,7 @@ except ImportError:
 setup(name = "curio",
             description="Curio - Concurrent I/O",
             long_description = """
-Curio is a library for performing concurrent I/O in Python 3. 
+Curio is a library for performing concurrent I/O with coroutines in Python 3. 
 """,
             license="""BSD""",
             version = "0.2",

@@ -1,5 +1,8 @@
 CHANGES
 -------
+05/05/2016 Refactoring of stream I/O classes. There is now FileStream
+           and SocketStream.   The old Stream class is gone.
+
 04/30/2016 The run_blocking() and run_cpu_bound() calls are now
            called run_in_thread() and run_in_process().
 
