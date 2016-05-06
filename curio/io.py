@@ -138,8 +138,6 @@ class Socket(object):
         while buffer:
             try:
                 nsent = self._socket_send(buffer, flags)
-                if nsent >= len(buffer):
-                    return
                 buffer = buffer[nsent:]
             except WantWrite:
                 await _write_wait(self._fileno)

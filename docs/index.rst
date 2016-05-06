@@ -9,12 +9,13 @@ Curio
 - a small and unusual object that is considered interesting or attractive
 - A Python library for concurrent I/O and systems programming.
 
-Curio is a library for performing concurrent I/O and various systems
-programming tasks using Python coroutines and the explicit async/await
-syntax introduced in Python 3.5.  Its programming model is based on
-cooperative multitasking and common programming abstractions such as
-threads, sockets, files, subprocesses, locks, and queues.  Under the
-covers, it is based on a task queuing system that is small and fast.
+Curio is a library for performing concurrent I/O and common system
+programming tasks such as launching subprocesses and farming work
+out to thread and process pools.  It uses Python coroutines and the
+explicit async/await syntax introduced in Python 3.5.  Its programming
+model is based on cooperative multitasking and existing programming
+abstractions such as threads, sockets, files, subprocesses, locks, and
+queues.  You'll find it to be small and fast.
 
 Contents:
 ---------
@@ -22,8 +23,8 @@ Contents:
    :maxdepth: 2
 
 * :doc:`tutorial` 
-* :doc:`howto`
 * :doc:`reference`
+* :doc:`howto`
 
 Installation:
 -------------
@@ -56,7 +57,7 @@ Here is a simple TCP echo server implemented using sockets and curio::
         print('Connection from', addr)
         async with client:
              while True:
-                 data = await client.recv(1000)
+                 data = await client.recv(100000)
                  if not data:
                      break
                  await client.sendall(data)
@@ -80,7 +81,7 @@ of the code::
     async def echo_client(client, addr):
         print('Connection from', addr)
         while True:
-            data = await client.recv(1000)
+            data = await client.recv(100000)
             if not data:
                 break
             await client.sendall(data)
@@ -98,8 +99,8 @@ Additional Features
 
 Curio provides additional support for SSL connections, synchronization
 primitives (events, locks, semaphores, and condition variables),
-queues, Unix signals, subprocesses, as well as thread and process
-pools.  In addition, the task model fully supports cancellation,
+queues, Unix signals, subprocesses, as well as running tasks in
+threads and processes. The task model fully supports cancellation,
 timeouts, monitoring, and other features critical to writing reliable
 code.
 
@@ -111,10 +112,10 @@ I/O. So, why create yet another library?  There is no simple answer to
 that question, but here are a few of the motivations for creating curio.
 
 * Python 3 has evolved considerably as a programming language and has
-  adopted many new features that are well-suited to cleanly
-  writing such a library. For example, improved support for
-  non-blocking I/O, support for delegation to subgenerators (``yield from``) 
-  and the introduction of explicit ``async`` and ``await`` syntax
+  adopted many new language features that are well-suited to cleanly
+  writing a library like this. For example, improved support for
+  non-blocking I/O, support for delegation to subgenerators (`yield
+  from`) and the introduction of explicit `async` and `await` syntax
   in Python 3.5. Curio takes full advantage of these features and is
   not encumbered by issues of backwards compatibility with legacy
   Python code written 15 years ago.
@@ -122,19 +123,20 @@ that question, but here are a few of the motivations for creating curio.
 * Existing I/O libraries are mainly built on event-loops, callback
   functions, and abstractions that predate Python's proper support for
   coroutines.  As a result, they are either overly complicated or
-  dependent on esoteric magic involving C extensions or
-  monkeypatching. Curio is a ground-up implementation that takes a
-  different approach to the problem while relying upon known
-  programming techniques involving sockets and files.  If you have
-  previously written synchronous code using processes or threads,
-  curio will feel familiar.  That is by design.
+  dependent on esoteric magic involving C extensions, monkeypatching,
+  or reimplementing half of the TCP flow-control protocol.  Curio is a
+  ground-up implementation that takes a different approach to the
+  problem while relying upon known programming techniques involving
+  sockets and files.  If you have previously written synchronous code
+  using processes or threads, curio will feel familiar.  That is by
+  design.
 
 * Simplicity is an important part of writing reliable systems
   software.  When your code fails, it helps to be able to debug
   it--possibly down to the level of individual calls to the operating
   system if necessary. Simplicity matters a lot.  Simple code also
   tends to run faster. The implementation of Curio aims to be simple.
-  The API for using Curio aims to be simple and intuitive.
+  The API for using Curio aims to be intuitive.
 
 * It's fun. 
 
@@ -145,13 +147,14 @@ Questions and Answers
 
 A: No. Curio is a standalone library. Although the core of the library
 uses the same basic machinery as ``asyncio`` to poll for I/O events,
-the handling of those events is done in a completely different manner.
+the handling of those events is carried out in a completely different
+manner.
 
-**Q: Is curio meant to be a compatible clone of asyncio?**
+**Q: Is curio meant to be a clone of asyncio?**
 
 A: No.  Although curio provides a significant amount of overlapping
-functionality, the Curio's APIs is smaller and slightly different in 
-various ways.
+functionality, the API is different and smaller.  Compatibility with
+other libaries is not a goal.
 
 **Q: How many tasks can be created?**
 
@@ -159,10 +162,10 @@ A: Each task involves an instance of a ``Task`` class that
 encapsulates a generator. No threads are used. As such, you're really
 only limited by the memory of your machine--potentially you could have
 hundreds of thousands of tasks.  The I/O functionality in curio is
-implemented using the built-in :mod:`selectors <python:selectors>` module.
-Thus, the number of open sockets allowed is subject to the limits of that
-library combined with any limits imposed by the operating system.
-
+implemented using the built-in ``selectors`` module.  Thus, the number
+of open sockets allowed would be subject to the limits of that library
+combined with any per-user limits imposed by the operating system.
+ 
 **Q: Can curio interoperate with other event loops?**
 
 A: At this time, no.  However, curio is a young project. It's
@@ -170,25 +173,39 @@ something that might be added later.
 
 **Q: How fast is curio?**
 
-A: In benchmarking of the simple echo server shown here, Curio runs
-more than 100% faster than ``asyncio``.  It runs at about the same
-speed as gevent. This is on OS-X so your mileage might vary. See the
-``examples/benchmark`` directory of the distribution for this testing
-code.
+A: In rough benchmarking of the simple echo server shown here, Curio
+runs between 75-150% faster than comparable code using coroutines in
+``asyncio``, 5-40% faster than the same coroutines running on
+``uvloop`` (an alternative event-loop for ``asyncio``), and at about
+the same speed as gevent.  This is on OS-X so your mileage might
+vary. Curio is not as fast as servers that utilize threads, low-level
+callback-based event handling (e.g., low-level protocols in
+``asyncio``), or direct coding in assembly language.  However, those
+approaches also don't involve coroutines (which is the whole point of
+Curio). See the ``examples/benchmark`` directory of the distribution
+for various testing programs.
 
 **Q: Is curio going to evolve into a framework?**
 
 A: No. The current goal is merely to provide a small, simple library
-that can serve as a kind of basic layer for performing concurrent I/O
-and related tasks. Implementing application level protocols such as HTTP 
-is not a goal.  However, it is hoped that support for such things
-would be made possible by third-party libraries and frameworks.
+for performing concurrent I/O, task synchronization, and common
+systems operations involving interprocess communication and
+subprocesses. It is not anticipated that curio itself would evolve
+into a framework for implementing application level protocols such as
+HTTP.  However, it might serve as a foundation for other packages that
+want to provide that kind of functionality.
 
-**Q: What are your future plans?**
+**Q: What are future plans?**
 
 A: Future work on curio will primarily focus on features related to
-debugging, reliability, and performance.  A primary goal is to have
-a solid environment for running and controlling concurrent tasks.
+performance, debugging, diagnostics, and reliability.  A main goal is
+to provide a robust environment for running and controlling concurrent
+tasks.
+
+**Q: How big is curio?**
+
+A: The complete library currently consists of fewer than 2500 lines of
+source statements.  This does not include blank lines and comments.
 
 **Q: Can I contribute?**
 
@@ -200,5 +217,6 @@ About
 -----
 Curio was created by David Beazley (@dabeaz).  http://www.dabeaz.com
 
+It is a young project.  All contributions welcome.
  
 

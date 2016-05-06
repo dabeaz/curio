@@ -1,14 +1,13 @@
 curio - concurrent I/O
 ======================
 
-Curio is a library for performing concurrent I/O and common systems
-programming tasks such as controlling subprocesses and farming work
+Curio is a library for performing concurrent I/O and common system
+programming tasks such as launching subprocesses and farming work
 out to thread and process pools.  It uses Python coroutines and the
 explicit async/await syntax introduced in Python 3.5.  Its programming
 model is based on cooperative multitasking and existing programming
 abstractions such as threads, sockets, files, subprocesses, locks, and
-queues.  Under the covers, it implements a task queuing system that is
-small, flexible, and fast.
+queues.  You'll find it to be small and fast.
 
 Important Disclaimer
 --------------------
@@ -41,7 +40,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
         print('Connection from', addr)
         async with client:
              while True:
-                 data = await client.recv(1000)
+                 data = await client.recv(100000)
                  if not data:
                      break
                  await client.sendall(data)
@@ -67,7 +66,7 @@ of the code:
     async def echo_client(client, addr):
         print('Connection from', addr)
         while True:
-            data = await client.recv(1000)
+            data = await client.recv(100000)
             if not data:
                 break
             await client.sendall(data)
@@ -99,28 +98,30 @@ that question, but here are a few of the motivations for creating curio.
 
 * Python 3 has evolved considerably as a programming language and has
   adopted many new language features that are well-suited to cleanly
-  writing a new I/O library. For example, improved support for
+  writing a library like this. For example, improved support for
   non-blocking I/O, support for delegation to subgenerators (`yield
   from`) and the introduction of explicit `async` and `await` syntax
   in Python 3.5. Curio takes full advantage of these features and is
   not encumbered by issues of backwards compatibility with legacy
   Python code written 15 years ago.
 
-* Existing I/O libraries are mostly built on event-loops, callback
-  functions, and custom I/O abstractions--this includes Python's own
-  asyncio module.  Curio takes a completely different approach to the
-  problem that focuses almost entirely on task scheduling while
-  relying upon known I/O techniques involving sockets and files.  If
-  you have previously written synchronous code using processes or
-  threads, curio will feel familiar.
+* Existing I/O libraries are mainly built on event-loops, callback
+  functions, and abstractions that predate Python's proper support for
+  coroutines.  As a result, they are either overly complicated or
+  dependent on esoteric magic involving C extensions, monkeypatching,
+  or reimplementing half of the TCP flow-control protocol.  Curio is a
+  ground-up implementation that takes a different approach to the
+  problem while relying upon known programming techniques involving
+  sockets and files.  If you have previously written synchronous code
+  using processes or threads, curio will feel familiar.  That is by
+  design.
 
-* Curio is a powerful library in a small package.  An emphasis is
-  placed on implementation simplicity.  Simplicity is an important
-  part of writing reliable systems software.  When your code fails, it
-  helps to be able to debug it--possibly down to the level of
-  individual calls to the operating system if necessary. Simplicity
-  matters a lot.  Simple code also tends to run faster.
-
+* Simplicity is an important part of writing reliable systems
+  software.  When your code fails, it helps to be able to debug
+  it--possibly down to the level of individual calls to the operating
+  system if necessary. Simplicity matters a lot.  Simple code also
+  tends to run faster. The implementation of Curio aims to be simple.
+  The API for using Curio aims to be intuitive.
 
 * It's fun. 
 
@@ -137,9 +138,9 @@ I/O) and other operations make the tasks move from waiting queues back
 into service.
 
 It's important to emphasize that the underlying kernel is solely
-focused on task management and scheduling. In fact, the kernel doesn't
-even perform any I/O operations.  This means that it is very small and
-fast.
+focused on task queuing and scheduling. In fact, the kernel doesn't
+even perform any I/O operations or do much of anything.  This means
+that it is very small and fast.
 
 Higher-level I/O operations are carried out by a wrapper layer that
 uses Python's normal socket and file objects. You use the
@@ -153,13 +154,14 @@ Questions and Answers
 
 A: No. Curio is a standalone library. Although the core of the library
 uses the same basic machinery as ``asyncio`` to poll for I/O events,
-the handling of those events is done in a completely different manner.
+the handling of those events is carried out in a completely different
+manner.
 
 **Q: Is curio meant to be a clone of asyncio?**
 
 A: No.  Although curio provides a significant amount of overlapping
-functionality, the API is different (and frankly much simpler). 
-Compatibility with other libaries is not a goal.
+functionality, the API is different and smaller.  Compatibility with
+other libaries is not a goal.
 
 **Q: How many tasks can be created?**
 
@@ -178,30 +180,38 @@ something that might be added later.
 
 **Q: How fast is curio?**
 
-A: In benchmarking of a simple echo server, curio runs more than 100%
-faster than ``asyncio``.  It runs about 50-60% faster than Twisted and
-at about the same speed as gevent. This is on OS-X so your mileage
-might vary. See the ``examples/benchmark`` directory of the
-distribution for this testing code.
+A: In rough benchmarking of the simple echo server shown here, Curio
+runs between 75-150% faster than comparable code using coroutines in
+``asyncio``, 5-40% faster than the same coroutines running on
+``uvloop`` (an alternative event-loop for ``asyncio``), and at about
+the same speed as gevent.  This is on OS-X so your mileage might
+vary. Curio is not as fast as servers that utilize threads, low-level
+callback-based event handling (e.g., low-level protocols in
+``asyncio``), or direct coding in assembly language.  However, those
+approaches also don't involve coroutines (which is the whole point of
+Curio). See the ``examples/benchmark`` directory of the distribution
+for various testing programs.
 
 **Q: Is curio going to evolve into a framework?**
 
 A: No. The current goal is merely to provide a small, simple library
-for performing concurrent I/O and common systems operations involving
-interprocess communication and subprocesses. It is not anticipated
-that curio would evolve into a framework for implementing application
-level protocols such as HTTP.  Instead, it might serve as a foundation
-for other packages that want to provide that kind of functionality.
+for performing concurrent I/O, task synchronization, and common
+systems operations involving interprocess communication and
+subprocesses. It is not anticipated that curio itself would evolve
+into a framework for implementing application level protocols such as
+HTTP.  However, it might serve as a foundation for other packages that
+want to provide that kind of functionality.
 
 **Q: What are future plans?**
 
 A: Future work on curio will primarily focus on features related to
-debugging, diagnostics, and reliability.  A primary goal is to provide
-a solid environment for running and controlling concurrent tasks.
+performance, debugging, diagnostics, and reliability.  A main goal is
+to provide a robust environment for running and controlling concurrent
+tasks.
 
 **Q: How big is curio?**
 
-A: The complete library currently consists of fewer than 1500 lines of
+A: The complete library currently consists of fewer than 2500 lines of
 source statements.  This does not include blank lines and comments.
 
 **Q: Can I contribute?**
@@ -214,7 +224,7 @@ About
 -----
 Curio was created by David Beazley (@dabeaz).  http://www.dabeaz.com
 
-It is a young project.  Contributions welcome.
+It is a young project.  All contributions welcome.
 
 
 
