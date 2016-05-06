@@ -59,14 +59,14 @@ def _spawn(coro, daemon):
     return (yield '_trap_spawn', coro, daemon)
 
 @coroutine
-def _cancel_task(task, exc=CancelledError):
+def _cancel_task(task):
     '''
     Cancel a task. Causes a CancelledError exception to raise in the task.
     The exception can be changed by specifying exc. 
     '''
     while True:
         try:
-            yield ('_trap_cancel_task', task, exc)
+            yield ('_trap_cancel_task', task)
             return
         except _CancelRetry:
             pass

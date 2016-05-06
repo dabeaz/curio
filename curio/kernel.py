@@ -131,7 +131,7 @@ class Kernel(object):
             self._notify_sock, self._wait_sock = socket.socketpair()
             self._wait_sock.setblocking(False)
             self._notify_sock.setblocking(False)
-            task = Task(_kernel_task())
+            task = Task(_kernel_task(), taskid=0)
             _reschedule_task(task)
             self._kernel_task_id = task.id
 
@@ -376,12 +376,12 @@ class Kernel(object):
                 _trap_wait_queue(_, task.joining, 'TASK_JOIN')
 
         # Cancel a task
-        def _trap_cancel_task(_, task, exc):
+        def _trap_cancel_task(_, task):
             if task == current:
                 _reschedule_task(current, exc=CurioError("A task can't cancel itself"))
                 return
 
-            if task.cancelled or _cancel_task(task, exc):
+            if task.cancelled or _cancel_task(task, CancelledError):
                 task.cancelled = True
                 _trap_join_task(_, task)
 

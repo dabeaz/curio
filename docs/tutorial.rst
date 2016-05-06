@@ -66,7 +66,7 @@ Let's add a few more tasks into the mix::
 
         print("We're leaving!")
         await kid_task.join()
-        print("Leaving")
+        print('Leaving')
 
     if __name__ == '__main__':
         curio.run(parent())
@@ -111,57 +111,82 @@ Yes?  Open up another terminal window and connect to the monitor as
 follows::
 
     bash % python3 -m curio.monitor
-    Curio Monitor:  4 tasks running
+    Curio Monitor: 3 tasks running
     Type help for commands
-    curio > 
+    curio >
 
 See what's happening by typing ``ps``::
 
     curio > ps
     Task   State        Cycles     Timeout Task                                               
     ------ ------------ ---------- ------- --------------------------------------------------
-    1      TIME_SLEEP   845        0.05770 Monitor.monitor_task                              
+    1      FUTURE_WAIT  2          None    Monitor.monitor_task                              
     2      TASK_JOIN    5          None    parent                                            
-    3      TIME_SLEEP   1          915.534 kid                                               
-    curio > 
+    3      TIME_SLEEP   1          None    kid                                            
+    curio >
 
 In the monitor, you can see a list of the active tasks.  You can see
-that the parent is waiting to join and that the kid is sleeping for
-another 915 seconds.  If you type ``ps`` again, you'll see the timeout
-value change. Although you're in the monitor--the kernel is still
-running underneath.  Actually, you'd like to know more about what's
-happening. You can get the stack trace of any task using the ``where``
-command::
+that the parent is waiting to join and that the kid is sleeping.
+Actually, you'd like to know more about what's happening. You can get
+the stack trace of any task using the ``where`` command::
 
     curio > where 2
-    Stack for Task(id=2, <coroutine object parent at 0x1058e7258>, state='TASK_JOIN') (most recent call last):
+    Stack for Task(id=2, <coroutine object parent at 0x10dda1780>, state='TASK_JOIN') (most recent call last):
       File "hello.py", line 23, in parent
         await kid_task.join()
-      File "/Users/beazley/Desktop/Projects/curio/curio/kernel.py", line 86, in join
-        await _join_task(self, timeout)
-      File "/Users/beazley/Desktop/Projects/curio/curio/kernel.py", line 631, in _join_task
-        yield ('_trap_join_task', task, timeout)
+      File "/Users/beazley/Desktop/Projects/curio/curio/task.py", line 58, in join
+        await _join_task(self)
+      File "/Users/beazley/Desktop/Projects/curio/curio/traps.py", line 79, in _join_task
+        yield ('_trap_join_task', task)
 
     curio > where 3
-    Stack for Task(id=3, <coroutine object kid at 0x1058e7360>, state='TIME_SLEEP') (most recent call last):
+    Stack for Task(id=3, <coroutine object kid at 0x10dda19e8>, state='TIME_SLEEP') (most recent call last):
       File "hello.py", line 12, in kid
         await curio.sleep(1000)
-      File "/Users/beazley/Desktop/Projects/curio/curio/kernel.py", line 687, in sleep
+      File "/Users/beazley/Desktop/Projects/curio/curio/task.py", line 95, in sleep
         await _sleep(seconds)
-      File "/Users/beazley/Desktop/Projects/curio/curio/kernel.py", line 605, in _sleep
+      File "/Users/beazley/Desktop/Projects/curio/curio/traps.py", line 52, in _sleep
         yield ('_trap_sleep', seconds)
 
     curio > 
 
 Actually, that kid is just being super annoying.  Let's cancel their
-world and let the parent get on with their business::
+world::
 
     curio > cancel 3
     Cancelling task 3
-    curio > 
+    *** Connection closed by remote host ***
 
-Back in the running program, you should see the "Leaving!" message and
-the program quit.
+This causes the whole program to die with a rather nasty traceback message like this::
+
+    Curio: Task Crash: parent
+    Traceback (most recent call last):
+      File "/Users/beazley/Desktop/Projects/curio/curio/kernel.py", line 533, in run
+        trap = current._throw(current.next_exc)
+      File "hello.py", line 12, in kid
+        await curio.sleep(1000)
+      File "/Users/beazley/Desktop/Projects/curio/curio/task.py", line 95, in sleep
+        await _sleep(seconds)
+      File "/Users/beazley/Desktop/Projects/curio/curio/traps.py", line 52, in _sleep
+        yield ('_trap_sleep', seconds)
+    curio.errors.CancelledError: CancelledError
+
+    The above exception was the direct cause of the following exception:
+
+    Traceback (most recent call last):
+      File "/Users/beazley/Desktop/Projects/curio/curio/kernel.py", line 531, in run
+        trap = current._send(current.next_value)
+      File "hello.py", line 23, in parent
+        await kid_task.join()
+      File "/Users/beazley/Desktop/Projects/curio/curio/task.py", line 60, in join
+       raise TaskError('Task crash') from self.exc_info[1]
+    curio.errors.TaskError: Task crash
+    bash %
+
+Not surprisingly, the parent sure didn't like having their child
+process abrubtly killed like that.  The ``join()`` method returned
+with a ``TaskError`` exception to indicate that some kind of problem
+occurred in the child.
 
 Debugging is an important feature of curio and by using the monitor,
 you see what's happening as tasks run.  You can find out where tasks
@@ -183,7 +208,7 @@ include a timeout and a cancellation request like this::
         except curio.TaskTimeout:
             print('I warned you!')
             await kid_task.cancel()
-        print("Leaving!")
+        print('Leaving!')
 
 If you run this version, the parent will wait 10 seconds for the child to join.  If not, the child is
 forcefully cancelled.  Problem solved. Now, if only real life were this easy.
@@ -248,7 +273,7 @@ parent's permission to start playing::
         kid_task = await curio.spawn(kid())
         await curio.sleep(5)
 
-        print("Yes, go play")
+        print('Yes, go play')
         await start_evt.set()
         await curio.sleep(5)
 
@@ -262,7 +287,7 @@ parent's permission to start playing::
         except curio.TaskTimeout:
             print('I warned you!')
             await kid_task.cancel()
-        print("Leaving!")
+        print('Leaving!')
 
 All of the synchronization primitives work the same way that they do
 in the ``threading`` module.  The main difference is that all operations
@@ -303,7 +328,7 @@ time to go.  Modify the code to wait on a ``SignalSet`` like this::
         kid_task = await curio.spawn(kid())
         await curio.sleep(5)
 
-        print("Yes, go play")
+        print('Yes, go play')
         await start_evt.set()
         
         await curio.SignalSet(signal.SIGHUP).wait()
@@ -317,7 +342,7 @@ time to go.  Modify the code to wait on a ``SignalSet`` like this::
         except curio.TaskTimeout:
             print('I warned you!')
             await kid_task.cancel()
-        print("Leaving!")
+        print('Leaving!')
 
 If you run this program, the parent lets the kid play 
 indefinitely--well, until a ``SIGHUP`` arrives.  When you run the
@@ -342,19 +367,19 @@ a different terminal window and drop into the curio monitor::
 
     bash % python3 -m curio.monitor
 
-    Curio Monitor: 4 tasks running
+    Curio Monitor: 3 tasks running
     Type help for commands
     curio > ps
     Task   State        Cycles     Timeout Task                                               
     ------ ------------ ---------- ------- --------------------------------------------------
-    1      TIME_SLEEP   236        0.06724 Monitor.monitor_task                              
+    1      FUTURE_WAIT  2          None    Monitor.monitor_task                              
     2      SIGNAL_WAIT  5          None    parent                                            
-    3      TIME_SLEEP   6          980.676 kid                                               
-    4      READ_WAIT    1          None    Kernel._kernel_task                               
-    curio > 
+    3      TIME_SLEEP   16         None    kid                                               
+    curio >
 
-Here you see the parent waiting on a signal and the kid sleeping await for another 796 seconds.
-If you want to initiate the signal, go to a separate terminal and type this::
+Here you see the parent waiting on a signal and the kid sleeping.  If
+you want to initiate the signal, go to a separate terminal and type
+this::
 
     bash % kill -HUP 36069
 
@@ -444,15 +469,6 @@ carried out in a separate thread. For example::
 Note: ``time.sleep()`` has only been used to illustrate blocking in an outside
 library. ``curio`` already has its own sleep function so if you really need to
 sleep, use that instead.
-
-A Caution: When a task delegates work to a subprocess or thread using
-the ``run_in_process()`` or ``run_in_thread()`` functions, that work runs
-outside the direct control of curio.  This means that whatever thread
-or process is handling the request will likely run until the requested
-work has been fully completed.  You can cancel a task that is waiting
-for the result, but be aware that doing so might create a kind of
-"zombie" worker left behind.  In this case, the eventual result is
-discarded when the worker finally completes.
 
 A Simple Echo Server
 --------------------
@@ -723,8 +739,8 @@ SSL::
     from curio import ssl
     import time
 
-    KEYFILE = "privkey_rsa"       # Private key
-    CERTFILE = "certificate.crt"  # Server certificate
+    KEYFILE = 'privkey_rsa'       # Private key
+    CERTFILE = 'certificate.crt'  # Server certificate
  
     async def handler(client, addr):
         client_f = client.as_stream()
