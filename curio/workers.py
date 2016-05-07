@@ -11,7 +11,7 @@ import threading
 
 from .errors import CancelledError, TaskTimeout
 from .traps import _future_wait, _get_kernel, _get_current
-from .sync import Semaphore
+from . import sync
 from .channel import Channel
 
 async def run_in_executor(exc, callable, *args, **kwargs):
@@ -234,7 +234,7 @@ class ProcessWorker(object):
 
 class WorkerPool(object):
     def __init__(self, workercls, nworkers):
-        self.nworkers = Semaphore(nworkers)
+        self.nworkers = sync.Semaphore(nworkers)
         self.workercls = workercls
         self.workers = [workercls() for n in range(nworkers)]
         
