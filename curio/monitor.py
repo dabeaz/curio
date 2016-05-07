@@ -62,8 +62,6 @@ import logging
 
 # --- Curio
 from .task import Task
-from .workers import run_in_thread
-from .sync import abide
 
 # ---
 log = logging.getLogger(__name__)
@@ -130,10 +128,10 @@ class Monitor(object):
         '''
         Asynchronous task loop for carrying out task cancellation.
         '''
+        from .sync import abide
         while True:
             task = await abide(self.monitor_queue.get)
             await task.cancel()
-            await abide(self.monitor_queue.task_done)
 
     def server(self):
         '''
@@ -239,7 +237,6 @@ class Monitor(object):
         if task:
             sout.write('Cancelling task %d\n' % taskid)
             self.monitor_queue.put(task)
-            self.monitor_queue.join()
             
     def command_exit(self, sout):
         pass
