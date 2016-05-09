@@ -369,7 +369,7 @@ class Kernel(object):
         # Join with a task
         def _trap_join_task(_, task):
             if task.terminated:
-                _reschedule_task(current, value=task.next_value, exc=task.next_exc)
+                _reschedule_task(current) 
             else:
                 if task.joining is None:
                     task.joining = kqueue()
