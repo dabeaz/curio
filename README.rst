@@ -93,7 +93,7 @@ of the code:
 This is only a small sample of what's possible.  Read the `official documentation
 <https://curio.readthedocs.org>`_ for more in-depth coverage.  The `tutorial 
 <https://curio.readthedocs.org/en/latest/tutorial.html>`_ is a good starting point.
-The `howto<https://curio.readthedocs.org/en/latest/howto.html>`_ describes how
+The `howto <https://curio.readthedocs.org/en/latest/howto.html>`_ describes how
 to carry out various tasks.
 
 Additional Features
