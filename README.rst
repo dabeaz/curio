@@ -11,11 +11,23 @@ queues.  You'll find it to be small and fast.
 
 Important Disclaimer
 --------------------
-Curio is experimental software that currently only works on POSIX systems
-(OS X, Linux, etc.).  Use at your own peril. 
+
+Curio is experimental software that currently only works on POSIX
+systems (OS X, Linux, etc.).  It is a work in progress and it may
+change at any time.  Use at your own peril.
+
+News
+----
+
+The version 0.2 release of curio cleans up a lot of APIs and makes a
+wide variety of performance improvements. If you were using version
+0.1, a lot of stuff is probably going to break.  Sorry about that.
+However, curio is still in its infancy. APIs might change--hopefully
+for the better though.
 
 An Example
 ----------
+
 Here is a simple TCP echo server implemented using sockets and curio:
 
 .. code:: python
@@ -78,6 +90,8 @@ of the code:
 This is only a small sample of what's possible.  Read the `official documentation
 <https://curio.readthedocs.org>`_ for more in-depth coverage.  The `tutorial 
 <https://curio.readthedocs.org/en/latest/tutorial.html>`_ is a good starting point.
+The `howto<https://curio.readthedocs.org/en/latest/howto.html>`_ describes how
+to carry out various tasks.
 
 Additional Features
 -------------------
@@ -106,15 +120,15 @@ that question, but here are a few of the motivations for creating curio.
   Python code written 15 years ago.
 
 * Existing I/O libraries are mainly built on event-loops, callback
-  functions, and abstractions that predate Python's proper support for
-  coroutines.  As a result, they are either overly complicated or
-  dependent on esoteric magic involving C extensions, monkeypatching,
-  or reimplementing half of the TCP flow-control protocol.  Curio is a
-  ground-up implementation that takes a different approach to the
-  problem while relying upon known programming techniques involving
-  sockets and files.  If you have previously written synchronous code
-  using processes or threads, curio will feel familiar.  That is by
-  design.
+  functions, futures, and various abstractions that predate Python's
+  proper support for coroutines.  As a result, they are either overly
+  complicated or dependent on esoteric magic involving C extensions,
+  monkeypatching, or reimplementing half of the TCP flow-control
+  protocol.  Curio is a ground-up implementation that takes a
+  different approach to the problem while relying upon known
+  programming techniques involving sockets and files.  If you have
+  previously written synchronous code using processes or threads,
+  curio will feel familiar.  That is by design.
 
 * Simplicity is an important part of writing reliable systems
   software.  When your code fails, it helps to be able to debug
@@ -124,14 +138,6 @@ that question, but here are a few of the motivations for creating curio.
   The API for using Curio aims to be intuitive.
 
 * It's fun. 
-
-News
-----
-
-The version 0.2 release of curio cleans up a lot of APIs and makes a wide
-variety of performance improvements. If you were using version 0.1, a lot of
-stuff is probably going to break.  Sorry about that.  However, curio is still
-in its infancy.  APIs are going to change--hopefully for the better though.
 
 Questions and Answers
 ---------------------
