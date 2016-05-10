@@ -14,7 +14,10 @@ Important Disclaimer
 
 Curio is experimental software that currently only works on POSIX
 systems (OS X, Linux, etc.).  It is a work in progress and it may
-change at any time.  Use at your own peril.
+change at any time.  Although curio can be installed via pip, the
+version uploaded on PyPI is only updated occasionally.  You'll
+probably get better results using the version cloned from github.
+Of course, your mileage might vary.
 
 News
 ----
