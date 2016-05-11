@@ -303,14 +303,17 @@ class StreamBase(object):
 
     async def readall(self):
         chunks = []
+        maxread = 65536
         if self._buffer:
             chunks.append(bytes(self._buffer))
             self._buffer.clear()
         while True:
-            chunk = await self.read()
+            chunk = await self.read(maxread)
             if not chunk:
                 return b''.join(chunks)
             chunks.append(chunk)
+            if len(chunk) == maxread:
+                maxread *= 2
 
     async def read_exactly(self, nbytes):
         chunks = []
