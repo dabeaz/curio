@@ -5,18 +5,20 @@
 import curio
 from curio import ssl
 from curio import network
+from socket import *
 
 KEYFILE = "ssl_test_rsa"    # Private key
 CERTFILE = "ssl_test.crt"   # Certificate (self-signed)
 
 async def handle(client, addr):
     print('Connection from', addr)
+    client.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)            
     async with client:
         while True:
             data = await client.recv(100000)
             if not data:
                 break
-            await client.send(data)
+            await client.sendall(data)
     print('Connection closed')
 
 if __name__ == '__main__':

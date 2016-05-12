@@ -45,6 +45,7 @@ if __name__ == '__main__':
         else:
             sock = socket(AF_INET, SOCK_STREAM)
 
+        sock.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
         sock.connect(addr)
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
