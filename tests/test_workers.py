@@ -126,6 +126,7 @@ def test_exception(kernel):
              results.append('fail')
          except Exception as e:
              results.append(type(e))
+             results.append(e.__cause__)
 
     async def main():
          await error()
@@ -133,6 +134,7 @@ def test_exception(kernel):
     kernel.run(main())
 
     assert results == [
-        TypeError
+        TypeError,
+        None
             ]
 

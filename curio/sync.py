@@ -199,6 +199,8 @@ class _contextadapt(object):
         except (CancelledError, TaskTimeout) as err:
             # An interesting corner case... if we're cancelled why waiting to
             # enter, we'd better arrange to exit in case it eventually succeeds.
+            self.exit_future.add_done_callback(lambda f: None)
+            self.finish_args = (None, None, None)
             self.finish_evt.set()
             raise
 
