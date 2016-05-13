@@ -21,12 +21,11 @@ Of course, your mileage might vary.
 
 News
 ----
-The version 0.3 release of curio fixes a few critical bugs.  The
-version 0.2 release of curio cleans up a lot of APIs and makes a wide
-variety of performance improvements. If you were using version 0.1, a
-lot of stuff is probably going to break.  Sorry about that.  However,
-curio is still in its infancy. APIs might change--hopefully for the
-better though.
+The version 0.4 release of curio cleans up a lot of APIs and makes a
+wide variety of performance improvements. If you were using version
+0.1, a lot of stuff is probably going to break.  Sorry about that.
+However, curio is still in its infancy. APIs might change--hopefully
+for the better though.
 
 An Example
 ----------

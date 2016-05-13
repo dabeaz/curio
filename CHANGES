@@ -1,6 +1,10 @@
 CHANGES
 -------
 
+Version 0.4 : May 13, 2016
+--------------------------
+05/13/2016 Fixed a subtle bug with futures/cancellation.
+
 Version 0.3 : May 13, 2016
 --------------------------
 05/13/2016 Bug fixes to the run_in_process() and run_in_thread() 
