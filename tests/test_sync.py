@@ -749,3 +749,35 @@ class TestAbide:
                 'tester2',
                 'tester finish'
                 ]
+
+    def test_abide_sync_rlock(self, kernel):
+        results = []
+        async def waiter(lck, evt):
+              async with abide(lck):
+                  results.append('acquired')
+              results.append('released')
+              await abide(evt.set)
+
+        # Synchronous code. Runs in a thread
+        def tester(lck, evt):
+              with lck:
+                  results.append('tester')
+                  time.sleep(0.1)
+              evt.wait()
+              with lck:
+                  results.append('tester finish')
+
+        async def main():
+            lck = threading.RLock()
+            evt = threading.Event()
+            await spawn(run_in_thread(tester, lck, evt))
+            await sleep(0.01)
+            await spawn(waiter(lck, evt))
+
+        kernel.run(main())
+        assert results == [
+                'tester',
+                'acquired',
+                'released',
+                'tester finish'
+                ]

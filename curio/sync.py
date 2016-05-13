@@ -9,7 +9,7 @@ __all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide
 import threading
 from inspect import iscoroutinefunction
 
-from .traps import _wait_on_queue, _reschedule_tasks
+from .traps import _wait_on_queue, _reschedule_tasks, _future_wait
 from .kernel import kqueue
 from . import workers
 from .errors import CancelledError, TaskTimeout
@@ -171,23 +171,41 @@ class Condition(_LockBase):
 class _contextadapt(object):
     def __init__(self, manager):
         self.manager = manager
+        self.start_evt = threading.Event()
+        self.finish_evt = threading.Event()
+        self.finish_args = ()
+        self.enter_future = workers._FutureLess()
+        self.exit_future = workers._FutureLess()
+
+    def _handler(self):
+        self.start_evt.wait()
+        try:
+            self.enter_future.set_result(self.manager.__enter__())
+        except Exception as e:
+            self.enter_future.set_exception(e)
+            return
+
+        self.finish_evt.wait()
+        try:
+            self.exit_future.set_result(self.manager.__exit__(*self.finish_args))
+        except Exception as e:
+            self.exit_future.set_exception(e)
 
     async def __aenter__(self):
-        task = await spawn(workers.run_in_thread(self.manager.__enter__))
+        task = await spawn(workers.run_in_thread(self._handler))
         try:
-            return await task.join()
+            await _future_wait(self.enter_future, self.start_evt)
+            return self.enter_future.result()
         except (CancelledError, TaskTimeout) as err:
             # An interesting corner case... if we're cancelled why waiting to
             # enter, we'd better arrange to exit in case it eventually succeeds.
-            async def manager_release(task, err):
-                  await task.join()
-                  await workers.run_in_thread(self.manager.__exit__, type(err), err, err.__traceback__)
-
-            await spawn(manager_release(task, err))
+            self.finish_evt.set()
             raise
 
     async def __aexit__(self, *args):
-        return await workers.run_in_thread(self.manager.__exit__, *args)
+        self.finish_args = args
+        await _future_wait(self.exit_future, self.finish_evt)
+        return self.exit_future.result()
 
 def abide(op, *args, **kwargs):
     '''

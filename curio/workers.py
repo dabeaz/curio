@@ -104,7 +104,7 @@ class _FutureLess(object):
         try:
             return self._result
         except AttributeError:
-            return self._exception
+            raise self._exception
         
     def add_done_callback(self, func):
         self._callback = func

@@ -966,7 +966,7 @@ synchronization primitives if you use the :func:`abide` function.
    a synchronous function, ``run_in_thread(op, *args, **kwargs)`` is
    returned.  If *op* is a synchronous context manager, it is wrapped by
    an asynchronous context manager that executes the ``__enter__()`` and
-   ``__exit__()`` methods in threads.
+   ``__exit__()`` methods in a backing thread.
 
 The main use of this function is in code that wants to safely
 synchronize curio with threads and processes. For example, here is how
@@ -1053,12 +1053,16 @@ any side-effects associated with that code executing, you'll need to
 take them into account.  Second, if you are using ``async with
 abide(lock)`` with a thread-lock and a cancellation request is
 received while waiting for the ``lock.__enter__()`` method to execute,
-Curio spawns a background task that takes over and waits for
-completion.  This task then immediately initiates the corresponding
-``lock.__exit__()`` call.  Without this, task cancellation would
-surely cause a deadlock of threads waiting to use the same lock.  It's entirely
-possible that this could also cause Curio to never exit in the event
-that the lock is never released as well.
+a background thread continues to run waiting for the eventual lock
+acquisition.  Once acquired, it will be immediately released again.
+Without this, task cancellation would surely cause a deadlock of
+threads waiting to use the same lock.
+
+The ``abide()`` function can be used to synchronize with a thread
+reentrant lock (e.g., ``threading.RLock``).  However, reentrancy is
+not supported.  Each lock acquisition using ``abide()`` involves a 
+backing thread.  Repeated acquisitions would violate the constraint
+that reentrant locks have on only acquired by a single thread.
 
 All things considered, it's probably best to try and avoid code that
 synchronizes Curio tasks with threads.  However, if you must, Curio abides.

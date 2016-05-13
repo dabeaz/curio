@@ -67,7 +67,7 @@ class Kernel(object):
             Monitor(self)
 
     def __del__(self):
-        if self._kernel_task_id:
+        if self._kernel_task_id is not None:
             self._notify_sock.close()
             self._wait_sock.close()
             self._kernel_task_id = None
@@ -324,7 +324,7 @@ class Kernel(object):
 
         # Wait on a Future
         def _trap_future_wait(_, future, event):
-            if not self._kernel_task_id:
+            if self._kernel_task_id is None:
                 _init_loopback()
 
             current.state = 'FUTURE_WAIT'
@@ -414,7 +414,7 @@ class Kernel(object):
             if self._signal_sets is None:
                 self._signal_sets = defaultdict(list)
                 self._default_signals = { }
-                if not self._kernel_task_id:
+                if self._kernel_task_id is None:
                     _init_loopback()
                 old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())     
                 assert old_fd < 0, 'Signals already initialized %d' % old_fd

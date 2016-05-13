@@ -1,5 +1,18 @@
 CHANGES
 -------
+
+Version 0.3 : May 13, 2016
+--------------------------
+05/13/2016 Bug fixes to the run_in_process() and run_in_thread() 
+           functions so that exceptions are reported properly.
+           Also fixed logic bug on related to kernel task initialization.
+
+05/13/2016 Modification to the abide() function to allow it to work
+           with RLocks from the threading module.  One caveat: Such
+	   locks are NOT reentrant from within curio itself. 
+
+Version 0.2 : May 11, 2016
+--------------------------
 05/05/2016 Refactoring of stream I/O classes. There is now FileStream
            and SocketStream.   The old Stream class is gone.
 

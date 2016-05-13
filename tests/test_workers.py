@@ -116,3 +116,23 @@ def test_worker_timeout(kernel, runner):
             10, 9, 8, 7, 6, 5, 'cancel', 4, 3, 2, 1
             ]
 
+
+def test_exception(kernel):
+    results = []
+
+    async def error():
+         try:
+             result = await run_in_thread(fib, '10')
+             results.append('fail')
+         except Exception as e:
+             results.append(type(e))
+
+    async def main():
+         await error()
+
+    kernel.run(main())
+
+    assert results == [
+        TypeError
+            ]
+
