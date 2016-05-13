@@ -72,33 +72,6 @@ async def open_unix_connection(path, *, ssl=None, server_hostname=None):
         sock._socket.close()
         raise
 
-class Server(object):
-    def __init__(self, sock, client_connected_task, ssl=None):
-        self._sock = sock
-        self._ssl = ssl
-        self._client_connected_task = client_connected_task
-        self._task = None
-
-    async def serve_forever(self):
-        async with self._sock:
-            while True:
-                client, addr = await self._sock.accept()
-
-                if self._ssl:
-                    client = self._ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
-
-                client_task = await spawn(self.run_client(client, addr))
-                del client
-
-    async def run_client(self, client, addr):
-        async with client:
-            await self._client_connected_task(client, addr)
-
-    async def cancel(self):
-        if self._task:
-            await self._task.cancel()
-
-
 async def _run_server(sock, client_connected_task, ssl=None):
     async def run_client(client, addr):
         async with client:
