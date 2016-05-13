@@ -1,6 +1,6 @@
 # curio/__init__.py
 
-__version__ = '0.3'
+__version__ = '0.4'
 
 from .errors import *
 from .task import *
