@@ -295,8 +295,8 @@ class StreamBase(object):
                 data = bytes(buf)
                 buf.clear()
             else:
-                data = bytes(buf[:n])
-                del buf[:n]
+                data = bytes(buf[:maxbytes])
+                del buf[:maxbytes]
         else:
             data = await self._read(maxbytes)
         return data
