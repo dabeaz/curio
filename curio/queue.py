@@ -12,7 +12,7 @@ from .traps import _wait_on_queue, _reschedule_tasks
 from .kernel import kqueue
 
 class Queue(object):
-    __slots__ = ('maxsize', '_queue', '_get_waiting', 
+    __slots__ = ('maxsize', '_queue', '_get_waiting',
                  '_put_waiting', '_join_waiting', '_task_count')
 
     def __init__(self, maxsize=0):

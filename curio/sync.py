@@ -13,10 +13,12 @@ from .traps import _wait_on_queue, _reschedule_tasks, _future_wait
 from .kernel import kqueue
 from . import workers
 from .errors import CancelledError, TaskTimeout
-from .task import spawn, timeout_after
+from .task import spawn
 
 class Event(object):
+
     __slots__ = ('_set', '_waiting')
+
     def __init__(self):
         self._set = False
         self._waiting = kqueue()
@@ -42,6 +44,7 @@ class Event(object):
         await _reschedule_tasks(self._waiting, len(self._waiting))
 
 class _LockBase(object):
+
     async def __aenter__(self):
         await self.acquire()
         return None
@@ -56,7 +59,9 @@ class _LockBase(object):
         pass
 
 class Lock(_LockBase):
+
     __slots__ = ('_acquired', '_waiting')
+
     def __init__(self):
         self._acquired = False
         self._waiting = kqueue()
@@ -83,7 +88,9 @@ class Lock(_LockBase):
         return self._acquired
 
 class Semaphore(_LockBase):
+
     __slots__ = ('_value', '_waiting')
+
     def __init__(self, value=1):
         self._value = value
         self._waiting = kqueue()
@@ -105,12 +112,14 @@ class Semaphore(_LockBase):
             await _reschedule_tasks(self._waiting, n=1)
         else:
             self._value += 1
-        
+
     def locked(self):
         return self._value == 0
 
 class BoundedSemaphore(Semaphore):
+
     __slots__ = ('_bound_value',)
+
     def __init__(self, value=1):
         self._bound_value = value
         super().__init__(value)
@@ -121,7 +130,9 @@ class BoundedSemaphore(Semaphore):
         await super().release()
 
 class Condition(_LockBase):
+
     __slots__ = ('_lock', '_waiting')
+
     def __init__(self, lock=None):
         if lock is None:
             self._lock = Lock()
@@ -169,6 +180,7 @@ class Condition(_LockBase):
 
 # Class that adapts a synchronous context-manager to an asynchronous manager
 class _contextadapt(object):
+
     def __init__(self, manager):
         self.manager = manager
         self.start_evt = threading.Event()
@@ -192,11 +204,11 @@ class _contextadapt(object):
             self.exit_future.set_exception(e)
 
     async def __aenter__(self):
-        task = await spawn(workers.run_in_thread(self._handler))
+        await spawn(workers.run_in_thread(self._handler))
         try:
             await _future_wait(self.enter_future, self.start_evt)
             return self.enter_future.result()
-        except (CancelledError, TaskTimeout) as err:
+        except (CancelledError, TaskTimeout):
             # An interesting corner case... if we're cancelled why waiting to
             # enter, we'd better arrange to exit in case it eventually succeeds.
             self.exit_future.add_done_callback(lambda f: None)

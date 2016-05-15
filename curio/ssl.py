@@ -17,6 +17,7 @@ except ImportError:
     # We need these exceptions defined, even if ssl is not available.
     class SSLWantReadError(Exception):
         pass
+
     class SSLWantWriteError(Exception):
         pass
 
@@ -35,12 +36,11 @@ if _ssl:
     async def get_server_certificate(*args, **kwargs):
         return await run_in_thread(partial(_ssl.get_server_certicate, *args, **kwargs))
 
-
     # Small wrapper class to make sure the wrap_socket() method returns the right type
     class CurioSSLContext(object):
         def __init__(self, context):
             self._context = context
-            
+
         def __getattr__(self, name):
             return getattr(self._context, name)
 
@@ -64,6 +64,3 @@ if _ssl:
     def create_default_context(*args, **kwargs):
         context = _ssl.create_default_context(*args, **kwargs)
         return CurioSSLContext(context)
-
-    
-    

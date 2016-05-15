@@ -20,7 +20,7 @@ __all__ = [
 from types import coroutine
 from selectors import EVENT_READ, EVENT_WRITE
 
-from .errors import _CancelRetry, CancelledError
+from .errors import _CancelRetry
 
 @coroutine
 def _read_wait(fileobj):
@@ -35,7 +35,7 @@ def _write_wait(fileobj):
     Wait until writing can be performed.
     '''
     yield ('_trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT')
-    
+
 @coroutine
 def _future_wait(future, event=None):
     '''
@@ -62,7 +62,7 @@ def _spawn(coro, daemon):
 def _cancel_task(task):
     '''
     Cancel a task. Causes a CancelledError exception to raise in the task.
-    The exception can be changed by specifying exc. 
+    The exception can be changed by specifying exc.
     '''
     while True:
         try:
@@ -132,7 +132,7 @@ def _get_current():
 @coroutine
 def _set_timeout(seconds):
     '''
-    Set a timeout for the current task.  
+    Set a timeout for the current task.
     '''
     result = yield ('_trap_set_timeout', seconds)
     return result

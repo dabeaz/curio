@@ -16,7 +16,7 @@ class SignalSet(object):
         self.pending = deque()        # Pending signals received
         self.waiting = None           # Task waiting for the signals (if any)
         self.watching = False         # Are the signals being watched right now?
-    
+
     async def __aenter__(self):
         assert not self.watching
         await _sigwatch(self)
@@ -49,7 +49,7 @@ class SignalSet(object):
     @contextmanager
     def ignore(self):
         '''
-        Context manager. Temporarily ignores all signals in the signal set. 
+        Context manager. Temporarily ignores all signals in the signal set.
         '''
         try:
             orig_signals = [ (signo, signal.signal(signo, signal.SIG_IGN)) for signo in self.signos ]
