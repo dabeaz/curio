@@ -1,6 +1,9 @@
 CHANGES
 -------
 
+05/15/2016 Fixed Issue #50. Undefined variable n in io.py 
+	   Reported by Wolfgang Langner
+
 Version 0.4 : May 13, 2016
 --------------------------
 05/13/2016 Fixed a subtle bug with futures/cancellation.
