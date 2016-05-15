@@ -40,12 +40,12 @@
 # look at the task table, and see what the tasks are doing.
 #
 # The internal monitor loop implemented on curio itself is presently
-# used to implement external task cancellation.  Manipulating any 
+# used to implement external task cancellation.  Manipulating any
 # part of the kernel state or task status is unsafe from an outside thread.
 # To make it safe, the user-interface thread of the monitor hands over
 # requests requiring the involvement of the kernel to the monitor loop.
 # Since this loop runs on curio, it can safely make cancellation requests
-# and perform other kernel-related actions. 
+# and perform other kernel-related actions.
 
 import sys
 import os
@@ -57,7 +57,6 @@ import socket
 import threading
 import queue
 import telnetlib
-from collections import deque
 import logging
 
 # --- Curio
@@ -99,7 +98,7 @@ def _format_stack(task):
         line = linecache.getline(filename, lineno, f.f_globals)
         extracted_list.append((filename, lineno, name, line))
     if not extracted_list:
-        resp = 'No stack for %r' % task 
+        resp = 'No stack for %r' % task
     else:
         resp = 'Stack for %r (most recent call last):\n' % task
         resp += ''.join(traceback.format_list(extracted_list))
@@ -107,7 +106,7 @@ def _format_stack(task):
 
 class Monitor(object):
     '''
-    Task monitor that runs concurrently to the curio kernel in a 
+    Task monitor that runs concurrently to the curio kernel in a
     separate thread. This can watch the kernel and provide debugging.
     '''
     def __init__(self, kern, host=MONITOR_HOST, port=MONITOR_PORT):
@@ -148,7 +147,7 @@ class Monitor(object):
             sin = client.makefile('r', encoding='utf-8')
             self.interactive_loop(sout, sin)
             client.close()
-                
+
     def interactive_loop(self, sout, sin):
         '''
         Main interactive loop of the monitor
@@ -205,24 +204,24 @@ class Monitor(object):
         for h, w in zip(headers, widths):
             sout.write('%-*s ' % (w, h))
         sout.write('\n')
-        sout.write(' '.join(w*'-' for w in widths))
+        sout.write(' '.join(w * '-' for w in widths))
         sout.write('\n')
         timestamp = time.monotonic()
         for taskid in sorted(self.kernel._tasks):
             task = self.kernel._tasks.get(taskid)
             if task:
                 remaining = format((task.timeout - timestamp), '0.6f')[:7] if task.timeout else 'None'
-                sout.write('%-*d %-*s %-*d %-*s %-*s\n' % (widths[0], taskid, 
-                                                                widths[1], task.state,
-                                                                widths[2], task.cycles,
-                                                                widths[3], remaining,
-                                                                widths[4], task))
+                sout.write('%-*d %-*s %-*d %-*s %-*s\n' % (widths[0], taskid,
+                                                           widths[1], task.state,
+                                                           widths[2], task.cycles,
+                                                           widths[3], remaining,
+                                                           widths[4], task))
 
     def command_where(self, sout, taskid):
         task = self.kernel._tasks.get(taskid)
         if task:
             stack = _format_stack(task)
-            sout.write(stack+'\n')
+            sout.write(stack + '\n')
         else:
             sout.write('No task %d\n' % taskid)
 
@@ -237,7 +236,7 @@ class Monitor(object):
         if task:
             sout.write('Cancelling task %d\n' % taskid)
             self.monitor_queue.put(task)
-            
+
     def command_exit(self, sout):
         pass
 

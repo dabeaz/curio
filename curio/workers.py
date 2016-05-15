@@ -9,8 +9,8 @@ __all__ = [ 'run_in_executor', 'run_in_thread', 'run_in_process' ]
 import multiprocessing
 import threading
 
-from .errors import CancelledError, TaskTimeout
-from .traps import _future_wait, _get_kernel, _get_current
+from .errors import CancelledError
+from .traps import _future_wait, _get_kernel
 from . import sync
 from .channel import Channel
 
@@ -46,7 +46,7 @@ async def run_in_thread(callable, *args, **kwargs):
     discarded in that case).
 
     Note: It is advisable that all callables submitted to threads
-    have a bound on their execution time (e.g., timeout or some 
+    have a bound on their execution time (e.g., timeout or some
     other mechanism).
     '''
     kernel = await _get_kernel()
@@ -76,7 +76,7 @@ async def run_in_process(callable, *args, **kwargs):
     '''
     kernel = await _get_kernel()
     if not kernel._process_pool:
-        kernel._process_pool = WorkerPool(ProcessWorker, 
+        kernel._process_pool = WorkerPool(ProcessWorker,
                                           MAX_WORKER_PROCESSES)
 
     return await kernel._process_pool.apply(callable, args, kwargs)
@@ -105,7 +105,7 @@ class _FutureLess(object):
             return self._result
         except AttributeError:
             raise self._exception from None
-        
+
     def add_done_callback(self, func):
         self._callback = func
 
@@ -207,7 +207,7 @@ class ProcessWorker(object):
             except Exception as e:
                 ch.send((False, e))
             func = args = kwargs = None
-    
+
     async def apply(self, func, args=(), kwargs={}):
         if self.process is None or not self.process.is_alive():
             self._launch()
@@ -237,25 +237,25 @@ class WorkerPool(object):
         self.nworkers = sync.Semaphore(nworkers)
         self.workercls = workercls
         self.workers = [workercls() for n in range(nworkers)]
-        
+
     def shutdown(self):
         for worker in self.workers:
             worker.shutdown()
         self.workers = None
 
     async def apply(self, func, args=(), kwargs={}):
-         async with self.nworkers:
-             worker = self.workers.pop()
-             try:
-                 return await worker.apply(func, args, kwargs)
-             except CancelledError as e:
-                 # If a worker is timed out or cancelled, we shut it
-                 # down and replace it with a fresh worker.
-                 worker.shutdown()
-                 worker = self.workercls()
-                 raise
-             finally:
-                 self.workers.append(worker)
+        async with self.nworkers:
+            worker = self.workers.pop()
+            try:
+                return await worker.apply(func, args, kwargs)
+            except CancelledError:
+                # If a worker is timed out or cancelled, we shut it
+                # down and replace it with a fresh worker.
+                worker.shutdown()
+                worker = self.workercls()
+                raise
+            finally:
+                self.workers.append(worker)
 
 # Pool definitions should anyone want to use them directly
 ProcessPool = lambda nworkers: WorkerPool(ProcessWorker, nworkers)

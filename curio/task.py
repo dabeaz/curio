@@ -4,7 +4,7 @@
 
 __all__ = [ 'sleep', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after' ]
 
-from .errors import CancelledError, TaskTimeout, TaskError
+from .errors import TaskTimeout, TaskError
 from .traps import *
 
 class Task(object):
@@ -13,14 +13,15 @@ class Task(object):
     related to execution state and debugging.
     '''
     __slots__ = (
-        'id', 'daemon',  'coro', '_send', '_throw', 'cycles', 'state',
+        'id', 'daemon', 'coro', '_send', '_throw', 'cycles', 'state',
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
         'next_exc', 'joining', 'cancelled', 'terminated', '_last_io', '__weakref__',
         )
     _lastid = 1
+
     def __init__(self, coro, daemon=False, taskid=None):
         if taskid is None:
-            taskid = Task._lastid   
+            taskid = Task._lastid
             Task._lastid += 1
         self.id = taskid
         self.coro = coro           # Underlying generator/coroutine
@@ -66,7 +67,7 @@ class Task(object):
         Cancel a task by raising a CancelledError exception.  Does not
         return until the task actually terminates.  Returns True if
         the task was actually cancelled. False is returned if the task
-        was already completed.  
+        was already completed.
         '''
         if self.terminated:
             return False
@@ -173,7 +174,7 @@ def ignore_after(seconds, coro=None, *, timeout_result=None):
     elapsed.  No exception is raised when time expires. Instead, None
     is returned.  This is often more convenient that catching an
     exception.  You can apply the function to a single coroutine:
-    
+
         if ignore_after(5, coro(args)) is None:
             # A timeout occurred
             ...
@@ -190,7 +191,7 @@ def ignore_after(seconds, coro=None, *, timeout_result=None):
 
     When used as a context manager, the return manager object has
     a result attribute that will be set to None if the time
-    period expires (or True otherwise). 
+    period expires (or True otherwise).
 
     You can change the return result to a different value using
     the timeout_result keyword argument.

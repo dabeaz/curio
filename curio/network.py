@@ -2,9 +2,9 @@
 #
 # Some high-level functions useful for writing network code.  These are loosely
 # based on their similar counterparts in the asyncio library. Some of the
-# fiddly low-level bits are borrowed.   
+# fiddly low-level bits are borrowed.
 
-__all__ = [ 
+__all__ = [
     'open_connection',
     'tcp_server',
     'open_unix_connection',
@@ -43,7 +43,7 @@ async def open_connection(host, port, *, ssl=None, source_addr=None, server_host
     if server_hostname and not ssl:
         raise ValueError('server_hostname is only applicable with SSL')
 
-    sock = await socket.create_connection((host,port), source_addr)
+    sock = await socket.create_connection((host, port), source_addr)
 
     try:
         # Apply SSL wrapping to the connection, if applicable
@@ -75,17 +75,17 @@ async def open_unix_connection(path, *, ssl=None, server_hostname=None):
 async def _run_server(sock, client_connected_task, ssl=None):
     async def run_client(client, addr):
         async with client:
-              await client_connected_task(client, addr)
+            await client_connected_task(client, addr)
 
     async with sock:
         while True:
             client, addr = await sock.accept()
             if ssl:
                 client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
-            client_task = await spawn(run_client(client, addr))
+            await spawn(run_client(client, addr))
             del client
-        
-async def tcp_server(host, port, client_connected_task, *, 
+
+async def tcp_server(host, port, client_connected_task, *,
                      family=socket.AF_INET, backlog=100, ssl=None, reuse_address=True):
 
     if ssl and not isinstance(ssl, curiossl.CurioSSLContext):
@@ -102,11 +102,11 @@ async def tcp_server(host, port, client_connected_task, *,
     except Exception:
         sock._socket.close()
         raise
-    
+
 async def unix_server(path, client_connected_task, *, backlog=100, ssl=None):
     if ssl and not isinstance(ssl, curiossl.CurioSSLContext):
         raise ValueError('ssl argument must be a curio.ssl.SSLContext instance')
-  
+
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         sock.bind(path)

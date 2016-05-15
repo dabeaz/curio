@@ -1,5 +1,5 @@
 # curio/errors.py
-# 
+#
 # Curio specific exceptions
 
 __all__ = [
@@ -20,4 +20,3 @@ class TaskError(CurioError):
 
 class _CancelRetry(Exception):
     pass
-

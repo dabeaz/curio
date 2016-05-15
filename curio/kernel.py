@@ -9,7 +9,7 @@ import os
 import sys
 import logging
 import signal
-from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
+from selectors import DefaultSelector
 from collections import deque, defaultdict
 
 # Logger where uncaught exceptions from crashed tasks are logged
@@ -38,7 +38,8 @@ class Kernel(object):
         self._selector = selector
         self._ready = kqueue()            # Tasks ready to run
         self._tasks = { }                 # Task table
-        self._signal_sets = None          # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
+        # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
+        self._signal_sets = None
         self._default_signals = None      # Dict of default signal handlers
 
         # Attributes related to the loopback socket (only initialized if required)
@@ -84,7 +85,7 @@ class Kernel(object):
         shutdown is True, the kernel cleans up after itself after all
         tasks complete.
         '''
-        
+
         # Motto:  "What happens in the kernel stays in the kernel"
 
         # ---- Kernel State
@@ -97,7 +98,7 @@ class Kernel(object):
 
         # ---- Number of non-daemonic tasks running
         njobs = sum(not task.daemon for task in tasks.values())
-        
+
         # ---- Bound methods
         selector_register = selector.register
         selector_unregister = selector.unregister
@@ -163,7 +164,7 @@ class Kernel(object):
                     ready_append(task)
 
                 # Any non-null bytes received here are assumed to be received signals.
-                # See if there are any pending signal sets and unblock if needed 
+                # See if there are any pending signal sets and unblock if needed
                 if not self._signal_sets:
                     continue
 
@@ -188,7 +189,7 @@ class Kernel(object):
             return task
 
         # Reschedule a task, putting it back on the ready queue so that it can run.
-        # value and exc specify a value or exception to send into the underlying 
+        # value and exc specify a value or exception to send into the underlying
         # coroutine when it is rescheduled.
         def _reschedule_task(task, value=None, exc=None):
             ready_append(task)
@@ -199,8 +200,8 @@ class Kernel(object):
 
         # Cancel a task. This causes a CancelledError exception to raise in the
         # underlying coroutine.  The coroutine can elect to catch the exception
-        # and continue to run to perform cleanup actions.  However, it would 
-        # normally terminate shortly afterwards.   This method is also used to 
+        # and continue to run to perform cleanup actions.  However, it would
+        # normally terminate shortly afterwards.   This method is also used to
         # raise timeouts.
         def _cancel_task(task, exc=CancelledError):
             if task.terminated:
@@ -242,11 +243,11 @@ class Kernel(object):
             task.timeout = None
 
             if not task.daemon:
-                njobs -=1
+                njobs -= 1
 
             if task.joining:
                 for wtask in task.joining:
-                    _reschedule_task(wtask) 
+                    _reschedule_task(wtask)
                 task.joining = None
             task.terminated = True
 
@@ -300,7 +301,7 @@ class Kernel(object):
         # triggered by coroutines.  They are never invoked directly
         # and there is no public API outside the kernel.  Instead,
         # coroutines use a statement such as
-        #   
+        #
         #   yield ('_trap_io', sock, EVENT_READ, 'READ_WAIT')
         #
         # to invoke a specific trap.
@@ -310,7 +311,7 @@ class Kernel(object):
             # See comment about deferred unregister in run().  If the requested
             # I/O operation is *different* than the last I/O operation that was
             # performed by the task, we need to unregister the last I/O resource used
-            # and register a new one with the selector.  
+            # and register a new one with the selector.
             if current._last_io != (state, fileobj):
                 if current._last_io:
                     selector_unregister(current._last_io[1])
@@ -328,7 +329,7 @@ class Kernel(object):
                 _init_loopback()
 
             current.state = 'FUTURE_WAIT'
-            current.cancel_func = (lambda task=current: 
+            current.cancel_func = (lambda task=current:
                                    setattr(task, 'future', future.cancel() and None))
             current.future = future
 
@@ -344,7 +345,7 @@ class Kernel(object):
             # earlier work.  In that case, it will trigger the callback,
             # find that the task's current Future is now different, and
             # discard the result.
-            future.add_done_callback(lambda fut, task=current: 
+            future.add_done_callback(lambda fut, task=current:
                                      _wake(task, fut) if task.future is fut else None)
 
             # An optional threading.Event object can be passed and set to
@@ -369,7 +370,7 @@ class Kernel(object):
         # Join with a task
         def _trap_join_task(_, task):
             if task.terminated:
-                _reschedule_task(current) 
+                _reschedule_task(current)
             else:
                 if task.joining is None:
                     task.joining = kqueue()
@@ -416,12 +417,12 @@ class Kernel(object):
                 self._default_signals = { }
                 if self._kernel_task_id is None:
                     _init_loopback()
-                old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())     
+                old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())
                 assert old_fd < 0, 'Signals already initialized %d' % old_fd
 
             for signo in sigset.signos:
                 if not self._signal_sets[signo]:
-                    self._default_signals[signo] = signal.signal(signo, lambda signo, frame:None)
+                    self._default_signals[signo] = signal.signal(signo, lambda signo, frame: None)
                 self._signal_sets[signo].append(sigset)
 
             _reschedule_task(current)
@@ -471,10 +472,10 @@ class Kernel(object):
             current.next_value = current
 
         # Create the traps table
-        traps = { name: trap 
+        traps = { name: trap
                   for name, trap in locals().items()
                   if name.startswith('_trap_') }
-        
+
         # If a coroutine was given, add it as the first task
         maintask = _new_task(coro) if coro else None
 
@@ -534,10 +535,10 @@ class Kernel(object):
                         current.next_exc = None
 
                     # Execute the trap
-                    traps[trap[0]](*trap) 
+                    traps[trap[0]](*trap)
 
                 except StopIteration as e:
-                    _cleanup_task(current, value = e.value)
+                    _cleanup_task(current, value=e.value)
 
                 except CancelledError as e:
                     current.exc_info = sys.exc_info()
@@ -566,29 +567,29 @@ class Kernel(object):
 
                 finally:
                     # Unregister previous I/O request. Discussion follows:
-                    # 
+                    #
                     # When a task performs I/O, it registers itself with the underlying
                     # I/O selector.  When the task is reawakened, it unregisters itself
                     # and prepares to run.  However, in many network applications, the
                     # task will perform a small amount of work and then go to sleep on
                     # exactly the same I/O resource that it was waiting on before. For
                     # example, a client handling task in a server will often spend most
-                    # of its time waiting for incoming data on a single socket. 
+                    # of its time waiting for incoming data on a single socket.
                     #
                     # Instead of always unregistering the task from the selector, we
                     # can defer the unregistration process until after the task goes
                     # back to sleep again.  If it happens to be sleeping on the same
                     # resource as before, there's no need to unregister it--it will
-                    # still be registered from the last I/O operation.   
+                    # still be registered from the last I/O operation.
                     #
-                    # The code here performs the unregister step for a task that 
+                    # The code here performs the unregister step for a task that
                     # ran, but is now sleeping for a *different* reason than repeating the
                     # prior I/O operation.  There is coordination with code in _trap_io().
 
                     if current._last_io:
                         selector_unregister(current._last_io[1])
                         current._last_io = None
-                    
+
         # If kernel shutdown has been requested, issue a cancellation request to all remaining tasks
         if shutdown:
             _shutdown()
@@ -603,17 +604,16 @@ def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
     launching the top-level task of an curio-based application.  It
     creates an entirely new kernel, runs the given task to completion,
     and concludes by shutting down the kernel, releasing all resources used.
-    
+
     Don't use this function if you're repeatedly launching a lot of
     new tasks to run in curio. Instead, create a Kernel instance and
     use its run() method instead.
     '''
-    kernel = Kernel(selector=selector, with_monitor=with_monitor, 
+    kernel = Kernel(selector=selector, with_monitor=with_monitor,
                     log_errors=log_errors, pdb=pdb)
     result = kernel.run(coro, shutdown=True)
     return result
 
 __all__ = [ 'Kernel', 'run' ]
-            
+
 from .monitor import Monitor
-        

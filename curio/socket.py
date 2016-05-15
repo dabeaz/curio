@@ -14,7 +14,7 @@ import socket as _socket
 __all__ = _socket.__all__
 
 from socket import *
-from functools import wraps, partial
+from functools import wraps
 
 from . import workers
 from . import io
@@ -65,11 +65,3 @@ async def gethostbyaddr(*args, **kwargs):
 @wraps(_socket.getnameinfo)
 async def getnameinfo(*args, **kwargs):
     return await workers.run_in_thread(_socket.getnameinfo, *args, **kwargs)
-
-
-
-
-    
-
-     
-    

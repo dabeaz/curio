@@ -1,8 +1,8 @@
 # curio/meta.py
-#     ___        
+#     ___
 #     \./      DANGER:  This module implements some experimental
 #  .--.O.--.            metaprogramming techniques involving async/await.
-#   \/   \/             If you use it, you might die. 
+#   \/   \/             If you use it, you might die.
 #
 
 __all__ = [ 'acontextmanager' ]
@@ -15,7 +15,7 @@ from contextlib import contextmanager
 class acontextmanager(object):
     '''
     Decorator that allows an asynchronous context manager to be written
-    using the same technique as with the @contextlib.contextmanager 
+    using the same technique as with the @contextlib.contextmanager
     decorator.
     '''
     def __init__(self, func):
@@ -35,7 +35,7 @@ class acontextmanager(object):
 
 def awaitable(syncfunc):
     '''
-    Decorator that allows an asynchronous function to be paired with a 
+    Decorator that allows an asynchronous function to be paired with a
     synchronous function in a single function call.  The selection of
     which function executes depends on the calling context.  For example:
 
@@ -52,8 +52,8 @@ def awaitable(syncfunc):
         def foo():
             ...
             r = spam(s, 1024)          # Calls synchronous function (A) above
-            ... 
-    
+            ...
+
         async def bar():
             ...
             r = await spam(s, 1024)    # Calls async function (B) above
@@ -64,6 +64,7 @@ def awaitable(syncfunc):
         if inspect.signature(syncfunc) != inspect.signature(asyncfunc):
             raise TypeError('%s and async %s have different signatures' %
                             (syncfunc.__name__, asyncfunc.__name__))
+
         @wraps(asyncfunc)
         def wrapper(*args, **kwargs):
             if sys._getframe(1).f_code.co_flags & 0x80:
@@ -72,9 +73,3 @@ def awaitable(syncfunc):
                 return syncfunc(*args, **kwargs)
         return wrapper
     return decorate
-
-
-
-
-
-

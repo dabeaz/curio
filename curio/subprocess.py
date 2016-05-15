@@ -12,7 +12,7 @@ import subprocess
 
 from subprocess import (
     CompletedProcess,
-    SubprocessError, 
+    SubprocessError,
     CalledProcessError,
     TimeoutExpired,
     PIPE,
@@ -125,9 +125,9 @@ async def run(args, *, stdin=None, input=None, stdout=None, stderr=None, shell=F
     return CompletedProcess(process.args, retcode, stdout, stderr)
 
 async def check_output(args, *, stdin=None, stderr=None, shell=False, input=None, timeout=None):
-     '''
-     Curio compatible version of subprocess.check_output()
-     '''
-     out = await run(args, stdout=PIPE, stdin=stdin, stderr=stderr, shell=shell, 
-                     timeout=timeout, check=True, input=input)
-     return out.stdout
+    '''
+    Curio compatible version of subprocess.check_output()
+    '''
+    out = await run(args, stdout=PIPE, stdin=stdin, stderr=stderr, shell=shell,
+                    timeout=timeout, check=True, input=input)
+    return out.stdout

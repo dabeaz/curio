@@ -9,10 +9,7 @@ __all__ = ['Channel', 'Listener', 'Client']
 import os
 import pickle
 import struct
-import io
 import hmac
-import multiprocessing.connection as mpc
-from contextlib import contextmanager
 
 from . import socket
 from .errors import CurioError
@@ -49,7 +46,7 @@ class Channel(object):
         '''
         Creates a channel from a multiprocessing Connection. Note: The
         multiprocessing connection is detached by having its handle set to None.
-        
+
         This method can be used to make curio talk over Pipes as created by
         multiprocessing.  For example:
 
@@ -69,7 +66,7 @@ class Channel(object):
 
     async def __aexit__(self, *args):
         await self.close()
-    
+
     async def close(self):
         await self._reader.close()
         await self._writer.close()
@@ -96,9 +93,9 @@ class Channel(object):
         header = struct.pack('!i', size)
         if size >= 16384:
             await self._writer.write(header)
-            await self._writer.write(m[offset:offset+size])
+            await self._writer.write(m[offset:offset + size])
         else:
-            msg = header + bytes(m[offset:offset+size])
+            msg = header + bytes(m[offset:offset + size])
             await self._writer.write(msg)
 
     async def recv_bytes(self, maxlength=None):
@@ -106,7 +103,7 @@ class Channel(object):
         Receive a message of bytes as a single message.
         '''
         header = await self._reader.read_exactly(4)
-        size,  = struct.unpack('!i', header)
+        size, = struct.unpack('!i', header)
         if maxlength is not None:
             if size > maxlength:
                 raise IOError('Message too large. %d bytes > %d maxlength' % (size, maxlength))

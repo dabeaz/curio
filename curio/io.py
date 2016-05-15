@@ -20,7 +20,7 @@
 # matter which.  Similarly, the Stream class can wrap normal files,
 # files created from sockets, pipes, and other file-like abstractions.
 #
-# No assumption is made about system compatibility (Unix vs. Windows).  
+# No assumption is made about system compatibility (Unix vs. Windows).
 # The main compatibility concern would be at the level of the I/O
 # selector used by the kernel.  For example, can it detect I/O events
 # on the provided file or socket?  If so, it will probably work here.
@@ -70,7 +70,7 @@ class Socket(object):
 
     def __getattr__(self, name):
         return getattr(self._socket, name)
-            
+
     def fileno(self):
         return self._fileno
 
@@ -225,7 +225,7 @@ class Socket(object):
                 return self._socket.sendmsg(buffers, ancdata, flags, address)
             except WantRead:
                 await _write_wait(self._fileno)
-    
+
     # Special functions for SSL
     async def do_handshake(self):
         while True:
@@ -236,7 +236,6 @@ class Socket(object):
             except WantWrite:
                 await _write_wait(self._fileno)
 
-            
     # Design discussion.  Why make close() async?   Partly it's to make the
     # programming interface highly uniform with the other methods (all of which
     # involve an await).  It's also to provide consistency with the Stream
@@ -256,10 +255,10 @@ class Socket(object):
     async def __aexit__(self, *args):
         if self._socket:
             self._socket.__exit__(*args)
-      
+
     def __enter__(self):
         raise RuntimeError('Use async with')
-    
+
     def __exit__(self, *args):
         pass
 
@@ -329,8 +328,8 @@ class StreamBase(object):
         while True:
             nl_index = self._buffer.find(b'\n')
             if nl_index >= 0:
-                resp = bytes(self._buffer[:nl_index+1])
-                del self._buffer[:nl_index+1]
+                resp = bytes(self._buffer[:nl_index + 1])
+                del self._buffer[:nl_index + 1]
                 return resp
             data = await self._read(MAX_READ)
             if data == b'':
@@ -350,7 +349,7 @@ class StreamBase(object):
             await self.write(line)
 
     async def flush(self):
-         pass
+        pass
 
     # Why async close()?   If the underlying file is buffered, the contents need
     # to be flushed first--a process that might cause a BlockingIOError.  In
@@ -390,7 +389,7 @@ class StreamBase(object):
 class FileStream(StreamBase):
     '''
     Wrapper around a file-like object.  File is put into non-blocking mode.
-    The underlying file must be in binary mode.  
+    The underlying file must be in binary mode.
     '''
     def __init__(self, fileobj):
         assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
@@ -452,7 +451,7 @@ class FileStream(StreamBase):
     async def flush(self):
         while True:
             try:
-                return self._file.flush() 
+                return self._file.flush()
             except WantWrite:
                 await _write_wait(self._fileno)
             except WantRead:
@@ -506,4 +505,3 @@ class SocketStream(StreamBase):
             except WantRead:
                 await _read_wait(self._fileno)
         return nwritten
-    
