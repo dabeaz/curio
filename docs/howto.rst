@@ -40,6 +40,28 @@ interface, use the ``as_stream()`` method like this::
     if __name__ == '__main__':
         run(tcp_server('', 25000, echo_client))
 
+How do you write a UDP Server?
+-----------------------------
+
+Here is an example of a simple UDP echo server using sockets::
+
+    import curio
+    from curio import socket
+
+    async def udp_echo(addr):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(addr)
+        while True:
+            data, addr = await sock.recvfrom(10000)
+            print('Received from', addr, data)
+            await sock.sendto(data, addr)
+
+    if __name__ == '__main__':
+        curio.run(main(('', 26000)))
+
+At this time, there are no high-level function (i.e., similar to
+``tcp_server()``) to run a UDP server. 
+
 How do you perform a blocking operation?
 ----------------------------------------
 
