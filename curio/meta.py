@@ -5,34 +5,44 @@
 #   \/   \/             If you use it, you might die.
 #
 
-__all__ = [ 'acontextmanager' ]
+__all__ = [ 'blocking', 'cpubound' ]
 
 import sys
 import inspect
 from functools import wraps
-from contextlib import contextmanager
+from . import workers
 
-class acontextmanager(object):
+def blocking(func):
     '''
-    Decorator that allows an asynchronous context manager to be written
-    using the same technique as with the @contextlib.contextmanager
-    decorator.
+    Decorator indicating that a function performs a blocking operation.
+    If called from synchronous Python code, the function runs normally.
+    However, if called from a coroutine, curio arranges for it to run
+    in a thread.  
     '''
-    def __init__(self, func):
-        self.manager = contextmanager(func)
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if sys._getframe(1).f_code.co_flags & 0x80:
+            return workers.run_in_thread(func, *args, **kwargs)
+        else:
+            return func(*args, **kwargs)
+    return wrapper
 
-    def __aenter__(self):
-        return self.manager.__enter__()
-
-    def __aexit__(self, *args):
-        return self.manager.__exit(*args)
-
-    def __enter__(self):
-        raise RuntimeError('Use async with')
-
-    def __exit__(self, *args):
-        pass
-
+def cpubound(func):
+    '''
+    Decorator indicating that a function performs a cpu-intensive operation.
+    If called from synchronous Python code, the function runs normally.
+    However, if called from a coroutine, curio arranges for it to run
+    in a process.
+    '''
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if sys._getframe(1).f_code.co_flags & 0x80:
+            # The use of wrapper in the next statement is not a typo.
+            return workers.run_in_process(wrapper, *args, **kwargs)
+        else:
+            return func(*args, **kwargs)
+    return wrapper
+    
 def awaitable(syncfunc):
     '''
     Decorator that allows an asynchronous function to be paired with a
