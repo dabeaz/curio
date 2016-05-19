@@ -105,6 +105,11 @@ threads and processes. The task model fully supports cancellation,
 timeouts, monitoring, and other features critical to writing reliable
 code.
 
+Projects Using Curio
+--------------------
+
+Please feel free to add your project here.
+
 The Big Question: Why?
 ----------------------
 
