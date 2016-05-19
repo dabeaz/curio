@@ -9,6 +9,7 @@ __all__ = [ 'run', 'Popen', 'CompletedProcess', 'CalledProcessError',
             'PIPE', 'STDOUT', 'DEVNULL' ]
 
 import subprocess
+import os
 
 from subprocess import (
     CompletedProcess,
@@ -36,7 +37,18 @@ class Popen(object):
         if 'universal_newlines' in kwargs:
             raise RuntimeError('universal_newlines argument not supported')
 
+        # If stdin has been given and it's set to a curio FileStream object,
+        # then we need to flip it to blocking.
+        if 'stdin' in kwargs:
+            stdin = kwargs['stdin']
+            if isinstance(stdin, FileStream):
+                # At hell's heart I stab thy coroutine attempting to read from a stream
+                # that's been used as a pipe input to a subprocess.  Must set back to
+                # blocking or all hell breaks loose in the child.  
+                os.set_blocking(stdin.fileno(), True)
+
         self._popen = subprocess.Popen(args, **kwargs)
+
         if self._popen.stdin:
             self.stdin = FileStream(self._popen.stdin)
         if self._popen.stdout:
