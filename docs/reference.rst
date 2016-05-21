@@ -1126,6 +1126,153 @@ may only be used in coroutines.
    temporarily disabled.  Note: This is a normal context manager--
    use a normal ``with``-statement.
 
+Asynchronous Metaprogramming
+----------------------------
+.. module:: curio.meta
+
+The :mod:`curio.meta` module provides some decorators and metaclasses that might
+be useful if writing larger programs involving coroutines.
+
+.. class:: AsyncABC()
+
+   A base class that provides the functionality of a normal abstract base class,
+   but additionally enforces coroutine-correctness on methods in subclasses. That is,
+   if a method is defined as a coroutine in a parent class, then it must also be
+   a coroutine in child classes.
+
+Here is an example::
+
+    from curio.abc import AsyncABC, abstractmethod
+    
+    class Base(AsyncABC):
+        @abstractmethod
+        async def spam(self):
+            pass
+
+        @abstractmethod
+        async def grok(self):
+            pass
+
+    class Child(Base):
+        async def spam(self):
+            pass
+
+    c = Child()   # Error -> grok() not defined
+
+    class Child2(Base):
+        def spam(self):     # Error -> Not defined using async def
+            pass
+
+        async def grok(self):
+            pass
+
+The enforcement of coroutines is applied to all methods.  Thus, the following
+classes would also generate an error::
+
+    class Base(AsyncABC):
+        async def spam(self):
+            pass
+
+        async def grok(self):
+            pass
+    
+    class Child(Base):
+        def spam(self):     # Error -> Not defined using async def
+            pass
+
+
+.. class:: AsyncObject()
+
+   A base class that provides all of the functionality of ``AsyncABC``, but additionally
+   requires instances to be created inside of coroutines.   The ``__init__()`` method 
+   must be defined as a coroutine and may call other coroutines.
+
+Here is an example using ``AsyncObject``::
+
+    from curio.meta import AsyncObject
+
+    class Spam(AsyncObject):
+        async def __init__(self, x, y):
+            self.x = x
+            self.y = y
+
+    # To create an instance
+    async def func():
+        s = await Spam(2, 3)
+        ...
+
+.. function:: blocking(func)
+
+   A decorator that indicates that the function performs a blocking operation.
+   If the function is called from within a coroutine, the function is executed
+   in a separate thread and ``await`` is used to obtain the result.  If the
+   function is called from normal synchronous code, then the function executes
+   normally.  The Curio ``run_in_thread()`` coroutine is used to execute the
+   function in a thread.
+
+.. function:: cpubound(func)
+
+   A decorator that indicates that the function performs CPU intensive work.
+   If the function is called from within a coroutine, the function is executed
+   in a separate process and ``await`` is used to obtain the result.  If the
+   function is called from normal synchronous code, then the function executes
+   normally.  The Curio ``run_in_process()`` coroutine is used to execute the
+   function in a process.
+
+The ``@blocking`` and ``@cpubound`` decorators are interesting in that they make
+normal Python functions usable from both asynchronous and synchronous code.
+For example, consider this example::
+
+    import curio
+    from curio.meta import blocking
+    import time
+
+    @blocking
+    def slow(name):
+        time.sleep(30)
+        return 'Hello ' + name
+
+    async def main():
+        result = await slow('Dave')      # Async execution
+        print(result)
+
+    if __name__ == '__main__':
+        result = slow('Guido')           # Sync execution
+        print(result)
+        curio.run(main())
+
+In this example, the ``slow()`` function can be used from both
+coroutines and normal synchronous code.  However, when called in
+a coroutine, ``await`` must be used.  Behind the scenes, the function
+runs in a thread--preventing the function from blocking the
+execution of other coroutines.
+
+.. function:: awaitable(syncfunc)
+
+   A decorator that allows an asynchronous implementation of a function to be
+   attached to an existing synchronous function. If the resulting function is
+   called from synchronous code, the synchronous function is used. If the
+   function is called from asynchronous code, the asynchronous function is used.
+
+Here is an example that illustrates::
+
+   import curio
+   from curio.meta import awaitable
+
+   def spam(x, y):
+       print('Synchronous ->', x, y)
+
+   @awaitable(spam)
+   async def spam(x, y):
+       print('Asynchronous ->', x, y)
+
+   async def main():
+       await spam(2, 3)        # Calls asynchronous spam()
+
+   if __name__ == '__main__':
+      spam(2, 3)               # Calls synchronous spam()
+      curio.run(main())
+
 Exceptions
 ----------
 The following exceptions are defined. All are subclasses of the :class:`CurioError` base class.

@@ -1,5 +1,18 @@
 CHANGES
 -------
+05/20/2016 Added asyncobject class to curio/meta.py.  This allows you
+           to write classes with an asynchronous __init__ method. For example:
+
+           from curio.meta import asyncobject
+           class Spam(asyncobject):
+               async def __init__(self):
+                   ...
+                   self.value = await coro()
+                   ...
+
+           Instances can only be created via await.  For example:
+
+              s = await Spam()
 
 05/15/2016 Fixed Issue #50. Undefined variable n in io.py 
 	   Reported by Wolfgang Langner

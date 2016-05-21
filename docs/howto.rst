@@ -41,7 +41,7 @@ interface, use the ``as_stream()`` method like this::
         run(tcp_server('', 25000, echo_client))
 
 How do you write a UDP Server?
------------------------------
+------------------------------
 
 Here is an example of a simple UDP echo server using sockets::
 
