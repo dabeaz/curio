@@ -521,7 +521,7 @@ class Kernel(object):
                                     if (_cancel_task(task, exc=TaskTimeout)):
                                         task.timeout = None
                                     else:
-                                        # Note: This is a possibility that a task will be
+                                        # Note: There is a possibility that a task will be
                                         # marked for timeout-cancellation even though it is
                                         # sitting on the ready queue.  In this case, the
                                         # rescheduled task is given priority. However, the
