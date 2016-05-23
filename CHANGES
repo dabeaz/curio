@@ -1,5 +1,12 @@
 CHANGES
 -------
+05/23/2016 Fixed Issue #52 (Problem with ignore_after context manager).
+           There was a possibility that a task would be marked for
+           timeout at precisely the same time some other operation had
+           completed and the task was sitting on the ready queue. To fix,
+           the timeout is deferred and retried the next time the kernel
+           blocks. 
+
 05/20/2016 Added asyncobject class to curio/meta.py.  This allows you
            to write classes with an asynchronous __init__ method. For example:
 

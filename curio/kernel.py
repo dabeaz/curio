@@ -503,6 +503,7 @@ class Kernel(object):
                 # Process sleeping tasks (if any)
                 if sleeping:
                     current_time = time_monotonic()
+                    cancel_retry = []
                     while sleeping and sleeping[0][0] <= current_time:
                         tm, taskid, sleep_type = heapq.heappop(sleeping)
                         # When a task wakes, verify that the timeout value matches that stored
@@ -517,8 +518,20 @@ class Kernel(object):
                                     _reschedule_task(task)
                             else:
                                 if tm == task.timeout:
-                                    task.timeout = None
-                                    _cancel_task(task, exc=TaskTimeout)
+                                    if (_cancel_task(task, exc=TaskTimeout)):
+                                        task.timeout = None
+                                    else:
+                                        # Note: This is a possibility that a task will be
+                                        # marked for timeout-cancellation even though it is
+                                        # sitting on the ready queue.  In this case, the
+                                        # rescheduled task is given priority. However, the
+                                        # cancellation timeout will be put back on the sleep
+                                        # queue and reprocessed the next time around. 
+                                        cancel_retry.append((tm, taskid, sleep_type))
+
+                    # Put deferred cancellation requests back on sleep queue
+                    for item in cancel_retry:
+                        heapq.heappush(sleeping, item)
 
             # --------
             # Run ready tasks
