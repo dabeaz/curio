@@ -171,23 +171,159 @@ thing when processes execute actual system calls.
 Coroutines versus Threads
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Coroutines can be scheduled and executed in a manner that is very
-similar to threads.  The key difference is that threads support
-preemption whereas coroutines do not.  This means that the operating
-system can switch threads at any time.  With coroutines, task
-switching can only occur on operations that involve a system call.
+Code written using coroutines is very similar to code written using
+threads.  To see this, here is a simple echo server that handles
+concurrent clients using Python's ``threading`` module::
+
+    # echoserv.py
+    
+    from socket import *
+    from threading import Thread
+    
+    def echo_server(address):
+        sock = socket(AF_INET, SOCK_STREAM)
+        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        sock.bind(address)
+        sock.listen(5)
+        print('Server listening at', address)
+        with sock:
+            while True:
+                client, addr = sock.accept()
+                Thread(target=echo_client, args=(client, addr), daemon=True).start()
+    
+    def echo_client(client, addr):
+        print('Connection from', addr)
+        with client:
+             while True:
+                 data = client.recv(100000)
+                 if not data:
+                     break
+                 client.sendall(data)
+        print('Connection closed')
+
+    if __name__ == '__main__':
+        echo_server(('',25000))
+
+Now, here is the same code written using coroutines and Curio::
+
+    # echoserv.py
+    
+    from curio import run, spawn
+    from curio.socket import *
+    
+    async def echo_server(address):
+        sock = socket(AF_INET, SOCK_STREAM)
+        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        sock.bind(address)
+        sock.listen(5)
+        print('Server listening at', address)
+        async with sock:
+            while True:
+                client, addr = await sock.accept()
+                await spawn(echo_client(client, addr))
+    
+    async def echo_client(client, addr):
+        print('Connection from', addr)
+        async with client:
+             while True:
+                 data = await client.recv(100000)
+                 if not data:
+                     break
+                 await client.sendall(data)
+        print('Connection closed')
+
+    if __name__ == '__main__':
+        run(echo_server(('',25000)))
+
+Both versions of code involve the same statements and the same overall
+control flow.  The key difference is that threads support
+preemption whereas coroutines do not. This means that in the threaded
+code, the operating system can switch threads on any statement. With
+coroutines, task switching can only occur on statements that involve
+``await``.
 
 Both approaches have advantages and disadvantages.  One potential
 advantage of the coroutine approach is that you explicitly know where
-task switching might occur---specifically, it only happens on
-operations that explicitly involve the ``await`` keyword.  Thus, if
-you're writing code that involves tricky task synchronization or 
-coordination, it might be easier to reason about about its behavior.
-A disadvantage of coroutines is that any kind of long-running calculation
-or blocking operation can't be preempted.  So, a coroutine might hog
-the CPU for an extended period and force other coroutines to wait
-for an extended period.
+task switching might occur. Thus, if you're writing code that involves
+tricky task synchronization or coordination, it might be easier to
+reason about about its behavior.  One disadvantage of coroutines is that
+any kind of long-running calculation or blocking operation can't be
+preempted.  So, a coroutine might hog the CPU for an extended period
+and force other coroutines to wait.  Another downside
+is that code must be written to explicitly take advantage of coroutines.
+Threads, on the other hand, can work with any existing Python code. 
 
+Coroutines versus Callbacks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For I/O handling, libraries and frameworks will sometimes make use of
+callback functions.  For example, here is an echo server written in
+the callback style using Python's ``asyncio`` module::
+
+    import asyncio
+    from socket import *
+
+    class EchoProtocol(asyncio.Protocol):
+        def connection_made(self, transport):
+            self.transport = transport
+            sock = transport.get_extra_info('socket')
+            try:
+                sock.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
+            except (OSError, NameError):
+                pass
+
+        def connection_lost(self, exc):
+            self.transport = None
+
+        def data_received(self, data):
+            self.transport.write(data)
+
+    if __name__ == '__main__':
+        loop = asyncio.get_event_loop()
+        coro = loop.create_server(EchoProtocol, '', 25000)
+        srv = loop.run_until_complete(coro)
+        loop.run_forever()
+
+In this code, different methods of the ``EchoProtocol`` class are
+triggered in response to I/O events. 
+
+Programming with callbacks is a well-known technique for I/O handling
+that is often used in programming languages without proper support for
+coroutines.  It can be efficient, but it also tends to result in code
+that's described as a kind of "callback hell."  These programs can
+easily consist of thousands of tiny functions with no immediately
+obvious strand of control flow tying them together. 
+
+Coroutines restore a lot of sanity to the overall programming model.
+The overall control-flow is much easier to follow and the number of
+required functions tends to be significantly less. 
+
+Historical Perspective
+^^^^^^^^^^^^^^^^^^^^^^
+
+Coroutines were first invented in the earliest days of computing to
+solve programs related to multitasking and concurrency.  Given the
+simplicity and benefits of the programming model, one might wonder why
+they haven't been used more often.
+
+A big part of this is really due to the lack of proper support in
+mainstream programming languages used to write production software.
+For example, languages such as Pascal, C/C++, and Java don't support
+coroutines. Thus, it's not a technique that most programmers would
+consider.  Even in Python, proper support for coroutines has taken a
+long time to emerge.  Over the years, various projects have explored
+coroutines in various forms, usually involving sneaky hacks surrounding
+generator functions and C extensions.  The addition of the ``yield from``
+construct in Python 3.3 greatly simplified the program of writing
+coroutine libraries.  The emergence of ``async/await`` in Python 3.5
+takes a huge stride in making coroutines more of a first-class object
+in the Python world.   This is really the starting point for Curio.
+
+Scheduling Layer
+----------------
+
+Programming Techniques
+----------------------
 
 
 
