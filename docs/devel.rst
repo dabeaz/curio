@@ -61,8 +61,8 @@ would do with normal Python functions.  The use of the ``await`` in calls is imp
 though--if you don't do that, the called coroutine won't run and you'll start to
 get crazy errors.
 
-System Calls
-^^^^^^^^^^^^
+Blocking Calls (i.e., "System Calls")
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 When a program runs, it executes statements one after the other until
 the services of the operating system are needed (e.g., reading a file, 
@@ -75,7 +75,7 @@ System calls are different than normal functions in that they involve
 making a request to the operating system kernel by executing a "trap."
 A trap is like a software-generated interrupt.  When it occurs, the
 running process is suspended and the operating system takes over to
-handle the request.
+handle the request.  Control doesn't return until data can be returned.
 
 Now, what does all of this have to do with coroutines?  As already
 noted, a coroutine is not capable of running all by itself.  It has
