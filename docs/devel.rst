@@ -6,6 +6,53 @@ Curio? This document describes the overall philosophy behind Curio,
 how it works under the covers, and how you might approach software
 development using it.
 
+Please Don't Use Curio!
+-----------------------
+
+Let's be frank for a moment--you really don't want to use Curio.  All
+things equal, you should probably be programming with threads.  Yes,
+threads. THOSE threads. Seriously. I'm not kidding.
+
+"But what about the GIL?" you ask.  Yes, yes, that can sometimes be an
+issue.
+
+"Or what about the fact that no one is smart enough to program with
+threads?"  Okay, yes, a lot of computer science students have exploded
+their head trying to solve something like the "Sleeping Barber"
+problem on their Operating Systems final exam.  Yes, it can get tricky 
+sometimes.
+
+"And what about making everything web-scale?"  Yes, threads might
+not let you run the next Facebook on a single server instance.  Point taken.
+
+All of these are perfectly valid concerns.  However, the truth of the
+matter is that threads still actually work pretty well for a lot of
+problems.  For one, it is extremely unlikely that you're building the
+next Facebook--if all you need to do is serve hundreds of clients at
+once, threads will work fine for that.  Second, there are well-known
+ways to make thread programming sane.  For example, using functions,
+avoiding shared state and side effects, and coordinating threads with
+queues.  As for the dreaded GIL, that is really only a concern for
+CPU-intensive processing.  Although it's an annoyance, there are known
+ways to work around it using process pools, distributed computation,
+or C extensions.  Finally, threads have the benefit of working with
+almost any existing Python code. All of the popular packages (i.e.,
+requests, SQLAlchemy, Django, Flask) work fine with threads.  I use threads in
+production.  There, I've said it.
+
+Now, suppose that you've ignored this advice or that you really do
+need to write an application that can handle 10000 concurrent client
+connections.  In that case, a coroutine-based library like Curio might
+be able to help you.  Before beginning though, be aware that
+coroutines are part of a strange new world.  They execute differently
+than normal Python code and don't play well with existing libraries.
+Nor do they solve the problem of the GIL or give you increased
+parallelism.  Your code will also be locked into the specific
+implementation details of a coroutine library whether it is Curio,
+asyncio, or some other solution.  Coroutines are weird, finicky, fun, 
+and amazing (sometimes all at once).  Only you can decide if this is
+what you really want.   If so, let's begin...
+
 Coroutines
 ----------
 
