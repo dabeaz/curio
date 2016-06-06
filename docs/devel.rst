@@ -50,7 +50,7 @@ be able to help you.  Before beginning though, be aware that
 coroutines are part of a strange new world.  They execute differently
 than normal Python code and don't play well with existing libraries.
 Nor do they solve the problem of the GIL or give you increased
-parallelism.  In addition to seeing interesting new bugs, coroutines
+parallelism.  In addition to seeing new kinds of bugs, coroutines
 will likely make you swat your arms in the air as you fight swarms of stinging bats
 and swooping manta rays.  Your coworkers will keep their distance more
 than usual.  Coroutines are weird, finicky, fun, and amazing
@@ -484,10 +484,10 @@ I/O operation is attempted using the normal socket ``recv()``
 method. If it fails, then the coroutine waits using the
 ``_read_wait()`` call.  Just to be clear.  There is no event loop and
 Curio is not performing any I/O. Curio is only responsible for
-waiting--that is basically the core of the scheduler.
+waiting--that is basically the core of it.
 
 On the subject of waiting, here is a list of the things that
-the Curio scheduler knows how to wait for:
+Curio knows how to wait for:
 
 * Expiration of a timer (e.g., sleeping).
 * I/O operations (read, write).
