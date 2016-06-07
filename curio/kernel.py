@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 from .errors import *
 from .errors import _CancelRetry
 from .task import Task
-from .traps import _read_wait
+from .traps import _read_wait, Traps
 
 # kqueue is the datatype used by the kernel for all of its queuing functionality.
 # Any time a task queue is needed, use this type instead of directly hard-coding the
@@ -472,9 +472,11 @@ class Kernel(object):
             current.next_value = current
 
         # Create the traps table
-        traps = { name: trap
-                  for name, trap in locals().items()
-                  if name.startswith('_trap_') }
+        trap_funcs = [ val for key, val in locals().items() if key.startswith('_trap') ]
+        traps = [None]*len(trap_funcs)
+        for func in trap_funcs:
+            trapno = getattr(Traps, func.__name__)
+            traps[trapno] = func
 
         # If a coroutine was given, add it as the first task
         maintask = _new_task(coro) if coro else None
