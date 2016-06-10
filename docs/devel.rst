@@ -587,8 +587,9 @@ coroutine to the ``run()`` function.  For example::
     curio.run(main())
 
 That first coroutine becomes the initial task.  If you want to create
-more tasks that execute concurrently, use the ``spawn()`` coroutine.
-For example::
+more tasks that execute concurrently, use the ``spawn()`` coroutine. 
+``spawn()`` is only valid inside other coroutines so might use it to
+launch more tasks inside ``main()`` like this::
 
     import curio
     
@@ -615,48 +616,12 @@ If you want to wait for a task to finish, save the result of ``spawn()`` and use
 If you've programmed with threads, the programming model is similar.  One important
 point though---you only use ``spawn()`` if you want concurrent task execution.
 If a coroutine merely wants to call another coroutine in a synchronous manner like a
-library function, just use ``await``.  For example::
+library function, you just use ``await``.  For example::
 
     async def main():
         print('Starting')
         await child(5)      
         print('Quitting')
-
-Task Cancellation
-^^^^^^^^^^^^^^^^^
-
-Curio allows any task to be cancelled.  Here's an example::
-
-    import curio
-    
-    async def child(n):
-        print('Sleeping')
-        await curio.sleep(n)
-        print('Awake again!')
-
-    async def main():
-        print('Starting')
-        task = await curio.spawn(child(5))
-        await time.sleep(1)
-        await task.cancel()     # Cancel the child
-
-    curio.run(main())
-
-Cancellation only occurs on blocking operations (e.g., the ``curio.sleep()`` call in the child).
-When a task is cancelled, the current operation fails with a ``CancelledError`` exception. This
-exception can be caught::
-
-    async def child(n):
-        print('Sleeping')
-        try:
-            await curio.sleep(n)
-            print('Awake again!')
-        except curio.CancelledError:
-            print('Rudely cancelled')
-
-A cancellation should not be ignored.  In fact, the ``task.cancel()`` method blocks until the
-task actually terminates.  If ignored, the cancelling task would simply hang forever waiting.
-That's probably not what you want.
 
 Returning Results
 ^^^^^^^^^^^^^^^^^
@@ -694,21 +659,374 @@ with an exception.  If you get other exceptions, they
 are related to some aspect of the ``join()`` operation (i.e.,
 cancellation), not the underlying task.
 
+Task Cancellation
+^^^^^^^^^^^^^^^^^
+
+Curio allows any task to be cancelled.  Here's an example::
+
+    import curio
+    
+    async def child(n):
+        print('Sleeping')
+        await curio.sleep(n)
+        print('Awake again!')
+
+    async def main():
+        print('Starting')
+        task = await curio.spawn(child(5))
+        await time.sleep(1)
+        await task.cancel()     # Cancel the child
+
+    curio.run(main())
+
+Cancellation only occurs on blocking operations (e.g., the ``curio.sleep()`` call in the child).
+When a task is cancelled, the current operation fails with a ``CancelledError`` exception. This
+exception can be caught::
+
+    async def child(n):
+        print('Sleeping')
+        try:
+            await curio.sleep(n)
+            print('Awake again!')
+        except curio.CancelledError:
+            print('Rudely cancelled')
+
+A cancellation should not be ignored.  In fact, the ``task.cancel()``
+method blocks until the task actually terminates.  If ignored, the
+cancelling task would simply hang forever waiting.  That's probably
+not what you want.
+
+Cancellation does not propagate to child tasks that a coroutine might
+have been spawned.  For example, consider this code::
+
+    from curio import sleep, spawn, run
+
+    async def sleeper(n):
+        print('Sleeping for', n)
+        await sleep(n)
+        print('Awake again')
+
+    async def coro():
+        task = await spawn(sleeper(10))
+        try:
+            await task.join()
+        except CancelledError:
+            print('Cancelled')
+
+    async def main():
+        task = await spawn(coro())
+        await sleep(1)
+        await task.cancel()
+
+    run(main())
+
+If you run this code, the ``coro()`` coroutine is cancelled, but its child process continues to run afterwards.
+The output looks like this::
+
+    Sleeping for 10
+    Cancelled
+    Awake again
+
+To cancel children, they must be explicitly cancelled.  Rewrite ``coro()`` like this::
+
+    async def coro():
+        task = await spawn(sleeper(10))
+        try:
+            await task.join()
+        except CancelledError:
+            print('Cancelled')
+            await task.cancel()        # Cancel child task
+
+Since cancellation doesn't propagate except explicitly as shown, one
+way to shield a coroutine from cancellation is to launch it as a
+separate task using ``spawn()``. Unless it's directly cancelled, a
+task always runs to completion.
+
 Timeouts
 ^^^^^^^^
+
+Curio allows every blocking operation to be aborted with a timeout.  However, 
+instead of instrumenting every possible API call with a ``timeout`` argument,
+it is applied through ``timeout_after(seconds [, coro])``.  For example::
+
+    from curio import *
+
+    async def child():
+        print('Yawn. Getting sleeping')
+        await sleep(10)
+        print('Back awake')
+
+    async def main():
+        try:
+            await timeout_after(1, child())
+        except TaskTimeout:
+            print('Timeout')
+
+    run(main())
+
+After the specified timeout period expires, a ``TaskTimeout``
+exception is raised by whatever blocking operation happens to be in
+progress.  It is critical to emphasize that timeouts can only
+occur on operations that block in Curio.  If the code runs
+away to go compute gigantic fibonacci numbers for the next ten minutes,
+a timeout won't be raised--remember that coroutines can't be preempted
+except on blocking operations.
+
+The ``timeout_after()`` function can also be used as a context manager.
+This allows it to be applied to an entire block of statements. For
+example::
+
+    try:
+        async with timeout_after(5):
+             await coro1()
+             await coro2()
+             ...
+    except TaskTimeout:
+        print('Timeout')
+
+Sometimes you might just want to stop an operation and silently move
+on. For that, you can use the ``ignore_after()`` function.  It works
+like ``timeout_after()`` except that it doesn't raise an exception.
+For example::
+
+    result = ignore_after(seconds, coro())
+    
+In the event of a timeout, the return result is ``None``. So, instead
+of using ``try-except``, you could do this::
+
+    if ignore_after(seconds, coro()) == None:
+        print('Timeout')
+
+The ``ignore_after()`` function also works as a context-manager. When
+used in this way, a ``result`` attribute is set to ``None`` when a 
+timeout occurs. For example::
+
+    async with ignore_after(seconds) as t:
+        await coro1()
+        await coro2()
+        ...
+        t.result = value     # Set a result (optional)
+
+    if t.result == None:
+        print('Timeout')
+
+Timeouts can be nested, but the semantics are a bit hair-raising.  To
+illustrate, consider this bit of code::
+
+    async def coro1():
+        print('Coro1 Start')
+        await sleep(10)
+        print('Coro1 Success')
+
+    async def coro2():
+        print('Coro2 Start')
+        await sleep(1)
+        print('Coro2 Success')
+
+    async def child():
+        try:
+            await timeout_after(50, coro1())
+        except TaskTimeout:
+            print('Coro1 Timeout')
+
+        await coro2()
+
+    async def main():
+        try:
+            await timeout_after(5, child())
+        except TaskTimeout:
+            print('Parent Timeout')
+
+If you run this program, you will get the following output::
+
+    Coro1 Start
+    Coro1 Timeout         (appears after 5 seconds)
+    Coro2 Start
+    Parent Timeout        (appears immediately)
+
+To understand this output, there are two important rules in play.
+First, the actual timeout period in effect is always the smallest of
+all of the applied timeout values. In this code, the outer ``main()``
+coroutine applies a 5 second timeout to the ``child()`` coroutine.
+Even though the ``child()`` coroutine attempts to apply a 50 second
+timeout to ``coro1()``, the 5 second expiration already applied is
+kept in force.  This is why ``coro1()`` receives a timeout.
+
+The second rule of timeouts is that the ``timeout_after()`` function
+always restores any previous timeout setting when it completes.  In
+the above code, the ``coro1()`` coroutine receives a timeout, which is
+appropriately handled. However, the ``child()`` coroutine continues to
+run afterwards--moving on to call the ``coro2()`` coroutine.  When
+``coro2()`` calls ``await sleep(1)``, it immediately fails with
+``TaskTimeout`` exception. This happens because of the restoration of
+the prior timeout--essentially Curio sees that the 5 second time period has
+already expired and raises ``TaskTimeout``.
+
+Admittedly, all of this is a bit subtle, but the key idea is that each
+``timeout_after()`` function is guaranteed to either run the given
+coroutine to completion or to generate at least one ``TaskTimeout``
+exception.  Since the above code uses ``timeout_after()`` twice, there
+are two separate ``TaskTimeout`` exceptions that get raised.
+
+There are are still some ways that timeouts can go wrong and you'll
+find yourself battling a sky full of swooping manta rays.  The best
+way to make your head explode is to catch ``TaskTimeout`` exceptions
+in code that doesn't use ``timeout_after()``.  For example::
+
+    async def child():
+         while True:
+              try:
+                   print('Sleeping')
+                   await sleep(10)
+              except TaskTimeout:
+                   print('Ha! Nope.')
+
+    async def parent():
+         try:
+             await timeout_after(5, child())
+         except TaskTimeout:
+             print('Timeout')
+
+In this code, the ``child()`` catches ``TaskTimeout``, but basically
+ignores it--running forever.  The ``parent()`` coroutine will hang
+forever waiting for the ``child()`` to exit.  The output of the
+program will look like this::
+
+    Sleeping
+    Ha! Nope.       (after 5 seconds)
+    Sleeping
+    Sleeping
+    ... forever...
+
+Bottom line:  Don't catch ``TaskTimeout`` exceptions unless you're also
+using ``timeout_after()``.  Another possible way to shoot yourself in the
+foot is to structure nested timeouts in a way that exceptions don't
+propagate properly.  For example, consider this::
+
+    async def child():
+         while True:
+              try:
+                   result = await timeout_after(1, coro())
+                   ...
+              except TaskTimeout:
+                   pass
+
+    async def parent():
+         try:
+             await timeout_after(5, child())
+         except TaskTimeout:
+             print('Timeout')
+
+In this code, timeouts are always associated with the inner
+``timeout_after()`` call in ``child()``.  The resulting exceptions get
+handled, but they're never allowed to propagate back out to the
+``parent()`` coroutine.  Ultimately, the code will get caught in some
+kind of strange infinite timeout loop as it tries to abort back out to
+the parent, but never does so.  You need to make sure that there is a
+way for a ``TaskTimeout`` exception to be raised and provide a route
+for it to propagate back to the associated ``timeout_after()`` call.
+
+It should be noted that timeouts can be temporarily suspended if you use
+``None`` as a timeout.  For example::
+
+    await timeout_after(None, coro())
+
+In this case, ``coro()`` is guaranteed to run fully to completion
+without a timeout.  This is true even if another timeout was already
+in effect.  In some sense, this shields ``coro()`` from a timeout.
+As a general rule, you probably want to avoid doing this except for
+extremely critical operations that have to complete no matter what.
+If a timeout has been applied, it was probably applied for a good reason.
+Your code should try to honor that.
+
+Waiting for Multiple Tasks and Concurrency
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When a task is launched using ``spawn()``, it executes concurrently with the
+creating coroutine.  If you need to wait for the task to finish, you normally
+use ``join()`` as described in the previous section.
+
+If you create multiple tasks, you might want to wait for them to complete in 
+more advanced ways.  For example, obtaining results one at a time in the order
+that tasks finish.  Or waiting for the first result to come back and cancelling
+the remaining tasks afterwards. 
+
+For these kinds of problems, you can use the ``wait()`` coroutine.
+Here is an example that uses wait to obtain results in the order that
+they're completed::
+
+    async def main():
+        # Create some tasks
+        task1 = await spawn(coro())
+        task2 = await spawn(coro())
+        task3 = await spawn(coro())
+
+        # Wait for the tasks in completion order
+        async for task in wait([task1, task2, task3]):
+             try:
+                 result = await task.join()
+                 print('Success:', result)
+             except TaskError as e:
+                 print('Failed:', e)
+
+To have remaining tasks cancelled, use ``wait()`` as a context
+manager.  For example, this code obtains the first result completed
+and then cancels all of the remaining tasks::
+
+    async def main():
+        # Create some tasks
+        task1 = await spawn(coro())
+        task2 = await spawn(coro())
+        task3 = await spawn(coro())
+
+        # Wait for the first task to complete. Cancel all of the remaining tasks
+        async with wait([task1, task2, task3]) as w:
+             task = await w.next_done()
+             try:
+                 result = await task.join()
+                 print('Success:', result)
+             except TaskError as e:
+                 print('Failed:', e)
 
 Getting a Task Self-Reference
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+When a coroutine is running in Curio, there is always an associated ``Task`` instance.
+This is normally returned by the ``spawn()`` function. For example::
 
+    task = await spawn(coro())
 
+The ``Task`` instance is normally only needed for operations
+involving joining or cancellation and typically those steps are performed
+in the same code that called ``spawn()``.   If for some reason, you need
+the ``Task`` instance and don't have a reference to it available, you can
+use ``current_task()`` like this::
 
+    from curio import current_task
 
+    async def coro():
+        #  Get the Task that's running me
+        task = await current_task()      # Get Task instance
+        ...
 
+Here's a more interesting example of a function that monitors the
+current task, displaying the number of execution cycles completed
+every 5 seconds::
 
+    from curio import *
 
+    async def monitor(task, interval):
+        while not task.terminated:
+            print(task.cycles, 'completed')
+            await sleep(interval)
 
+   async def coro(n):
+       await spawn(monitor(await current_task(), 5))
+       while n > 0:
+         await sleep(0.01)
+         n -=1
 
+   run(coro(10000))
 
-
-
+In this code, you can see how ``current_task()`` is used to get a Task self-reference for
+passing to the ``monitor()`` coroutine.

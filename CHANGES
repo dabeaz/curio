@@ -1,5 +1,33 @@
 CHANGES
 -------
+06/09/2016 Experimental new wait() function added.  It can be used to wait for
+           more than one task at a time and to return them in completion order.
+           For example:
+
+           task1 = await spawn(coro())
+           task2 = await spawn(coro())
+           task3 = await spawn(coro())
+
+           # Get results from all tasks as they complete
+           async for task in wait([task1, task2, task3]):
+               result = await task.join()
+
+           # Get the first result and cancel remaining tasks
+           async with wait([task1, task2, task3]) as w:
+               task = await w.next_done()
+               result = await task.join()
+               # Other tasks cancelled here
+
+06/09/2016 Refined the behavior of timeouts.  First, a timeout is not allowed
+           to extend the time expiration of a previously set timeout. For
+           example, if code previously set a 5 second timeout, an attempt
+           to now set a 10 second timeout still results in a 5 second timeout.
+           Second, when restoring a previous timeout, if the timeout period has
+           expired, Curio arranges for a TaskTimeout exception to be raised on
+           the next blocking call.   Without this, it's too easy for timeouts
+           to disappear or not have any effect.   Setting a timeout of None
+           disables timeouts regardless of any prior setting.
+
 05/23/2016 Fixed Issue #52 (Problem with ignore_after context manager).
            There was a possibility that a task would be marked for
            timeout at precisely the same time some other operation had

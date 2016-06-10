@@ -450,14 +450,29 @@ class Kernel(object):
             old_timeout = current.timeout
             if seconds:
                 _set_timeout(seconds)
+                if old_timeout and current.timeout > old_timeout:
+                    current.timeout = old_timeout
             else:
                 current.timeout = None
+
             current.next_value = old_timeout
             ready_appendleft(current)
 
         # Clear a previously set timeout
         def _trap_unset_timeout(_, previous):
-            current.timeout = previous
+            # Here's an evil corner case.  Suppose the previous timeout in effect
+            # has already expired?  If so, then we need to arrange for a timeout
+            # to be generated.  However, this has to happen on the *next* blocking
+            # call, not on this trap.  That's because the "unset" timeout feature
+            # is usually done in the finalization stage of the previous timeout
+            # handling.  If we were to raise a TaskTimeout here, it would get mixed
+            # up with the prior timeout handling and all manner of head-explosion
+            # will occur.
+
+            if previous and previous < time_monotonic():
+                _set_timeout(0)
+            else:
+                current.timeout = previous
             current.next_value = None
             ready_appendleft(current)
 
