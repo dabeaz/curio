@@ -210,7 +210,7 @@ a high-level call such as ``await sleep(10)`` and it will just work.
 Coroutines and Multitasking
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As noted, systems calls almost always involve waiting or blocking.  For
+As noted, system calls almost always involve waiting or blocking.  For
 example, waiting for time to elapse, waiting to receive a network
 packet, etc.  While waiting, it might be possible to switch to another
 coroutine that's able to run--this is multitasking.  If there are
@@ -359,7 +359,7 @@ simplicity and benefits of the programming model, one might wonder why
 they haven't been used more often.
 
 A big part of this is really due to the lack of proper support in
-mainstream programming languages used to write production software.
+mainstream programming languages used to write systems software.
 For example, languages such as Pascal, C/C++, and Java don't support
 coroutines. Thus, it's not a technique that most programmers would even think to 
 consider.  Even in Python, proper support for coroutines has taken a
@@ -556,7 +556,7 @@ code starts to look much more normal. For example::
                    break
                await sock.sendall(data)
 
-This is exactly what's happening in something like the
+This is exactly what's happening in the
 ``curio.socket`` module.  It provides a coroutine wrapper around a
 normal socket and let's you write normal-looking socket code.
 
@@ -588,7 +588,7 @@ coroutine to the ``run()`` function.  For example::
 
 That first coroutine becomes the initial task.  If you want to create
 more tasks that execute concurrently, use the ``spawn()`` coroutine. 
-``spawn()`` is only valid inside other coroutines so might use it to
+``spawn()`` is only valid inside other coroutines so you might use it to
 launch more tasks inside ``main()`` like this::
 
     import curio
@@ -626,7 +626,7 @@ library function, you just use ``await``.  For example::
 Returning Results
 ^^^^^^^^^^^^^^^^^
 
-The ``task.join()`` returns the final result of a coroutine.  For example::
+The ``task.join()`` method returns the final result of a coroutine.  For example::
 
     async def add(x, y):
         return x + y
@@ -656,7 +656,7 @@ exceptions related to the ``join()`` operation versus an
 exception that was raised inside the task.  The ``TaskError`` solves
 this issue--if you get that exception, it means that the task being joined exited 
 with an exception.  If you get other exceptions, they
-are related to some aspect of the ``join()`` operation (i.e.,
+are related to some aspect of the ``join()`` operation itself (i.e.,
 cancellation), not the underlying task.
 
 Task Cancellation
@@ -720,7 +720,7 @@ have been spawned.  For example, consider this code::
 
     run(main())
 
-If you run this code, the ``coro()`` coroutine is cancelled, but its child process continues to run afterwards.
+If you run this code, the ``coro()`` coroutine is cancelled, but its child task continues to run afterwards.
 The output looks like this::
 
     Sleeping for 10
@@ -850,7 +850,8 @@ all of the applied timeout values. In this code, the outer ``main()``
 coroutine applies a 5 second timeout to the ``child()`` coroutine.
 Even though the ``child()`` coroutine attempts to apply a 50 second
 timeout to ``coro1()``, the 5 second expiration already applied is
-kept in force.  This is why ``coro1()`` receives a timeout.
+kept in force.  This is why ``coro1()`` receives a timeout when it sleeps
+for 10 seconds.
 
 The second rule of timeouts is that the ``timeout_after()`` function
 always restores any previous timeout setting when it completes.  In
@@ -866,7 +867,7 @@ Admittedly, all of this is a bit subtle, but the key idea is that each
 ``timeout_after()`` function is guaranteed to either run the given
 coroutine to completion or to generate at least one ``TaskTimeout``
 exception.  Since the above code uses ``timeout_after()`` twice, there
-are two separate ``TaskTimeout`` exceptions that get raised.
+are two separate ``TaskTimeout`` exceptions that might get raised.
 
 There are are still some ways that timeouts can go wrong and you'll
 find yourself battling a sky full of swooping manta rays.  The best
@@ -921,10 +922,21 @@ In this code, timeouts are always associated with the inner
 ``timeout_after()`` call in ``child()``.  The resulting exceptions get
 handled, but they're never allowed to propagate back out to the
 ``parent()`` coroutine.  Ultimately, the code will get caught in some
-kind of strange infinite timeout loop as it tries to abort back out to
+kind of strange infinite timeout loop as it repeatedly tries to abort back out to
 the parent, but never does so.  You need to make sure that there is a
 way for a ``TaskTimeout`` exception to be raised and provide a route
-for it to propagate back to the associated ``timeout_after()`` call.
+for it to propagate back to the associated ``timeout_after()`` call. For
+example, re-raising the exception::
+
+    async def child():
+         while True:
+              try:
+                   result = await timeout_after(1, coro())
+                   ...
+              except TaskTimeout:
+                   # Handle the timeout in some way 
+                   ...
+                   raise
 
 It should be noted that timeouts can be temporarily suspended if you use
 ``None`` as a timeout.  For example::
@@ -952,7 +964,7 @@ that tasks finish.  Or waiting for the first result to come back and cancelling
 the remaining tasks afterwards. 
 
 For these kinds of problems, you can use the ``wait()`` coroutine.
-Here is an example that uses wait to obtain results in the order that
+Here is an example that uses ``wait()`` to obtain results in the order that
 they're completed::
 
     async def main():
@@ -986,13 +998,20 @@ and then cancels all of the remaining tasks::
                  result = await task.join()
                  print('Success:', result)
              except TaskError as e:
-                 print('Failed:', e)
+                 print('Failed - Reason:', e.__cause__)
+
+One feature of ``wait()`` is that it does not actually return the results of
+completed tasks. Instead, it always produces the associated ``Task`` instance.
+Partly, this is so you can figure which of the tasks actually completed.  To
+get the result, you call ``task.join()`` and handle it in the usual way.  Just as
+a reminder, exceptions produce a ``TaskeError`` exception that wraps around the
+actual exception.
 
 Getting a Task Self-Reference
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 When a coroutine is running in Curio, there is always an associated ``Task`` instance.
-This is normally returned by the ``spawn()`` function. For example::
+It is returned by the ``spawn()`` function. For example::
 
     task = await spawn(coro())
 
@@ -1009,24 +1028,37 @@ use ``current_task()`` like this::
         task = await current_task()      # Get Task instance
         ...
 
-Here's a more interesting example of a function that monitors the
-current task, displaying the number of execution cycles completed
-every 5 seconds::
+Here's a more interesting example of a function that applies a watchdog
+to the current task, cancelling it if nothing happens within a certain
+time period::
 
     from curio import *
 
-    async def monitor(task, interval):
-        while not task.terminated:
-            print(task.cycles, 'completed')
-            await sleep(interval)
+    async def watchdog(interval):
+        task = await current_task()
+        async def watcher():
+            while not task.terminated:
+                cycles = task.cycles
+                await sleep(interval)
+                if cycles == task.cycles:
+                    print('Cancelling', task)
+                    await task.cancel()
+        await spawn(watcher())
 
-   async def coro(n):
-       await spawn(monitor(await current_task(), 5))
-       while n > 0:
-         await sleep(0.01)
-         n -=1
 
-   run(coro(10000))
+   async def coro():
+       await watchdog(30)     # Enable a watchdog timer
+       await sleep(10000)
 
-In this code, you can see how ``current_task()`` is used to get a Task self-reference for
-passing to the ``monitor()`` coroutine.
+   run(coro())
+
+In this code, you can see how ``current_task()`` is used to get a Task
+self-reference in the ``watchdog()`` coroutine.  ``watchdog()`` then
+uses it to monitor the number of execution cycles completed and to
+issue a cancellation if nothing seems to be happening.
+
+At a high level, obtaining a task self-reference simplifies the API.
+For example, the ``coro()`` code merely calls ``watchdog(30)``.
+There's no need to pass an extra ``Task`` instance around in the
+API--it can be easily obtained if it's needed.
+
