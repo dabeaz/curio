@@ -4,7 +4,8 @@ python: 3.5
 sudo: false
 
 install:
-  - python3 setup.py install
+  - travis_retry pip install -e .[test]
 
 script:
   - python3 -m pytest
+  - cd docs && make html
