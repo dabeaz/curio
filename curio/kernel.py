@@ -624,7 +624,13 @@ class Kernel(object):
         if shutdown:
             _shutdown()
 
-        return maintask.next_value if maintask else None
+        if maintask:
+            if maintask.next_exc:
+                raise maintask.next_exc
+            else:
+                return maintask.next_value
+        else:
+            return None
 
 def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
     '''

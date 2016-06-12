@@ -535,3 +535,16 @@ def test_task_wait_cancel(kernel):
             'child1 cancel',
             'child2 cancel'
             ]
+
+def test_task_run_error(kernel):
+    results = []
+
+    async def main():
+        int('bad')
+
+    try:
+        kernel.run(main())
+    except TaskError as e:
+        assert isinstance(e.__cause__, ValueError)
+    else:
+        assert False
