@@ -43,7 +43,7 @@ class SignalSet(object):
 
         while True:
             if self.pending:
-                return self.pending.popleft()
+                return signal.Signals(self.pending.popleft())
             await _sigwait(self)
 
     @contextmanager
