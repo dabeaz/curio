@@ -1,5 +1,11 @@
 CHANGES
 -------
+06/11/2016 Fixed Issue #53.  curio.run() was swallowing all exceptions.  It now
+           reports a TaskError exception if the given coroutine fails.  This is
+           a chained exception where __cause__ contains the actual cause of
+           failure.   This is meant to be consistent with the join() method 
+           of Tasks.
+
 06/09/2016 Experimental new wait() function added.  It can be used to wait for
            more than one task at a time and to return them in completion order.
            For example:
