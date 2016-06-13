@@ -185,9 +185,6 @@ class wait(object):
            
         self._tasks = []
         for task in self._initial_tasks:
-            # If task is not already a Task, spawn it as a task
-            if not isinstance(task, Task):
-                task = await spawn(task)
             await spawn(wait_runner(task))
             self._tasks.append(task)
 
