@@ -1,5 +1,8 @@
 CHANGES
 -------
+06/07/2016 Changed trap names (e.g., '_trap_io') to int enums. This is
+           low-level change that shouldn't affect existing code.
+
 05/23/2016 Fixed Issue #52 (Problem with ignore_after context manager).
            There was a possibility that a task would be marked for
            timeout at precisely the same time some other operation had
