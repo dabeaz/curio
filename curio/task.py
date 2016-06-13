@@ -2,7 +2,7 @@
 #
 # Task class and task related functions.
 
-__all__ = [ 'sleep', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after' ]
+__all__ = [ 'sleep', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after', 'wait' ]
 
 from .errors import TaskTimeout, TaskError
 from .traps import *
@@ -117,6 +117,96 @@ async def gather(tasks, *, return_exceptions=False):
                 raise
     return results
 
+class wait(object):
+    '''
+    Wait for one or more tasks to complete, possibly with cancellation. 
+    Suppose you have created some tasks:
+
+         task1 = await spawn(coro())
+         task2 = await spawn(coro())
+         task3 = await spawn(coro())
+  
+    wait() allows you to obtain tasks as they complete.  For example:
+
+         w = wait([task1, task2, task3])
+         
+    Obtain the next completed task:
+
+         task = await w.next_done()
+         result = await task.join()
+    
+    Get all of the completed tasks in completion order:
+
+         async for task in w:
+             result = await task.join()
+
+    All unfinished tasks will be cancelled if you use the result of wait() 
+    as a context manager. For example:
+
+         async with wait([task1, task2, task3]) as w:
+             task = await w.next_done()
+             result = await task.join()
+         # All remaining tasks cancelled
+
+    All remaining tasks can also be cancelled using await w.cancel_remaining().
+
+    wait() only returns the complete Task instances, not the results of those
+    tasks.  To get the results, you still call task.join() as before.  wait()
+    ensures that when you call join(), the result is immediately available.
+    '''
+    def __init__(self, tasks):
+        self._initial_tasks = tasks
+        self._queue = queue.Queue()
+        self._tasks = None
+
+    async def __aenter__(self):
+        await self._init()
+        return self
+
+    async def __aexit__(self, ty, val, tb):
+        await self.cancel_remaining()
+
+    async def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        next = await self.next_done()
+        if next is None:
+            raise StopAsyncIteration
+        return next
+
+    async def _init(self):
+        async def wait_runner(task):
+             try:
+                 result = await task.join()
+             except Exception:
+                 pass
+             await self._queue.put(task)
+           
+        self._tasks = []
+        for task in self._initial_tasks:
+            await spawn(wait_runner(task))
+            self._tasks.append(task)
+
+    async def next_done(self):
+        if self._tasks is None:
+            await self._init()
+        if not self._tasks:
+            return None
+
+        task = await self._queue.get()
+        self._tasks.remove(task)
+        return task
+
+    async def cancel_remaining(self):
+        if self._tasks is None:
+            await self._init()
+
+        for task in self._tasks:
+            await task.cancel()
+
+        self._tasks = []
+
 # Helper class for running timeouts as a context manager
 class _TimeoutAfter(object):
     def __init__(self, seconds, ignore=False, timeout_result=None):
@@ -200,3 +290,5 @@ def ignore_after(seconds, coro=None, *, timeout_result=None):
         return _TimeoutAfter(seconds, ignore=True, timeout_result=timeout_result)
     else:
         return _timeout_after_func(seconds, coro, ignore=True, timeout_result=timeout_result)
+
+from . import queue

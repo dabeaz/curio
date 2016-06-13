@@ -77,6 +77,63 @@ class Kernel(object):
         if self._process_pool:
             self._process_pool.shutdown()
 
+    # Force the kernel to wake, possibly scheduling a task to run.
+    # This method is called by threads running concurrently to the
+    # curio kernel.  For example, it's triggered upon completion of
+    # Futures created by thread pools and processes. It's inherently
+    # dangerous for any kind of operation on the kernel to be
+    # performed by a separate thread.  Thus, the *only* thing that
+    # happens here is that the task gets appended to a deque and a
+    # notification message is written to the kernel notification
+    # socket.  append() and pop() operations on deques are thread safe
+    # and do not need additional locking.  See
+    # https://docs.python.org/3/library/collections.html#collections.deque
+    # ----------
+    def _wake(self, task=None, future=None):
+        if task:
+            self._wake_queue.append((task, future))
+        self._notify_sock.send(b'\x00')
+
+    def _init_loopback(self):
+        self._notify_sock, self._wait_sock = socket.socketpair()
+        self._wait_sock.setblocking(False)
+        self._notify_sock.setblocking(False)
+        return self._wait_sock.fileno()
+
+    def _init_signals(self):
+        self._signal_sets = defaultdict(list)
+        self._default_signals = { }
+        old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())
+        assert old_fd < 0, 'Signals already initialized %d' % old_fd
+
+    def _signal_watch(self, sigset):
+        for signo in sigset.signos:
+            if not self._signal_sets[signo]:
+                self._default_signals[signo] = signal.signal(signo, lambda signo, frame: None)
+            self._signal_sets[signo].append(sigset)
+
+    def _signal_unwatch(self, sigset):
+        for signo in sigset.signos:
+            if sigset in self._signal_sets[signo]:
+                self._signal_sets[signo].remove(sigset)
+
+            # If there are no active watchers for a signal, revert it back to default behavior
+            if not self._signal_sets[signo]:
+                signal.signal(signo, self._default_signals[signo])
+                del self._signal_sets[signo]
+
+    def _shutdown_resources(self):
+        if self._notify_sock:
+            self._notify_sock.close()
+            self._notify_sock = None
+            self._wait_sock.close()
+            self._wait_sock = None
+
+        if self._signal_sets:
+            signal.set_wakeup_fd(-1)
+            self._signal_sets = None
+            self._default_signals = None
+
     # Main Kernel Loop
     # ----------
     def run(self, coro=None, *, shutdown=False):
@@ -107,31 +164,13 @@ class Kernel(object):
         ready_append = ready.append
         ready_appendleft = ready.appendleft
         time_monotonic = time.monotonic
+        _wake = self._wake     
 
         # ---- In-kernel task used for processing signals and futures
 
-        # Force the kernel to wake, possibly scheduling a task to run.
-        # This method is called by threads running concurrently to the
-        # curio kernel.  For example, it's triggered upon completion of
-        # Futures created by thread pools and processes. It's inherently
-        # dangerous for any kind of operation on the kernel to be
-        # performed by a separate thread.  Thus, the *only* thing that
-        # happens here is that the task gets appended to a deque and a
-        # notification message is written to the kernel notification
-        # socket.  append() and pop() operations on deques are thread safe
-        # and do not need additional locking.  See
-        # https://docs.python.org/3/library/collections.html#collections.deque
-        # ----------
-        def _wake(task=None, future=None):
-            if task:
-                wake_queue.append((task, future))
-            self._notify_sock.send(b'\x00')
-
         # Initialize the loopback socket and launch the kernel task if needed
-        def _init_loopback():
-            self._notify_sock, self._wait_sock = socket.socketpair()
-            self._wait_sock.setblocking(False)
-            self._notify_sock.setblocking(False)
+        def _init_loopback_task():
+            self._init_loopback()
             task = Task(_kernel_task(), taskid=0)
             _reschedule_task(task)
             self._kernel_task_id = task.id
@@ -168,7 +207,7 @@ class Kernel(object):
                 if not self._signal_sets:
                     continue
 
-                sigs = (signal.Signals(n) for n in data if n in self._signal_sets)
+                sigs = (n for n in data if n in self._signal_sets)
                 for signo in sigs:
                     for sigset in self._signal_sets[signo]:
                         sigset.pending.append(signo)
@@ -276,17 +315,10 @@ class Kernel(object):
             task = tasks.pop(self._kernel_task_id, None)
             if task:
                 task.cancel_func()
-                self._notify_sock.close()
-                self._notify_sock = None
-                self._wait_sock.close()
-                self._wait_sock = None
                 self._kernel_task_id = None
 
-            # Remove the signal handling file descriptor (if any)
-            if self._signal_sets:
-                signal.set_wakeup_fd(-1)
-                self._signal_sets = None
-                self._default_signals = None
+            # Cleanup other resources
+            self._shutdown_resources()
 
         # Set a timeout or sleep event on the current task
         def _set_timeout(seconds, sleep_type='timeout'):
@@ -326,7 +358,7 @@ class Kernel(object):
         # Wait on a Future
         def _trap_future_wait(_, future, event):
             if self._kernel_task_id is None:
-                _init_loopback()
+                _init_loopback_task()
 
             current.state = 'FUTURE_WAIT'
             current.cancel_func = (lambda task=current:
@@ -345,8 +377,8 @@ class Kernel(object):
             # earlier work.  In that case, it will trigger the callback,
             # find that the task's current Future is now different, and
             # discard the result.
-            future.add_done_callback(lambda fut, task=current:
-                                     _wake(task, fut) if task.future is fut else None)
+
+            future.add_done_callback(lambda fut, task=current: _wake(task, fut))
 
             # An optional threading.Event object can be passed and set to
             # start a worker thread.   This makes it possible to have a lock-free
@@ -412,31 +444,18 @@ class Kernel(object):
         def _trap_sigwatch(_, sigset):
             # Initialize the signal handling part of the kernel if not done already
             # Note: This only works if running in the main thread
+            if self._kernel_task_id is None:
+                _init_loopback_task()
+
             if self._signal_sets is None:
-                self._signal_sets = defaultdict(list)
-                self._default_signals = { }
-                if self._kernel_task_id is None:
-                    _init_loopback()
-                old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())
-                assert old_fd < 0, 'Signals already initialized %d' % old_fd
+                self._init_signals()
 
-            for signo in sigset.signos:
-                if not self._signal_sets[signo]:
-                    self._default_signals[signo] = signal.signal(signo, lambda signo, frame: None)
-                self._signal_sets[signo].append(sigset)
-
+            self._signal_watch(sigset)
             _reschedule_task(current)
 
         # Unwatch signals
         def _trap_sigunwatch(_, sigset):
-            for signo in sigset.signos:
-                if sigset in self._signal_sets[signo]:
-                    self._signal_sets[signo].remove(sigset)
-
-                # If there are no active watchers for a signal, revert it back to default behavior
-                if not self._signal_sets[signo]:
-                    signal.signal(signo, self._default_signals[signo])
-                    del self._signal_sets[signo]
+            self._signal_unwatch(sigset)
             _reschedule_task(current)
 
         # Wait for a signal
@@ -450,14 +469,29 @@ class Kernel(object):
             old_timeout = current.timeout
             if seconds:
                 _set_timeout(seconds)
+                if old_timeout and current.timeout > old_timeout:
+                    current.timeout = old_timeout
             else:
                 current.timeout = None
+
             current.next_value = old_timeout
             ready_appendleft(current)
 
         # Clear a previously set timeout
         def _trap_unset_timeout(_, previous):
-            current.timeout = previous
+            # Here's an evil corner case.  Suppose the previous timeout in effect
+            # has already expired?  If so, then we need to arrange for a timeout
+            # to be generated.  However, this has to happen on the *next* blocking
+            # call, not on this trap.  That's because the "unset" timeout feature
+            # is usually done in the finalization stage of the previous timeout
+            # handling.  If we were to raise a TaskTimeout here, it would get mixed
+            # up with the prior timeout handling and all manner of head-explosion
+            # will occur.
+
+            if previous and previous < time_monotonic():
+                _set_timeout(0)
+            else:
+                current.timeout = previous
             current.next_value = None
             ready_appendleft(current)
 
@@ -609,7 +643,13 @@ class Kernel(object):
         if shutdown:
             _shutdown()
 
-        return maintask.next_value if maintask else None
+        if maintask:
+            if maintask.next_exc:
+                raise maintask.next_exc
+            else:
+                return maintask.next_value
+        else:
+            return None
 
 def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
     '''

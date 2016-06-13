@@ -398,3 +398,153 @@ def test_double_cancel(kernel):
             'done cancel'
             ]
 
+def test_nested_timeout(kernel):
+    results = []
+
+    async def coro1():
+        results.append('coro1 start')
+        await sleep(1)
+        results.append('coro1 done')
+
+    async def coro2():
+        results.append('coro2 start')
+        await sleep(1)
+        results.append('coro2 done')
+
+    async def child():
+        try:
+            await timeout_after(5, coro1())
+            results.append('coro1 success')
+        except TaskTimeout:
+            results.append('coro1 timeout')
+
+        await coro2()
+        results.append('coro2 success')
+
+    async def parent():
+        try:
+            await timeout_after(1, child())
+        except TaskTimeout:
+            results.append('parent timeout')
+
+    kernel.run(parent())
+    assert results == [
+            'coro1 start',
+            'coro1 timeout',
+            'coro2 start',
+            'parent timeout'
+            ]
+
+
+def test_nested_timeout_none(kernel):
+    results = []
+
+    async def coro1():
+        results.append('coro1 start')
+        await sleep(2)
+        results.append('coro1 done')
+
+    async def coro2():
+        results.append('coro2 start')
+        await sleep(1)
+        results.append('coro2 done')
+
+    async def child():
+        await timeout_after(None, coro1())
+        results.append('coro1 success')
+
+        await coro2()
+        results.append('coro2 success')
+
+    async def parent():
+        try:
+            await timeout_after(1, child())
+        except TaskTimeout:
+            results.append('parent timeout')
+
+    kernel.run(parent())
+    assert results == [
+            'coro1 start',
+            'coro1 done',
+            'coro1 success',
+            'coro2 start',
+            'parent timeout'
+            ]
+
+def test_task_wait_no_cancel(kernel):
+    results = []
+
+    async def child(name, n):
+        results.append(name + ' start')
+        await sleep(n)
+        results.append(name + ' end')
+        return n
+
+    async def main():
+        task1 = await spawn(child('child1', 0.75))
+        task2 = await spawn(child('child2', 0.5))
+        task3 = await spawn(child('child3', 0.25))
+        w = wait([task1, task2, task3])
+        async for task in w:
+             result = await task.join()
+             results.append(result)
+
+    kernel.run(main())
+    assert results == [
+            'child1 start',
+            'child2 start',
+            'child3 start',
+            'child3 end',
+            0.25,
+            'child2 end',
+            0.5,
+            'child1 end',
+            0.75
+            ]
+
+
+def test_task_wait_cancel(kernel):
+    results = []
+
+    async def child(name, n):
+        results.append(name + ' start')
+        try:
+            await sleep(n)
+            results.append(name + ' end')
+        except CancelledError:
+            results.append(name + ' cancel')
+        return n
+
+    async def main():
+        task1 = await spawn(child('child1', 0.75))
+        task2 = await spawn(child('child2', 0.5))
+        task3 = await spawn(child('child3', 0.25))
+        w = wait([task1, task2, task3])
+        async with w:
+             task = await w.next_done()
+             result = await task.join()
+             results.append(result)
+
+    kernel.run(main())
+    assert results == [
+            'child1 start',
+            'child2 start',
+            'child3 start',
+            'child3 end',
+            0.25,
+            'child1 cancel',
+            'child2 cancel'
+            ]
+
+def test_task_run_error(kernel):
+    results = []
+
+    async def main():
+        int('bad')
+
+    try:
+        kernel.run(main())
+    except TaskError as e:
+        assert isinstance(e.__cause__, ValueError)
+    else:
+        assert False
