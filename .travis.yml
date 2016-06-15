@@ -16,7 +16,7 @@ before_install:
 
 install:
   - python3 setup.py install
-  - pip install pytest
+  - python3 -m pip install pytest
 
 script:
   - python3 -m pytest
