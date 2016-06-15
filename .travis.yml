@@ -16,7 +16,8 @@ before_install:
 
 install:
   - python3 setup.py install
-  - python3 -m pip install pytest
+  - travis_retry python3 -m pip install -e .[test]
 
 script:
   - python3 -m pytest
+  - sphinx-build -nq -b html -b linkcheck -d docs/_build/doctrees docs docs/_build/html
