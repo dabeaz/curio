@@ -1,7 +1,14 @@
 language: python
 python: 3.5
 
+os:
+  - linux
+  - osx
+
 sudo: false
+
+before_install:
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
 
 install:
   - python3 setup.py install
