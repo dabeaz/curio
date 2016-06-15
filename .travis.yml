@@ -15,7 +15,6 @@ before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install python3; fi
 
 install:
-  - python3 setup.py install
   - travis_retry python3 -m pip install -e .[test]
 
 script:
