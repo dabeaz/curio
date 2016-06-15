@@ -983,7 +983,7 @@ More Information
 The official Github page at https://github.com/dabeaz/curio should be used for bug reports,
 pull requests, and other activities. 
 
-A reference manual can be found at https://curio.readthedocs.org/en/latest/reference.html.
+A reference manual can be found at https://curio.readthedocs.io/en/latest/reference.html.
 
 
 

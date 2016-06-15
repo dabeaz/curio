@@ -22,9 +22,10 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-* :doc:`tutorial` 
-* :doc:`reference`
-* :doc:`howto`
+   tutorial
+   reference
+   howto
+   devel
 
 Installation:
 -------------
@@ -91,7 +92,7 @@ of the code::
         run(tcp_server('', 25000, echo_client))
 
 This is only a small sample of what's possible.  The `tutorial 
-<https://curio.readthedocs.org/en/latest/tutorial.html>`_ is a good starting point
+<https://curio.readthedocs.io/en/latest/tutorial.html>`_ is a good starting point
 for more information.
 
 Additional Features

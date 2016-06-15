@@ -82,8 +82,8 @@ Defining a Coroutine
 
 A coroutine is a function defined using ``async def`` such as this::
 
-    async def greeting(name):
-        return 'Hello ' + name
+    >>> async def greeting(name):
+    ...     return 'Hello ' + name
 
 Unlike a normal function, a coroutine never executes independently.
 It has to be driven by some other code.  It's low-level, but you can
@@ -91,7 +91,7 @@ drive a coroutine manually if you want::
 
     >>> g = greeting('Dave')
     >>> g
-    <coroutine object greeting at 0x10ded14c0>
+    <coroutine object greeting at ...>
     >>> g.send(None)
     Traceback (most recent call last):
       File "<stdin>", line 1, in <module>
@@ -115,13 +115,16 @@ Coroutines Calling Coroutines
 Coroutines can call other coroutines as long as you preface the call
 with the ``await`` keyword.  For example::
 
-    async def main():
-         names = ['Dave', 'Paula', 'Thomas', 'Lewis']
-         for name in names:
-             print(await greeting(name))
-
-    from curio import run
-    run(main())
+    >>> async def main():
+    ...      names = ['Dave', 'Paula', 'Thomas', 'Lewis']
+    ...      for name in names:
+    ...          print(await greeting(name))
+    >>> from curio import run
+    >>> run(main())
+    Hello Dave
+    Hello Paula
+    Hello Thomas
+    Hello Lewis
 
 For the most part, you can write async functions, methods, and do everything that you
 would do with normal Python functions.  The use of the ``await`` in calls is important
@@ -149,11 +152,10 @@ completes the request and reschedules the process.
 Now, what does all of this have to do with coroutines?  Let's define
 a very special kind of coroutine::
 
-   from types import coroutine
-
-   @coroutine
-   def sleep(seconds):
-       yield ('sleep', seconds)
+   >>> from types import coroutine
+   >>> @coroutine
+   ... def sleep(seconds):
+   ...     yield ('sleep', seconds)
 
 This coroutine is different than the rest--it doesn't use the
 ``async`` syntax and it makes direct use of the ``yield`` statement
@@ -161,19 +163,18 @@ This coroutine is different than the rest--it doesn't use the
 decorator is there so that it can be called with ``await``.
 Now, let's write a coroutine that uses this::
 
-   async def main():
-       print('Yawn. Getting sleepy.')
-       await sleep(10)
-       print('Awake at last!')
+   >>> async def main():
+   ...     print('Yawn. Getting sleepy.')
+   ...     await sleep(10)
+   ...     print('Awake at last!')
 
 Let's manually drive it using the same technique as before::
  
     >>> c = main()
     >>> request = c.send(None)
-    Yawn! Getting sleepy.
+    Yawn. Getting sleepy.
     >>> request
     ('sleep', 10)
-    >>> 
 
 The output from the first ``print()`` function appears, but the
 coroutine is now suspended. The return value of the
@@ -192,7 +193,6 @@ return result if any).   For example::
     Traceback (most recent call last):
       File "<stdin>", line 1, in <module>
     StopIteration
-    >>> 
 
 All of this might seem very low-level, but this is precisely what
 Curio is doing. Coroutines execute statements under the

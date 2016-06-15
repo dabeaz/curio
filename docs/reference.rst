@@ -44,7 +44,7 @@ run a top-level coroutine using the following function:
    crash.  If *with_monitor* is ``True``, then the monitor debugging
    task executes in the background.  If *selector* is given, it should
    be an instance of a selector from the :mod:`selectors
-   <python:selector>` module.
+   <python:selectors>` module.
    
 If you are going to repeatedly run coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
@@ -76,8 +76,8 @@ The following functions are defined to help manage the execution of tasks.
 
    Create a new task that runs the coroutine *coro*.  Does not
    return to the caller until the new task has been scheduled and
-   executed for at least one cycle.  Returns a :class:`Task` instance
-   as a result.  The *daemon* option, if supplied, specifies that the
+   executed for at least one cycle.  Returns a :class:`Task <curio.task.Task>`
+   instance as a result.  The *daemon* option, if supplied, specifies that the
    new task will run indefinitely in the background.  Curio only runs
    as long as there are non-daemonic tasks to execute.  Note: a
    daemonic task will still be cancelled if the underlying kernel is

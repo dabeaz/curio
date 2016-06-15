@@ -4,7 +4,8 @@ python: 3.5
 sudo: false
 
 install:
-  - python3 setup.py install
+  - travis_retry pip install -e .[test]
 
 script:
   - python3 -m pytest
+  - sphinx-build -nq -b html -b linkcheck -d docs/_build/doctrees docs docs/_build/html
