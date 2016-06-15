@@ -2,7 +2,7 @@
 #
 # Task class and task related functions.
 
-__all__ = [ 'sleep', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after', 'wait' ]
+__all__ = [ 'Task', 'sleep', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after', 'wait' ]
 
 from .errors import TaskTimeout, TaskError
 from .traps import *
