@@ -1,15 +1,18 @@
-language: python
-python: 3.5
-
-os:
-  - linux
-  - osx
+matrix:
+  include:
+    - language: python
+      python: 3.5
+      os: linux
+    - language: generic
+      python: 3
+      os: osx
 
 sudo: false
 cache: pip
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew outdated python3 || brew upgrade python3; fi
 
 install:
   - python3 setup.py install
