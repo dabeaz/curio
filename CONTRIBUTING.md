@@ -18,6 +18,8 @@ it might be better served by its own repository.  Feel free to submit
 a pull request to the Curio README file that includes a link to your
 project.
 
+Also, if submitting a pull request, please consider updating the
+"Contributors" section of the README file so that you get credit.
 
 Testing
 -------

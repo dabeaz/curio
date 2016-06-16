@@ -219,6 +219,12 @@ A: Absolutely. Please use the Github page at
 https://github.com/dabeaz/curio as the primary point of discussion
 concerning pull requests, bugs, and feature requests.
 
+Contributors
+------------
+
+- David Beazley
+- Brett Cannon
+
 About
 -----
 Curio was created by David Beazley (@dabeaz).  http://www.dabeaz.com
