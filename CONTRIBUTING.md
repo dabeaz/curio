@@ -21,6 +21,7 @@ project.
 
 Testing
 -------
+[![Build Status](https://travis-ci.org/dabeaz/curio.svg?branch=master)](https://travis-ci.org/dabeaz/curio)
 
 Curio uses the [py.test](http://pytest.org) tool to write and drive
 its tests. Probably the best way to get set up to run the test suite
@@ -31,15 +32,6 @@ command::
   python3.5 -m venv venv-cpython35
 
 This will create a `venv-cpython35` directory that you can install
-py.test into (please note that the project name on the
-[Python Package Index](https://pypi.io) for py.test is `pytest`)::
-
-  ./venv-cpython35/bin/python3 -m pip install pytest
-
-With py.test installed, running Curio's test suite is a simple matter
-of executing py.test::
-
-  ./venv-cpython35/bin/python3 -m pytest
-
-You should see output about the tests running along with the final
-results of the test run once the test suite is done executing.
+py.test into. From there you can follow what the
+[`.travis.yml` file](https://github.com/dabeaz/curio/blob/master/.travis.yml)
+does to run Curio's test suite (both for code and documentation).
