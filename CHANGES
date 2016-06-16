@@ -1,5 +1,10 @@
 CHANGES
 -------
+06/16/2016 Fixed Issue #55.  Exceptions occuring in code executed by 
+           run_in_process() now include a RemoteTraceback exception 
+           that shows the traceback from the remote process. This
+           should make debugging a big easier. 
+
 06/11/2016 Fixed Issue #53.  curio.run() was swallowing all exceptions.  It now
            reports a TaskError exception if the given coroutine fails.  This is
            a chained exception where __cause__ contains the actual cause of

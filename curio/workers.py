@@ -8,11 +8,37 @@ __all__ = [ 'run_in_executor', 'run_in_thread', 'run_in_process' ]
 
 import multiprocessing
 import threading
+import traceback
 
 from .errors import CancelledError
 from .traps import _future_wait, _get_kernel
 from . import sync
 from .channel import Channel
+
+
+# Code to embed a traceback in a remote exception.  This is borrowed
+# straight from multiprocessing.pool.  Copied here to avoid possible
+# confusion when reading the traceback message (it will identify itself
+# as originating from curio as opposed to multiprocessing.pool).
+
+class RemoteTraceback(Exception):
+    def __init__(self, tb):
+        self.tb = tb
+    def __str__(self):
+        return self.tb
+
+class ExceptionWithTraceback:
+    def __init__(self, exc, tb):
+        tb = traceback.format_exception(type(exc), exc, tb)
+        tb = ''.join(tb)
+        self.exc = exc
+        self.tb = '\n"""\n%s"""' % tb
+    def __reduce__(self):
+        return rebuild_exc, (self.exc, self.tb)
+
+def rebuild_exc(exc, tb):
+    exc.__cause__ = RemoteTraceback(tb)
+    return exc
 
 async def run_in_executor(exc, callable, *args, **kwargs):
     '''
@@ -205,6 +231,7 @@ class ProcessWorker(object):
                 result = func(*args, **kwargs)
                 ch.send((True, result))
             except Exception as e:
+                e = ExceptionWithTraceback(e, e.__traceback__)                
                 ch.send((False, e))
             func = args = kwargs = None
 
