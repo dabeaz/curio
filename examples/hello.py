@@ -1,5 +1,5 @@
 # A hello world program. From the Curio tutorial at
-# https://curio.readthedocs.org/en/latest/tutorial.html
+# https://curio.readthedocs.io/en/latest/tutorial.html
 #
 import curio
 import signal
