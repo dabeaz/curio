@@ -134,6 +134,10 @@ class Kernel(object):
             self._signal_sets = None
             self._default_signals = None
 
+        if self._selector:
+            self._selector.close()
+            self._selector = None
+
     # Main Kernel Loop
     # ----------
     def run(self, coro=None, *, shutdown=False):
