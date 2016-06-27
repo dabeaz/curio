@@ -20,6 +20,7 @@ __all__ = [
 from types import coroutine
 from selectors import EVENT_READ, EVENT_WRITE
 from enum import IntEnum
+
 from .errors import _CancelRetry
 
 class Traps(IntEnum):
@@ -63,12 +64,12 @@ def _future_wait(future, event=None):
     yield (_trap_future_wait, future, event)
 
 @coroutine
-def _sleep(seconds):
+def _sleep(clock):
     '''
-    Sleep for a given number of seconds. Sleeping for 0 seconds
-    forces the current task to yield to the next task (if any).
+    Sleep until the monotonic clock reaches the specified clock value.
+    If clock is 0, forces the current task to yield to the next task (if any).
     '''
-    yield (_trap_sleep, seconds)
+    yield (_trap_sleep, clock)
 
 @coroutine
 def _spawn(coro, daemon):
@@ -149,11 +150,12 @@ def _get_current():
     return result
 
 @coroutine
-def _set_timeout(seconds):
+def _set_timeout(clock):
     '''
-    Set a timeout for the current task.
+    Set a timeout for the current task that occurs at the specified clock value.
+    Setting a clock of None clears any previous timeout.
     '''
-    result = yield (_trap_set_timeout, seconds)
+    result = yield (_trap_set_timeout, clock)
     return result
 
 @coroutine

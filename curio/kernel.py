@@ -35,6 +35,7 @@ class Kernel(object):
     def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=True):
         if selector is None:
             selector = DefaultSelector()
+
         self._selector = selector
         self._ready = kqueue()            # Tasks ready to run
         self._tasks = { }                 # Task table
@@ -325,11 +326,10 @@ class Kernel(object):
             self._shutdown_resources()
 
         # Set a timeout or sleep event on the current task
-        def _set_timeout(seconds, sleep_type='timeout'):
-            timeout = time_monotonic() + seconds
-            item = (timeout, current.id, sleep_type)
+        def _set_timeout(clock, sleep_type='timeout'):
+            item = (clock, current.id, sleep_type)
             heapq.heappush(sleeping, item)
-            setattr(current, sleep_type, timeout)
+            setattr(current, sleep_type, clock)
 
         # ---- Traps
         #
@@ -436,9 +436,9 @@ class Kernel(object):
             current.cancel_func = lambda current=current: queue.remove(current)
 
         # Sleep for a specified period
-        def _trap_sleep(_, seconds):
-            if seconds > 0:
-                _set_timeout(seconds, 'sleep')
+        def _trap_sleep(_, clock):
+            if clock > 0:
+                _set_timeout(clock, 'sleep')
                 current.state = 'TIME_SLEEP'
                 current.cancel_func = lambda task=current: setattr(task, 'sleep', None)
             else:
@@ -469,10 +469,10 @@ class Kernel(object):
             current.cancel_func = lambda: setattr(sigset, 'waiting', None)
 
         # Set a timeout to be delivered to the calling task
-        def _trap_set_timeout(_, seconds):
+        def _trap_set_timeout(_, timeout):
             old_timeout = current.timeout
-            if seconds:
-                _set_timeout(seconds)
+            if timeout:
+                _set_timeout(timeout)
                 if old_timeout and current.timeout > old_timeout:
                     current.timeout = old_timeout
             else:
@@ -493,7 +493,7 @@ class Kernel(object):
             # will occur.
 
             if previous and previous < time_monotonic():
-                _set_timeout(0)
+                _set_timeout(previous)
             else:
                 current.timeout = previous
             current.next_value = None
