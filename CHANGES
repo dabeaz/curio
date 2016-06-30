@@ -1,5 +1,16 @@
 CHANGES
 -------
+06/30/2016 Added alpn_protocols keyword argument to open_connection()
+           function to make it easier to use TLS ALPN with clients.  For 
+           example to open a connection and have it negotiate HTTP/2 
+           or HTTP/1.1 as a protocol, you can do this:
+
+           sock = await open_connection(host, port, ssl=True, 
+                                        server_hostname=host,
+                                        alpn_protocols=['h2', 'http/1.1'])
+
+           print('selected protocol:', sock.selected_alpn_protocol())
+
 06/30/2016 Changed internal clock handling to use absolute values of
            the monotonic clock.  New wakeat() function utilizes this
            to allow more controlled sleeping for periodic timers

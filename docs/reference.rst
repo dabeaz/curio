@@ -597,7 +597,7 @@ High Level Networking
 The following functions are provided to simplify common tasks related to
 making network connections and writing servers.
 
-.. asyncfunction:: open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None)
+.. asyncfunction:: open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None, alpn_protocols=None)
 
    Creates an outgoing connection to a server at *host* and
    *port*. This connection is made using the
@@ -609,9 +609,12 @@ making network connections and writing servers.
    address to use on the socket.  *server_hostname* specifies the
    hostname to check against when making SSL connections.  It is
    highly advised that this be supplied to avoid man-in-the-middle
-   attacks.
+   attacks.  *alpn_protocols* specifies a list of protocol names
+   for use with the TLS ALPN extension (RFC7301).  A typical value 
+   might be ``['h2', 'http/1.1']`` for negotiating either a HTTP/2
+   or HTTP/1.1 connection.
 
-.. asyncfunction:: open_unix_connection(path, *, ssl=None, server_hostname=None)
+.. asyncfunction:: open_unix_connection(path, *, ssl=None, server_hostname=None, alpn_protocols=None)
 
    Creates a connection to a Unix domain socket with optional SSL applied.
 
