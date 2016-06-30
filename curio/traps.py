@@ -69,7 +69,7 @@ def _sleep(clock):
     Sleep until the monotonic clock reaches the specified clock value.
     If clock is 0, forces the current task to yield to the next task (if any).
     '''
-    yield (_trap_sleep, clock)
+    return (yield (_trap_sleep, clock))
 
 @coroutine
 def _spawn(coro, daemon):

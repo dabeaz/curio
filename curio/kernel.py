@@ -435,14 +435,14 @@ class Kernel(object):
             current.state = state
             current.cancel_func = lambda current=current: queue.remove(current)
 
-        # Sleep for a specified period
+        # Sleep for a specified period. Returns value of monotonic clock
         def _trap_sleep(_, clock):
             if clock > 0:
                 _set_timeout(clock, 'sleep')
                 current.state = 'TIME_SLEEP'
                 current.cancel_func = lambda task=current: setattr(task, 'sleep', None)
             else:
-                _reschedule_task(current)
+                _reschedule_task(current, value=time_monotonic())
 
         # Watch signals
         def _trap_sigwatch(_, sigset):
@@ -555,7 +555,7 @@ class Kernel(object):
                             if sleep_type == 'sleep':
                                 if tm == task.sleep:
                                     task.sleep = None
-                                    _reschedule_task(task)
+                                    _reschedule_task(task, value=current_time)
                             else:
                                 if tm == task.timeout:
                                     if (_cancel_task(task, exc=TaskTimeout)):

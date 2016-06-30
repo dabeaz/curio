@@ -2,7 +2,7 @@
 #
 # Task class and task related functions.
 
-__all__ = [ 'Task', 'sleep', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after', 'wait' ]
+__all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after', 'wait' ]
 
 from time import monotonic
 from .errors import TaskTimeout, TaskError
@@ -95,6 +95,13 @@ async def sleep(seconds):
     makes a task immediately switch to the next ready task (if any).
     '''
     await _sleep(seconds + monotonic() if seconds else 0)
+
+async def wake_at(clock):
+    '''
+    Sleep until the monotonic clock reaches the value of clock. 
+    Returns the value of the monotonic clock when awakened.
+    '''
+    return await _sleep(clock)
 
 async def spawn(coro, *, daemon=False):
     '''

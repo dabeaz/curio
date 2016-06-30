@@ -28,6 +28,24 @@ def test_sleep(kernel):
     elapsed = end-start
     assert elapsed > 0.5
 
+def test_wakeat(kernel):
+    results = []
+    async def main():
+          clock = time.monotonic() + 0.5
+          results.append('start')
+          newclock = await wake_at(clock)
+          results.append(round(newclock-clock, 4))
+
+    start = time.time()
+    kernel.run(main())
+    end = time.time()
+    assert results == [
+            'start',
+            0.0,
+            ]
+    elapsed = end-start
+    assert elapsed > 0.5
+
 def test_sleep_cancel(kernel):
     results = []
 

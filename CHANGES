@@ -1,5 +1,21 @@
 CHANGES
 -------
+06/30/2016 Changed internal clock handling to use absolute values of
+           the monotonic clock.  New wakeat() function utilizes this
+           to allow more controlled sleeping for periodic timers
+           and other applications.  For example, here is a loop that
+           precisely wakes up on a specified time interval:
+
+           import time
+           from curio import wakeat
+
+           async def pulse(interval):
+               next_wake = time.monotonic()
+               while True:
+                    await wake_at(next_wake)
+                    print('Tick', time.asctime())
+                    next_wake += interval
+                
 06/16/2016 Fixed Issue #55.  Exceptions occuring in code executed by 
            run_in_process() now include a RemoteTraceback exception 
            that shows the traceback from the remote process. This

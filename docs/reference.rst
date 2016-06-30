@@ -88,6 +88,12 @@ The following functions are defined to help manage the execution of tasks.
    Sleep for a specified number of seconds.  If the number of seconds is 0, the
    kernel merely switches to the next task (if any).
 
+.. asyncfunction:: wake_at(clock)
+
+   Sleep until the monotonic clock reaches the given clock value.  Returns the
+   value of the monotonic clock at the time the task awakes.  Use this function
+   if you need to have more precise interval timing.
+
 .. asyncfunction:: current_task()
 
    Returns a reference to the :class:`Task` instance corresponding to the
