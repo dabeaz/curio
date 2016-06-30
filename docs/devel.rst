@@ -1062,3 +1062,54 @@ For example, the ``coro()`` code merely calls ``watchdog(30)``.
 There's no need to pass an extra ``Task`` instance around in the
 API--it can be easily obtained if it's needed.
 
+Programming Considerations and APIs
+-----------------------------------
+
+The use of ``async`` and ``await`` present new challenges in
+designing libraries and APIs.  For example, asynchronous functions
+can't be called outside of coroutines and weird things happen if
+you forget to use ``await``.  Curio can't solve all of these
+problems, but it does provide some metaprogramming
+features that might prove to be interesting.
+
+Asynchronous Abstract Base Classes
+----------------------------------
+
+Suppose you want to enforce async-correctness in methods defined in 
+a subclass.  Use ``AsyncABC`` as a base class. For example::
+
+    from curio.meta import AsyncABC
+
+    class Base(AsyncABC):
+        async def spam(self):
+            pass
+
+If you inherit from ``Base`` and don't define ``spam()`` as an asynchronous
+method, you'll get an error::
+
+    class Child(Base):
+        def spam(self):
+            pass
+
+    Traceback (most recent call last):
+    ...
+    TypeError: Must use async def spam(self)
+
+The ``AsyncABC`` class is also a proper abstract base class so you can
+use the usual ``@abstractmethod`` decorator on methods as well. For
+example::
+
+    from curio.meta import AsyncABC, abstractmethod
+
+    class Base(AsyncABC):
+        @abstractmethod
+        async def spam(self):
+            pass
+
+
+
+
+
+
+
+
