@@ -115,11 +115,11 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
    exception. This is a chained exception.  The `__cause__` attribute of this
    exception contains the actual exception raised by the task when it crashed.
    If called on a task that has been cancelled, the `__cause__`
-   attribute is set to :exc:`CancelledError`.
+   attribute is set to :exc:`curio.CancelledError`.
 
 .. asyncmethod:: Task.cancel()
 
-   Cancels the task.  This raises a :exc:`CancelledError` exception in
+   Cancels the task.  This raises a :exc:`curio.CancelledError` exception in
    the task which may choose to handle it in order to perform cleanup
    actions.  Does not return until the task actually terminates.
    Curio only allows a task to be cancelled once.  If this method is
