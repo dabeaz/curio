@@ -174,10 +174,10 @@ functions can be used for this purpose:
 
    Execute the specified coroutine and return its result. However,
    issue a cancellation request to the calling task after *seconds*
-   have elapsed.  When this happens, a :py:exc:`TaskTimeout` exception
-   is raised.  If *coro* is ``None``, the result of this function serves
-   as an asynchronous context manager that applies a timeout to a block
-   of statements.
+   have elapsed.  When this happens, a :py:exc:`curio.TaskTimeout`
+   exception is raised.  If *coro* is ``None``, the result of this
+   function serves as an asynchronous context manager that applies a
+   timeout to a block of statements.
 
 .. asyncfunction:: ignore_after(seconds, coro=None, *, timeout_result=None)
 
