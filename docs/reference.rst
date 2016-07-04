@@ -235,6 +235,7 @@ appropriate.
 
 Performing External Work
 ------------------------
+.. module:: curio.workers
 
 Sometimes you need to perform work outside the kernel.  This includes CPU-intensive
 calculations and blocking operations.  Use the following functions to do that:
