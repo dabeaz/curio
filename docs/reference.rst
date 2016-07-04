@@ -8,7 +8,7 @@ Coroutines
 
 Curio is solely concerned with the execution of coroutines.  A coroutine
 is a function defined using ``async def``.  For example::
-  
+
     async def hello(name):
           return 'Hello ' + name
 
@@ -45,14 +45,14 @@ run a top-level coroutine using the following function:
    task executes in the background.  If *selector* is given, it should
    be an instance of a selector from the :mod:`selectors
    <python:selectors>` module.
-   
+
 If you are going to repeatedly run coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
 them using its ``run()`` method as described below:
 
 .. class:: Kernel(pdb=False, log_errors=True, selector=None, with_monitor=False)
 
-   Create an instance of a curio kernel.  The arguments are the same 
+   Create an instance of a curio kernel.  The arguments are the same
    as described above for the :func:`run()` function.
 
 There is only one method that may be used on a :class:`Kernel` outside of coroutines.
@@ -63,8 +63,8 @@ There is only one method that may be used on a :class:`Kernel` outside of corout
    execution.  *coro* is a coroutine to run as a task.  If *shutdown*
    is ``True``, the kernel will cancel all daemonic tasks and perform
    a clean shutdown once all regular tasks have completed.  Calling
-   this method with no coroutine and *shutdown* set to ``True`` 
-   will make the kernel cancel all remaining tasks and perform a 
+   this method with no coroutine and *shutdown* set to ``True``
+   will make the kernel cancel all remaining tasks and perform a
    clean shut down.
 
 Tasks
@@ -102,14 +102,14 @@ The following functions are defined to help manage the execution of tasks.
 
 The :func:`spawn` and :func:`current_task` both return a :class:`Task` instance
 that serves as a kind of wrapper around the underlying coroutine that's executing.
-:class:`Task` instances are not created directly, but they have the following 
+:class:`Task` instances are not created directly, but they have the following
 methods that can be used in coroutines:
 
 .. asyncmethod:: Task.join()
 
    Wait for the task to terminate.  Returns the value returned by the task or
-   raises a :exc:`TaskError` exception if the task failed with an exception.
-   This is a chained exception.  The `__cause__` attribute of this
+   raises a :exc:`curio.TaskError` exception if the task failed with an
+   exception. This is a chained exception.  The `__cause__` attribute of this
    exception contains the actual exception raised by the task when it crashed.
    If called on a task that has been cancelled, the `__cause__`
    attribute is set to :exc:`CancelledError`.
@@ -276,7 +276,7 @@ of :func:`run_in_executor`.  These functions have no external library
 dependencies, have substantially less communication overhead, and more
 predictable cancellation semantics.
 
-The following values in :mod:`curio.workers` define how many 
+The following values in :mod:`curio.workers` define how many
 worker threads and processes are used.  If you are going to
 change these values, do it before any tasks are executed.
 
@@ -284,7 +284,7 @@ change these values, do it before any tasks are executed.
 
    Specifies the maximum number of threads used by a single kernel
    using the :func:`run_in_thread` function.  Default value is 64.
-   
+
 .. data:: MAX_WORKER_PROCESSES
 
    Specifies the maximum number of processes used by a single kernel
@@ -307,7 +307,7 @@ Socket
 The :class:`Socket` class is used to wrap existing an socket.  It is compatible with
 sockets from the built-in :mod:`socket` module as well as SSL-wrapped sockets created
 by functions by the built-in :mod:`ssl` module.  Sockets in curio should be fully
-compatible most common socket features. 
+compatible most common socket features.
 
 .. class:: Socket(sockobj)
 
@@ -462,7 +462,7 @@ The following methods are available on instances of :class:`FileStream`:
 
 .. asyncmethod:: FileStream.close()
 
-   Flush any unwritten data and close the file.  This method is not 
+   Flush any unwritten data and close the file.  This method is not
    called on garbage collection.
 
 .. method:: FileStream.blocking()
@@ -610,7 +610,7 @@ making network connections and writing servers.
    hostname to check against when making SSL connections.  It is
    highly advised that this be supplied to avoid man-in-the-middle
    attacks.  *alpn_protocols* specifies a list of protocol names
-   for use with the TLS ALPN extension (RFC7301).  A typical value 
+   for use with the TLS ALPN extension (RFC7301).  A typical value
    might be ``['h2', 'http/1.1']`` for negotiating either a HTTP/2
    or HTTP/1.1 connection.
 
@@ -636,7 +636,7 @@ making network connections and writing servers.
    connection. *backlog* is the argument given to the
    :py:meth:`socket.socket.listen` method.  *ssl* is an optional
    :class:`curio.ssl.SSLContext` to use if setting up an SSL
-   connection.  
+   connection.
 
 subprocess wrapper module
 -------------------------
@@ -823,7 +823,7 @@ limit the number of tasks performing an operation.  For example::
              await curio.spawn(worker(sema))
 
          # After this point, you should see two tasks at a time run. Every 5 seconds.
- 
+
     curio.run(main())
 
 .. class:: Condition(lock=None)
@@ -964,7 +964,7 @@ Synchronizing with Threads and Processes
 ----------------------------------------
 Curio's synchronization primitives aren't safe to use with externel threads or
 processes.   However, Curio can work with existing thread or process-level
-synchronization primitives if you use the :func:`abide` function. 
+synchronization primitives if you use the :func:`abide` function.
 
 .. asyncfunction:: abide(op, *args, **kwargs)
 
@@ -1069,7 +1069,7 @@ threads waiting to use the same lock.
 
 The ``abide()`` function can be used to synchronize with a thread
 reentrant lock (e.g., ``threading.RLock``).  However, reentrancy is
-not supported.  Each lock acquisition using ``abide()`` involves a 
+not supported.  Each lock acquisition using ``abide()`` involves a
 backing thread.  Repeated acquisitions would violate the constraint
 that reentrant locks have on only acquired by a single thread.
 
@@ -1152,7 +1152,7 @@ be useful if writing larger programs involving coroutines.
 Here is an example::
 
     from curio.abc import AsyncABC, abstractmethod
-    
+
     class Base(AsyncABC):
         @abstractmethod
         async def spam(self):
@@ -1184,7 +1184,7 @@ classes would also generate an error::
 
         async def grok(self):
             pass
-    
+
     class Child(Base):
         def spam(self):     # Error -> Not defined using async def
             pass
@@ -1193,7 +1193,7 @@ classes would also generate an error::
 .. class:: AsyncObject()
 
    A base class that provides all of the functionality of ``AsyncABC``, but additionally
-   requires instances to be created inside of coroutines.   The ``__init__()`` method 
+   requires instances to be created inside of coroutines.   The ``__init__()`` method
    must be defined as a coroutine and may call other coroutines.
 
 Here is an example using ``AsyncObject``::
@@ -1284,7 +1284,10 @@ Here is an example that illustrates::
 
 Exceptions
 ----------
-The following exceptions are defined. All are subclasses of the :class:`CurioError` base class.
+.. module:: curio
+
+The following exceptions are defined. All are subclasses of the
+:class:`CurioError` base class.
 
 .. exception:: CancelledError
 
@@ -1300,8 +1303,8 @@ The following exceptions are defined. All are subclasses of the :class:`CurioErr
 .. exception:: TaskError
 
    Exception raised by the :meth:`Task.join` method if an uncaught exception
-   occurs in a task.  It is a chained exception. The :attr:`__cause__` attribute contains
-   the exception that causes the task to fail.
+   occurs in a task.  It is a chained exception. The ``__cause__`` attribute
+   contains the exception that causes the task to fail.
 
 Low-level Kernel System Calls
 -----------------------------
@@ -1317,12 +1320,12 @@ implementing a new curio primitive.   These calls are found in the
 .. asyncfunction:: _read_wait(fileobj)
 
    Sleep until data is available for reading on *fileobj*.  *fileobj* is
-   any file-like object with a `fileno()` method. 
+   any file-like object with a `fileno()` method.
 
 .. asyncfunction:: _write_wait(fileobj)
 
    Sleep until data can be written on *fileobj*.  *fileobj* is
-   any file-like object with a `fileno()` method. 
+   any file-like object with a `fileno()` method.
 
 .. asyncfunction:: _future_wait(future)
 
@@ -1333,9 +1336,10 @@ implementing a new curio primitive.   These calls are found in the
 
    Sleep until the indicated *task* completes.  The final return value
    of the task is returned if it completed successfully. If the task
-   failed with an exception, a :exc:`TaskError` exception is
-   raised.  This is a chained exception.  The :attr:`TaskError.__cause__` attribute of this
-   exception contains the actual exception raised in the task.
+   failed with an exception, a :exc:`curio.TaskError` exception is
+   raised.  This is a chained exception.  ``TaskError.__cause__``
+   attribute of this exception contains the actual exception raised in
+   the task.
 
 .. asyncfunction:: _cancel_task(task)
 
@@ -1379,7 +1383,7 @@ implementing a new curio primitive.   These calls are found in the
 
 .. asyncfunction:: _set_timeout(seconds)
 
-   Set a timeout in the currently running task. Returns the 
+   Set a timeout in the currently running task. Returns the
    previous timeout (if any)
 
 .. asyncfunction:: _unset_timeout(previous)
