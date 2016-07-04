@@ -558,8 +558,10 @@ calling signature as their counterparts in the standard :mod:`ssl` module:
 
 .. function:: create_default_context(*args, **kwargs)
 
-The :class:`SSLContext` class is also redefined and modified so that the :meth:`wrap_socket` method
-returns a socket compatible with curio.
+.. class:: SSLContext
+
+   A redefined and modified variant of :class:`ssl.SSLContext` so that the
+   :meth:`wrap_socket` method returns a socket compatible with curio.
 
 Don't attempt to use the :mod:`curio.ssl` module without a careful read of Python's official documentation
 at https://docs.python.org/3/library/ssl.html.
