@@ -642,14 +642,17 @@ subprocess wrapper module
 -------------------------
 .. module:: curio.subprocess
 
-The :mod:`curio.subprocess` module provides a wrapper around the built-in :mod:`subprocess` module.
+The :mod:`curio.subprocess` module provides a wrapper around the built-in
+:mod:`subprocess` module.
 
 .. class:: Popen(*args, **kwargs)
 
-   A wrapper around the :class:`subprocess.Popen` class.  The same arguments are accepted.
-   On the resulting ``Popen`` instance, the :attr:`stdin`, :attr:`stdout`, and
-   :attr:`stderr` file attributes have been wrapped by the
-   :class:`curio.io.FileStream` class. You can use these in an asynchronous context.
+   A wrapper around the :class:`subprocess.Popen` class.  The same arguments are
+   accepted. On the resulting :class:`~subprocess.Popen` instance, the
+   :attr:`~subprocess.Popen.stdin`, :attr:`~subprocess.Popen.stdout`, and
+   :attr:`~subprocess.Popen.stderr` file attributes have been wrapped by the
+   :class:`curio.io.FileStream` class. You can use these in an asynchronous
+   context.
 
 Here is an example of using :class:`Popen` to read streaming output off of a
 subprocess with curio::
