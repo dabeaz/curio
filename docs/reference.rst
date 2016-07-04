@@ -267,9 +267,11 @@ calculations and blocking operations.  Use the following functions to do that:
    Run ``callable(*args, **kwargs)`` callable in a user-supplied
    executor and returns the result. *exc* is an executor from the
    :py:mod:`concurrent.futures` module in the standard library.  This
-   executor is expected to implement a :py:meth:`submit` method that
-   executes the given callable and returns a :class:`Future` instance
-   for collecting its result.
+   executor is expected to implement a
+   :meth:`~concurrent.futures.Executor.submit` method that executes
+   the given callable and returns a
+   :class:`~concurrent.futures.Future` instance for collecting its
+   result.
 
 When performing external work, it's almost always better to use the
 :func:`run_in_process` and :func:`run_in_thread` functions instead
