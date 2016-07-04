@@ -1289,6 +1289,10 @@ Exceptions
 The following exceptions are defined. All are subclasses of the
 :class:`CurioError` base class.
 
+.. exception:: CurioError
+
+   Base class for all Curio-specific exceptions.
+
 .. exception:: CancelledError
 
    Exception raised in a coroutine if it has been cancelled.  If ignored, the
