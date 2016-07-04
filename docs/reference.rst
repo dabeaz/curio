@@ -76,7 +76,7 @@ The following functions are defined to help manage the execution of tasks.
 
    Create a new task that runs the coroutine *coro*.  Does not
    return to the caller until the new task has been scheduled and
-   executed for at least one cycle.  Returns a :class:`Task <curio.task.Task>`
+   executed for at least one cycle.  Returns a :class:`Task`
    instance as a result.  The *daemon* option, if supplied, specifies that the
    new task will run indefinitely in the background.  Curio only runs
    as long as there are non-daemonic tasks to execute.  Note: a
@@ -102,8 +102,11 @@ The following functions are defined to help manage the execution of tasks.
 
 The :func:`spawn` and :func:`current_task` both return a :class:`Task` instance
 that serves as a kind of wrapper around the underlying coroutine that's executing.
-:class:`Task` instances are not created directly, but they have the following
-methods that can be used in coroutines:
+
+.. class:: Task
+
+   A class representing an executing coroutine. This class cannot be
+   created directly.
 
 .. asyncmethod:: Task.join()
 
