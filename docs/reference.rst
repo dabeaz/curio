@@ -429,7 +429,7 @@ existing file-like object.  Certain other functions in curio use this
 
    Create a file-like wrapper around an existing file.  *fileobj* must be in
    in binary mode.  The file is placed into non-blocking mode
-   using :mod:`os.set_blocking(fileobj.fileno())`.  *fileobj* is not
+   using ``os.set_blocking(fileobj.fileno())``.  *fileobj* is not
    closed unless the resulting instance is explicitly closed or used
    as a context manager.
 
