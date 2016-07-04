@@ -623,8 +623,8 @@ making network connections and writing servers.
    Creates a server for receiving TCP connections on
    a given host and port.  *client_connected_task* is a coroutine that
    is to be called to handle each connection.  Family specifies the
-   address family and is either :py:const:`socket.AF_INET` or
-   :py:const:`socket.AF_INET6`.  *backlog* is the argument to the
+   address family and is either :data:`socket.AF_INET` or
+   :data:`socket.AF_INET6`.  *backlog* is the argument to the
    :py:meth:`socket.socket.listen` method.  *ssl* specifies an
    :class:`curio.ssl.SSLContext` instance to use. *reuse_address*
    specifies whether to reuse a previously used port.
