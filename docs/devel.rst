@@ -1065,17 +1065,56 @@ API--it can be easily obtained if it's needed.
 Programming Considerations and APIs
 -----------------------------------
 
-The use of ``async`` and ``await`` present new challenges in
-designing libraries and APIs.  For example, asynchronous functions
-can't be called outside of coroutines and weird things happen if
-you forget to use ``await``.  Curio can't solve all of these
-problems, but it does provide some metaprogramming
-features that might prove to be interesting.
+The use of ``async`` and ``await`` present new challenges in designing
+libraries and APIs.  For example, asynchronous functions can't be
+called outside of coroutines and weird things happen if you forget to
+use ``await``.  Curio can't solve all of these problems, but it does
+provide some metaprogramming features that might prove to be
+interesting.   Many of these features are probably best described as
+"experimental" so use them with a certain skepticism and caution.
+
+A Moment of Zen
+^^^^^^^^^^^^^^^
+
+One of the most commonly cited rules of Python coding is that
+"explicit is better than implicit."  Use of ``async`` and ``await``
+embodies this idea--if you're using a coroutine, it is always called
+using ``await``.  There is no ambiguity when reading the code.  
+Moreover, ``await`` is only allowed inside functions defined using
+``async def``.  So, if you see ``async`` or ``await``, you're
+working with coroutines--end of story.
+
+That said, there are still certain design challenges.  For example,
+where are you actually allowed to define coroutines?  Functions?
+Methods?  Special methods? Properties?   Also, what happens when
+you start to mix normal functions and coroutines together?  For
+example, suppose you have a class with a mix of methods like this::
+
+    class Spam(object):
+        async def foo():
+             ...
+        def bar():
+             ...
+
+Is this mix of a coroutine and non-coroutine methods in the class a
+potential source of confusion to users?  It might be hard to say.
+However, what happens if more advanced features such as inheritance
+enter the picture and people screw it up? For example::
+
+    class Child(Spam):
+        def foo():        # Was a coroutine in Spam
+            ...
+
+Needless to say, this is the kind of thing that might keep you
+up at night.  If you are writing any kind of large application
+involving ``async`` and ``await`` you'll probably want to spend
+some time carefully thinking about the big picture and how all
+of the parts hold together.
 
 Asynchronous Abstract Base Classes
-----------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Suppose you want to enforce async-correctness in methods defined in 
+Suppose you wanted to enforce async-correctness in methods defined in 
 a subclass.  Use ``AsyncABC`` as a base class. For example::
 
     from curio.meta import AsyncABC
@@ -1105,6 +1144,228 @@ example::
         @abstractmethod
         async def spam(self):
             pass
+
+Asynchronous Instance Creation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Normally, use of ``async`` and ``await`` is forbidden in the
+``__init__()`` method of a class.  Honestly, you should probably try to
+avoid asynchronous operations during instance creation, but if you
+can't, there are two approaches.  First, you can define an
+asynchronous class method::
+
+    class Spam(object):
+        @classmethod
+        async def new(cls)
+            self = cls.__new__(cls)
+            self.val = await coro()
+            ...
+            return self
+
+     # Example of creating an instance
+     async def main():
+          s = await Spam.new()
+     
+You'd need to custom-tailor the arguments to ``new()`` to your liking.
+However, as an ``async`` function, you're free to use coroutines inside.
+
+A second approach is to inherit from the Curio ``AsyncObject`` base class
+like this::
+
+    from curio.meta import AsyncObject
+    class Spam(AsyncObject):
+        async def __init__(self):
+            self.val = await coro()
+            ...
+
+ 
+     # Example of creating an instance    
+     async def main():
+         s = await Spam()
+
+This latter approach probably looks the most "pythonic" at the risk of
+shattering your co-workers heads as they wonder what kind of
+voodoo-magic you applied to the ``Spam`` class to make it support an
+asynchronous ``__init__()`` method.  If you must know, that magic
+involves metaclasses.  On that subject, the ``AsyncObject`` base uses
+the same metaclass as ``AsyncABC``, enforces async-correctness in
+subclasses, and allows abstract methods to be defined.
+
+Asynchronous Instance Cleanup/Deletion
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You might be asking yourself if it's possible to put asynchronous
+operations in the ``__del__()`` method of a class.  In short: it's
+not possible (at least not using any technique that I'm aware of).
+If you need to perform actions involving asynchronous operations on
+cleanup, you should make your class operate as an asynchronous context
+manager::
+
+    class Spam(object):
+        async def __aenter__(self):
+            await coro()
+            ...
+        async def __aexit__(self, ty, val, tb):
+            await coro()
+            ...
+
+Then, use your object using an ``async with`` statement like this::
+
+    async def main():
+        s = Spam()
+        ...
+        async with s:
+            ...
+
+If a context-manager is not appropriate, then your only other option
+is to have an explicit shutdown/cleanup method defined as an async
+function::
+
+    class Spam(object):
+        async def cleanup(self):
+            await coro()
+            ...
+
+    async def main():
+        s = Spam()
+        try:
+           ...
+        finally:
+           await s.cleanup()
+
+Asynchronous Properties
+^^^^^^^^^^^^^^^^^^^^^^^
+
+It might come as a surprise, but normal Python properties can be defined
+using asynchronous functions.  For example::
+
+    class Spam(object):
+        @property
+        async def value(self):
+            result = await coro()
+            return result
+
+    # Example usage
+    async def main():
+        s = Spam()
+        ...
+        v = await s.value
+
+The property works as a read-only value as long as you preface any
+access by an ``await``.  Again, you might shatter heads pulling a
+stunt like this.
+
+It does not seem possible to define asynchronous property setter or
+deleter functions.   So, if you're going to drop ``async`` on a
+property, keep in mind that it best needs to be read-only.
+
+Blocking Functions
+^^^^^^^^^^^^^^^^^^
+
+Suppose you have a normal Python function that performs blocking
+operations, but you'd like the function to be safely available to 
+coroutines.  You can use the curio ``blocking`` decorator to do
+this::
+
+    from curio.meta import blocking
+
+    @blocking
+    def spam():
+        ...
+        blocking_op()
+        ...
+
+The interesting thing about ``@blocking`` is that it doesn't change
+the usage of the function for normal Python code.  You call it the
+same way you always have::
+
+    def foo():
+        s = spam()
+  
+
+In asynchronous code, you call the same function but add ``await`` like this::
+
+    async def bar():
+        s = await spam()
+
+Behind the scenes, the blocking function is implicitly executed in a
+separate thread using Curio's ``run_in_thread()`` function.
+
+CPU-Intensive Functions
+^^^^^^^^^^^^^^^^^^^^^^^
+
+CPU-intensive operations performed by a coroutine will temporarily
+suspend execution of all other tasks.   If you have such a function,
+you can mark it as such using the ``@cpubound`` decorator.  For example::
+
+
+    from curio.meta import cpubound
+
+    @cpubound
+    def spam():
+        # Computationally expensive op
+        ...
+        return result
+
+In normal Python code, you call this function the same way as before::
+
+    def foo():
+        s = spam()
+
+In asynchronous code, you call the same function but add ``await`` like this::
+
+    async def bar():
+        s = await spam()
+
+This will run the computationally intensive task in a separate process using
+Curio's ``run_in_process()`` function.
+
+Be aware that ``@cpubound`` makes a function execute in a separate
+Python interpreter process.  It's only going to work correctly if that
+function is free of side-effects and dependencies on global state.
+
+Dual Synchronous/Asynchronous Function Implementation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Suppose you wanted to have a function with both a synchronous and asynchronous
+implementation.  You can use the ``@awaitable`` decorator for this::
+
+    from curio.meta import awaitable
+
+    def spam():
+        print('Synchronous spam')
+
+    @awaitable(spam)
+    async def spam():
+        print('Asynchronous spam')
+
+The selection of the appropriate method now depends on execution context.
+Here's an example of what happens in your code::
+
+    def foo():
+        spam()         # --> Synchronous spam
+
+    async def bar():
+        await spam()   # --> Asynchronous spam
+
+If you're wondering how in the world this actually works, let's
+just say it involves frame hacks.   Your list of enemies and
+the difficulty of your next code review continues to grow.
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
 
 
 
