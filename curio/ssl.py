@@ -34,7 +34,7 @@ if _ssl:
 
     @wraps(_ssl.get_server_certificate)
     async def get_server_certificate(*args, **kwargs):
-        return await run_in_thread(partial(_ssl.get_server_certicate, *args, **kwargs))
+        return await run_in_thread(partial(_ssl.get_server_certificate, *args, **kwargs))
 
     # Small wrapper class to make sure the wrap_socket() method returns the right type
     class CurioSSLContext(object):
