@@ -9,6 +9,7 @@ __all__ = [ 'run_in_executor', 'run_in_thread', 'run_in_process' ]
 import multiprocessing
 import threading
 import traceback
+import signal
 
 from .errors import CancelledError
 from .traps import _future_wait, _get_kernel
@@ -225,6 +226,7 @@ class ProcessWorker(object):
             self.nrequests = 0
 
     def run_server(self, ch):
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         while True:
             func, args, kwargs = ch.recv()
             try:
@@ -282,7 +284,8 @@ class WorkerPool(object):
                 worker = self.workercls()
                 raise
             finally:
-                self.workers.append(worker)
+                if self.workers is not None:
+                    self.workers.append(worker)
 
 # Pool definitions should anyone want to use them directly
 ProcessPool = lambda nworkers: WorkerPool(ProcessWorker, nworkers)

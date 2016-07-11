@@ -519,6 +519,11 @@ class Kernel(object):
         # If a coroutine was given, add it as the first task
         maintask = _new_task(coro) if coro else None
 
+        # If there's no main-task and shutdown requested, perform the shutdown
+        if maintask is None and shutdown:
+            _shutdown()
+            return
+
         # ------------------------------------------------------------
         # Main Kernel Loop
         # ------------------------------------------------------------
@@ -614,7 +619,7 @@ class Kernel(object):
                         import pdb as _pdb
                         _pdb.post_mortem(current.exc_info[2])
 
-                except SystemExit:
+                except (SystemExit, KeyboardInterrupt):
                     _cleanup_task(current)
                     raise
 
