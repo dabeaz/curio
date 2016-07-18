@@ -1,5 +1,18 @@
 CHANGES
 -------
+07/18/2016 Some changes to Kernel cleanup and resource management.  The
+           proper way to shut down the kernel is to use Kernel.run(shutdown=True).
+           Alternatively, the kernel can now been used as a context manager:
+
+             with Kernel() as kern:
+                  kern.run(coro())
+
+           Note: The plain run() method properly shuts down the Kernel
+           if you're only running a single coroutine.
+
+           The Kernel.__del__() method now raises an exception if the
+           kernel is deleted without being properly shut down. 
+
 06/30/2016 Added alpn_protocols keyword argument to open_connection()
            function to make it easier to use TLS ALPN with clients.  For 
            example to open a connection and have it negotiate HTTP/2 

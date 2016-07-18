@@ -69,14 +69,14 @@ class Kernel(object):
             Monitor(self)
 
     def __del__(self):
-        if self._kernel_task_id is not None:
-            self._notify_sock.close()
-            self._wait_sock.close()
-            self._kernel_task_id = None
-        if self._thread_pool:
-            self._thread_pool.shutdown()
-        if self._process_pool:
-            self._process_pool.shutdown()
+        if self._selector is not None:
+            raise RuntimeError('Curio kernel not properly terminated.  Please use Kernel.run(shutdown=True)')
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.run(shutdown=True)
 
     # Force the kernel to wake, possibly scheduling a task to run.
     # This method is called by threads running concurrently to the
@@ -124,6 +124,7 @@ class Kernel(object):
                 del self._signal_sets[signo]
 
     def _shutdown_resources(self):
+        log.debug('Kernel %r shutting down', self)
         if self._notify_sock:
             self._notify_sock.close()
             self._notify_sock = None
@@ -139,6 +140,14 @@ class Kernel(object):
             self._selector.close()
             self._selector = None
 
+        if self._thread_pool:
+            self._thread_pool.shutdown()
+            self._thread_pool = None
+        
+        if self._process_pool:
+            self._process_pool.shutdown()
+            self._process_pool = None
+
     # Main Kernel Loop
     # ----------
     def run(self, coro=None, *, shutdown=False):
@@ -147,6 +156,8 @@ class Kernel(object):
         shutdown is True, the kernel cleans up after itself after all
         tasks complete.
         '''
+
+        assert self._selector is not None, 'Kernel has been shut down'
 
         # Motto:  "What happens in the kernel stays in the kernel"
 
