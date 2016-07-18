@@ -686,7 +686,8 @@ def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
     '''
     kernel = Kernel(selector=selector, with_monitor=with_monitor,
                     log_errors=log_errors, pdb=pdb)
-    result = kernel.run(coro, shutdown=True)
+    with kernel:
+        result = kernel.run(coro)
     return result
 
 __all__ = [ 'Kernel', 'run' ]
