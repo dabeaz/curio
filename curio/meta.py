@@ -5,7 +5,7 @@
 #   \/   \/             If you use it, you might die.
 #
 
-__all__ = [ 'blocking', 'cpubound', 'awaitable', 'AsyncABC', 'AsyncObject' ]
+__all__ = [ 'blocking', 'cpubound', 'awaitable', 'sync_only', 'AsyncABC', 'AsyncObject' ]
 
 import sys
 import inspect
@@ -40,6 +40,18 @@ def cpubound(func):
         if sys._getframe(1).f_code.co_flags & 0x80:
             # The use of wrapper in the next statement is not a typo.
             return workers.run_in_process(wrapper, *args, **kwargs)
+        else:
+            return func(*args, **kwargs)
+    return wrapper
+
+def sync_only(func):
+    '''
+    Decorator indicating that a function is only valid in synchronous code.
+    '''
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if sys._getframe(1).f_code.co_flags & 0x80:
+            raise RuntimeError('{} may only be used in synchronous mode'.format(func.__name__))
         else:
             return func(*args, **kwargs)
     return wrapper

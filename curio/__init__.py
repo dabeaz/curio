@@ -10,6 +10,7 @@ from .sync import *
 from .queue import *
 from .workers import *
 from .network import *
+from .file import *
 
 __all__ = [ *errors.__all__,
             *task.__all__,
@@ -18,5 +19,6 @@ __all__ = [ *errors.__all__,
             *sync.__all__,
             *queue.__all__,
             *workers.__all__,
-            *network.__all__
-             ]
+            *network.__all__,
+            *file.__all__,
+           ]

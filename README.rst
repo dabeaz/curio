@@ -208,6 +208,10 @@ performance, debugging, diagnostics, and reliability.  A main goal is
 to provide a robust environment for running and controlling concurrent
 tasks.
 
+**Q: Is there a Curio sticker?
+
+A: No.
+
 **Q: How big is curio?**
 
 A: The complete library currently consists of fewer than 2500 lines of
