@@ -51,7 +51,7 @@ def sync_only(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         if sys._getframe(1).f_code.co_flags & 0x80:
-            raise RuntimeError('{} may only be used in synchronous mode'.format(func.__name__))
+            raise RuntimeError('{} may only be used in synchronous code'.format(func.__name__))
         else:
             return func(*args, **kwargs)
     return wrapper

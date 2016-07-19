@@ -93,14 +93,21 @@ class AsyncFile(object):
 
     @sync_only
     def __enter__(self):
-        return self._file.__enter__()
+        self._file.__enter__()
+        return self
 
     def __exit__(self, *args):
         return self._file.__exit__(*args)
 
     def __aiter__(self):
         return self
-        
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        await self.close()
+
     async def __anext__(self):
         data = await run_in_thread(next, self._file, None)
         if data is None:
