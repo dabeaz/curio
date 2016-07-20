@@ -3,7 +3,7 @@
 # Curio specific exceptions
 
 __all__ = [
-    'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError'
+    'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError', 'SyncIOError',
     ]
 
 class CurioError(Exception):
@@ -16,6 +16,9 @@ class TaskTimeout(CurioError):
     pass
 
 class TaskError(CurioError):
+    pass
+
+class SyncIOError(CurioError):
     pass
 
 class _CancelRetry(Exception):

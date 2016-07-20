@@ -10,8 +10,10 @@ __all__ = [ 'blocking', 'cpubound', 'awaitable', 'sync_only', 'AsyncABC', 'Async
 import sys
 import inspect
 from functools import wraps
-from . import workers
 from abc import ABCMeta, abstractmethod
+
+from . import workers
+from .errors import SyncIOError
 
 def blocking(func):
     '''
@@ -51,7 +53,7 @@ def sync_only(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         if sys._getframe(1).f_code.co_flags & 0x80:
-            raise RuntimeError('{} may only be used in synchronous code'.format(func.__name__))
+            raise SyncIOError('{} may only be used in synchronous code'.format(func.__name__))
         else:
             return func(*args, **kwargs)
     return wrapper

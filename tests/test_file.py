@@ -45,3 +45,49 @@ def test_readiter(kernel):
 
     kernel.run(main())
 
+wlines = ['line1\n', 'line2\n', 'line3\n']
+
+def test_write(kernel):
+    async def main():
+        outname = os.path.join(dirname, 'tmp.txt')
+        f = await aopen(outname, 'w')
+        outdata = ''.join(wlines)
+        await f.write(outdata)
+        await f.flush()
+        await f.close()
+        assert open(outname).read() == outdata
+
+def test_writelines(kernel):
+    async def main():
+        outname = os.path.join(dirname, 'tmp.txt')
+        f = await aopen(outname, 'w')
+        await f.writelines(wlines)
+        await f.close()
+        assert open(outname).readlines() == outdata
+
+
+def test_sync_iter(kernel):
+    async def main():
+        f = await aopen(os.path.join(dirname, 'testdata.txt'), 'r')
+        try:
+           for line in f:
+               pass
+
+           assert False, 'sync-iteration should have failed'
+        except SyncIOError:
+            assert True
+
+    kernel.run(main())
+
+def test_sync_with(kernel):
+    async def main():
+        f = await aopen(os.path.join(dirname, 'testdata.txt'), 'r')
+        try:
+           with f:
+               pass
+           assert False, 'sync-with should have failed'
+        except SyncIOError:
+            assert True
+
+    kernel.run(main())
+    

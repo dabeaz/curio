@@ -48,12 +48,18 @@
 
 __all__ = ['aopen', 'anext']
 
+import logging
+log = logging.getLogger(__name__)
+
 from .meta import blocking, sync_only
 from .workers import run_in_thread
 
 class AsyncFile(object):
-    def __init__(self, file):
-        self._file = file
+    def __init__(self, fileobj):
+        self._file = fileobj
+
+    def __repr__(self):
+        return 'AsyncFile(%r)' % self._file
 
     @blocking
     def read(self, *args, **kwargs):
@@ -78,6 +84,10 @@ class AsyncFile(object):
     @blocking
     def close(self):
         return self._file.close()
+
+    @blocking
+    def seek(self, *args, **kwargs):
+        return self._file.seek(*args, **kwargs)
 
     @blocking
     def truncate(self, *args, **kwargs):
