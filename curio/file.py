@@ -36,7 +36,7 @@
 # use the asynchronous versions:
 #
 #    async def coro():
-#        async with aopen(somefile, 'r') as f:
+#        async with await aopen(somefile, 'r') as f:
 #            async for line in f:
 #                ...
 #
@@ -55,6 +55,9 @@ from .meta import blocking, sync_only
 from .workers import run_in_thread
 
 class AsyncFile(object):
+    '''
+    An async wrapper around a standard file object.  
+    '''
     def __init__(self, fileobj):
         self._file = fileobj
 
@@ -64,6 +67,22 @@ class AsyncFile(object):
     @blocking
     def read(self, *args, **kwargs):
         return self._file.read(*args, **kwargs)
+
+    @blocking
+    def read1(self, *args, **kwargs):
+        return self._file.read1(*args, **kwargs)
+
+    @blocking
+    def readinto(self, *args, **kwargs):
+        return self._file.readinto(*args, **kwargs)
+
+    @blocking
+    def readinto1(self, *args, **kwargs):
+        return self._file.readinto1(*args, **kwargs)
+
+    @blocking
+    def readline(self, *args, **kwargs):
+        return self._file.readline(*args, **kwargs)
 
     @blocking
     def readlines(self, *args, **kwargs):
@@ -88,6 +107,10 @@ class AsyncFile(object):
     @blocking
     def seek(self, *args, **kwargs):
         return self._file.seek(*args, **kwargs)
+
+    @blocking
+    def tell(self, *args, **kwargs):
+        return self._file.tell(*args, **kwargs)
 
     @blocking
     def truncate(self, *args, **kwargs):
