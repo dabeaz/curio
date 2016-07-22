@@ -709,7 +709,7 @@ file wrapper module
 .. module:: curio.file
 
 One problem concerning coroutines and async concerns access to files on the
-normal file system.  Yes, you can use the built-in `open()` function, but 
+normal file system.  Yes, you can use the built-in ``open()`` function, but 
 what happens afterwards is hard to predict.  Under the covers, the operating
 system might have to access a disk drive or perform networking of its own.
 Either way, the operation might take a long time to complete and while it does,
@@ -717,56 +717,75 @@ the whole Curio kernel will be blocked.  You really don't want that--especially
 if the system is under heavy load.
 
 The :mod:`curio.file` module provides an asynchronous compatible
-replacement for the built-in `open()` function and associated file
+replacement for the built-in ``open()`` function and associated file
 objects, should you want to read and write traditional files on the
 filesystem.  The underlying implementation avoids blocking.  How this
 is accomplished is an implementation detail (although threads are used
 in the initial version). 
 
-.. asyncfunction:: aopen(*args, **kwargs)
+.. function:: aopen(*args, **kwargs)
 
    Creates a :class:`curio.file.AsyncFile` wrapper around a traditional file object as
-   returned by Python's builtin `open()` function.   The arguments are exactly the
-   same as for `open()`. 
+   returned by Python's builtin ``open()`` function.   The arguments are exactly the
+   same as for ``open()``.  The returned file object must be used as an asynchronous
+   context manager.  
 
 .. class:: AsyncFile(fileobj)
 
-   This class represents an asynchronous file as returned by the `aopen()` function.
-   No assumptions
+   This class represents an asynchronous file as returned by the ``aopen()`` 
+   function.  Normally, instances are created by the ``aopen()`` function. 
+   However, it can be wrapped around an already-existing file object that
+   was opened using the built-in ``open()`` function.
 
 The following methods are redefined on :class:`AsyncFile` objects to be
 compatible with coroutines.  Any method not listed here will be
 delegated directly to the underlying file.  These methods take the same arguments
-as the underlying file.
+as the underlying file object.  Be aware that not all of these methods are
+available on all kinds of files (e.g., ``read1()``, ``readinto()`` and similar 
+methods are only available in binary-mode files).
 
 .. asyncmethod:: AsyncFile.read(*args, **kwargs)
+.. asyncmethod:: AsyncFile.read1(*args, **kwargs)
+.. asyncmethod:: AsyncFile.readline(*args, **kwargs)
 .. asyncmethod:: AsyncFile.readlines(*args, **kwargs)
+.. asyncmethod:: AsyncFile.readinto(*args, **kwargs)
+.. asyncmethod:: AsyncFile.readinto1(*args, **kwargs)
 .. asyncmethod:: AsyncFile.write(*args, **kwargs)
 .. asyncmethod:: AsyncFile.writelines(*args, **kwargs)
 .. asyncmethod:: AsyncFile.truncate(*args, **kwargs)
 .. asyncmethod:: AsyncFile.seek(*args, **kwargs)
+.. asyncmethod:: AsyncFile.tell(*args, **kwargs)
 .. asyncmethod:: AsyncFile.flush()
 .. asyncmethod:: AsyncFile.close()
 
-:class:`AsyncFile` objects may be used as an asynchronous context manager.
-For example::
+:class:`AsyncFile` objects should always be used as an asynchronous
+context manager.  For example::
 
-    async with await aopen(filename):
+    async with aopen(filename) as f:
         # Use the file
-        ...
+        data = await f.read()
 
 :class:`AsyncFile` objects may also be used with asynchronous iteration.
 For example::
 
-    f = await open(filename)
-    async for line in f:
-        ...
+    async with open(filename) as f:
+        async for line in f:
+            ...
 
-:class:`AsyncFile` objects are sufficiently "file-like" that they can
-be handed to any synchronous function that expects to work with a
-file-like object.   However, be aware that doing so might cause the
-Curio kernel to block.   If you're not using `await` with any operation
-involving I/O, be aware that performance might suffer.
+:class:`AsyncFile` objects are intentionally incompatible with code
+that uses files in a synchronous manner.  Partly, this is to help
+avoid unintentional errors in your program where you blocking might
+occur with you realizing it.  If you know what you're doing and you
+need to access the underlying file in synchronous code, use the
+`blocking()` context manager like this::
+
+    async with open(filename) as f:
+        ...
+        # Pass to synchronous code (danger: might block)
+        with f.blocking() as sync_f:
+             # Use synchronous I/O operations
+             data = sync_f.read()
+             ...
 
 Synchronization Primitives
 --------------------------

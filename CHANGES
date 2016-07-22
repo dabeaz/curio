@@ -1,5 +1,18 @@
 CHANGES
 -------
+07/22/2017 Added support for asynchronous access to files as might be
+           opened by the builtin open() function.  Use the new aopen()
+           function with an async-context manager like this:
+
+             async with aopen(filename, 'r') as f:
+                 data = await f.read()
+
+           Note: a file opened in this manner provides an asynchronous API
+           that will prevent the Curio kernel from blocking on things
+           like disk seeks.  However, the underlying implementation is
+           not specified.  In the initial version, thread pools are
+           used to carry out each I/O operation.
+           
 07/18/2016 Some changes to Kernel cleanup and resource management.  The
            proper way to shut down the kernel is to use Kernel.run(shutdown=True).
            Alternatively, the kernel can now been used as a context manager:

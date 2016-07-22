@@ -1,7 +1,5 @@
 # curio/file.py
 #
-# (WORK IN PROGRESS)
-#
 # Let's talk about files for a moment.  Suppose you're in a coroutine
 # and you start using things like the built-in open() function:
 #
@@ -10,132 +8,127 @@
 #         data = f.read()
 #         ...
 #
-# Yes, this will "work", but who knows what's actually going to happen
-# on that open() call and associated read().  If it's on a disk, the
+# Yes, it will "work", but who knows what's actually going to happen
+# on that open() call and associated read().  If it's on disk, the
 # whole program might lock up for a few milliseconds (aka. "an
 # eternity") doing a disk seek.  While that happens, your whole
 # coroutine based server is going to grind to a screeching halt.  This
 # is bad--especially if a lot of coroutines start doing it all at
 # once.
 #
-# Knowing how to handle this is sort of an tricky question. 
-# Traditional files don't really support "async" in the usual way a
-# socket might.    However, one thing is for certain--if files
-# are going to be handled in a sane way, they also have to have
-# an async interface.
+# Knowing how to handle this is a tricky question.  Traditional files
+# don't really support "async" in the usual way a socket might. You
+# might be able to do something sneaky with asynchronous POSIX APIs
+# (i.e., aio_* functions) or maybe thread pools.  However, one thing
+# is for certain--if files are going to be handled in a sane way, they're
+# going to have an async interface.
 #
 # This file does just that by providing an async-compatible aopen()
 # call.  You use it the same way you use open() and a normal file:
 #
 #    async def coro():
-#        f = await aopen(somefile, 'r')
-#        data = await f.read()
-#        ...
+#        async with aopen(somefile, 'r') as f:
+#            data = await f.read()
+#            ...
 #
-# If you want to use context managers or iteration, make sure you
-# use the asynchronous versions:
+# If you want to use iteration, make sure you use the asynchronous version:
 #
 #    async def coro():
-#        async with await aopen(somefile, 'r') as f:
+#        async with aopen(somefile, 'r') as f:
 #            async for line in f:
 #                ...
 #
-# An "async" file is sufficiently file-like to be passed as a file
-# to traditional synchronous code.  However, be aware that doing
-# so may cause all sorts of bad things to happen.  You'll probably
-# want to run such code in a separate thread or by putting data
-# into a io.StringIO or io.BytesIO instance instead.
 
 __all__ = ['aopen', 'anext']
 
-import logging
-log = logging.getLogger(__name__)
-
-from .meta import blocking, sync_only
+from contextlib import contextmanager
 from .workers import run_in_thread
+from .errors import SyncIOError
 
 class AsyncFile(object):
     '''
-    An async wrapper around a standard file object.  
+    An async wrapper around a standard file object.  Uses threads to
+    execute various I/O operations in a way that avoids blocking
+    the Curio kernel loop.
     '''
-    def __init__(self, fileobj):
-        self._file = fileobj
+    def __init__(self, fileobj, open_args=None, open_kwargs=None):
+        self._fileobj = fileobj
+        self._open_args= open_args
+        self._open_kwargs = open_kwargs
 
     def __repr__(self):
-        return 'AsyncFile(%r)' % self._file
+        return 'AsyncFile(%r)' % self._fileobj
 
-    @blocking
-    def read(self, *args, **kwargs):
-        return self._file.read(*args, **kwargs)
+    @contextmanager
+    def blocking(self):
+        '''
+        Expose the underlying file in blocking mode for use with synchronous code.
+        '''
+        yield self._file
 
-    @blocking
-    def read1(self, *args, **kwargs):
-        return self._file.read1(*args, **kwargs)
+    @property
+    def _file(self):
+        if self._fileobj is None:
+            raise RuntimeError('Must use an async file as an async-context-manager.')
+        return self._fileobj
 
-    @blocking
-    def readinto(self, *args, **kwargs):
-        return self._file.readinto(*args, **kwargs)
+    async def read(self, *args, **kwargs):
+        return await run_in_thread(self._file.read, *args, **kwargs)
 
-    @blocking
-    def readinto1(self, *args, **kwargs):
-        return self._file.readinto1(*args, **kwargs)
+    async def read1(self, *args, **kwargs):
+        return await run_in_thread(self._file.read1, *args, **kwargs)
 
-    @blocking
-    def readline(self, *args, **kwargs):
-        return self._file.readline(*args, **kwargs)
+    async def readinto(self, *args, **kwargs):
+        return await run_in_thread(self._file.readinto, *args, **kwargs)
 
-    @blocking
-    def readlines(self, *args, **kwargs):
-        return self._file.readlines(*args, **kwargs)
+    async def readinto1(self, *args, **kwargs):
+        return await run_in_thread(self._file.readinto1, *args, **kwargs)
 
-    @blocking
-    def write(self, *args, **kwargs):
-        return self._file.write(*args, **kwargs)
+    async def readline(self, *args, **kwargs):
+        return await run_in_thread(self._file.readline, *args, **kwargs)
 
-    @blocking
-    def writelines(self, *args, **kwargs):
-        return self._file.writelines(*args, **kwargs)
+    async def readlines(self, *args, **kwargs):
+        return await run_in_thread(self._file.readlines, *args, **kwargs)
 
-    @blocking
-    def flush(self):
-        return self._file.flush()
+    async def write(self, *args, **kwargs):
+        return await run_in_thread(self._file.write, *args, **kwargs)
 
-    @blocking
-    def close(self):
-        return self._file.close()
+    async def writelines(self, *args, **kwargs):
+        return await run_in_thread(self._file.writelines, *args, **kwargs)
 
-    @blocking
-    def seek(self, *args, **kwargs):
-        return self._file.seek(*args, **kwargs)
+    async def flush(self):
+        return await run_in_thread(self._file.flush)
 
-    @blocking
-    def tell(self, *args, **kwargs):
-        return self._file.tell(*args, **kwargs)
+    async def close(self):
+        return await run_in_thread(self._file.close)
 
-    @blocking
-    def truncate(self, *args, **kwargs):
-        return self._file.truncate(*args, **kwargs)
+    async def seek(self, *args, **kwargs):
+        return await run_in_thread(self._file.seek, *args, **kwargs)
 
-    @sync_only
+    async def tell(self, *args, **kwargs):
+        return await run_in_thread(self._file.tell, *args, **kwargs)
+
+    async def truncate(self, *args, **kwargs):
+        return await run_in_thread(self._file.truncate, *args, **kwargs)
+
     def __iter__(self):
-        return self._file.__iter__()
+        raise SyncIOError('Use asynchronous iteration')
 
-    @sync_only
     def __next__(self):
-        return self._file.__next__()
+        raise SyncIOError('Use asynchronous iteration')
 
-    @sync_only
     def __enter__(self):
-        self._file.__enter__()
-        return self
+        raise SyncIOError('Use async with')
 
     def __exit__(self, *args):
-        return self._file.__exit__(*args)
+        pass
 
     def __aiter__(self):
         return self
 
     async def __aenter__(self):
+        if self._fileobj is None:
+            self._fileobj = await run_in_thread(open, *self._open_args, **self._open_kwargs)
         return self
 
     async def __aexit__(self, *args):
@@ -150,15 +143,13 @@ class AsyncFile(object):
     def __getattr__(self, name):
         return getattr(self._file, name)
 
-@blocking
 def aopen(*args, **kwargs):
     '''
     Async version of the builtin open() function that returns an async-compatible
     file object.  Takes the same arguments.  Returns a wrapped file in which
     blocking I/O operations must be awaited.
     '''
-    f = open(*args, **kwargs)
-    return AsyncFile(f)
+    return AsyncFile(None, args, kwargs)
 
 async def anext(f, sentinel=object):
     '''
