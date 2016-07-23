@@ -37,7 +37,7 @@ For example, using functions, avoiding shared state and side effects,
 and coordinating threads with queues.  As for the dreaded GIL, that is
 mainly a concern for CPU-intensive processing.  Although it's an
 annoyance, there are known ways to work around it using process pools,
-distributed computation, or C extensions.  Finally, threads have the
+message passing, or C extensions.  Finally, threads have the
 benefit of working with almost any existing Python code. All of the
 popular packages (e.g., requests, SQLAlchemy, Django, Flask, etc.)
 work fine with threads.  I use threads in production.  There, I've
@@ -58,13 +58,13 @@ than usual.  Coroutines are weird, finicky, fun, and amazing
 really want.
 
 Curio makes it all just a bit more interesting by killing off every
-beloved character of asynchronous programming in the
-first act.  The event loop? Dead. Futures? Dead. Protocols?
-Dead. Transports?  You guessed it, dead. And the scrappy hero, Callback
-"Buck" Function? Yep, dead. Big time dead--as in not just "pining for
-the fjords" dead.  Tried to apply a monkeypatch. It failed.  Now, when
-Curio goes to the playlot and asks "who wants to interoperate?", the
-other kids are quickly shuttled away by their fretful parents.
+beloved character of asynchronous programming in the first act.  The
+event loop? Dead. Futures? Dead. Protocols?  Dead. Transports?  You
+guessed it, dead. And the scrappy hero, Callback "Buck" Function? Yep,
+dead. Big time dead--as in not just "pining for the fjords" dead.
+Tried to apply a monkeypatch. It failed.  Now, when Curio goes to the
+playlot and asks "who wants to interoperate?", the other kids are
+quickly shuttled away by their fretful parents.
 
 And a hollow voice says "plugh."
 
@@ -107,7 +107,8 @@ function that runs a coroutine and returns its final result::
     >>>
 
 By the way, ``run()`` is basically the only function Curio provides to
-the outside world of non-coroutines. Remember that. It's "run". Three letters.
+the outside world of non-coroutines. Remember that. It's "run". Three
+letters.
 
 Coroutines Calling Coroutines
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -126,28 +127,29 @@ with the ``await`` keyword.  For example::
     Hello Thomas
     Hello Lewis
 
-For the most part, you can write async functions, methods, and do everything that you
-would do with normal Python functions.  The use of the ``await`` in calls is important
-though--if you don't do that, the called coroutine won't run and you'll be fighting
-the aforementioned swarm of stinging bats trying to figure out what's wrong.
+For the most part, you can write async functions, methods, and do
+everything that you would do with normal Python functions.  The use of
+the ``await`` in calls is important though--if you don't do that, the
+called coroutine won't run and you'll be fighting the aforementioned
+swarm of stinging bats trying to figure out what's wrong.
 
 Blocking Calls (i.e., "System Calls")
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 When a program runs, it executes statements one after the other until
-the services of the operating system are needed (e.g., sleeping, reading a file, 
-receiving a network packet, etc.).  For example::
+the services of the operating system are needed (e.g., sleeping,
+reading a file, receiving a network packet, etc.).  For example::
 
      import time
      time.sleep(10)
 
-Under the covers, this operation ultimately involves making a "system call."
-System calls are different than normal functions in that they involve
-making a request to the operating system kernel by executing a "trap."
-A trap is like a software-generated interrupt.  When it occurs, the
-running process is suspended and the operating system takes over to
-handle the request. Control doesn't return until the operating system
-completes the request and reschedules the process.
+Under the covers, this operation ultimately involves making a "system
+call."  System calls are different than normal functions in that they
+involve making a request to the operating system kernel by executing a
+"trap."  A trap is like a software-generated interrupt.  When it
+occurs, the running process is suspended and the operating system
+takes over to handle the request. Control doesn't return until the
+operating system completes the request and reschedules the process.
 
 Now, what does all of this have to do with coroutines?  Let's define
 a very special kind of coroutine::
@@ -177,16 +179,16 @@ Let's manually drive it using the same technique as before::
     ('sleep', 10)
 
 The output from the first ``print()`` function appears, but the
-coroutine is now suspended. The return value of the
-``send()`` call is the tuple produced by the ``yield`` statement in
-the ``sleep()`` coroutine.  This is exactly the same concept as a
-trap.  The coroutine has suspended itself and made a request (in this
-case, a request to sleep for 10 seconds).  It is now up to the driver
-of the code to satisfy that request.  As far as the coroutine is
-concerned, the details of how this is done don't matter.  It's just
-assumed that the coroutine will be resumed after 10 seconds have
-elapsed.  To do that, you call ``send()`` again on the coroutine (with a
-return result if any).   For example::
+coroutine is now suspended. The return value of the ``send()`` call is
+the tuple produced by the ``yield`` statement in the ``sleep()``
+coroutine.  This is exactly the same concept as a trap.  The coroutine
+has suspended itself and made a request (in this case, a request to
+sleep for 10 seconds).  It is now up to the driver of the code to
+satisfy that request.  As far as the coroutine is concerned, the
+details of how this is done don't matter.  It's just assumed that the
+coroutine will be resumed after 10 seconds have elapsed.  To do that,
+you call ``send()`` again on the coroutine (with a return result if
+any).  For example::
 
     >>> c.send(None)
     Awake at last!
@@ -195,11 +197,11 @@ return result if any).   For example::
     StopIteration
 
 All of this might seem very low-level, but this is precisely what
-Curio is doing. Coroutines execute statements under the
-supervision of a small kernel.  When a coroutine executes a system
-call (e.g., a special coroutine that makes use of ``yield``), 
-the kernel receives that request and acts upon it.  The coroutine
-resumes once the request has completed.
+Curio is doing. Coroutines execute statements under the supervision of
+a small kernel.  When a coroutine executes a system call (e.g., a
+special coroutine that makes use of ``yield``), the kernel receives
+that request and acts upon it.  The coroutine resumes once the request
+has completed.
 
 Keep in mind that all of this machinery is hidden from view.  Your
 application doesn't actually see the Curio kernel or use code that
@@ -288,8 +290,8 @@ Now, here is the same code written using coroutines and Curio::
     if __name__ == '__main__':
         run(echo_server(('',25000)))
 
-Both versions of code involve the same statements and have the same overall
-control flow.  The key difference is that threads support
+Both versions of code involve the same statements and have the same
+overall control flow.  The key difference is that threads support
 preemption whereas coroutines do not. This means that in the threaded
 code, the operating system can switch threads on any statement. With
 coroutines, task switching can only occur on statements that involve
@@ -345,10 +347,10 @@ number of tiny functions with no easily discerned strand of control
 flow tying them together.
 
 Coroutines restore a lot of sanity to the overall programming model.
-The control-flow is much easier to follow and the number of
-required functions tends to be significantly less.  In fact, the main
-motivation for adding ``async`` and ``await`` to Python and other languages is
-to simplify asynchronous I/O by avoiding callback hell.
+The control-flow is much easier to follow and the number of required
+functions tends to be significantly less.  In fact, the main
+motivation for adding ``async`` and ``await`` to Python and other
+languages is to simplify asynchronous I/O by avoiding callback hell.
 
 Historical Perspective
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -359,17 +361,18 @@ simplicity and benefits of the programming model, one might wonder why
 they haven't been used more often.
 
 A big part of this is really due to the lack of proper support in
-mainstream programming languages used to write systems software.
-For example, languages such as Pascal, C/C++, and Java don't support
-coroutines. Thus, it's not a technique that most programmers would even think to 
-consider.  Even in Python, proper support for coroutines has taken a
-long time to emerge.  Over the years, various projects have explored
-coroutines in various forms, usually involving sneaky hacks surrounding
-generator functions and C extensions.  The addition of the ``yield from``
-construct in Python 3.3 greatly simplified the problem of writing
-coroutine libraries.  The emergence of ``async/await`` in Python 3.5
-takes a huge stride in making coroutines more of a first-class object
-in the Python world.   This is really the starting point for Curio.
+mainstream programming languages used to write systems software.  For
+example, languages such as Pascal, C/C++, and Java don't support
+coroutines. Thus, it's not a technique that most programmers would
+even think to consider.  Even in Python, proper support for coroutines
+has taken a long time to emerge.  Over the years, various projects
+have explored coroutines in various forms, usually involving sneaky
+hacks surrounding generator functions and C extensions.  The addition
+of the ``yield from`` construct in Python 3.3 greatly simplified the
+problem of writing coroutine libraries.  The emergence of
+``async/await`` in Python 3.5 takes a huge stride in making coroutines
+more of a first-class object in the Python world.  This is really the
+starting point for Curio.
 
 Layered Architecture
 --------------------
@@ -382,19 +385,18 @@ Operating System Design and Programming Libraries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Think about how I/O works in the operating system for a moment. At the
-lowest level, you'll find device drivers and
-other hardware-specific code.  However, the bulk of the operating
-system is not written to operate at this low-level. Instead, those
-details are hidden behind a device-independent abstraction layer that
-manages file descriptors, I/O buffering, flow control, and other
-details. 
+lowest level, you'll find device drivers and other hardware-specific
+code.  However, the bulk of the operating system is not written to
+operate at this low-level. Instead, those details are hidden behind a
+device-independent abstraction layer that manages file descriptors,
+I/O buffering, flow control, and other details.
 
 .. image:: _static/layers.png
 
-The same layering principal applies to user applications.  The operating
-system provides a set of low-level system calls (traps).  These calls
-vary between operating systems, but you don't really care as a
-programmer.  That's because the implementation details are hidden
+The same layering principal applies to user applications.  The
+operating system provides a set of low-level system calls (traps).
+These calls vary between operating systems, but you don't really care
+as a programmer.  That's because the implementation details are hidden
 behind a layer of standardized programming libraries such as the C
 standard library, various POSIX standards, Microsoft Windows APIs,
 etc.  Working in Python removes you even further from
@@ -1000,12 +1002,13 @@ and then cancels all of the remaining tasks::
              except TaskError as e:
                  print('Failed - Reason:', e.__cause__)
 
-One feature of ``wait()`` is that it does not actually return the results of
-completed tasks. Instead, it always produces the associated ``Task`` instance.
-Partly, this is so you can figure which of the tasks actually completed.  To
-get the result, you call ``task.join()`` and handle it in the usual way.  Just as
-a reminder, exceptions produce a ``TaskeError`` exception that wraps around the
-actual exception.
+One feature of ``wait()`` is that it does not actually return the
+results of completed tasks. Instead, it always produces the associated
+``Task`` instance.  Partly, this is so you can figure which of the
+tasks actually completed.  To get the result, you call ``task.join()``
+and handle it in the usual way.  Just as a reminder, exceptions
+produce a ``TaskeError`` exception that wraps around the actual
+exception.
 
 Getting a Task Self-Reference
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1352,25 +1355,59 @@ If you're wondering how in the world this actually works, let's
 just say it involves frame hacks.   Your list of enemies and
 the difficulty of your next code review continues to grow.
 
+Considerations Function Wrapping and Inheritance
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Suppose that you have a simple async function like this::
 
+    async def spam():
+        print('spam')
 
+Now, suppose you have another function that wraps around it::
 
+    async def bar():
+        print('bar')
+        return await spam()
 
+If you call ``bar()`` as a coroutine, it will work perfectly fine. 
+For example::
+ 
+    async def main():
+        await bar()
 
+However, here's a subtle oddity.  It turns out that you could drop
+the ``async`` and ``await`` from the ``bar()`` function entirely
+and everything will still work. For example::
 
-        
+     def bar():
+         print('bar')
+         return spam()
 
+However, should you actually do this?  All things considered, I think it's
+probably better to leave the ``async`` and ``await`` keywords in place.
+It makes it more clear to the reader that the code exists in the world
+of asynchronous programming.  This is something to think about as you
+write larger applications--if you're using async, always define async functions.
 
+Here is another odd example involving inheritance. Suppose you redefined
+a method and used ``super()`` like this::
 
+    class Parent(object):
+        async def spam(self):
+            print('Parent.spam')
 
+    class Child(Parent):
+        def spam(self):
+            print('Child.spam')
+            return super().spam()
 
+It turns out that the ``spam()`` method of ``Child`` will work
+perfectly fine, but it's just a little weird that it doesn't use
+``async`` in the same way as the parent.  It would probably read
+better written like this::
 
-
-
-
-
-
-
-
+    class Child(Parent):
+        async def spam(self):
+            print('Child.spam')
+            return await super().spam()
 
