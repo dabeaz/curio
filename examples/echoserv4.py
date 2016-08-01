@@ -13,4 +13,7 @@ async def echo_client(client, addr):
     await s.close()
 
 if __name__ == '__main__':
-    run(tcp_server('', 25000, echo_client))
+    try:
+        run(tcp_server('', 25000, echo_client))
+    except KeyboardInterrupt:
+        pass

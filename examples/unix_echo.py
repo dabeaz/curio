@@ -17,5 +17,7 @@ if __name__ == '__main__':
           os.remove('/tmp/curiounixecho')
      except:
           pass
-     run(unix_server('/tmp/curiounixecho', echo_handler))
-          
+     try:
+         run(unix_server('/tmp/curiounixecho', echo_handler))
+     except KeyboardInterrupt:
+          pass

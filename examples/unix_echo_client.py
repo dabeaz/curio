@@ -15,4 +15,7 @@ async def main(addr):
     await sock.close()
 
 if __name__ == '__main__':
-    curio.run(main('/tmp/curiounixecho'))
+    try:
+        curio.run(main('/tmp/curiounixecho'))
+    except KeyboardInterrupt:
+        pass

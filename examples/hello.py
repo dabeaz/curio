@@ -57,4 +57,7 @@ async def parent():
     print("Leaving!")
 
 if __name__ == '__main__':
-    curio.run(parent(), with_monitor=True)
+    try:
+        curio.run(parent(), with_monitor=True)
+    except KeyboardInterrupt:
+        pass
