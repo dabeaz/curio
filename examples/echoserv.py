@@ -25,4 +25,7 @@ async def echo_client(client):
     print('Connection closed')
 
 if __name__ == '__main__':
-     run(echo_server(('',25000)))
+    try:
+        run(echo_server(('', 25000)))
+    except KeyboardInterrupt:
+        pass

@@ -2,12 +2,13 @@
 #
 # An example of a simple SSL server.  To test, connect via browser
 
+import os
 import curio
 from curio import ssl
 import time
 
-KEYFILE = "ssl_test_rsa"    # Private key
-CERTFILE = "ssl_test.crt"   # Certificate (self-signed)
+KEYFILE = os.path.dirname(__file__) + "/ssl_test_rsa"    # Private key
+CERTFILE = os.path.dirname(__file__) + "/ssl_test.crt"   # Certificate (self-signed)
 
 async def handler(client, addr):
     s = client.as_stream()
@@ -30,4 +31,7 @@ if __name__ == '__main__':
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
     print('Connect to https://localhost:10000 to see if it works')
-    curio.run(curio.tcp_server('', 10000, handler, ssl=ssl_context))
+    try:
+        curio.run(curio.tcp_server('', 10000, handler, ssl=ssl_context))
+    except KeyboardInterrupt:
+        pass

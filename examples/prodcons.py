@@ -24,4 +24,7 @@ async def main():
     await cons_task.cancel()
 
 if __name__ == '__main__':
-    curio.run(main())
+    try:
+        curio.run(main())
+    except KeyboardInterrupt:
+        pass

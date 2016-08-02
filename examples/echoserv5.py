@@ -34,4 +34,7 @@ async def main(host, port):
                 await task.cancel()
 
 if __name__ == '__main__':
-    run(main('', 25000))
+    try:
+        run(main('', 25000))
+    except KeyboardInterrupt:
+        pass

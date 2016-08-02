@@ -14,4 +14,7 @@ async def main(addr):
         await sock.sendto(data, addr)
 
 if __name__ == '__main__':
-    curio.run(main(('', 26000)))
+    try:
+        curio.run(main(('', 26000)))
+    except KeyboardInterrupt:
+        pass
