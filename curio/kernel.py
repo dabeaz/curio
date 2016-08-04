@@ -187,9 +187,10 @@ class Kernel(object):
         # Initialize the loopback socket and launch the kernel task if needed
         def _init_loopback_task():
             self._init_loopback()
-            task = Task(_kernel_task(), taskid=0)
+            task = Task(_kernel_task(), taskid=0, daemon=True)
             _reschedule_task(task)
             self._kernel_task_id = task.id
+            self._tasks[task.id] = task
 
         # Internal task that monitors the loopback socket--allowing the kernel to
         # awake for non-I/O events.  Also processes incoming signals.  This only
@@ -308,30 +309,39 @@ class Kernel(object):
 
             del tasks[task.id]
 
-        # Shut down the kernel, cleaning up resources and cancelling
-        # still-running daemon tasks
+        # For "reasons" related to task scheduling, the task
+        # of shutting down all remaining tasks is best managed
+        # by a launching a task dedicated to carrying out the task (sic)
+        async def _shutdown_tasks(tocancel):
+            for task in tocancel:
+                try:
+                    await task.cancel()
+                except Exception as e:
+                    log.error('Exception %r ignored in curio shutdown' % e, exc_info=True)
+
+
+        # Shut down the kernel. All remaining tasks are run through a cancellation
+        # process so that they can cleanup properly.  After that, internal
+        # resources are cleaned up.
         def _shutdown():
             nonlocal njobs
-            for task in sorted(tasks.values(), key=lambda t: t.id, reverse=True):
-                if task.id == self._kernel_task_id:
-                    continue
+            tocancel = [task for task in tasks.values() if task.id != self._kernel_task_id]
 
-                # If the task is daemonic, force it to non-daemon status and cancel it
-                if task.daemon:
-                    njobs += 1
-                    task.daemon = False
+            # Cancel all non-daemonic tasks first
+            tocancel.sort(key=lambda task: task.daemon)
 
-                assert _cancel_task(task)
+            # Cancel the kernel loopback task last
+            if self._kernel_task_id is not None:
+                tocancel.append(tasks[self._kernel_task_id])
 
-            # Run all of the daemon tasks through cancellation
-            if ready:
+            if tocancel:
+                _new_task(_shutdown_tasks(tocancel))
                 self.run()
 
-            # Cancel the kernel loopback task (if any)
-            task = tasks.pop(self._kernel_task_id, None)
-            if task:
-                task.cancel_func()
-                self._kernel_task_id = None
+            self._kernel_task_id = None
+
+            # There had better not be any tasks left
+            assert not tasks
 
             # Cleanup other resources
             self._shutdown_resources()
@@ -520,6 +530,12 @@ class Kernel(object):
             ready_appendleft(current)
             current.next_value = current
 
+        # Cancel all non-daemonic tasks
+        def _trap_cancel_all(_):
+            tocancel = [task for task in tasks.values() if not task.daemon ]
+            current.cancel_func = lambda: None
+            _new_task(_shutdown_tasks(tocancel))
+
         # Create the traps table
         trap_funcs = [ val for key, val in locals().items() if key.startswith('_trap') ]
         traps = [None]*len(trap_funcs)
@@ -603,16 +619,13 @@ class Kernel(object):
                         trap = current._throw(current.next_exc)
                         current.next_exc = None
 
-                    # Execute the trap
-                    traps[trap[0]](*trap)
-
                 except StopIteration as e:
                     _cleanup_task(current, value=e.value)
 
-                except CancelledError as e:
+                except (CancelledError, TaskExit) as e:
                     current.exc_info = sys.exc_info()
                     current.state = 'CANCELLED'
-                    _cleanup_task(current)
+                    _cleanup_task(current, exc=e)
 
                 except Exception as e:
                     current.exc_info = sys.exc_info()
@@ -630,9 +643,13 @@ class Kernel(object):
                         import pdb as _pdb
                         _pdb.post_mortem(current.exc_info[2])
 
-                except (SystemExit, KeyboardInterrupt):
+                except: # (SystemExit, KeyboardInterrupt):
                     _cleanup_task(current)
                     raise
+
+                else:
+                    # Execute the trap
+                    traps[trap[0]](*trap)
 
                 finally:
                     # Unregister previous I/O request. Discussion follows:

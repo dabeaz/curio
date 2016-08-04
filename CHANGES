@@ -1,6 +1,61 @@
 CHANGES
 -------
-07/22/2017 Added support for asynchronous access to files as might be
+08/04/2016 Added a new abort() function.   This causes curio to 
+           cancel all non-daemonic tasks that are currently running.
+           For example:
+
+              async def coro():
+                  ...
+                  if something_really_bad:
+                      await abort()
+
+           abort() causes a CancelledError exception to be raised in
+           all active tasks, including the task that calls abort().
+           This should make the Curio kernel stop running.  However,
+           it does not perform a full shutdown of resources. If
+           you wanted to submit more work to the kernel, it should
+           still work.
+                    
+
+08/04/2016 Added a new KernelExit exception that can be used to 
+           make the kernel terminate execution.  For example:
+
+              async def coro():
+                  ...
+                  if something_bad:
+                      raise KernelExit('Something bad')
+
+           This causes the kernel to simply stop, aborting the
+           currently executing task.   The exception will propagate
+           out of the run() function so if you need to catch it, do
+           this:
+
+               try:
+                   run(coro())
+               except KernelExit as e:
+                   print('Going away because of:', e)
+
+           KernelExit by itself does not do anything to other 
+	   running tasks.  However, the run() function will
+           separately issue a shutdown request causing all
+           remaining tasks to cancel.
+
+08/04/2016 Added a new TaskExit exception that can be used to make a 
+           single task terminate.  For example:
+
+               async def coro():
+                   ...
+                   if something_bad:
+                       raise TaskExit('Goodbye')
+                   ...
+
+           Think of TaskExit as a kind of self-cancellation. 
+
+08/04/2016 Some refinements to kernel shutdown.   The shutdown process is
+           more carefully supervised and fixes a few very subtle errors
+           related to task scheduling. 
+
+07/22/2016 Added support for asynchronous access to files as might be
            opened by the builtin open() function.  Use the new aopen()
            function with an async-context manager like this:
 
