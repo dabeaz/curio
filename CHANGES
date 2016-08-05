@@ -1,22 +1,5 @@
 CHANGES
 -------
-08/04/2016 Added a new abort() function.   This causes curio to 
-           cancel all non-daemonic tasks that are currently running.
-           For example:
-
-              async def coro():
-                  ...
-                  if something_really_bad:
-                      await abort()
-
-           abort() causes a CancelledError exception to be raised in
-           all active tasks, including the task that calls abort().
-           This should make the Curio kernel stop running.  However,
-           it does not perform a full shutdown of resources. If
-           you wanted to submit more work to the kernel, it should
-           still work.
-                    
-
 08/04/2016 Added a new KernelExit exception that can be used to 
            make the kernel terminate execution.  For example:
 

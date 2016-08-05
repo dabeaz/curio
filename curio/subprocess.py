@@ -77,18 +77,19 @@ class Popen(object):
         stdout_task = await spawn(self.stdout.readall()) if self.stdout else None
         stderr_task = await spawn(self.stderr.readall()) if self.stderr else None
         try:
-            if input:
-                await timeout_after(timeout, self.stdin.write(input))
-                await self.stdin.close()
-                self.stdin = None
+            async with timeout_after(timeout):
+                if input:
+                    await self.stdin.write(input)
+                    await self.stdin.close()
 
-            # Collect the output from the workers
-            stdout = await timeout_after(timeout, stdout_task.join()) if stdout_task else b''
-            stderr = await timeout_after(timeout, stderr_task.join()) if stderr_task else b''
+                stdout = await stdout_task.join() if stdout_task else b''
+                stderr = await stderr_task.join() if stderr_task else b''
             return (stdout, stderr)
         except TaskTimeout:
-            await stdout_task.cancel()
-            await stderr_task.cancel()
+            if stdout_task:
+                await stdout_task.cancel()
+            if stderr_task:
+                await stderr_task.cancel()
             raise
 
     def __enter__(self):

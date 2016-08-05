@@ -2,7 +2,7 @@
 #
 # Task class and task related functions.
 
-__all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after', 'wait', 'cancel_all' ]
+__all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after', 'wait' ]
 
 from time import monotonic
 from .errors import TaskTimeout, TaskError
@@ -109,12 +109,6 @@ async def spawn(coro, *, daemon=False):
     forever as a background task.
     '''
     return await _spawn(coro, daemon)
-
-async def cancel_all():
-    '''
-    Abort all non-daemonic tasks, issuing a cancellation request
-    '''
-    await _cancel_all()
 
 async def gather(tasks, *, return_exceptions=False):
     '''

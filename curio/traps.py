@@ -15,7 +15,6 @@ __all__ = [
     '_spawn', '_cancel_task', '_join_task', '_wait_on_queue',
     '_reschedule_tasks', '_sigwatch', '_sigunwatch', '_sigwait',
     '_get_kernel', '_get_current', '_set_timeout', '_unset_timeout',
-    '_cancel_all',
     ]
 
 from types import coroutine
@@ -40,7 +39,6 @@ class Traps(IntEnum):
     _trap_get_current = 12
     _trap_set_timeout = 13
     _trap_unset_timeout = 14
-    _trap_cancel_all = 15
 
 globals().update((key,val) for key, val in vars(Traps).items() if key.startswith('_trap'))
 
@@ -166,10 +164,3 @@ def _unset_timeout(previous):
     Restore the previous timeout for the current task.
     '''
     yield (_trap_unset_timeout, previous)
-
-@coroutine
-def _cancel_all():
-    '''
-    Cancel all non-daemonic tasks
-    '''
-    yield (_trap_cancel_all, )

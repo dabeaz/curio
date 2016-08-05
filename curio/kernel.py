@@ -530,12 +530,6 @@ class Kernel(object):
             ready_appendleft(current)
             current.next_value = current
 
-        # Cancel all non-daemonic tasks
-        def _trap_cancel_all(_):
-            tocancel = [task for task in tasks.values() if not task.daemon ]
-            current.cancel_func = lambda: None
-            _new_task(_shutdown_tasks(tocancel))
-
         # Create the traps table
         trap_funcs = [ val for key, val in locals().items() if key.startswith('_trap') ]
         traps = [None]*len(trap_funcs)
