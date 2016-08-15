@@ -13,7 +13,7 @@
 __all__ = [
     '_read_wait', '_write_wait', '_future_wait', '_sleep',
     '_spawn', '_cancel_task', '_join_task', '_wait_on_queue',
-    '_reschedule_tasks', '_sigwatch', '_sigunwatch', '_sigwait',
+    '_reschedule_tasks', '_queue_reschedule_function', '_sigwatch', '_sigunwatch', '_sigwait',
     '_get_kernel', '_get_current', '_set_timeout', '_unset_timeout',
     ]
 
@@ -39,6 +39,7 @@ class Traps(IntEnum):
     _trap_get_current = 12
     _trap_set_timeout = 13
     _trap_unset_timeout = 14
+    _trap_queue_reschedule_function = 15
 
 globals().update((key,val) for key, val in vars(Traps).items() if key.startswith('_trap'))
 
@@ -106,11 +107,11 @@ def _wait_on_queue(queue, state):
     yield (_trap_wait_queue, queue, state)
 
 @coroutine
-def _reschedule_tasks(queue, n=1, value=None, exc=None):
+def _reschedule_tasks(queue, n=1):
     '''
     Reschedule one or more tasks waiting on a kernel queue.
     '''
-    yield (_trap_reschedule_tasks, queue, n, value, exc)
+    yield (_trap_reschedule_tasks, queue, n)
 
 @coroutine
 def _sigwatch(sigset):
@@ -164,3 +165,13 @@ def _unset_timeout(previous):
     Restore the previous timeout for the current task.
     '''
     yield (_trap_unset_timeout, previous)
+
+@coroutine
+def _queue_reschedule_function(queue):
+    '''
+    Return a function that allows tasks to be rescheduled from a queue without
+    the use of await.   Can be used in synchronous code as long as it runs
+    in the same thread as the Curio kernel.
+    '''
+    result = yield (_trap_queue_reschedule_function, queue)
+    return result

@@ -418,11 +418,19 @@ class Kernel(object):
             _reschedule_task(current, value=task)
 
         # Reschedule one or more tasks from a queue
-        def _trap_reschedule_tasks(_, queue, n, value, exc):
+        def _trap_reschedule_tasks(_, queue, n):
             while n > 0:
-                _reschedule_task(queue.popleft(), value=value, exc=exc)
+                _reschedule_task(queue.popleft())
                 n -= 1
             _reschedule_task(current)
+
+        # Trap that returns a function for rescheduling tasks from synchronous code
+        def _trap_queue_reschedule_function(_, queue):
+            def _reschedule(n):
+                while n > 0:
+                    _reschedule_task(queue.popleft())
+                    n -= 1
+            _reschedule_task(current, value=_reschedule)
 
         # Join with a task
         def _trap_join_task(_, task):

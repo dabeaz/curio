@@ -162,6 +162,159 @@ class TestEvent:
                 'got event'
                 ]
 
+class TestSyncEvent:
+    def test_syncevent_get_wait(self, kernel):
+        results = []
+        async def event_setter(evt, seconds):
+              results.append('sleep')
+              await sleep(seconds)
+              results.append('event_set')
+              evt.set()
+
+        async def event_waiter(evt):
+              results.append('wait_start')
+              results.append(evt.is_set())
+              await evt.wait()
+              results.append('wait_done')
+              results.append(evt.is_set())
+              evt.clear()
+              results.append(evt.is_set())
+
+        async def main():
+            evt = SyncEvent()
+            await spawn(event_waiter(evt))
+            await spawn(event_setter(evt, 1))
+
+        kernel.run(main())
+        assert results == [
+                'wait_start',
+                False,
+                'sleep',
+                'event_set',
+                'wait_done',
+                True,
+                False
+                ]
+
+    def test_syncevent_get_immediate(self, kernel):
+        results = []
+        async def event_setter(evt):
+              results.append('event_set')
+              evt.set()
+
+        async def event_waiter(evt, seconds):
+              results.append('sleep')
+              await sleep(seconds)
+              results.append('wait_start')
+              await evt.wait()
+              results.append('wait_done')
+
+        async def main():
+            evt = SyncEvent()
+            await spawn(event_waiter(evt, 1))
+            await spawn(event_setter(evt))
+
+        kernel.run(main())
+        assert results == [
+                'sleep',
+                'event_set',
+                'wait_start',
+                'wait_done',
+                ]
+
+
+    def test_syncevent_wait_cancel(self, kernel):
+        results = []
+        async def event_waiter(evt):
+              results.append('event_wait')
+              try:
+                   await evt.wait()
+              except CancelledError:
+                   results.append('event_cancel')
+
+        async def event_cancel(seconds):
+              evt = SyncEvent()
+              task = await spawn(event_waiter(evt))
+              results.append('sleep')
+              await sleep(seconds)
+              results.append('cancel_start')
+              await task.cancel()
+              results.append('cancel_done')
+
+        kernel.run(event_cancel(1))
+
+        assert results == [
+                'event_wait',
+                'sleep',
+                'cancel_start',
+                'event_cancel',
+                'cancel_done',
+                ]
+
+    def test_syncevent_wait_timeout(self, kernel):
+        results = []
+        async def event_waiter(evt):
+              results.append('event_wait')
+              try:
+                  await timeout_after(0.5, evt.wait())
+              except TaskTimeout:
+                   results.append('event_timeout')
+
+        async def event_run(seconds):
+              evt = SyncEvent()
+              task = await spawn(event_waiter(evt))
+              results.append('sleep')
+              await sleep(seconds)
+              results.append('sleep_done')
+
+        kernel.run(event_run(1))
+
+        assert results == [
+                'event_wait',
+                'sleep',
+                'event_timeout',
+                'sleep_done',
+                ]
+
+    def test_syncevent_wait_notimeout(self, kernel):
+        results = []
+        async def event_waiter(evt):
+              results.append('event_wait')
+              try:
+                  await timeout_after(1.0, evt.wait())
+                  results.append('got event')
+              except TaskTimeout:
+                  results.append('event_timeout')
+              
+              evt.clear()
+              try:
+                  await evt.wait()
+                  results.append('got event')
+              except TaskTimeout:
+                  results.append('bad timeout')
+
+        async def event_run():
+              evt = SyncEvent()
+              task = await spawn(event_waiter(evt))
+              results.append('sleep')
+              await sleep(0.25)
+              results.append('event_set')
+              evt.set()
+              await sleep(1.0)
+              results.append('event_set')
+              evt.set()
+
+        kernel.run(event_run())
+        assert results == [
+                'event_wait',
+                'sleep',
+                'event_set',
+                'got event',
+                'event_set',
+                'got event'
+                ]
+
+
 class TestLock:
     def test_lock_sequence(self, kernel):
         results = []

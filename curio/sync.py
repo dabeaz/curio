@@ -4,19 +4,18 @@
 # events, locks, semaphores, and condition variables. These primitives
 # are only safe to use in the curio framework--they are not thread safe.
 
-__all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide' ]
+__all__ = ['Event', 'SyncEvent', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide' ]
 
 import threading
 from inspect import iscoroutinefunction
 
-from .traps import _wait_on_queue, _reschedule_tasks, _future_wait
+from .traps import _wait_on_queue, _reschedule_tasks, _future_wait, _queue_reschedule_function
 from .kernel import kqueue
 from . import workers
 from .errors import CancelledError, TaskTimeout
 from .task import spawn
 
 class Event(object):
-
     __slots__ = ('_set', '_waiting')
 
     def __init__(self):
@@ -37,12 +36,35 @@ class Event(object):
     async def wait(self):
         if self._set:
             return
+
         await _wait_on_queue(self._waiting, 'EVENT_WAIT')
 
     async def set(self):
         self._set = True
         await _reschedule_tasks(self._waiting, len(self._waiting))
 
+class SyncEvent(Event):
+    '''
+    An Event object that can only be awaited in asynchronous code, set
+    in synchronous code.   Useful for coordinating asynchronous tasks
+    from normal synchronous code.
+    '''
+    __slots__ = ('_reschedule_func',)
+
+    def __init__(self):
+        super().__init__()
+        self._reschedule_func = None
+
+    async def wait(self):
+        if self._reschedule_func is None:
+            self._reschedule_func = await _queue_reschedule_function(self._waiting)
+        await super().wait()
+
+    def set(self):
+        self._set = True
+        if self._reschedule_func:
+            self._reschedule_func(len(self._waiting))
+        
 class _LockBase(object):
 
     async def __aenter__(self):

@@ -1,5 +1,37 @@
 CHANGES
 -------
+08/15/2016 Added a new synchronization primitive SyncEvent that allows
+           synchronization between asynchronous and synchronous code.
+           You use it like a normal Event object, but it can only
+           be waited upon in a coroutine. It is set using a normal
+           synchronous set() call.  For example:
+
+               evt = SyncEvent()
+
+               async def coro():
+                   print('Waiting for something')
+                   await evt.wait()
+                   print('It happened')
+
+               def spam():
+                   print('About to signal')
+                   evt.set()
+
+               async def main():
+                   await spawn(coro())
+                   await sleep(5)
+                   spam()         # Note: Normal synchronous function call
+
+               run(main())
+
+           The main purpose of this feature is to make it easier to
+           coordinate asynchronous tasks with things that are happening
+           in normal synchronous Python code.  For example, synchronous
+           code could be doing something like building up a list of
+           outgoing network packets.   When completed, perhaps it wants
+           to signal an asynchronous task to actually perform the
+           outgoing I/O.   This can be used for that.
+
 08/04/2016 Added a new KernelExit exception that can be used to 
            make the kernel terminate execution.  For example:
 
