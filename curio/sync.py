@@ -4,7 +4,7 @@
 # events, locks, semaphores, and condition variables. These primitives
 # are only safe to use in the curio framework--they are not thread safe.
 
-__all__ = ['Event', 'SyncEvent', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide' ]
+__all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide' ]
 
 import threading
 from inspect import iscoroutinefunction
@@ -14,13 +14,15 @@ from .kernel import kqueue
 from . import workers
 from .errors import CancelledError, TaskTimeout
 from .task import spawn
+from .meta import awaitable
 
 class Event(object):
-    __slots__ = ('_set', '_waiting')
+    __slots__ = ('_set', '_waiting', '_reschedule_func')
 
     def __init__(self):
         self._set = False
         self._waiting = kqueue()
+        self._reschedule_func = None
 
     def __repr__(self):
         res = super().__repr__()
@@ -37,8 +39,17 @@ class Event(object):
         if self._set:
             return
 
+        if self._reschedule_func is None:
+            self._reschedule_func = await _queue_reschedule_function(self._waiting)
+
         await _wait_on_queue(self._waiting, 'EVENT_WAIT')
 
+    def set(self):
+        self._set = True
+        if self._reschedule_func and self._waiting:
+            self._reschedule_func(len(self._waiting))
+
+    @awaitable(set)
     async def set(self):
         self._set = True
         await _reschedule_tasks(self._waiting, len(self._waiting))

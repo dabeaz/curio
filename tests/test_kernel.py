@@ -34,7 +34,7 @@ def test_wakeat(kernel):
           clock = time.monotonic() + 0.5
           results.append('start')
           newclock = await wake_at(clock)
-          results.append(round(newclock-clock, 2))
+          results.append(round(newclock-clock, 1))
 
     start = time.time()
     kernel.run(main())

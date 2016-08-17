@@ -1,18 +1,51 @@
 CHANGES
 -------
-08/15/2016 Added a new synchronization primitive SyncEvent that allows
-           synchronization between asynchronous and synchronous code.
-           You use it like a normal Event object, but it can only
-           be waited upon in a coroutine. It is set using a normal
-           synchronous set() call.  For example:
+08/16/2016 Modified the Queue class so that the put() method can be used from either
+           synchronous or asynchronous code.  For example:
 
-               evt = SyncEvent()
+              from curio import Queue
+              queue = Queue()
+
+              def spam():
+                  # Create some item
+                  ...
+                  queue.put(item)
+
+              async def consumer():
+                  while True:
+                       item = await queue.get()
+                       # Consume the item
+                       ...
+
+              async def coro():
+                    ...
+                    spam()       # Note: Normal synchronous function call
+                    ...
+
+              async def main():
+                  await spawn(coro())
+                  await spawn(consumer())
+
+              run(main())
+
+           The main purpose of adding this is to make it easier for normal
+           synchronous code to communicate to async tasks without knowing
+           too much about what they are.  Note:  The put() method is never
+           allowed to block in synchronous mode.  If the queue has a bounded
+           size and it fills up, an exception is raised.
+
+08/16/2016 Modified the Event class so that events can also be set from synchronous
+           code.  For example:
+
+               from curio import Event
+               evt = Event()
 
                async def coro():
                    print('Waiting for something')
                    await evt.wait()
                    print('It happened')
 
+               # A normal synchronous function. No async/await here.
                def spam():
                    print('About to signal')
                    evt.set()
@@ -24,13 +57,21 @@ CHANGES
 
                run(main())
 
-           The main purpose of this feature is to make it easier to
-           coordinate asynchronous tasks with things that are happening
-           in normal synchronous Python code.  For example, synchronous
-           code could be doing something like building up a list of
-           outgoing network packets.   When completed, perhaps it wants
-           to signal an asynchronous task to actually perform the
-           outgoing I/O.   This can be used for that.
+           The main motivation for adding this is that is very easy for
+           control flow to escape the world of "async/await".  However,
+           that code may still want to signal or coordinate with async
+           tasks in some way.   By allowing a synchronous set(), it
+           makes it possible to do this.    It should be noted that within
+           a coroutine, you have to use await when triggering an event.
+           For example:
+
+               evt = Event()
+
+               def foo():
+                   evt.set()           # Synchronous use
+
+               async def bar():
+                   await evt.set()     # Asynchronous use
 
 08/04/2016 Added a new KernelExit exception that can be used to 
            make the kernel terminate execution.  For example:

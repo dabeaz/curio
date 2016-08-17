@@ -16,7 +16,6 @@ from .traps import _future_wait, _get_kernel
 from . import sync
 from .channel import Channel
 
-
 # Code to embed a traceback in a remote exception.  This is borrowed
 # straight from multiprocessing.pool.  Copied here to avoid possible
 # confusion when reading the traceback message (it will identify itself

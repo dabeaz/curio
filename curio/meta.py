@@ -12,7 +12,7 @@ import inspect
 from functools import wraps
 from abc import ABCMeta, abstractmethod
 
-from . import workers
+
 from .errors import SyncIOError
 
 def blocking(func):
@@ -22,6 +22,7 @@ def blocking(func):
     However, if called from a coroutine, curio arranges for it to run
     in a thread.  
     '''
+    from . import workers
     @wraps(func)
     def wrapper(*args, **kwargs):
         if sys._getframe(1).f_code.co_flags & 0x80:
@@ -37,6 +38,7 @@ def cpubound(func):
     However, if called from a coroutine, curio arranges for it to run
     in a process.
     '''
+    from . import workers
     @wraps(func)
     def wrapper(*args, **kwargs):
         if sys._getframe(1).f_code.co_flags & 0x80:
