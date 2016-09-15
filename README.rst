@@ -208,7 +208,7 @@ performance, debugging, diagnostics, and reliability.  A main goal is
 to provide a robust environment for running and controlling concurrent
 tasks.
 
-**Q: Is there a Curio sticker?
+**Q: Is there a Curio sticker?**
 
 A: No.
 
