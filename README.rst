@@ -223,6 +223,12 @@ A: Absolutely. Please use the Github page at
 https://github.com/dabeaz/curio as the primary point of discussion
 concerning pull requests, bugs, and feature requests.
 
+Discussion Forum
+----------------
+
+A discussion forum for Curio is available at http://forum.dabeaz.com/c/curio.  
+Please go there to ask questions and find out whats happening with the project.
+
 Contributors
 ------------
 
