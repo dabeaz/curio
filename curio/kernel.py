@@ -259,7 +259,7 @@ class Kernel(object):
         # and continue to run to perform cleanup actions.  However, it would
         # normally terminate shortly afterwards.   This method is also used to
         # raise timeouts.
-        def _cancel_task(task, exc=CancelledError):
+        def _cancel_task(task, exc=CancelledError, val=None):
             if task.terminated:
                 return True
 
@@ -286,7 +286,7 @@ class Kernel(object):
             task.cancel_func()
 
             # Reschedule it with a pending exception
-            _reschedule_task(task, exc=exc(exc.__name__))
+            _reschedule_task(task, exc=exc(exc.__name__ if val is None else val))
             return True
 
         # Cleanup task.  This is called after the underlying coroutine has
@@ -592,7 +592,7 @@ class Kernel(object):
                                     _reschedule_task(task, value=current_time)
                             else:
                                 if tm == task.timeout:
-                                    if (_cancel_task(task, exc=TaskTimeout)):
+                                    if (_cancel_task(task, exc=TaskTimeout, val=current_time)):
                                         task.timeout = None
                                     else:
                                         # Note: There is a possibility that a task will be

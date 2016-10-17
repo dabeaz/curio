@@ -230,6 +230,7 @@ class _TimeoutAfter(object):
     async def __aexit__(self, ty, val, tb):
         await _unset_timeout(self._prior)
         if ty == TaskTimeout:
+            val.expired = val.args[0] >= self._clock
             self.result = self._timeout_result
             if self._ignore:
                 return True
@@ -238,7 +239,8 @@ async def _timeout_after_func(clock, coro, ignore=False, timeout_result=None):
     prior = await _set_timeout(clock)
     try:
         return await coro
-    except TaskTimeout:
+    except TaskTimeout as e:
+        e.expired = e.args[0] >= clock
         if not ignore:
             raise
         return timeout_result

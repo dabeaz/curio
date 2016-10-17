@@ -1,5 +1,34 @@
 CHANGES
 -------
+10/16/2016 Added an expired attribute to TaskTimeout exceptions
+           that more precisely indicates whether or not the
+           specified time internal has elapsed.  For example:
+
+           try:
+               await timeout_after(20, coro())
+           except TaskTimeout as e:
+               if e.expired:
+                   # 20 seconds have elapsed.
+                   ...
+               else:
+                   # Timeout has occurred early
+
+           A premature timeout can occur when timeouts are nested.
+           For example:
+
+           async with timeout_after(15):
+               statements
+               ...
+               try:
+                   await timeout_after(5, coro())
+               except TaskTimeout as e:
+                   if e.expired:
+                      # Inner timeout expired
+                   else:
+                      # Outer timeout must have expired
+               ...
+
+           
 08/16/2016 Modified the Queue class so that the put() method can be used from either
            synchronous or asynchronous code.  For example:
 
