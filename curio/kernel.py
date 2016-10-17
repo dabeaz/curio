@@ -430,7 +430,8 @@ class Kernel(object):
                 while n > 0:
                     _reschedule_task(queue.popleft())
                     n -= 1
-            _reschedule_task(current, value=_reschedule)
+            ready_appendleft(current)
+            current.next_value = _reschedule
 
         # Join with a task
         def _trap_join_task(_, task):
