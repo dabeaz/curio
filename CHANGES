@@ -1,33 +1,44 @@
 CHANGES
 -------
-10/16/2016 Added an expired attribute to TaskTimeout exceptions
-           that more precisely indicates whether or not the
-           specified time internal has elapsed.  For example:
+10/17/2016 More precisely defined the semantics of nested timeouts
+           and exception handling.  Consider the following arrangement
+           of timeout blocks:
 
-           try:
-               await timeout_after(20, coro())
-           except TaskTimeout as e:
-               if e.expired:
-                   # 20 seconds have elapsed.
-                   ...
-               else:
-                   # Timeout has occurred early
+           # B1
+           async with timeout_after(time1):
+                # B2
+                async with timeout_after(time2):
+                    await coro()
 
-           A premature timeout can occur when timeouts are nested.
-           For example:
+           Here are the rules:
 
-           async with timeout_after(15):
-               statements
-               ...
-               try:
-                   await timeout_after(5, coro())
-               except TaskTimeout as e:
-                   if e.expired:
-                      # Inner timeout expired
-                   else:
-                      # Outer timeout must have expired
-               ...
+           1. If time2 expires before time1, then block B2 receives
+              a TaskTimeout exception.
 
+           2. If time1 expires before time2, then block B2 receives
+              a TimeoutCancellationError exception and block B1
+              receives a TaskTimeout exception.  This reflects the
+              fact that the inner timeout didn't actually occur
+              and thus it shouldn't be reported as such.  The inner
+              block is still cancelled however in order to satisfy
+              the outer timeout.
+
+           3. If time2 expires before time1 and the resulting
+              TaskTimeout is NOT caught, but allowed to propagate out
+              to B1, then block B1 receives an UncaughtTimeoutError
+              exception.  A block should never report a TaskTimeout
+              unless its specified time interval has actually expired.
+              Reporting a timeout early because of an uncaught 
+              exception in an inner block should be considered to be
+              an operational error. This exception reflects that.
+
+           4. If time1 and time2 both expire simultaneously, the
+              outer timeout takes precedence and time1 is considered
+              to have expired first.
+
+           See Issue #82 for further details about the rationale for
+           this change. https://github.com/dabeaz/curio/issues/82
+           
            
 08/16/2016 Modified the Queue class so that the put() method can be used from either
            synchronous or asynchronous code.  For example:

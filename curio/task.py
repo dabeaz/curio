@@ -5,7 +5,7 @@
 __all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather', 'timeout_after', 'ignore_after', 'wait' ]
 
 from time import monotonic
-from .errors import TaskTimeout, TaskError
+from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError
 from .traps import *
 
 class Task(object):
@@ -16,7 +16,8 @@ class Task(object):
     __slots__ = (
         'id', 'daemon', 'coro', '_send', '_throw', 'cycles', 'state',
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
-        'next_exc', 'joining', 'cancelled', 'terminated', '_last_io', '__weakref__',
+        'next_exc', 'joining', 'cancelled', 'terminated', '_last_io', '_deadlines',
+        '__weakref__',
         )
     _lastid = 1
 
@@ -42,6 +43,7 @@ class Task(object):
         self._last_io = None       # Last I/O operation performed
         self._send = coro.send     # Bound coroutine methods
         self._throw = coro.throw
+        self._deadlines = []       # Timeout deadlines
 
     def __repr__(self):
         return 'Task(id=%r, %r, state=%r)' % (self.id, self.coro, self.state)
@@ -224,27 +226,96 @@ class _TimeoutAfter(object):
         self.result = True
 
     async def __aenter__(self):
+        task = await current_task()
+        self._deadlines = task._deadlines
+        self._deadlines.append(self._clock)
         self._prior = await _set_timeout(self._clock)
         return self
 
     async def __aexit__(self, ty, val, tb):
         await _unset_timeout(self._prior)
-        if ty == TaskTimeout:
-            val.expired = val.args[0] >= self._clock
-            self.result = self._timeout_result
-            if self._ignore:
-                return True
+
+        # Discussion.  If a timeout has occurred, it will either
+        # present itself here as a TaskTimeout or TimeoutCancellationError
+        # exception.  The value of this exception is set to the current
+        # kernel clock which can be compared against our own deadline.   
+        # What happens next is driven by these rules:
+        #
+        # 1.  If we are the outer-most context where the timeout 
+        #     period has expired, then a TaskTimeout is raised.
+        #
+        # 2.  If the deadline has expired for at least one outer
+        #     context, (but not us), a TimeoutCancellationError is
+        #     raised.  This means that time has expired elsewhere.
+        #     We're being cancelled because of that, but the reason
+        #     for the cancellation wasn't due to a timeout on our
+        #     part.
+        #
+        # 3.  If the timeout period has not expired on ANY remaining
+        #     timeout context, it means that a timeout has escaped
+        #     some inner timeout context where it should have been
+        #     caught. This is an operational error.  We raise
+        #     UncaughtTimeoutError.
+
+        try:
+            if ty in (TaskTimeout, TimeoutCancellationError):
+                timeout_clock = val.args[0]
+                # Find the outer most deadline that has expired
+                for n, deadline in enumerate(self._deadlines):
+                    if deadline <= timeout_clock:
+                        break
+                else:
+                    # No remaining context has expired. An operational error
+                    raise UncaughtTimeoutError('Uncaught timeout received')
+
+                if n < len(self._deadlines) - 1:
+                    if ty is TaskTimeout:
+                        raise TimeoutCancellationError(val.args[0]).with_traceback(tb) from None
+                    else:
+                        return False
+                else:
+                    # The timeout is us.  Make sure it's a TaskTimeout (unless ignored)
+                    self.result = self._timeout_result
+                    if self._ignore:
+                        return True
+                    else:
+                        if ty is TimeoutCancellationError:
+                            raise TaskTimeout(val.args[0]).with_traceback(tb) from None
+                        else:
+                            return False
+        finally:
+            self._deadlines.pop()
 
 async def _timeout_after_func(clock, coro, ignore=False, timeout_result=None):
+    task = await current_task()
     prior = await _set_timeout(clock)
+    task._deadlines.append(clock)
     try:
         return await coro
-    except TaskTimeout as e:
-        e.expired = e.args[0] >= clock
+    except (TaskTimeout, TimeoutCancellationError) as e:
+        timeout_clock = e.args[0]
+        for n, deadline in enumerate(task._deadlines):
+            if deadline <= timeout_clock:
+                break
+        else:
+            raise UncaughtTimeoutError('Uncaught timeout received')
+
+        if n < len(task._deadlines) - 1:
+            if isinstance(e, TaskTimeout):
+                raise TimeoutCancellationError(e.args[0]).with_traceback(e.__traceback__) from None
+            else:
+                raise
+
+        # We're getting the timeout
         if not ignore:
-            raise
+            if isinstance(e, TimeoutCancellationError):
+                raise TaskTimeout(e.args[0]).with_traceback(e.__traceback__) from None
+            else:
+                raise
         return timeout_result
+
     finally:
+        task._deadlines.pop()
         await _unset_timeout(prior)
 
 def timeout_after(seconds, coro=None):
