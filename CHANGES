@@ -1,5 +1,17 @@
 CHANGES
 -------
+10/17/2016 Added shutdown() method to sockets.  It is an async function
+           to mirror async implementation of close()
+
+           await sock.shutdown(how)
+
+10/17/2016 Added writeable() method to sockets.  It can be used to
+           quickly test if a socket will accept more data before
+           doing a send().  See Issue #83.
+
+           await sock.writeable()
+           nsent = await sock.send(data)
+
 10/17/2016 More precisely defined the semantics of nested timeouts
            and exception handling.  Consider the following arrangement
            of timeout blocks:

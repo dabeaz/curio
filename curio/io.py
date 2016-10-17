@@ -28,6 +28,7 @@
 __all__ = ['Socket', 'FileStream', 'SocketStream']
 
 from socket import SOL_SOCKET, SO_ERROR
+from select import select
 from contextlib import contextmanager
 import io
 import os
@@ -144,6 +145,10 @@ class Socket(object):
             except WantRead:
                 await _read_wait(self._fileno)
 
+    async def writeable(self):
+        if not select([], [self._fileno], [], 0)[1]:
+            await _write_wait(self._fileno)
+
     async def accept(self):
         while True:
             try:
@@ -248,6 +253,10 @@ class Socket(object):
         self._socket = None
         self._fileno = -1
 
+    # This is declared as async for the same reason as close()
+    async def shutdown(self, how):
+        self._socket.shutdown(how)
+        
     async def __aenter__(self):
         self._socket.__enter__()
         return self
