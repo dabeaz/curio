@@ -50,7 +50,9 @@ __all__ = ["Local"]
 # An unusual feature of this implementation (and our main deviation from
 # threading.Local) is that we implement *TLS inheritance*, i.e., when you
 # spawn a new task, then all TLS values set in the parent task are (shallowly)
-# copied to the child task. This, again, allows us to preserve context
+# copied to the child task. This is a bit experimental, but very handy in
+# cases like when a request handler spawns some small short-lived worker tasks
+# as part of its processing and those want to do logging as well.
 
 import threading
 from contextlib import contextmanager
