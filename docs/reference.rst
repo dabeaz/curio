@@ -182,6 +182,14 @@ functions can be used for this purpose:
    function serves as an asynchronous context manager that applies a
    timeout to a block of statements.
 
+   :func:`timeout_after` may be composed with other :func:`timeout_after` 
+   operations (i.e., nested timeouts).   If an outer timeout expires
+   first, then :py:exc:`curio.TimeoutCancelledError` is raised
+   instead of :py:exc:`curio.TaskTimeout`.  If an inner timeout
+   expires and fails to properly catch :py:exc:`curio.TaskTimeout`,
+   a :py:exc:`curio.UncaughtTimeoutError` is raised in the outer
+   timeout.  
+
 .. asyncfunction:: ignore_after(seconds, coro=None, *, timeout_result=None)
 
    Execute the specified coroutine and return its result. Issue a
@@ -192,6 +200,11 @@ functions can be used for this purpose:
    of statements.  For the context manager case, ``result`` attribute
    of the manager is set to ``None`` or the value of *timeout_result*
    if the block was cancelled.
+
+   Note: :func:`ignore_after` may also be composed with other timeout
+   operations.  :py:exc:`curio.TimeoutCancelledError` and
+   :py:exc:`curio.UncaughtTimeoutError` exceptions might be raised
+   according to the same rules as for :func:`timeout_after`.
 
 Here is an example that shows how these functions can be used::
 

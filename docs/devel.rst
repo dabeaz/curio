@@ -812,8 +812,8 @@ timeout occurs. For example::
     if t.result == None:
         print('Timeout')
 
-Timeouts can be nested, but the semantics are a bit hair-raising.  To
-illustrate, consider this bit of code::
+Timeouts can be nested, but the semantics are a bit hair-raising and
+tricky.  To illustrate, consider this bit of code::
 
     async def coro1():
         print('Coro1 Start')
@@ -842,34 +842,54 @@ illustrate, consider this bit of code::
 If you run this program, you will get the following output::
 
     Coro1 Start
-    Coro1 Timeout         (appears after 5 seconds)
-    Coro2 Start
-    Parent Timeout        (appears immediately)
+    Parent Timeout        (appears after 5 seconds)
 
-To understand this output, there are two important rules in play.
+To understand this output, there are some important rules in play.
 First, the actual timeout period in effect is always the smallest of
 all of the applied timeout values. In this code, the outer ``main()``
 coroutine applies a 5 second timeout to the ``child()`` coroutine.
 Even though the ``child()`` coroutine attempts to apply a 50 second
 timeout to ``coro1()``, the 5 second expiration already applied is
-kept in force.  This is why ``coro1()`` receives a timeout when it sleeps
+kept in force.  This is why ``coro1()`` is cancelled when it sleeps
 for 10 seconds.
 
-The second rule of timeouts is that the ``timeout_after()`` function
-always restores any previous timeout setting when it completes.  In
-the above code, the ``coro1()`` coroutine receives a timeout, which is
-appropriately handled. However, the ``child()`` coroutine continues to
-run afterwards--moving on to call the ``coro2()`` coroutine.  When
-``coro2()`` calls ``await sleep(1)``, it immediately fails with
-``TaskTimeout`` exception. This happens because of the restoration of
-the prior timeout--essentially Curio sees that the 5 second time period has
-already expired and raises ``TaskTimeout``.
+The second rule of timeouts is that only the outer-most timeout that
+expires receives a ``TaskTimeout`` exception.  In this case, the
+``timeout_after(5)`` operation in ``main()`` is the timeout that has
+expired.  Thus, it gets the exception.  The inner call to
+``timeout_after(50)`` also aborts with an exception, but it is a
+``TimeoutCancelledError``.  This signals that the code is being
+cancelled due to a timeout, but not the one that was specifically
+requested.  That is, the operation is NOT being cancelled due to 50
+seconds passing. Instead, some kind of outer timeout is responsible.
+Normally, ``TimeoutCancelledError`` would not be caught.  Instead, it
+silently propagates to the outer timeout which handles it.
 
-Admittedly, all of this is a bit subtle, but the key idea is that each
-``timeout_after()`` function is guaranteed to either run the given
-coroutine to completion or to generate at least one ``TaskTimeout``
-exception.  Since the above code uses ``timeout_after()`` twice, there
-are two separate ``TaskTimeout`` exceptions that might get raised.
+Admittedly, all of this is a bit subtle, but the key idea is that 
+an outer timeout is always allowed to cancel an inner timeout. Moreover,
+the ``TaskTimeout`` exception will only arise out of the ``timeout_after()``
+call that has expired.   This arrangement allows for tricky corner cases
+such as this example::
+
+    async def child():
+         while True:
+              try:
+                   result = await timeout_after(1, coro())
+                   ...
+              except TaskTimeout:
+                   print('Timed out. Retrying')
+
+    async def parent():
+         try:
+             await timeout_after(5, child())
+         except TaskTimeout:
+             print('Timeout')
+
+In this code, it might appear that ``child()`` will never terminate
+due to the fact that it catches ``TaskTimeout`` exceptions and
+continues to loop forever.  Not so--when the ``timeout_after()``
+operation in ``parent()`` expires, a ``TimeoutCancellationError`` will
+be raised in ``child()`` instead.  This causes the loop to stop.
 
 There are are still some ways that timeouts can go wrong and you'll
 find yourself battling a sky full of swooping manta rays.  The best
@@ -902,43 +922,7 @@ program will look like this::
     ... forever...
 
 Bottom line:  Don't catch ``TaskTimeout`` exceptions unless you're also
-using ``timeout_after()``.  Another possible way to shoot yourself in the
-foot is to structure nested timeouts in a way that exceptions don't
-propagate properly.  For example, consider this::
-
-    async def child():
-         while True:
-              try:
-                   result = await timeout_after(1, coro())
-                   ...
-              except TaskTimeout:
-                   pass
-
-    async def parent():
-         try:
-             await timeout_after(5, child())
-         except TaskTimeout:
-             print('Timeout')
-
-In this code, timeouts are always associated with the inner
-``timeout_after()`` call in ``child()``.  The resulting exceptions get
-handled, but they're never allowed to propagate back out to the
-``parent()`` coroutine.  Ultimately, the code will get caught in some
-kind of strange infinite timeout loop as it repeatedly tries to abort back out to
-the parent, but never does so.  You need to make sure that there is a
-way for a ``TaskTimeout`` exception to be raised and provide a route
-for it to propagate back to the associated ``timeout_after()`` call. For
-example, re-raising the exception::
-
-    async def child():
-         while True:
-              try:
-                   result = await timeout_after(1, coro())
-                   ...
-              except TaskTimeout:
-                   # Handle the timeout in some way 
-                   ...
-                   raise
+using ``timeout_after()``. 
 
 It should be noted that timeouts can be temporarily suspended if you use
 ``None`` as a timeout.  For example::
