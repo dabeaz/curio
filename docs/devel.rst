@@ -858,11 +858,11 @@ expires receives a ``TaskTimeout`` exception.  In this case, the
 ``timeout_after(5)`` operation in ``main()`` is the timeout that has
 expired.  Thus, it gets the exception.  The inner call to
 ``timeout_after(50)`` also aborts with an exception, but it is a
-``TimeoutCancelledError``.  This signals that the code is being
+``TimeoutCancellationError``.  This signals that the code is being
 cancelled due to a timeout, but not the one that was specifically
 requested.  That is, the operation is NOT being cancelled due to 50
 seconds passing. Instead, some kind of outer timeout is responsible.
-Normally, ``TimeoutCancelledError`` would not be caught.  Instead, it
+Normally, ``TimeoutCancellationError`` would not be caught.  Instead, it
 silently propagates to the outer timeout which handles it.
 
 Admittedly, all of this is a bit subtle, but the key idea is that 
