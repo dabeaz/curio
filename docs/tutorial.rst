@@ -908,6 +908,100 @@ Curio provides the same synchronization primitives as found in the built-in
 ``threading`` module.  The same techniques used by threads can be used with
 curio.
 
+Task-local storage
+------------------
+
+Sometimes it happens that you want to store some data that is specific
+to a particular Task in place where it can be reached from anywhere,
+without having to pass it around everywhere. For example, in a server
+that responds to network requests, you might want to assign each
+request a unique tag, and then make sure to include that unique tag in
+all log messages generated while handling the request. If we were
+using threads, the solution would be thread-local storage implemented
+with :py:class:`threading.local`. In Curio, we use task-local storage,
+implemented by ``curio.Local``. For example::
+
+    # tls-example.py
+
+    import curio
+
+    import random
+    r = random.Random(0)
+
+    request_info = curio.Local()
+
+    # Example logging function that tags each line with the request identifier.
+    def log(msg):
+        # Read from task-local storage:
+        request_tag = request_info.tag
+
+        print("request {}: {}".format(request_tag, msg))
+
+    async def concurrent_helper(job):
+        log("running helper task {}".format(job))
+        await curio.sleep(r.random())
+        log("finished helper task {}".format(job))
+
+    async def handle_request(tag):
+        # Write to task-local storage:
+        request_info.tag = tag
+
+        log("Request received")
+        await curio.sleep(r.random())
+        helpers = [
+            await curio.spawn(concurrent_helper(1)),
+            await curio.spawn(concurrent_helper(2)),
+        ]
+        for helper in helpers:
+            await helper.join()
+        await curio.sleep(r.random())
+        log("Request complete")
+
+    async def main():
+        tasks = []
+        for i in range(3):
+            tasks.append(await curio.spawn(handle_request(i)))
+        for task in tasks:
+            await task.join()
+
+    if __name__ == "__main__":
+        curio.run(main())
+
+which produces output like::
+
+    request 0: Request received
+    request 1: Request received
+    request 2: Request received
+    request 2: running helper task 1
+    request 2: running helper task 2
+    request 2: finished helper task 1
+    request 1: running helper task 1
+    request 1: running helper task 2
+    request 0: running helper task 1
+    request 0: running helper task 2
+    request 2: finished helper task 2
+    request 0: finished helper task 1
+    request 1: finished helper task 1
+    request 0: finished helper task 2
+    request 2: Request complete
+    request 1: finished helper task 2
+    request 1: Request complete
+    request 0: Request complete
+
+Notice two features in particular:
+
+- Unlike almost all other APIs in curio, accessing task-local storage
+  does *not* use ``await``. As an example of why this is useful,
+  imagine you wanted to capture logs written via the standard library
+  :py:mod:`logging` module, and annotate them with request
+  identifiers. Because :py:mod:`logging` is synchronous, this would be
+  impossible if accessing task-local storage required ``await``.
+
+- Unlike :py:class:`threading.local`, Curio task-local variables are
+  *inherited*. Notice how in our example above, the logs from
+  ``concurrent_helper`` are tagged with the appropriate request.
+
+
 Programming Advice
 ------------------
 
