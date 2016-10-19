@@ -203,10 +203,10 @@ functions can be used for this purpose:
 
    :func:`timeout_after` may be composed with other :func:`timeout_after` 
    operations (i.e., nested timeouts).   If an outer timeout expires
-   first, then :py:exc:`curio.TimeoutCancellationError` is raised
+   first, then ``curio.TimeoutCancellationError`` is raised
    instead of :py:exc:`curio.TaskTimeout`.  If an inner timeout
    expires and fails to properly catch :py:exc:`curio.TaskTimeout`,
-   a :py:exc:`curio.UncaughtTimeoutError` is raised in the outer
+   a ``curio.UncaughtTimeoutError`` is raised in the outer
    timeout.  
 
 .. asyncfunction:: ignore_after(seconds, coro=None, *, timeout_result=None)
@@ -221,8 +221,8 @@ functions can be used for this purpose:
    if the block was cancelled.
 
    Note: :func:`ignore_after` may also be composed with other timeout
-   operations.  :py:exc:`curio.TimeoutCancellationError` and
-   :py:exc:`curio.UncaughtTimeoutError` exceptions might be raised
+   operations.  ``curio.TimeoutCancellationError`` and
+   ``curio.UncaughtTimeoutError`` exceptions might be raised
    according to the same rules as for :func:`timeout_after`.
 
 Here is an example that shows how these functions can be used::
