@@ -88,6 +88,8 @@ def _local_dict(local):
 
 class Local:
     def __getattribute__(self, name):
+        if name == "__dict__":
+            return _local_dict(self)
         try:
             return _local_dict(self)[name]
         except KeyError:
