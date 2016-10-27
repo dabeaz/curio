@@ -131,7 +131,7 @@ class RLock(_LockBase):
         self._count = 0
 
     async def acquire(self):
-        
+
         me = await current_task()
 
         if self._owner is not me:
@@ -141,6 +141,26 @@ class RLock(_LockBase):
         return True
 
     async def release(self):
+        """Release the lock
+
+        If the acquisitions count reaches 0, release the underlying
+        lock. Only the owner of the lock can release it.
+
+        Note, that due to the asynchronous nature of the _LocBase.__aexit__(),
+        this lock could be acquired by another waiter before the current owner
+        executes the first line after the context, which might surprise a user:
+
+        >>>lck = RLock()
+        >>>async def foo():
+        >>>    async with lck:
+        >>>        print('locked')
+        >>>        # since the actual call to lck.release() will be done before
+        >>>        # exiting the context, some other waiter coroutine could be
+        >>>        # scheduled to run before we actually exit the context
+        >>>    print('This line might be executed after'
+        >>>          'another coroutine acquires this lock')
+
+        """
         if not await current_task() is self._owner:
             raise RuntimeError('RLock can only be released by the owner')
         self._count -= 1

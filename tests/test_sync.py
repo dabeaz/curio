@@ -352,7 +352,6 @@ class TestRLock:
             await spawn(worker_simple(lck))
 
         kernel.run(main())
-        print(results)
         assert results == [
             False,
             'work1 wait',
