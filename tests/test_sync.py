@@ -319,6 +319,61 @@ class TestLock:
                 'sleep_done',
                 ]
 
+
+class TestRLock:
+    def test_rlock_reenter(self, kernel):
+        results = []
+
+        async def inner(lck, label):
+            results.append(lck.locked())
+            async with lck:
+                results.append(label + ' inner acquired')
+                results.append(label + ' inner releasing')
+
+        async def worker(lck, label):
+            results.append(lck.locked())
+            results.append(label + ' wait')
+            async with lck:
+                results.append(label + ' acquired')
+                await sleep(0.25)
+                await inner(lck, label)
+                results.append(label + ' releasing')
+
+        async def worker_simple(lck):
+            results.append('simple wait')
+            async with lck:
+                results.append('simple acquired')
+                results.append('simple releasing')
+
+        async def main():
+            lck = RLock()
+            await spawn(worker(lck, 'work1'))
+            await spawn(worker(lck, 'work2'))
+            await spawn(worker_simple(lck))
+
+        kernel.run(main())
+        print(results)
+        assert results == [
+            False,
+            'work1 wait',
+            'work1 acquired',
+            True,
+            'work2 wait',
+            'simple wait',
+            True,
+            'work1 inner acquired',
+            'work1 inner releasing',
+            'work1 releasing',
+            'work2 acquired',
+            True,
+            'work2 inner acquired',
+            'work2 inner releasing',
+            'work2 releasing',
+            'simple acquired',
+            'simple releasing'
+        ]
+
+
 class TestSemaphore:
     def test_sema_sequence(self, kernel):
         results = []
