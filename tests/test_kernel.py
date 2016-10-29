@@ -90,6 +90,27 @@ def test_sleep_timeout(kernel):
             'timeout',
             ]
 
+def test_sleep_timeout_absolute(kernel):
+    results = []
+
+    async def sleeper():
+        results.append('start')
+        try:
+            await timeout_at(time.monotonic() + 0.5, sleep(1))
+            results.append('not here')
+        except TaskTimeout:
+            results.append('timeout')
+
+    async def main():
+        task = await spawn(sleeper())
+        await task.join()
+
+    kernel.run(main())
+    assert results == [
+            'start',
+            'timeout',
+            ]
+
 def test_sleep_ignore_timeout(kernel):
     results = []
 
@@ -99,6 +120,34 @@ def test_sleep_ignore_timeout(kernel):
             results.append('timeout')
 
         async with ignore_after(0.5) as s:
+            await sleep(1)
+
+        if s.result is None:
+            results.append('timeout2')
+
+
+    async def main():
+        task = await spawn(sleeper())
+        await task.join()
+
+    kernel.run(main())
+    assert results == [
+            'start',
+            'timeout',
+            'timeout2',
+            ]
+
+
+
+def test_sleep_ignore_timeout_absolute(kernel):
+    results = []
+
+    async def sleeper():
+        results.append('start')
+        if await ignore_at(time.monotonic() + 0.5, sleep(1)) is None:
+            results.append('timeout')
+
+        async with ignore_at(time.monotonic() + 0.5) as s:
             await sleep(1)
 
         if s.result is None:

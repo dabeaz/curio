@@ -16,10 +16,10 @@ class CancelledError(CurioError):
 class TimeoutCancellationError(CancelledError):
     pass
 
-class UncaughtTimeoutError(CurioError):
+class TaskTimeout(CancelledError):
     pass
 
-class TaskTimeout(CurioError):
+class UncaughtTimeoutError(CurioError):
     pass
 
 class TaskError(CurioError):

@@ -1,5 +1,13 @@
 CHANGES
 -------
+10/29/2016 Added timeout_at() and ignore_at() functions that allow timeouts
+           to be specified at absolute clock values.  The usage is the
+           same as for timeout_after() and ignore_after().
+           
+10/29/2016 Modified TaskTimout exception so that it subclasses CancelledError.
+           This makes it easier to write code that handles any kind of 
+	   cancellation (explicit cancellation, cancellation by timeout, etc.)
+
 10/17/2016 Added shutdown() method to sockets.  It is an async function
            to mirror async implementation of close()
 

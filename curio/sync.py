@@ -12,7 +12,7 @@ from inspect import iscoroutinefunction
 from .traps import _wait_on_queue, _reschedule_tasks, _future_wait, _queue_reschedule_function
 from .kernel import kqueue
 from . import workers
-from .errors import CancelledError, TaskTimeout
+from .errors import CancelledError
 from .task import spawn
 from .meta import awaitable
 
@@ -241,8 +241,8 @@ class _contextadapt(object):
         try:
             await _future_wait(self.enter_future, self.start_evt)
             return self.enter_future.result()
-        except (CancelledError, TaskTimeout):
-            # An interesting corner case... if we're cancelled why waiting to
+        except CancelledError:
+            # An interesting corner case... if we're cancelled while waiting to
             # enter, we'd better arrange to exit in case it eventually succeeds.
             self.exit_future.add_done_callback(lambda f: None)
             self.finish_args = (None, None, None)
