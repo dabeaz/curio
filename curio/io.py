@@ -34,6 +34,7 @@ import io
 import os
 
 from .traps import _read_wait, _write_wait
+from . import errors
 
 # Exceptions raised for non-blocking I/O.  For normal sockets, blocking operations
 # normally just raise BlockingIOError.  For SSL sockets, more specific exceptions
@@ -136,14 +137,20 @@ class Socket(object):
 
     async def sendall(self, data, flags=0):
         buffer = memoryview(data).cast('b')
-        while buffer:
-            try:
-                nsent = self._socket_send(buffer, flags)
-                buffer = buffer[nsent:]
-            except WantWrite:
-                await _write_wait(self._fileno)
-            except WantRead:
-                await _read_wait(self._fileno)
+        total_sent = 0
+        try:
+            while buffer:
+                try:
+                    nsent = self._socket_send(buffer, flags)
+                    total_sent += nsent
+                    buffer = buffer[nsent:]
+                except WantWrite:
+                    await _write_wait(self._fileno)
+                except WantRead:
+                    await _read_wait(self._fileno)
+        except errors.CancelledError as e:
+            e.bytes_sent = total_sent
+            raise
 
     async def writeable(self):
         if not select([], [self._fileno], [], 0)[1]:

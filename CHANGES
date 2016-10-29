@@ -1,5 +1,14 @@
 CHANGES
 -------
+10/29/2016 If the sendall() method of a socket is aborted with a CancelledError,
+           the resulting exception object now gets a bytes_sent attribute set to
+           indicate how much progress was made.   For example:
+
+           try:
+               await sock.sendall(data)
+           except CancelledError as e:
+               print(e.bytes_sent, 'bytes sent')
+
 10/29/2016 Added timeout_at() and ignore_at() functions that allow timeouts
            to be specified at absolute clock values.  The usage is the
            same as for timeout_after() and ignore_after().
