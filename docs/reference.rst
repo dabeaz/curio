@@ -925,7 +925,8 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
 .. asyncmethod:: Lock.release()
 
    Release the lock, decrementing the rerecurtion level by 1. If recursion level reaches 0,
-   the lock is unlocked. Can only be called by the owner task.
+   the lock is unlocked. Raises ``RuntimeError`` if called not by the owner or if lock
+   is not locked.
 
 .. method:: Lock.locked()
 

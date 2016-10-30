@@ -135,6 +135,7 @@ class RLock(_LockBase):
         me = await current_task()
 
         if self._owner is not me:
+
             await self._lock.acquire()
             self._owner = me
         self._count += 1
@@ -163,6 +164,8 @@ class RLock(_LockBase):
         """
         if not await current_task() is self._owner:
             raise RuntimeError('RLock can only be released by the owner')
+        if not self.locked():
+            raise RuntimeError('RLock is not locked')
         self._count -= 1
         if self._count == 0:
             await self._lock.release()
