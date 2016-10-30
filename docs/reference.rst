@@ -908,6 +908,30 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
 
     curio.run(main())
 
+.. class:: RLock()
+
+   This class provides a recursive lock funtionality, that could be acquired multiple times
+   within the same task. The behavior of this lock is identical to the ``threading.RLock``,
+   except that the owner of the lock will be a task, wich acquired it, instead of a thread.
+
+
+:class:`RLock` instances support the following methods:
+
+.. asyncmethod:: Lock.acquire()
+
+   Acquire the lock, incrementing the recursion by 1. Can be used multiple times withing 
+   the same task, that owns this lock.
+
+.. asyncmethod:: Lock.release()
+
+   Release the lock, decrementing the rerecurtion level by 1. If recursion level reaches 0,
+   the lock is unlocked. Can only be called by the owner task.
+
+.. method:: Lock.locked()
+
+   Return ``True`` if the lock is currently held, i.e. recursion level is greater than 0.
+
+
 .. class:: Semaphore(value=1)
 
    Create a semaphore.  Semaphores are based on a counter.  If the count is greater
