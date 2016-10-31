@@ -4,7 +4,7 @@
 # events, locks, semaphores, and condition variables. These primitives
 # are only safe to use in the curio framework--they are not thread safe.
 
-__all__ = ['Event', 'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide' ]
+__all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide' ]
 
 import threading
 from inspect import iscoroutinefunction
@@ -12,8 +12,8 @@ from inspect import iscoroutinefunction
 from .traps import _wait_on_queue, _reschedule_tasks, _future_wait, _queue_reschedule_function
 from .kernel import kqueue
 from . import workers
-from .errors import CancelledError
-from .task import spawn
+from .errors import CancelledError, TaskTimeout
+from .task import spawn, current_task
 from .meta import awaitable
 
 class Event(object):
@@ -119,6 +119,60 @@ class Lock(_LockBase):
 
     def locked(self):
         return self._acquired
+
+
+class RLock(_LockBase):
+
+    __slots__ = ('_lock', '_owner', '_count')
+
+    def __init__(self):
+        self._lock = Lock()
+        self._owner = None
+        self._count = 0
+
+    async def acquire(self):
+
+        me = await current_task()
+
+        if self._owner is not me:
+
+            await self._lock.acquire()
+            self._owner = me
+        self._count += 1
+        return True
+
+    async def release(self):
+        """Release the lock
+
+        If the acquisitions count reaches 0, release the underlying
+        lock. Only the owner of the lock can release it.
+
+        Note, that due to the asynchronous nature of the _LocBase.__aexit__(),
+        this lock could be acquired by another waiter before the current owner
+        executes the first line after the context, which might surprise a user:
+
+        >>>lck = RLock()
+        >>>async def foo():
+        >>>    async with lck:
+        >>>        print('locked')
+        >>>        # since the actual call to lck.release() will be done before
+        >>>        # exiting the context, some other waiter coroutine could be
+        >>>        # scheduled to run before we actually exit the context
+        >>>    print('This line might be executed after'
+        >>>          'another coroutine acquires this lock')
+
+        """
+        if not await current_task() is self._owner:
+            raise RuntimeError('RLock can only be released by the owner')
+        if not self.locked():
+            raise RuntimeError('RLock is not locked')
+        self._count -= 1
+        if self._count == 0:
+            await self._lock.release()
+
+    def locked(self):
+        return self._count > 0
+
 
 class Semaphore(_LockBase):
 
