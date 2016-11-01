@@ -4,7 +4,7 @@
 # between tasks.  This is only safe to use within curio. It is not
 # thread-safe.
 
-__all__ = ['Queue', 'PriorityQueue']
+__all__ = ['Queue', 'PriorityQueue', 'LifoQueue']
 
 from collections import deque
 from heapq import heappush, heappop
@@ -97,3 +97,15 @@ class PriorityQueue(Queue):
 
     def _get(self):
         return heappop(self._queue)
+
+
+class LifoQueue(Queue):
+
+    def _init_internal_queue(self):
+        return []
+
+    def _put(self, item):
+        self._queue.append(item)
+
+    def _get(self):
+        return self._queue.pop()
