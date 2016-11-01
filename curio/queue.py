@@ -4,7 +4,6 @@
 # between tasks.  This is only safe to use within curio. It is not
 # thread-safe.
 
-__all__ = ['Queue', 'PriorityQueue', 'LifoQueue']
 
 from collections import deque
 from heapq import heappush, heappop
@@ -14,8 +13,12 @@ from .kernel import kqueue
 from .errors import CurioError
 from .meta import awaitable
 
+__all__ = ['Queue', 'PriorityQueue', 'LifoQueue']
+
+
 class Full(CurioError):
     pass
+
 
 class Queue(object):
     __slots__ = ('maxsize', '_queue', '_get_waiting',
@@ -88,6 +91,11 @@ class Queue(object):
 
 
 class PriorityQueue(Queue):
+    """A Queue that outputs an item with the lowest priority first
+
+    Items have to be orderable objects
+
+    """
 
     def _init_internal_queue(self):
         return []
@@ -100,6 +108,11 @@ class PriorityQueue(Queue):
 
 
 class LifoQueue(Queue):
+    """Last In First Out queue
+
+    Retrieves most recently added items first
+
+    """
 
     def _init_internal_queue(self):
         return []
