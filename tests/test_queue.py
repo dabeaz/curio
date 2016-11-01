@@ -255,3 +255,32 @@ def test_queue_sync(kernel):
             'cons2 done',
             ]
 
+
+def test_priority_queue(kernel):
+    results = []
+    priorities = [4, 2, 1, 3]
+
+    async def consumer(queue, label):
+        while True:
+            item = await queue.get()
+            if item[1] is None:
+                break
+            results.append(item[1])
+            await queue.task_done()
+            await sleep(0.2)
+        await queue.task_done()
+
+    async def producer():
+        queue = PriorityQueue()
+
+        for n in priorities:
+            await queue.put((n, n))
+
+        await queue.put((10, None))
+
+        await spawn(consumer(queue, 'cons1'))
+
+        await queue.join()
+
+    kernel.run(producer())
+    assert results == sorted(priorities)
