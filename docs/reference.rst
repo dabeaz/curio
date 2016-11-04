@@ -1113,6 +1113,61 @@ Here is an example of using queues in a producer-consumer problem::
 
     curio.run(main())
 
+.. class:: PriorityQueue(maxsize=0)
+
+  Creates a **priority** queue with a maximum number of elements in *maxsize*.
+
+In a :class:`PriorityQueue` items are retrieved in priority order with the 
+lowest priority first::
+
+    import curio
+
+    async def main():
+        q = curio.PriorityQueue()
+        await q.put((0, 'highest priority'))
+        await q.put((100, 'very low priority'))
+        await q.put((3, 'higher priority'))
+
+        while not q.empty():
+            print(await q.get())
+
+    curio.run(main())
+
+
+This will output
+::
+
+    (0, 'highest priority')
+    (3, 'higher priority')
+    (100, 'very low priority')
+
+.. class:: LifoQueue(maxsize=0)
+
+    A queue with **"Last In First Out"** retrieving policy
+
+::
+
+    import curio
+
+    async def main():
+        q = curio.LifoQueue()
+        await q.put('first')
+        await q.put('second')
+        await q.put('last')
+
+        while not q.empty():
+            print(await q.get())
+
+    curio.run(main())
+
+This will output
+::
+
+    last
+    second
+    first
+
+
 Synchronizing with Threads and Processes
 ----------------------------------------
 Curio's synchronization primitives aren't safe to use with externel threads or
