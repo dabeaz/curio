@@ -113,9 +113,9 @@ Please feel free to add your project here.
 Talks Related to Curio
 ----------------------
 
-* `Fear and Awaiting in Async<https://www.youtube.com/watch?v=E-1Y4kSsAFc>`_, Keynote talk by David Beazley at PyOhio 2016.
+* `Fear and Awaiting in Async <https://www.youtube.com/watch?v=E-1Y4kSsAFc>`_, Keynote talk by David Beazley at PyOhio 2016.
 
-* `Topics of Interest (Async)<https://www.youtube.com/watch?v=ZzfHjytDceU>`_, Keynote talk by David Beazley at Python Brasil 2015.
+* `Topics of Interest (Async) <https://www.youtube.com/watch?v=ZzfHjytDceU>`_, Keynote talk by David Beazley at Python Brasil 2015.
 
 The Big Question: Why?
 ----------------------
