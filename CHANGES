@@ -1,5 +1,17 @@
 CHANGES
 -------
+11/05/2016 Pulled time related functionality into the kernel as a new call.
+           Use the following to get the current value of the kernel clock:
+            
+                await curio.clock()
+
+           Timeout related functions such as timeout_after() and ignore_after()
+           now rely on the kernel clock instead of using time.monotonic().
+           This changes consolidates all use of the clock into one place
+           and makes it easier (later) to reconfigure timing should it be
+           desired.  For example, perhaps changing the scale of the clock
+           to slow down or speed up time handling (for debugging, testing, etc.)
+
 10/29/2016 If the sendall() method of a socket is aborted with a CancelledError,
            the resulting exception object now gets a bytes_sent attribute set to
            indicate how much progress was made.   For example:

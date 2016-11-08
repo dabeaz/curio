@@ -3,7 +3,7 @@
 # Task class and task related functions.
 
 __all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather', 
-            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at', 'wait' ]
+            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at', 'wait', 'clock' ]
 
 from time import monotonic
 from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError
@@ -98,14 +98,21 @@ async def sleep(seconds):
     Sleep for a specified number of seconds.  Sleeping for 0 seconds
     makes a task immediately switch to the next ready task (if any).
     '''
-    await _sleep(seconds + monotonic() if seconds else 0)
+    return await _sleep(seconds, False)
 
 async def wake_at(clock):
     '''
-    Sleep until the monotonic clock reaches the value of clock. 
+    Sleep until the kernel clock reaches the value of clock. 
     Returns the value of the monotonic clock when awakened.
     '''
-    return await _sleep(clock)
+    return await _sleep(clock, True)
+
+async def clock():
+    '''
+    Return the current value of the kernel clock. Does not
+    preempt the current task.
+    '''
+    return await _clock()
 
 async def spawn(coro, *, daemon=False):
     '''
@@ -221,14 +228,18 @@ class wait(object):
 
 # Helper class for running timeouts as a context manager
 class _TimeoutAfter(object):
-    def __init__(self, clock, ignore=False, timeout_result=None):
+    def __init__(self, clock, absolute, ignore=False, timeout_result=None):
         self._clock = clock
+        self._absolute = absolute
         self._ignore = ignore
         self._timeout_result = timeout_result
         self.result = True
 
     async def __aenter__(self):
         task = await current_task()
+        if not self._absolute and self._clock:
+            self._clock += await _clock()
+            self._absolute = False
         self._deadlines = task._deadlines
         self._deadlines.append(self._clock)
         self._prior = await _set_timeout(self._clock)
@@ -288,8 +299,10 @@ class _TimeoutAfter(object):
         finally:
             self._deadlines.pop()
 
-async def _timeout_after_func(clock, coro, ignore=False, timeout_result=None):
+async def _timeout_after_func(clock, absolute, coro, ignore=False, timeout_result=None):
     task = await current_task()
+    if not absolute and clock:
+        clock += await _clock()
     prior = await _set_timeout(clock)
     task._deadlines.append(clock)
     try:
@@ -326,9 +339,9 @@ def timeout_at(clock, coro=None):
     reaches the specified value. Usage is the same as for timeout_after().
     '''
     if coro is None:
-        return _TimeoutAfter(clock)
+        return _TimeoutAfter(clock, True)
     else:
-        return _timeout_after_func(clock, coro)
+        return _timeout_after_func(clock, True, coro)
 
 def timeout_after(seconds, coro=None):
     '''
@@ -346,8 +359,10 @@ def timeout_after(seconds, coro=None):
              await coro2(args)
              ...
     '''
-    clock = seconds + monotonic() if seconds else seconds
-    return timeout_at(clock, coro)
+    if coro is None:
+        return _TimeoutAfter(seconds, False)
+    else:
+        return _timeout_after_func(seconds, False, coro)
 
 def ignore_at(clock, coro=None, *, timeout_result=None):
     '''
@@ -355,9 +370,9 @@ def ignore_at(clock, coro=None, *, timeout_result=None):
     clock value. Same usage as ignore_after().
     '''
     if coro is None:
-        return _TimeoutAfter(clock, ignore=True, timeout_result=timeout_result)
+        return _TimeoutAfter(clock, True, ignore=True, timeout_result=timeout_result)
     else:
-        return _timeout_after_func(clock, coro, ignore=True, timeout_result=timeout_result)
+        return _timeout_after_func(clock, True, coro, ignore=True, timeout_result=timeout_result)
 
 def ignore_after(seconds, coro=None, *, timeout_result=None):
     '''
@@ -387,7 +402,9 @@ def ignore_after(seconds, coro=None, *, timeout_result=None):
     You can change the return result to a different value using
     the timeout_result keyword argument.
     '''
-    clock = seconds + monotonic() if seconds else seconds
-    return ignore_at(clock, coro, timeout_result=timeout_result)
+    if coro is None:
+        return _TimeoutAfter(seconds, False, ignore=True, timeout_result=timeout_result)
+    else:
+        return _timeout_after_func(seconds, False, coro, ignore=True, timeout_result=timeout_result)
 
 from . import queue

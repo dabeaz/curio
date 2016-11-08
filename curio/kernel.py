@@ -467,9 +467,13 @@ class Kernel(object):
             current.state = state
             current.cancel_func = lambda current=current: queue.remove(current)
 
-        # Sleep for a specified period. Returns value of monotonic clock
-        def _trap_sleep(_, clock):
+        # Sleep for a specified period. Returns value of monotonic clock.
+        # absolute flag indicates whether or not an absolute or relative clock 
+        # interval has been provided
+        def _trap_sleep(_, clock, absolute):
             if clock > 0:
+                if not absolute:
+                    clock += time_monotonic()
                 _set_timeout(clock, 'sleep')
                 current.state = 'TIME_SLEEP'
                 current.cancel_func = lambda task=current: setattr(task, 'sleep', None)
@@ -540,6 +544,11 @@ class Kernel(object):
         def _trap_get_current(_):
             ready_appendleft(current)
             current.next_value = current
+
+        # Return the current value of the kernel clock
+        def _trap_clock(_):
+            ready_appendleft(current)
+            current.next_value = time_monotonic()
 
         # Create the traps table
         trap_funcs = [ val for key, val in locals().items() if key.startswith('_trap') ]

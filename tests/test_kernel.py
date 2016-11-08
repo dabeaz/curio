@@ -2,6 +2,7 @@
 
 import time
 from curio import *
+kernel_clock = clock
 
 def test_hello(kernel):
     results = []
@@ -31,7 +32,7 @@ def test_sleep(kernel):
 def test_wakeat(kernel):
     results = []
     async def main():
-          clock = time.monotonic() + 0.5
+          clock = await kernel_clock() + 0.5
           results.append('start')
           newclock = await wake_at(clock)
           results.append(round(newclock-clock, 1))
@@ -96,7 +97,7 @@ def test_sleep_timeout_absolute(kernel):
     async def sleeper():
         results.append('start')
         try:
-            await timeout_at(time.monotonic() + 0.5, sleep(1))
+            await timeout_at((await kernel_clock()) + 0.5, sleep(1))
             results.append('not here')
         except TaskTimeout:
             results.append('timeout')
@@ -144,10 +145,10 @@ def test_sleep_ignore_timeout_absolute(kernel):
 
     async def sleeper():
         results.append('start')
-        if await ignore_at(time.monotonic() + 0.5, sleep(1)) is None:
+        if await ignore_at((await kernel_clock()) + 0.5, sleep(1)) is None:
             results.append('timeout')
 
-        async with ignore_at(time.monotonic() + 0.5) as s:
+        async with ignore_at((await kernel_clock()) + 0.5) as s:
             await sleep(1)
 
         if s.result is None:

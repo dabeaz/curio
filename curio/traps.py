@@ -7,14 +7,15 @@
 # instead.  Direct use by users is allowed, but if you're working with
 # these traps directly, there is probably a higher level interface
 # that simplifies the problem you're trying to solve (e.g., Socket,
-# File, objects, etc.)
+# File, objects, etc.).    
 # ----------------------------------------------------------------------
 
 __all__ = [
-    '_read_wait', '_write_wait', '_future_wait', '_sleep',
-    '_spawn', '_cancel_task', '_join_task', '_wait_on_queue',
-    '_reschedule_tasks', '_queue_reschedule_function', '_sigwatch', '_sigunwatch', '_sigwait',
-    '_get_kernel', '_get_current', '_set_timeout', '_unset_timeout',
+    '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
+    '_cancel_task', '_join_task', '_wait_on_queue',
+    '_reschedule_tasks', '_queue_reschedule_function', '_sigwatch',
+    '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
+    '_set_timeout', '_unset_timeout', '_clock',
     ]
 
 from types import coroutine
@@ -40,6 +41,7 @@ class Traps(IntEnum):
     _trap_set_timeout = 13
     _trap_unset_timeout = 14
     _trap_queue_reschedule_function = 15
+    _trap_clock = 16
 
 globals().update((key,val) for key, val in vars(Traps).items() if key.startswith('_trap'))
 
@@ -65,12 +67,14 @@ def _future_wait(future, event=None):
     yield (_trap_future_wait, future, event)
 
 @coroutine
-def _sleep(clock):
+def _sleep(clock, absolute):
     '''
     Sleep until the monotonic clock reaches the specified clock value.
     If clock is 0, forces the current task to yield to the next task (if any).
+    absolute is a boolean flag that indicates whether or not the clock
+    period is an absolute time or relative.
     '''
-    return (yield (_trap_sleep, clock))
+    return (yield (_trap_sleep, clock, absolute))
 
 @coroutine
 def _spawn(coro, daemon):
@@ -139,25 +143,22 @@ def _get_kernel():
     '''
     Get the kernel executing the task.
     '''
-    result = yield (_trap_get_kernel,)
-    return result
+    return (yield (_trap_get_kernel,))
 
 @coroutine
 def _get_current():
     '''
     Get the currently executing task
     '''
-    result = yield (_trap_get_current,)
-    return result
+    return (yield (_trap_get_current,))
 
 @coroutine
 def _set_timeout(clock):
     '''
     Set a timeout for the current task that occurs at the specified clock value.
-    Setting a clock of None clears any previous timeout.
+    Setting a clock of None clears any previous timeout. 
     '''
-    result = yield (_trap_set_timeout, clock)
-    return result
+    return (yield (_trap_set_timeout, clock))
 
 @coroutine
 def _unset_timeout(previous):
@@ -173,5 +174,11 @@ def _queue_reschedule_function(queue):
     the use of await.   Can be used in synchronous code as long as it runs
     in the same thread as the Curio kernel.
     '''
-    result = yield (_trap_queue_reschedule_function, queue)
-    return result
+    return (yield (_trap_queue_reschedule_function, queue))
+
+@coroutine
+def _clock():
+    '''
+    Return the value of the kernel clock
+    '''
+    return (yield (_trap_clock,))
