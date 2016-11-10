@@ -3,7 +3,8 @@
 # Task class and task related functions.
 
 __all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather', 
-            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at', 'wait', 'clock' ]
+            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
+            'wait', 'clock' , 'defer_cancellation']
 
 from time import monotonic
 from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError
@@ -17,7 +18,8 @@ class Task(object):
     __slots__ = (
         'id', 'daemon', 'coro', '_send', '_throw', 'cycles', 'state',
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
-        'next_exc', 'joining', 'cancelled', 'terminated', '_last_io', '_deadlines',
+        'next_exc', 'joining', 'cancelled', 'terminated', 'cancel_pending',
+        'cancel_defer_depth', '_last_io', '_deadlines',
         'task_local_storage', '__weakref__',
         )
     _lastid = 1
@@ -41,6 +43,8 @@ class Task(object):
         self.joining = None        # Optional set of tasks waiting to join with this one
         self.cancelled = False     # Cancelled?
         self.terminated = False    # Terminated?
+        self.cancel_pending = False  # Deferred cancellation pending?
+        self.cancel_defer_depth = 0  # Levels of defer_cancellation in effect
         self.task_local_storage = {} # Task local storage
         self._last_io = None       # Last I/O operation performed
         self._send = coro.send     # Bound coroutine methods
@@ -73,6 +77,17 @@ class Task(object):
         return until the task actually terminates.  Returns True if
         the task was actually cancelled. False is returned if the task
         was already completed.
+        '''
+        result = await self.cancel_no_wait()
+        await _join_task(self)
+        return result
+
+    async def cancel_no_wait(self):
+        '''
+        Cancel a task by raising a CancelledError exception.  Returns
+        immediately, without waiting for the task to terminate.  Returns True
+        if the task was actually cancelled. False is returned if the task was
+        already completed.
         '''
         if self.terminated:
             return False
@@ -225,6 +240,15 @@ class wait(object):
             await task.cancel()
 
         self._tasks = []
+
+class _DeferCancellation:
+    async def __aenter__(self):
+        await _adjust_cancel_defer_depth(1)
+
+    async def __aexit__(self, ty, val, tb):
+        await _adjust_cancel_defer_depth(-1)
+
+defer_cancellation = _DeferCancellation()
 
 # Helper class for running timeouts as a context manager
 class _TimeoutAfter(object):
