@@ -33,7 +33,8 @@ kqueue = deque
 # ----------------------------------------------------------------------
 
 class Kernel(object):
-    def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=True):
+    def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=True,
+                 crash_handler=None):
         if selector is None:
             selector = DefaultSelector()
 
@@ -60,7 +61,7 @@ class Kernel(object):
         self._process_pool = None
 
         # Optional crash handler callback
-        self._crash_handler = None
+        self._crash_handler = crash_handler
 
         self._pdb = pdb
         self._log_errors = log_errors
@@ -719,7 +720,8 @@ class Kernel(object):
         else:
             return None
 
-def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
+def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None, 
+        crash_handler=None, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
@@ -733,7 +735,7 @@ def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None):
     use its run() method instead.
     '''
     kernel = Kernel(selector=selector, with_monitor=with_monitor,
-                    log_errors=log_errors, pdb=pdb)
+                    log_errors=log_errors, pdb=pdb, crash_handler=crash_handler, **extra)
     with kernel:
         result = kernel.run(coro)
     return result
