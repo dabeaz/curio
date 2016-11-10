@@ -1,6 +1,7 @@
 # test_kernel.py
 
 import time
+import pytest
 from curio import *
 kernel_clock = clock
 
@@ -271,6 +272,29 @@ def test_task_cancel(kernel):
             'done',
             ]
 
+
+def test_task_cancel_no_wait(kernel):
+    async def child(e1, e2):
+        await e1.set()
+        try:
+            await sleep(1000)
+        except CancelledError:
+            await e2.wait()
+            raise
+
+    async def main():
+        e1 = Event()
+        e2 = Event()
+        task = await spawn(child(e1, e2))
+        await e1.wait()
+        await task.cancel_no_wait()
+        await e2.set()
+        try:
+            await task.join()
+        except TaskError as e:
+            assert isinstance(e.__cause__, CancelledError)
+
+    kernel.run(main())
 
 def test_task_cancel_join(kernel):
     results = []
@@ -718,3 +742,24 @@ def test_task_run_error(kernel):
         assert isinstance(e.__cause__, ValueError)
     else:
         assert False
+
+def test_defer_cancellation(kernel):
+    async def cancel_me(e1, e2):
+        with pytest.raises(CancelledError):
+            async with defer_cancellation:
+                try:
+                    await e1.set()
+                    await e2.wait()
+                except CancelledError:
+                    assert False
+
+    async def main():
+        e1 = Event()
+        e2 = Event()
+        task = await spawn(cancel_me(e1, e2))
+        await e1.wait()
+        await task.cancel_no_wait()
+        await e2.set()
+        await task.join()
+
+    kernel.run(main())

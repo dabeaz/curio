@@ -444,16 +444,32 @@ class Kernel(object):
                     task.joining = kqueue()
                 _trap_wait_queue(_, task.joining, 'TASK_JOIN')
 
+        # Enter or exit a 'with curio.defer_cancellation' block:
+        def _trap_adjust_cancel_defer_depth(_, n):
+            current.cancel_defer_depth += n
+            if current.cancel_defer_depth == 0 and current.cancel_pending:
+                current.cancel_pending = False
+                if current.cancelled:
+                    return
+                _reschedule_task(current, exc=CancelledError("CancelledError"))
+            else:
+                ready_appendleft(current)
+
         # Cancel a task
         def _trap_cancel_task(_, task):
             if task == current:
                 _reschedule_task(current, exc=CurioError("A task can't cancel itself"))
                 return
 
-            if task.cancelled or _cancel_task(task, CancelledError):
+            if task.cancelled:
+                ready_appendleft(current)
+            elif task.cancel_defer_depth > 0:
+                print("Deferred")
+                task.cancel_pending = True
+                ready_appendleft(current)
+            elif _cancel_task(task, CancelledError):
                 task.cancelled = True
-                _trap_join_task(_, task)
-
+                ready_appendleft(current)
             else:
                 # Fail with a _CancelRetry exception to indicate that the cancel
                 # request should be attempted again.  This happens in the case

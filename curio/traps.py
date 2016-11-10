@@ -12,9 +12,9 @@
 
 __all__ = [
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
-    '_cancel_task', '_join_task', '_wait_on_queue',
-    '_reschedule_tasks', '_queue_reschedule_function', '_sigwatch',
-    '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
+    '_cancel_task', '_adjust_cancel_defer_depth', '_join_task',
+    '_wait_on_queue', '_reschedule_tasks', '_queue_reschedule_function',
+    '_sigwatch', '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
     '_set_timeout', '_unset_timeout', '_clock',
     ]
 
@@ -42,6 +42,7 @@ class Traps(IntEnum):
     _trap_unset_timeout = 14
     _trap_queue_reschedule_function = 15
     _trap_clock = 16
+    _trap_adjust_cancel_defer_depth = 17
 
 globals().update((key,val) for key, val in vars(Traps).items() if key.startswith('_trap'))
 
@@ -95,6 +96,14 @@ def _cancel_task(task):
             return
         except _CancelRetry:
             pass
+
+@coroutine
+def _adjust_cancel_defer_depth(n):
+    '''
+    Increment or decrement the current task's cancel_defer_depth. If it goes
+    to 0, and the task was previously cancelled, then raises CancelledError.
+    '''
+    yield (_trap_adjust_cancel_defer_depth, n)
 
 @coroutine
 def _join_task(task):
