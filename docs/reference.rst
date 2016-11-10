@@ -168,17 +168,17 @@ The following public attributes are available of :class:`Task` instances:
 
    A boolean flag that indicates whether or not the task has run to completion.
 
-Task local storage
-------------------
+Context local storage
+---------------------
 
-Curio supports "task local storage". The API is modeled after the
+Curio supports "context local storage". The API is modeled after the
 "thread local storage" provided by :py:class:`threading.local`.
 
 .. class:: Local
 
-   A class representing a bundle of task-local values. Objects of this
-   class have no particular attributes or methods. Instead, they serve
-   as a blank slate to which you can add whatever attributes you
+   A class representing a bundle of context-local values. Objects of
+   this class have no particular attributes or methods. Instead, they
+   serve as a blank slate to which you can add whatever attributes you
    like. Modifications made from within one task will only be visible
    to that task -- with one exception: when you create a new task
    using ``curio.spawn``, then any values assigned to

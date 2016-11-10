@@ -19,7 +19,7 @@ from .errors import *
 from .errors import _CancelRetry
 from .task import Task
 from .traps import _read_wait, Traps
-from .tls import _enable_tls_for, _copy_tls
+from .cls import _enable_cls_for, _copy_cls
 
 # kqueue is the datatype used by the kernel for all of its queuing functionality.
 # Any time a task queue is needed, use this type instead of directly hard-coding the
@@ -416,7 +416,7 @@ class Kernel(object):
         # Add a new task to the kernel
         def _trap_spawn(_, coro, daemon):
             task = _new_task(coro, daemon)
-            _copy_tls(current, task)
+            _copy_cls(current, task)
             _reschedule_task(current, value=task)
 
         # Reschedule one or more tasks from a queue
@@ -627,7 +627,7 @@ class Kernel(object):
                 try:
                     current.state = 'RUNNING'
                     current.cycles += 1
-                    with _enable_tls_for(current):
+                    with _enable_cls_for(current):
                         if current.next_exc is None:
                             trap = current._send(current.next_value)
                         else:

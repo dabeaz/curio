@@ -18,7 +18,7 @@ class Task(object):
         'id', 'daemon', 'coro', '_send', '_throw', 'cycles', 'state',
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
         'next_exc', 'joining', 'cancelled', 'terminated', '_last_io', '_deadlines',
-        'task_local_storage', '__weakref__',
+        'context_local_storage', '__weakref__',
         )
     _lastid = 1
 
@@ -41,7 +41,7 @@ class Task(object):
         self.joining = None        # Optional set of tasks waiting to join with this one
         self.cancelled = False     # Cancelled?
         self.terminated = False    # Terminated?
-        self.task_local_storage = {} # Task local storage
+        self.context_local_storage = {} # Context local storage
         self._last_io = None       # Last I/O operation performed
         self._send = coro.send     # Bound coroutine methods
         self._throw = coro.throw
