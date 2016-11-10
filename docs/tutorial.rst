@@ -912,7 +912,7 @@ Task-local storage
 ------------------
 
 Sometimes it happens that you want to store some data that is specific
-to a particular Task in place where it can be reached from anywhere,
+to a particular Task in a place where it can be reached from anywhere,
 without having to pass it around everywhere. For example, in a server
 that responds to network requests, you might want to assign each
 request a unique tag, and then make sure to include that unique tag in
