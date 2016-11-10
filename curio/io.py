@@ -35,6 +35,7 @@ import os
 
 from .traps import _read_wait, _write_wait
 from . import errors
+from .util import aiter_compat_hack
 
 # Exceptions raised for non-blocking I/O.  For normal sockets, blocking operations
 # normally just raise BlockingIOError.  For SSL sockets, more specific exceptions
@@ -377,7 +378,8 @@ class StreamBase(object):
         self._file = None
         self._fileno = -1
 
-    async def __aiter__(self):
+    @aiter_compat_hack
+    def __aiter__(self):
         return self
 
     async def __anext__(self):
