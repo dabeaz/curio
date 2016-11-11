@@ -1,4 +1,4 @@
-# curio/tls.py
+# curio/local.py
 #
 # Task local storage
 
@@ -48,8 +48,8 @@ __all__ = ["Local"]
 #  _current_task_local_storage.value[local_obj]["attr"]
 #
 # An unusual feature of this implementation (and our main deviation from
-# threading.Local) is that we implement *TLS inheritance*, i.e., when you
-# spawn a new task, then all TLS values set in the parent task are (shallowly)
+# threading.Local) is that we implement *task local inheritance*, i.e., when you
+# spawn a new task, then all task local values set in the parent task are (shallowly)
 # copied to the child task. This is a bit experimental, but very handy in
 # cases like when a request handler spawns some small short-lived worker tasks
 # as part of its processing and those want to do logging as well.
@@ -63,7 +63,7 @@ _current_task_local_storage = threading.local()
 _current_task_local_storage.value = None
 
 @contextmanager
-def _enable_tls_for(task):
+def _enable_tasklocal_for(task):
     # Using a full save/restore pattern here is a little paranoid, but
     # safe. Even if someone does something silly like calling curio.run() from
     # inside a curio coroutine.
@@ -74,8 +74,8 @@ def _enable_tls_for(task):
     finally:
         _current_task_local_storage.value = old
 
-# Called from _trap_spawn to implement TLS inheritance.
-def _copy_tls(parent, child):
+# Called from _trap_spawn to implement task local inheritance.
+def _copy_tasklocal(parent, child):
     # Make a shallow copy of the values associated with each Local object.
     for local, values in parent.task_local_storage.items():
         child.task_local_storage[local] = dict(values)

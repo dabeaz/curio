@@ -921,7 +921,7 @@ using threads, the solution would be thread-local storage implemented
 with :py:class:`threading.local`. In Curio, we use task-local storage,
 implemented by ``curio.Local``. For example::
 
-    # tls-example.py
+    # local-example.py
 
     import curio
 

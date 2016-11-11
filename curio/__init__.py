@@ -11,7 +11,7 @@ from .queue import *
 from .workers import *
 from .network import *
 from .file import *
-from .tls import *
+from .local import *
 
 __all__ = [ *errors.__all__,
             *task.__all__,
@@ -22,5 +22,5 @@ __all__ = [ *errors.__all__,
             *workers.__all__,
             *network.__all__,
             *file.__all__,
-            *tls.__all__,
+            *local.__all__,
            ]
