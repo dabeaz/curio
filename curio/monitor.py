@@ -22,7 +22,7 @@
 # Where host and port configure the network address on which the monitor
 # operates.
 #
-# To connect to the monitor, run python3 -m curio.monitor [port]. For example:
+# To connect to the monitor, run python3 -m curio.monitor -H [host] -p [port]. For example:
 #
 # Theory of operation:
 # --------------------
@@ -57,6 +57,7 @@ import socket
 import threading
 import queue
 import telnetlib
+import argparse
 import logging
 
 # --- Curio
@@ -249,9 +250,19 @@ def monitor_client(host, port):
     tn.interact()
     tn.close()
 
+
+def main():
+    parser = argparse.ArgumentParser("usage: python -m curio.monitor [options]")
+    parser.add_argument("-H", "--host", dest="monitor_host",
+                        default=MONITOR_HOST, type=str,
+                        help="monitor host ip")
+
+    parser.add_argument("-p", "--port", dest="monitor_port",
+                        default=MONITOR_PORT, type=int,
+                        help="monitor port number")
+    args = parser.parse_args()
+    monitor_client(args.monitor_host, args.monitor_port)
+
+
 if __name__ == '__main__':
-    if sys.argv[1:]:
-        port = int(sys.argv[1])
-    else:
-        port = MONITOR_PORT
-    monitor_client(MONITOR_HOST, port)
+    main()
