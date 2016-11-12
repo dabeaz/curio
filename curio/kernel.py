@@ -482,14 +482,19 @@ class Kernel(object):
         # absolute flag indicates whether or not an absolute or relative clock 
         # interval has been provided
         def _trap_sleep(clock, absolute):
-            if clock > 0:
-                if not absolute:
-                    clock += time_monotonic()
-                _set_timeout(clock, 'sleep')
-                current.state = 'TIME_SLEEP'
-                current.cancel_func = lambda task=current: setattr(task, 'sleep', None)
-            else:
-                _reschedule_task(current, value=time_monotonic())
+            # We used to have a special case where sleep periods <= 0 would
+            # simply reschedule the task to the end of the ready queue without
+            # actually putting it on the sleep queue first. But this meant
+            # that if a task looped while calling sleep(0), it would allow
+            # other *ready* tasks to run, but block ever checking for I/O or
+            # timeouts, so sleeping tasks would never wake up. That's not what
+            # we want; sleep(0) should mean "please give other stuff a chance
+            # to run". So now we always go through the whole sleep machinery.
+            if not absolute:
+                clock += time_monotonic()
+            _set_timeout(clock, 'sleep')
+            current.state = 'TIME_SLEEP'
+            current.cancel_func = lambda task=current: setattr(task, 'sleep', None)
 
         # Watch signals
         def _sync_trap_sigwatch(sigset):
