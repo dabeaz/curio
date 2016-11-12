@@ -1529,6 +1529,14 @@ yourself using these, you're probably doing something wrong--or
 implementing a new curio primitive.   These calls are found in the
 ``curio.traps`` submodule.
 
+Traps come in two flavors: *regular* and *synchronous*. A synchronous
+trap is implemented by trapping into the kernel, but semantically it
+acts like a regular synchronous function call. Specifically, this
+means that it always returns immediately without running any other
+task, and that it does not act as a cancellation point. Regular traps
+might or might not block or yield execution, and can be cancelled or
+timed-out.
+
 .. asyncfunction:: _read_wait(fileobj)
 
    Sleep until data is available for reading on *fileobj*.  *fileobj* is
@@ -1587,22 +1595,43 @@ implementing a new curio primitive.   These calls are found in the
 
 .. asyncfunction:: _get_kernel()
 
-   Get a reference to the running ``Kernel`` object.
+   Synchronous trap. Get a reference to the running ``Kernel`` object.
 
 .. asyncfunction:: _get_current()
 
-   Get a reference to the currently running ``Task`` instance.
+   Synchronous trap. Get a reference to the currently running ``Task``
+   instance.
 
 .. asyncfunction:: _set_timeout(seconds)
 
-   Set a timeout in the currently running task. Returns the
-   previous timeout (if any)
+   Synchronous trap. Set a timeout in the currently running
+   task. Returns the previous timeout (if any)
 
 .. asyncfunction:: _unset_timeout(previous)
 
-   Unset a timeout in the currently running task. *previous*
-   is the value returned by the _set_timeout() call used to
-   set the timeout.
+   Synchronous trap. Unset a timeout in the currently running
+   task. *previous* is the value returned by the _set_timeout() call
+   used to set the timeout.
+
+.. asyncfunction:: _adjust_cancel_defer_depth(n)
+
+   Synchronous trap. For each task, we keep track of how deeply nested
+   we are inside ``curio.defer_cancellation`` blocks. This trap is
+   used to increment/decrement this count when we enter/exit these
+   blocks. If the count reaches zero and a cancellation is pending,
+   then raises ``CancelledError``.
+
+.. asyncfunction:: _queue_reschedule_function(queue)
+
+   Synchronous trap. Return a function that allows tasks to be
+   rescheduled from a queue without the use of await.  Can be used in
+   synchronous code as long as it runs in the same thread as the Curio
+   kernel.
+
+.. asyncfunction:: _clock():
+
+   Synchronous trap. Returns the current time according to the Curio
+   kernel's clock.
 
 Again, you're unlikely to use any of these functions directly.  However, here's a small taste
 of how they're used.  For example, the :meth:`curio.io.Socket.recv` method
