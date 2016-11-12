@@ -44,7 +44,11 @@ class Traps(IntEnum):
     _trap_clock = 16
     _trap_adjust_cancel_defer_depth = 17
 
-globals().update((key,val) for key, val in vars(Traps).items() if key.startswith('_trap'))
+class SyncTraps(IntEnum):
+    pass
+
+globals().update((trap.name, trap) for trap in Traps)
+globals().update((trap.name, trap) for trap in SyncTraps)
 
 @coroutine
 def _read_wait(fileobj):
