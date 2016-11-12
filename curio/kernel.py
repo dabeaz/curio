@@ -422,17 +422,15 @@ class Kernel(object):
 
         # Reschedule one or more tasks from a queue
         def _trap_reschedule_tasks(queue, n):
-            while n > 0:
+            for _ in range(n):
                 _reschedule_task(queue.popleft())
-                n -= 1
             _reschedule_task(current)
 
         # Trap that returns a function for rescheduling tasks from synchronous code
         def _sync_trap_queue_reschedule_function(queue):
             def _reschedule(n):
-                while n > 0:
+                for _ in range(n):
                     _reschedule_task(queue.popleft())
-                    n -= 1
             return _reschedule
 
         # Join with a task
@@ -444,7 +442,7 @@ class Kernel(object):
                     task.joining = kqueue()
                 _trap_wait_queue(task.joining, 'TASK_JOIN')
 
-        # Enter or exit a 'with curio.defer_cancellation' block:
+        # Enter or exit an 'async with curio.defer_cancellation' block:
         def _sync_trap_adjust_cancel_defer_depth(n):
             current.cancel_defer_depth += n
             if current.cancel_defer_depth == 0 and current.cancel_pending:
@@ -462,7 +460,6 @@ class Kernel(object):
             if task.cancelled:
                 ready_appendleft(current)
             elif task.cancel_defer_depth > 0:
-                print("Deferred")
                 task.cancel_pending = True
                 ready_appendleft(current)
             elif _cancel_task(task, CancelledError):
