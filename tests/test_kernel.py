@@ -763,3 +763,35 @@ def test_defer_cancellation(kernel):
         await task.join()
 
     kernel.run(main())
+
+
+def test_sleep_0_starvation(kernel):
+    # This task should not block other tasks from running, and should be
+    # cancellable. We used to have a bug where neither were true...
+    async def loop_forever():
+        while True:
+            print("Sleeping 0")
+            await sleep(0)
+
+    async def io1(sock):
+        await sock.recv(1)
+        await sock.send(b"x")
+        await sock.recv(1)
+
+    async def io2(sock):
+        await sock.send(b"x")
+        await sock.recv(1)
+        await sock.send(b"x")
+
+    async def main():
+        loop_task = await spawn(loop_forever())
+        await sleep(0)
+        import curio.socket
+        sock1, sock2 = curio.socket.socketpair()
+        io1_task = await spawn(io1(sock1))
+        io2_task = await spawn(io2(sock2))
+        await io1_task.join()
+        await io2_task.join()
+        await loop_task.cancel()
+
+    kernel.run(main())

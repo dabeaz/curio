@@ -33,18 +33,21 @@ class Traps(IntEnum):
     _trap_join_task = 5
     _trap_wait_queue = 6
     _trap_reschedule_tasks = 7
-    _trap_sigwatch = 8
-    _trap_sigunwatch = 9
-    _trap_sigwait = 10
-    _trap_get_kernel = 11
-    _trap_get_current = 12
-    _trap_set_timeout = 13
-    _trap_unset_timeout = 14
-    _trap_queue_reschedule_function = 15
-    _trap_clock = 16
-    _trap_adjust_cancel_defer_depth = 17
+    _trap_sigwait = 8
 
-globals().update((key,val) for key, val in vars(Traps).items() if key.startswith('_trap'))
+class SyncTraps(IntEnum):
+    _sync_trap_adjust_cancel_defer_depth = 0
+    _sync_trap_get_kernel = 1
+    _sync_trap_get_current = 2
+    _sync_trap_set_timeout = 3
+    _sync_trap_unset_timeout = 4
+    _sync_trap_queue_reschedule_function = 5
+    _sync_trap_clock = 6
+    _sync_trap_sigwatch = 7
+    _sync_trap_sigunwatch = 8
+
+globals().update((trap.name, trap) for trap in Traps)
+globals().update((trap.name, trap) for trap in SyncTraps)
 
 @coroutine
 def _read_wait(fileobj):
@@ -103,7 +106,7 @@ def _adjust_cancel_defer_depth(n):
     Increment or decrement the current task's cancel_defer_depth. If it goes
     to 0, and the task was previously cancelled, then raises CancelledError.
     '''
-    yield (_trap_adjust_cancel_defer_depth, n)
+    yield (_sync_trap_adjust_cancel_defer_depth, n)
 
 @coroutine
 def _join_task(task):
@@ -131,14 +134,14 @@ def _sigwatch(sigset):
     '''
     Start monitoring a signal set
     '''
-    yield (_trap_sigwatch, sigset)
+    yield (_sync_trap_sigwatch, sigset)
 
 @coroutine
 def _sigunwatch(sigset):
     '''
     Stop watching a signal set
     '''
-    yield (_trap_sigunwatch, sigset)
+    yield (_sync_trap_sigunwatch, sigset)
 
 @coroutine
 def _sigwait(sigset):
@@ -152,14 +155,14 @@ def _get_kernel():
     '''
     Get the kernel executing the task.
     '''
-    return (yield (_trap_get_kernel,))
+    return (yield (_sync_trap_get_kernel,))
 
 @coroutine
 def _get_current():
     '''
     Get the currently executing task
     '''
-    return (yield (_trap_get_current,))
+    return (yield (_sync_trap_get_current,))
 
 @coroutine
 def _set_timeout(clock):
@@ -167,14 +170,14 @@ def _set_timeout(clock):
     Set a timeout for the current task that occurs at the specified clock value.
     Setting a clock of None clears any previous timeout. 
     '''
-    return (yield (_trap_set_timeout, clock))
+    return (yield (_sync_trap_set_timeout, clock))
 
 @coroutine
 def _unset_timeout(previous):
     '''
     Restore the previous timeout for the current task.
     '''
-    yield (_trap_unset_timeout, previous)
+    yield (_sync_trap_unset_timeout, previous)
 
 @coroutine
 def _queue_reschedule_function(queue):
@@ -183,11 +186,11 @@ def _queue_reschedule_function(queue):
     the use of await.   Can be used in synchronous code as long as it runs
     in the same thread as the Curio kernel.
     '''
-    return (yield (_trap_queue_reschedule_function, queue))
+    return (yield (_sync_trap_queue_reschedule_function, queue))
 
 @coroutine
 def _clock():
     '''
     Return the value of the kernel clock
     '''
-    return (yield (_trap_clock,))
+    return (yield (_sync_trap_clock,))
