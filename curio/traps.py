@@ -42,10 +42,9 @@ class Traps(IntEnum):
     _trap_unset_timeout = 14
     _trap_queue_reschedule_function = 15
     _trap_clock = 16
-    _trap_adjust_cancel_defer_depth = 17
 
 class SyncTraps(IntEnum):
-    pass
+    _sync_trap_adjust_cancel_defer_depth = 0
 
 globals().update((trap.name, trap) for trap in Traps)
 globals().update((trap.name, trap) for trap in SyncTraps)
@@ -107,7 +106,7 @@ def _adjust_cancel_defer_depth(n):
     Increment or decrement the current task's cancel_defer_depth. If it goes
     to 0, and the task was previously cancelled, then raises CancelledError.
     '''
-    yield (_trap_adjust_cancel_defer_depth, n)
+    yield (_sync_trap_adjust_cancel_defer_depth, n)
 
 @coroutine
 def _join_task(task):

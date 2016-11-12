@@ -446,15 +446,13 @@ class Kernel(object):
                 _trap_wait_queue(task.joining, 'TASK_JOIN')
 
         # Enter or exit a 'with curio.defer_cancellation' block:
-        def _trap_adjust_cancel_defer_depth(n):
+        def _sync_trap_adjust_cancel_defer_depth(n):
             current.cancel_defer_depth += n
             if current.cancel_defer_depth == 0 and current.cancel_pending:
                 current.cancel_pending = False
                 if current.cancelled:
                     return
-                _reschedule_task(current, exc=CancelledError("CancelledError"))
-            else:
-                ready_appendleft(current)
+                raise CancelledError("CancelledError")
 
         # Cancel a task
         def _trap_cancel_task(task):
@@ -649,9 +647,23 @@ class Kernel(object):
                     with _enable_tasklocal_for(current):
                         if current.next_exc is None:
                             trap = current._send(current.next_value)
+                            current.next_value = None
                         else:
                             trap = current._throw(current.next_exc)
                             current.next_exc = None
+
+                        # If the trap is synchronous, then handle it
+                        # immediately without rescheduling. Sync trap handlers
+                        # have a different API than regular traps -- they just
+                        # return or raise whatever the trap should return or
+                        # raise.
+                        while type(trap[0]) is SyncTraps:
+                            try:
+                                next_value = sync_traps[trap[0]](*trap[1:])
+                            except Exception as next_exc:
+                                trap = current._throw(next_exc)
+                            else:
+                                trap = current._send(next_value)
 
                 except StopIteration as e:
                     _cleanup_task(current, value=e.value)
@@ -683,6 +695,7 @@ class Kernel(object):
 
                 else:
                     # Execute the trap
+                    assert type(trap[0]) is Traps
                     traps[trap[0]](*trap[1:])
 
                 finally:
