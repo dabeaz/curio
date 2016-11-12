@@ -1582,11 +1582,13 @@ timed-out.
 
 .. asyncfunction:: _sigwatch(sigset)
 
-   Tell the kernel to start queuing signals in the given signal set *sigset*.
+   Synchronous trap. Tell the kernel to start queuing signals in the
+   given signal set *sigset*.
 
 .. asyncfunction:: _sigunwatch(sigset)
 
-   Tell the kernel to stop queuing signals in the given signal set.
+   Synchronous trap. Tell the kernel to stop queuing signals in the
+   given signal set.
 
 .. asyncfunction:: _sigwait(sigset)
 

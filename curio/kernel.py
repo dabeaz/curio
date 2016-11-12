@@ -495,7 +495,7 @@ class Kernel(object):
                 _reschedule_task(current, value=time_monotonic())
 
         # Watch signals
-        def _trap_sigwatch(sigset):
+        def _sync_trap_sigwatch(sigset):
             # Initialize the signal handling part of the kernel if not done already
             # Note: This only works if running in the main thread
             if self._kernel_task_id is None:
@@ -505,12 +505,10 @@ class Kernel(object):
                 self._init_signals()
 
             self._signal_watch(sigset)
-            _reschedule_task(current)
 
         # Unwatch signals
-        def _trap_sigunwatch(sigset):
+        def _sync_trap_sigunwatch(sigset):
             self._signal_unwatch(sigset)
-            _reschedule_task(current)
 
         # Wait for a signal
         def _trap_sigwait(sigset):

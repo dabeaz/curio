@@ -33,9 +33,7 @@ class Traps(IntEnum):
     _trap_join_task = 5
     _trap_wait_queue = 6
     _trap_reschedule_tasks = 7
-    _trap_sigwatch = 8
-    _trap_sigunwatch = 9
-    _trap_sigwait = 10
+    _trap_sigwait = 8
 
 class SyncTraps(IntEnum):
     _sync_trap_adjust_cancel_defer_depth = 0
@@ -45,6 +43,8 @@ class SyncTraps(IntEnum):
     _sync_trap_unset_timeout = 4
     _sync_trap_queue_reschedule_function = 5
     _sync_trap_clock = 6
+    _sync_trap_sigwatch = 7
+    _sync_trap_sigunwatch = 8
 
 globals().update((trap.name, trap) for trap in Traps)
 globals().update((trap.name, trap) for trap in SyncTraps)
@@ -134,14 +134,14 @@ def _sigwatch(sigset):
     '''
     Start monitoring a signal set
     '''
-    yield (_trap_sigwatch, sigset)
+    yield (_sync_trap_sigwatch, sigset)
 
 @coroutine
 def _sigunwatch(sigset):
     '''
     Stop watching a signal set
     '''
-    yield (_trap_sigunwatch, sigset)
+    yield (_sync_trap_sigunwatch, sigset)
 
 @coroutine
 def _sigwait(sigset):
