@@ -1,5 +1,7 @@
 # test_socket.py
 
+import os
+
 from curio import *
 from curio.socket import *
 
@@ -372,3 +374,23 @@ def test_buffer_into(kernel):
     s2._socket.close()
 
     assert all(n==x for n,x in enumerate(results[0]))
+
+def test_read_write_on_same_socket(kernel):
+    async def main():
+        s1, s2 = socketpair()
+        t1 = await spawn(s1.recv(1000))
+        # Large enough send to trigger blocking on write:
+        N = 10000000
+        t2 = await spawn(s1.sendall(b"x" * N))
+        # Above is the actual test -- right now it triggers a crash.
+        # Rest of this is just to clean up:
+        # Let t1 finish:
+        await s2.sendall(b"x")
+        # Let t2 finish:
+        n = 0
+        while n < N:
+            n += len(await s2.recv(N))
+        await t1.join()
+        await t2.join()
+
+    kernel.run(main())

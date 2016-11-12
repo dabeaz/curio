@@ -9,7 +9,7 @@ import os
 import sys
 import logging
 import signal
-from selectors import DefaultSelector
+from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
 
 # Logger where uncaught exceptions from crashed tasks are logged
@@ -177,7 +177,10 @@ class Kernel(object):
         # ---- Bound methods
         selector_register = selector.register
         selector_unregister = selector.unregister
+        selector_modify = selector.modify
         selector_select = selector.select
+        selector_getkey = selector.get_key
+
         ready_popleft = ready.popleft
         ready_append = ready.append
         ready_appendleft = ready.appendleft
@@ -354,6 +357,28 @@ class Kernel(object):
             heapq.heappush(sleeping, item)
             setattr(current, sleep_type, clock)
 
+        # ---- I/O Support functions
+
+        def _register_event(fileobj, event, task):
+            try:
+                key = selector_getkey(fileobj)
+                mask, (rtask, wtask) = key.events, key.data
+                selector_modify(fileobj,  mask | event,
+                                (task, wtask) if event == EVENT_READ else (rtask, task))
+            except KeyError:
+                selector_register(fileobj, event,
+                                  (task, None) if event == EVENT_READ else (None, task))
+
+        def _unregister_event(fileobj, event):
+            key = selector_getkey(fileobj)
+            mask, (rtask, wtask) = key.events, key.data
+            mask &= ~event
+            if not mask:
+                selector_unregister(fileobj)
+            else:
+                selector_modify(fileobj, mask,
+                                (None, wtask) if event == EVENT_READ else (rtask, None))
+
         # ---- Traps
         #
         # These implement the low-level functionality that is
@@ -371,16 +396,25 @@ class Kernel(object):
             # I/O operation is *different* than the last I/O operation that was
             # performed by the task, we need to unregister the last I/O resource used
             # and register a new one with the selector.
+            '''
             if current._last_io != (state, fileobj):
                 if current._last_io:
                     selector_unregister(current._last_io[1])
                 selector_register(fileobj, event, current)
-
+            '''
+            # NEW
+            if current._last_io != (fileobj, event):
+                if current._last_io:
+                    _unregister_event(*current._last_io)
+                _register_event(fileobj, event, current)
+            # ---
+            
             # This step indicates that we have managed any deferred I/O management
             # for the task.  Otherwise the run() method will perform an unregistration step.
             current._last_io = None
             current.state = state
-            current.cancel_func = lambda: selector_unregister(fileobj)
+            # current.cancel_func = lambda: selector_unregister(fileobj)
+            current.cancel_func = lambda: _unregister_event(fileobj, event)    # NEW
 
         # Wait on a Future
         def _trap_future_wait(future, event):
@@ -589,12 +623,34 @@ class Kernel(object):
 
                 # Reschedule tasks with completed I/O
                 for key, mask in events:
+                    rtask, wtask = key.data
+                    if mask & EVENT_READ:
+                        rtask._last_io = (key.fileobj, EVENT_READ)
+                        rtask.state = 'READY'
+                        rtask.cancel_func = None
+                        ready_append(rtask)
+                        rtask = None
+                        mask &= ~EVENT_READ
+                    if mask & EVENT_WRITE:
+                        wtask._last_io = (key.fileobj, EVENT_WRITE)
+                        wtask.state = 'READY'
+                        wtask.cancel_func = None
+                        ready_append(wtask)
+                        wtask = None
+                        mask &= ~EVENT_WRITE
+                    #if mask:
+                    #    selector_modify(key.fileobj, mask, (rtask, wtask))
+                    #else:
+                    #    selector_unregister(key.fileobj)
+
+                    '''
                     task = key.data
                     # Please see comment regarding deferred_unregister in run()
                     task._last_io = (task.state, key.fileobj)
                     task.state = 'READY'
                     task.cancel_func = None
                     ready_append(task)
+                    '''
 
                 # Process sleeping tasks (if any)
                 if sleeping:
@@ -713,7 +769,8 @@ class Kernel(object):
                     # prior I/O operation.  There is coordination with code in _trap_io().
 
                     if current._last_io:
-                        selector_unregister(current._last_io[1])
+                        #selector_unregister(current._last_io[1])
+                        _unregister_event(*current._last_io)
                         current._last_io = None
 
         # If kernel shutdown has been requested, issue a cancellation request to all remaining tasks
