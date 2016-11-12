@@ -428,13 +428,12 @@ class Kernel(object):
             _reschedule_task(current)
 
         # Trap that returns a function for rescheduling tasks from synchronous code
-        def _trap_queue_reschedule_function(queue):
+        def _sync_trap_queue_reschedule_function(queue):
             def _reschedule(n):
                 while n > 0:
                     _reschedule_task(queue.popleft())
                     n -= 1
-            ready_appendleft(current)
-            current.next_value = _reschedule
+            return _reschedule
 
         # Join with a task
         def _trap_join_task(task):
@@ -520,7 +519,7 @@ class Kernel(object):
             current.cancel_func = lambda: setattr(sigset, 'waiting', None)
 
         # Set a timeout to be delivered to the calling task
-        def _trap_set_timeout(timeout):
+        def _sync_trap_set_timeout(timeout):
             old_timeout = current.timeout
             if timeout:
                 _set_timeout(timeout)
@@ -529,11 +528,10 @@ class Kernel(object):
             else:
                 current.timeout = None
 
-            current.next_value = old_timeout
-            ready_appendleft(current)
+            return old_timeout
 
         # Clear a previously set timeout
-        def _trap_unset_timeout(previous):
+        def _sync_trap_unset_timeout(previous):
             # Here's an evil corner case.  Suppose the previous timeout in effect
             # has already expired?  If so, then we need to arrange for a timeout
             # to be generated.  However, this has to happen on the *next* blocking
@@ -547,23 +545,18 @@ class Kernel(object):
                 _set_timeout(previous)
             else:
                 current.timeout = previous
-            current.next_value = None
-            ready_appendleft(current)
 
         # Return the running kernel
-        def _trap_get_kernel():
-            ready_appendleft(current)
-            current.next_value = self
+        def _sync_trap_get_kernel():
+            return self
 
         # Return the currently running task
-        def _trap_get_current():
-            ready_appendleft(current)
-            current.next_value = current
+        def _sync_trap_get_current():
+            return current
 
         # Return the current value of the kernel clock
-        def _trap_clock():
-            ready_appendleft(current)
-            current.next_value = time_monotonic()
+        def _sync_trap_clock():
+            return time_monotonic()
 
         # Create the traps tables
         traps = [None] * len(Traps)
