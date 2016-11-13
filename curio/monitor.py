@@ -105,6 +105,7 @@ def _format_stack(task):
         resp += ''.join(traceback.format_list(extracted_list))
     return resp
 
+
 class Monitor(object):
     '''
     Task monitor that runs concurrently to the curio kernel in a
@@ -119,10 +120,17 @@ class Monitor(object):
 
         # The monitor launches both a separate thread and helper task
         # that runs inside curio itself to manage cancellation events
-        threading.Thread(target=self.server, daemon=True).start()
+        self._ui_thread = threading.Thread(target=self.server, args=(), daemon=True)
+        self._closing = threading.Event()
+        self._ui_thread.start()
+
         monitor_task = Task(self.monitor_task(), daemon=True)
         kern._ready.append(monitor_task)
         kern._tasks[monitor_task.id] = monitor_task
+
+    def close(self):
+        self._closing.set()
+        self._ui_thread.join()
 
     async def monitor_task(self):
         '''
@@ -139,15 +147,27 @@ class Monitor(object):
         from curio itself.
         '''
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except AttributeError:
+            pass
+
+        # set the timeout to prevent the server loop from
+        # blocking indefinitaly on sock.accept()
+        sock.settimeout(0.5)
         sock.bind(self.address)
         sock.listen(1)
-        while True:
-            client, addr = sock.accept()
-            sout = client.makefile('w', encoding='utf-8')
-            sin = client.makefile('r', encoding='utf-8')
-            self.interactive_loop(sout, sin)
-            client.close()
+        with sock:
+            while not self._closing.is_set():
+                try:
+                    client, addr = sock.accept()
+                    with client:
+                        sout = client.makefile('w', encoding='utf-8')
+                        sin = client.makefile('r', encoding='utf-8')
+                        self.interactive_loop(sout, sin)
+                except socket.timeout:
+                    continue
 
     def interactive_loop(self, sout, sin):
         '''
@@ -155,7 +175,7 @@ class Monitor(object):
         '''
         sout.write('\nCurio Monitor: %d tasks running\n' % len(self.kernel._tasks))
         sout.write('Type help for commands\n')
-        while True:
+        while not self._closing.is_set():
             sout.write('curio > ')
             sout.flush()
             resp = sin.readline()
