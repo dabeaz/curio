@@ -94,6 +94,12 @@ The following functions are defined to help manage the execution of tasks.
    value of the monotonic clock at the time the task awakes.  Use this function
    if you need to have more precise interval timing.
 
+.. asyncfunction:: switch(clock)
+
+   Voluntarily switch to the next task. This is a convenience utility so users
+   do not need to use :func:`sleep` with a 0 time offset. It also faster than
+   sleeping for 0 seconds due to the curio's internals.
+
 .. asyncfunction:: current_task()
 
    Returns a reference to the :class:`Task` instance corresponding to the

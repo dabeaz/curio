@@ -83,6 +83,7 @@ def _sleep(clock, absolute):
 
 @coroutine
 def _switch():
+    """Switch to the next ready task"""
     return (yield (_trap_switch, ))
 
 @coroutine

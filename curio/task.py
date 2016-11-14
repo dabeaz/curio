@@ -110,7 +110,7 @@ async def current_task():
 
 async def switch():
     """
-    Switch to the next ready task.
+    Switch to the next ready task
 
     Usage:
 
