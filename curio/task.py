@@ -2,7 +2,7 @@
 #
 # Task class and task related functions.
 
-__all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather', 
+__all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'switch', 'spawn', 'gather', 
             'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
             'wait', 'clock' , 'defer_cancellation']
 
@@ -107,6 +107,24 @@ async def current_task():
     Returns a reference to the current task
     '''
     return await _get_current()
+
+async def switch():
+    """
+    Switch to the next ready task.
+
+    Usage:
+
+         await switch()
+
+    The end result is identical to
+
+         await curio.sleep(0)
+
+    except that it bypasses all the time scheduling routine,
+    which should make it faster.
+
+    """
+    return await _switch()
 
 async def sleep(seconds):
     '''

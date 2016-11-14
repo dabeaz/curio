@@ -15,7 +15,7 @@ __all__ = [
     '_cancel_task', '_adjust_cancel_defer_depth', '_join_task',
     '_wait_on_queue', '_reschedule_tasks', '_queue_reschedule_function',
     '_sigwatch', '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
-    '_set_timeout', '_unset_timeout', '_clock', 
+    '_switch', '_set_timeout', '_unset_timeout', '_clock', 
     ]
 
 from types import coroutine
@@ -34,6 +34,7 @@ class Traps(IntEnum):
     _trap_wait_queue = 6
     _trap_reschedule_tasks = 7
     _trap_sigwait = 8
+    _trap_switch = 9
 
 class SyncTraps(IntEnum):
     _sync_trap_adjust_cancel_defer_depth = 0
@@ -79,6 +80,10 @@ def _sleep(clock, absolute):
     period is an absolute time or relative.
     '''
     return (yield (_trap_sleep, clock, absolute))
+
+@coroutine
+def _switch():
+    return (yield (_trap_switch, ))
 
 @coroutine
 def _spawn(coro, daemon):
