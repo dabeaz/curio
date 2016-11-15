@@ -83,7 +83,7 @@ class Socket(object):
         return None
 
     def dup(self):
-        return Socket(self._socket.dup())
+        return type(self)(self._socket.dup())
 
     def makefile(self, mode, buffering=0, *, encoding=None, errors=None, newline=None):
         if 'b' not in mode:
@@ -160,7 +160,7 @@ class Socket(object):
         while True:
             try:
                 client, addr = self._socket.accept()
-                return Socket(client), addr
+                return type(self)(client), addr
             except WantRead:
                 await _read_wait(self._fileno)
 
