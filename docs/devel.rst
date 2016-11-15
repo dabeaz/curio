@@ -991,7 +991,7 @@ results of completed tasks. Instead, it always produces the associated
 ``Task`` instance.  Partly, this is so you can figure which of the
 tasks actually completed.  To get the result, you call ``task.join()``
 and handle it in the usual way.  Just as a reminder, exceptions
-produce a ``TaskeError`` exception that wraps around the actual
+produce a ``TaskError`` exception that wraps around the actual
 exception.
 
 Getting a Task Self-Reference
