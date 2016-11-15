@@ -66,9 +66,11 @@ class Kernel(object):
         self._pdb = pdb
         self._log_errors = log_errors
 
+        self._monitor = None
+
         # If a monitor is specified, launch it
         if with_monitor or 'CURIOMONITOR' in os.environ:
-            Monitor(self)
+            self._monitor = Monitor(self)
 
     def __del__(self):
         if self._selector is not None:
@@ -79,6 +81,8 @@ class Kernel(object):
 
     def __exit__(self, *args):
         self.run(shutdown=True)
+        if self._monitor:
+            self._monitor.close()
 
     # Force the kernel to wake, possibly scheduling a task to run.
     # This method is called by threads running concurrently to the
