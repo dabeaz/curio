@@ -81,8 +81,6 @@ class Kernel(object):
 
     def __exit__(self, *args):
         self.run(shutdown=True)
-        if self._monitor:
-            self._monitor.close()
 
     # Force the kernel to wake, possibly scheduling a task to run.
     # This method is called by threads running concurrently to the
@@ -153,6 +151,9 @@ class Kernel(object):
         if self._process_pool:
             self._process_pool.shutdown()
             self._process_pool = None
+
+        if self._monitor:
+            self._monitor.close()
 
     # Main Kernel Loop
     # ----------
