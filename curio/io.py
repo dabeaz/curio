@@ -125,7 +125,7 @@ class Socket(object):
                 await _read_wait(self._fileno)
             except WantWrite:
                 await _write_wait(self._fileno)
-
+  
     async def send(self, data, flags=0):
         while True:
             try:

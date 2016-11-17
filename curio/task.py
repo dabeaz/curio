@@ -4,7 +4,7 @@
 
 __all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather', 
             'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
-            'wait', 'clock' , 'defer_cancellation']
+            'wait', 'clock' , 'defer_cancellation', 'schedule']
 
 from time import monotonic
 from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError
@@ -128,6 +128,12 @@ async def clock():
     preempt the current task.
     '''
     return await _clock()
+
+async def schedule():
+    '''
+    Preempt the calling task.  Forces the scheduling of other tasks.
+    '''
+    await sleep(0)
 
 async def spawn(coro, *, daemon=False):
     '''
