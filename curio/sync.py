@@ -130,6 +130,11 @@ class RLock(_LockBase):
         self._owner = None
         self._count = 0
 
+    def __repr__(self):
+        res = super().__repr__()
+        extra = 'locked' if self.locked() else 'unlocked'
+        return '<{} [{},recursion:{}]>'.format(res[1:-1], extra, self._count)
+
     async def acquire(self):
 
         me = await current_task()
