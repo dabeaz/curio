@@ -34,12 +34,16 @@ kqueue = deque
 
 class Kernel(object):
     def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=True,
+                 scheduler_queue=None,
                  crash_handler=None):
         if selector is None:
             selector = DefaultSelector()
 
+        if scheduler_queue is None:
+            scheduler_queue = kqueue
+
         self._selector = selector
-        self._ready = kqueue()            # Tasks ready to run
+        self._ready = scheduler_queue()            # Tasks ready to run
         self._tasks = { }                 # Task table
         # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
         self._signal_sets = None
@@ -147,7 +151,7 @@ class Kernel(object):
         if self._thread_pool:
             self._thread_pool.shutdown()
             self._thread_pool = None
-        
+
         if self._process_pool:
             self._process_pool.shutdown()
             self._process_pool = None
@@ -186,9 +190,9 @@ class Kernel(object):
         selector_select = selector.select
         selector_getkey = selector.get_key
 
-        ready_popleft = ready.popleft
-        ready_append = ready.append
-        ready_appendleft = ready.appendleft
+        ready_pop = ready.popleft
+        ready_push = ready.append
+        ready_pushfront = ready.appendleft
         time_monotonic = time.monotonic
         _wake = self._wake     
 
@@ -227,7 +231,7 @@ class Kernel(object):
                     task.future = None
                     task.state = 'READY'
                     task.cancel_func = None
-                    ready_append(task)
+                    ready_push(task)
 
                 # Any non-null bytes received here are assumed to be received signals.
                 # See if there are any pending signal sets and unblock if needed
@@ -258,7 +262,7 @@ class Kernel(object):
         # value and exc specify a value or exception to send into the underlying
         # coroutine when it is rescheduled.
         def _reschedule_task(task, value=None, exc=None):
-            ready_append(task)
+            ready_push(task)
             task.next_value = value
             task.next_exc = exc
             task.state = 'READY'
@@ -497,13 +501,13 @@ class Kernel(object):
                 return
 
             if task.cancelled:
-                ready_appendleft(current)
+                ready_pushfront(current)
             elif task.cancel_defer_depth > 0:
                 task.cancel_pending = True
-                ready_appendleft(current)
+                ready_pushfront(current)
             elif _cancel_task(task, CancelledError):
                 task.cancelled = True
-                ready_appendleft(current)
+                ready_pushfront(current)
             else:
                 # Fail with a _CancelRetry exception to indicate that the cancel
                 # request should be attempted again.  This happens in the case
@@ -633,14 +637,14 @@ class Kernel(object):
                         rtask._last_io = (key.fileobj, EVENT_READ)
                         rtask.state = 'READY'
                         rtask.cancel_func = None
-                        ready_append(rtask)
+                        ready_push(rtask)
                         rtask = None
                         mask &= ~EVENT_READ
                     if mask & EVENT_WRITE:
                         wtask._last_io = (key.fileobj, EVENT_WRITE)
                         wtask.state = 'READY'
                         wtask.cancel_func = None
-                        ready_append(wtask)
+                        ready_push(wtask)
                         wtask = None
                         mask &= ~EVENT_WRITE
                     #if mask:
@@ -654,7 +658,7 @@ class Kernel(object):
                     task._last_io = (task.state, key.fileobj)
                     task.state = 'READY'
                     task.cancel_func = None
-                    ready_append(task)
+                    ready_push(task)
                     '''
 
                 # Process sleeping tasks (if any)
@@ -694,7 +698,7 @@ class Kernel(object):
             # Run ready tasks
             # --------
             while ready:
-                current = ready_popleft()
+                current = ready_pop()
                 try:
                     current.state = 'RUNNING'
                     current.cycles += 1
