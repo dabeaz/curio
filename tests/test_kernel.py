@@ -795,3 +795,31 @@ def test_sleep_0_starvation(kernel):
         await loop_task.cancel()
 
     kernel.run(main())
+
+
+def test_switch(kernel):
+
+    results = []
+
+    async def swither():
+        results.append('switcher running')
+        await switch()
+        results.append('switcher continues')
+
+    async def main():
+        await spawn(swither())
+        results.append('switcher waiting')
+        await sleep(0)
+        results.append('all done')
+
+        print(results)
+
+    kernel.run(main())
+
+    assert results == [
+        'switcher running',
+        'switcher waiting',
+        'switcher continues',
+        'all done'
+    ]
+

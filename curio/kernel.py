@@ -535,6 +535,9 @@ class Kernel(object):
             current.state = 'TIME_SLEEP'
             current.cancel_func = lambda task=current: setattr(task, 'sleep', None)
 
+        def _trap_switch():
+            _reschedule_task(current)
+
         # Watch signals
         def _sync_trap_sigwatch(sigset):
             # Initialize the signal handling part of the kernel if not done already
