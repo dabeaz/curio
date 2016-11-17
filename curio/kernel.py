@@ -34,12 +34,16 @@ kqueue = deque
 
 class Kernel(object):
     def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=True,
+                 scheduler_queue=None,
                  crash_handler=None):
         if selector is None:
             selector = DefaultSelector()
 
+        if scheduler_queue is None:
+            scheduler_queue = kqueue
+
         self._selector = selector
-        self._ready = kqueue()            # Tasks ready to run
+        self._ready = scheduler_queue()            # Tasks ready to run
         self._tasks = { }                 # Task table
         # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
         self._signal_sets = None
@@ -147,7 +151,7 @@ class Kernel(object):
         if self._thread_pool:
             self._thread_pool.shutdown()
             self._thread_pool = None
-        
+
         if self._process_pool:
             self._process_pool.shutdown()
             self._process_pool = None
