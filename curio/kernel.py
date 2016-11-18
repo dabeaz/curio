@@ -619,30 +619,34 @@ class Kernel(object):
         # ------------------------------------------------------------
         while njobs > 0:
             # --------
-            # Poll for I/O as long as there is nothing to run
+            # Poll for I/O
             # --------
-            while not ready:
-                # Wait for an I/O event (or timeout)
+            if ready:
+                # set polling timeout to 0 if there is at least on task ready to run
+                timeout = 0
+            else:
                 timeout = (sleeping[0][0] - time_monotonic()) if sleeping else None
-                events = selector_select(timeout)
 
-                # Reschedule tasks with completed I/O
-                for key, mask in events:
-                    rtask, wtask = key.data
-                    if mask & EVENT_READ:
-                        rtask._last_io = (key.fileobj, EVENT_READ)
-                        rtask.state = 'READY'
-                        rtask.cancel_func = None
-                        ready_append(rtask)
-                        rtask = None
-                        mask &= ~EVENT_READ
-                    if mask & EVENT_WRITE:
-                        wtask._last_io = (key.fileobj, EVENT_WRITE)
-                        wtask.state = 'READY'
-                        wtask.cancel_func = None
-                        ready_append(wtask)
-                        wtask = None
-                        mask &= ~EVENT_WRITE
+            # Wait for an I/O event (or timeout)
+            events = selector_select(timeout)
+
+            # Reschedule tasks with completed I/O
+            for key, mask in events:
+                rtask, wtask = key.data
+                if mask & EVENT_READ:
+                    rtask._last_io = (key.fileobj, EVENT_READ)
+                    rtask.state = 'READY'
+                    rtask.cancel_func = None
+                    ready_append(rtask)
+                    rtask = None
+                    mask &= ~EVENT_READ
+                if mask & EVENT_WRITE:
+                    wtask._last_io = (key.fileobj, EVENT_WRITE)
+                    wtask.state = 'READY'
+                    wtask.cancel_func = None
+                    ready_append(wtask)
+                    wtask = None
+                    mask &= ~EVENT_WRITE
                     #if mask:
                     #    selector_modify(key.fileobj, mask, (rtask, wtask))
                     #else:
@@ -657,38 +661,38 @@ class Kernel(object):
                     ready_append(task)
                     '''
 
-                # Process sleeping tasks (if any)
-                if sleeping:
-                    current_time = time_monotonic()
-                    cancel_retry = []
-                    while sleeping and sleeping[0][0] <= current_time:
-                        tm, taskid, sleep_type = heapq.heappop(sleeping)
-                        # When a task wakes, verify that the timeout value matches that stored
-                        # on the task. If it differs, it means that the task completed its
-                        # operation, was cancelled, or is no longer concerned with this
-                        # sleep operation.  In that case, we do nothing
-                        if taskid in tasks:
-                            task = tasks[taskid]
-                            if sleep_type == 'sleep':
-                                if tm == task.sleep:
-                                    task.sleep = None
-                                    _reschedule_task(task, value=current_time)
-                            else:
-                                if tm == task.timeout:
-                                    if (_cancel_task(task, exc=TaskTimeout, val=current_time)):
-                                        task.timeout = None
-                                    else:
-                                        # Note: There is a possibility that a task will be
-                                        # marked for timeout-cancellation even though it is
-                                        # sitting on the ready queue.  In this case, the
-                                        # rescheduled task is given priority. However, the
-                                        # cancellation timeout will be put back on the sleep
-                                        # queue and reprocessed the next time around. 
-                                        cancel_retry.append((tm, taskid, sleep_type))
+            # Process sleeping tasks (if any)
+            if sleeping:
+                current_time = time_monotonic()
+                cancel_retry = []
+                while sleeping and sleeping[0][0] <= current_time:
+                    tm, taskid, sleep_type = heapq.heappop(sleeping)
+                    # When a task wakes, verify that the timeout value matches that stored
+                    # on the task. If it differs, it means that the task completed its
+                    # operation, was cancelled, or is no longer concerned with this
+                    # sleep operation.  In that case, we do nothing
+                    if taskid in tasks:
+                        task = tasks[taskid]
+                        if sleep_type == 'sleep':
+                            if tm == task.sleep:
+                                task.sleep = None
+                                _reschedule_task(task, value=current_time)
+                        else:
+                            if tm == task.timeout:
+                                if (_cancel_task(task, exc=TaskTimeout, val=current_time)):
+                                    task.timeout = None
+                                else:
+                                    # Note: There is a possibility that a task will be
+                                    # marked for timeout-cancellation even though it is
+                                    # sitting on the ready queue.  In this case, the
+                                    # rescheduled task is given priority. However, the
+                                    # cancellation timeout will be put back on the sleep
+                                    # queue and reprocessed the next time around.
+                                    cancel_retry.append((tm, taskid, sleep_type))
 
-                    # Put deferred cancellation requests back on sleep queue
-                    for item in cancel_retry:
-                        heapq.heappush(sleeping, item)
+                # Put deferred cancellation requests back on sleep queue
+                for item in cancel_retry:
+                    heapq.heappush(sleeping, item)
 
             # --------
             # Run ready tasks
