@@ -28,10 +28,9 @@ class Traps(IntEnum):
     _trap_io = 0
     _trap_future_wait = 1
     _trap_sleep = 2
-    _trap_cancel_task = 3
-    _trap_join_task = 4
-    _trap_wait_queue = 5
-    _trap_sigwait = 6
+    _trap_join_task = 3
+    _trap_wait_queue = 4
+    _trap_sigwait = 5
 
 class SyncTraps(IntEnum):
     _sync_trap_adjust_cancel_defer_depth = 0
@@ -45,6 +44,7 @@ class SyncTraps(IntEnum):
     _sync_trap_sigunwatch = 8
     _sync_trap_spawn = 9
     _sync_trap_reschedule_tasks = 10
+    _sync_trap_cancel_task = 11
 
 globals().update((trap.name, trap) for trap in Traps)
 globals().update((trap.name, trap) for trap in SyncTraps)
@@ -91,14 +91,8 @@ def _spawn(coro, daemon):
 def _cancel_task(task):
     '''
     Cancel a task. Causes a CancelledError exception to raise in the task.
-    The exception can be changed by specifying exc.
     '''
-    while True:
-        try:
-            yield (_trap_cancel_task, task)
-            return
-        except _CancelRetry:
-            pass
+    yield (_sync_trap_cancel_task, task)
 
 @coroutine
 def _adjust_cancel_defer_depth(n):

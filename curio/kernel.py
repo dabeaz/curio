@@ -264,12 +264,16 @@ class Kernel(object):
             task.state = 'READY'
             task.cancel_func = None
 
-        # Cancel a task. This causes a CancelledError exception to raise in the
-        # underlying coroutine.  The coroutine can elect to catch the exception
-        # and continue to run to perform cleanup actions.  However, it would
-        # normally terminate shortly afterwards.   This method is also used to
-        # raise timeouts.
-        def _cancel_task(task, exc=CancelledError, val=None):
+        # Attempt to cancel a task. This causes a CancelledError exception to
+        # raise in the underlying coroutine.  The coroutine can elect to catch
+        # the exception and continue to run to perform cleanup actions.
+        # However, it would normally terminate shortly afterwards.  This
+        # method is also used to raise timeouts.
+        #
+        # This only works if the task is currently blocked. If it succeeds, it
+        # returns True. If it fails, it returns False. (And in that case, we
+        # need to arrange for the cancellation to happen some other way.)
+        def _try_cancel_blocked_task(task, exc=CancelledError, val=None):
             if task.terminated:
                 return True
 
@@ -474,41 +478,36 @@ class Kernel(object):
         # Join with a task
         def _trap_join_task(task):
             if task.terminated:
-                _reschedule_task(current)
+                return _trap_sleep(0, False)
             else:
                 if task.joining is None:
                     task.joining = kqueue()
-                _trap_wait_queue(task.joining, 'TASK_JOIN')
+                return _trap_wait_queue(task.joining, 'TASK_JOIN')
 
         # Enter or exit an 'async with curio.defer_cancellation' block:
         def _sync_trap_adjust_cancel_defer_depth(n):
             current.cancel_defer_depth += n
             if current.cancel_defer_depth == 0 and current.cancel_pending:
                 current.cancel_pending = False
-                if current.cancelled:
-                    return
                 raise CancelledError("CancelledError")
 
         # Cancel a task
-        def _trap_cancel_task(task):
+        def _sync_trap_cancel_task(task):
             if task == current:
-                _reschedule_task(current, exc=CurioError("A task can't cancel itself"))
-                return
+                raise CurioError("A task can't cancel itself")
 
             if task.cancelled:
-                ready_appendleft(current)
-            elif task.cancel_defer_depth > 0:
-                task.cancel_pending = True
-                ready_appendleft(current)
-            elif _cancel_task(task, CancelledError):
-                task.cancelled = True
-                ready_appendleft(current)
+                return
+            task.cancelled = True
+
+            if (task.cancel_defer_depth == 0
+                and _try_cancel_blocked_task(task, CancelledError)):
+                # we were able to do it immediately
+                pass
             else:
-                # Fail with a _CancelRetry exception to indicate that the cancel
-                # request should be attempted again.  This happens in the case
-                # that a cancellation request is issued against a task that
-                # ready to run in the ready queue.
-                _reschedule_task(current, exc=_CancelRetry())
+                # wait for the next cancellation point (either exiting a 'with
+                # defer_cancellation' block, or entering a blocking call).
+                task.cancel_pending = True
 
         # Wait on a queue
         def _trap_wait_queue(queue, state):
@@ -674,7 +673,7 @@ class Kernel(object):
                                     _reschedule_task(task, value=current_time)
                             else:
                                 if tm == task.timeout:
-                                    if (_cancel_task(task, exc=TaskTimeout, val=current_time)):
+                                    if (_try_cancel_blocked_task(task, exc=TaskTimeout, val=current_time)):
                                         task.timeout = None
                                     else:
                                         # Note: There is a possibility that a task will be
@@ -750,6 +749,12 @@ class Kernel(object):
                     # Execute the trap
                     assert type(trap[0]) is Traps
                     traps[trap[0]](*trap[1:])
+                    # Entering a blocking call triggers a check for pending
+                    # cancellation
+                    assert current.cancel_func is not None
+                    if current.cancel_defer_depth == 0 and current.cancel_pending:
+                        result = _try_cancel_blocked_task(current, CancelledError)
+                        assert result
 
                 finally:
                     # Unregister previous I/O request. Discussion follows:
