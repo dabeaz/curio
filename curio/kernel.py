@@ -277,6 +277,9 @@ class Kernel(object):
             if task.terminated:
                 return True
 
+            if task.cancel_defer_depth > 0:
+                return False
+
             if not task.cancel_func:
                 # All tasks set a cancellation function when they
                 # block.  If there is no cancellation function set. It
@@ -487,9 +490,15 @@ class Kernel(object):
         # Enter or exit an 'async with curio.defer_cancellation' block:
         def _sync_trap_adjust_cancel_defer_depth(n):
             current.cancel_defer_depth += n
-            if current.cancel_defer_depth == 0 and current.cancel_pending:
-                current.cancel_pending = False
-                raise CancelledError("CancelledError")
+            if current.cancel_defer_depth == 0:
+                if current.cancel_pending:
+                    current.cancel_pending = False
+                    raise CancelledError("CancelledError")
+                else:
+                    if task.timeout is not None:
+                        now = time_monotonic()
+                        if task.timeout <= now:
+                            raise TaskTimeout(now)
 
         # Cancel a task
         def _sync_trap_cancel_task(task):
@@ -500,8 +509,7 @@ class Kernel(object):
                 return
             task.cancelled = True
 
-            if (task.cancel_defer_depth == 0
-                and _try_cancel_blocked_task(task, CancelledError)):
+            if _try_cancel_blocked_task(task, CancelledError):
                 # we were able to do it immediately
                 pass
             else:
@@ -673,7 +681,7 @@ class Kernel(object):
                                     _reschedule_task(task, value=current_time)
                             else:
                                 if tm == task.timeout:
-                                    if (_try_cancel_blocked_task(task, exc=TaskTimeout, val=current_time)):
+                                    if _try_cancel_blocked_task(task, exc=TaskTimeout, val=current_time):
                                         task.timeout = None
                                     else:
                                         # Note: There is a possibility that a task will be
