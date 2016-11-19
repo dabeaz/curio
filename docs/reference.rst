@@ -1530,56 +1530,55 @@ yourself using these, you're probably doing something wrong--or
 implementing a new curio primitive.   These calls are found in the
 ``curio.traps`` submodule.
 
-Traps come in two flavors: *regular* and *synchronous*. A synchronous
-trap is implemented by trapping into the kernel, but semantically it
-acts like a regular synchronous function call. Specifically, this
-means that it always returns immediately without running any other
-task, and that it does not act as a cancellation point. Regular traps
-might or might not block or yield execution, and can be cancelled or
-timed-out.
+Traps come in two flavors: *blocking* and *synchronous*. A blocking
+trap might block for an indefinite period of time while allowing other
+tasks to run, and always checks for and raises any pending timeouts or
+cancellations. A synchronous trap is implemented by trapping into the
+kernel, but semantically it acts like a regular synchronous function
+call. Specifically, this means that it always returns immediately
+without running any other task, and that it does *not* act as a
+cancellation point.
 
 .. asyncfunction:: _read_wait(fileobj)
 
-   Sleep until data is available for reading on *fileobj*.  *fileobj* is
-   any file-like object with a `fileno()` method.
+   Blocking trap. Sleep until data is available for reading on
+   *fileobj*.  *fileobj* is any file-like object with a `fileno()`
+   method.
 
 .. asyncfunction:: _write_wait(fileobj)
 
-   Sleep until data can be written on *fileobj*.  *fileobj* is
-   any file-like object with a `fileno()` method.
+   Blocking trap. Sleep until data can be written on *fileobj*.
+   *fileobj* is any file-like object with a `fileno()` method.
 
 .. asyncfunction:: _future_wait(future)
 
-   Sleep until a result is set on *future*.  *future* is an instance of
-   :py:class:`concurrent.futures.Future`.
+   Blocking trap. Sleep until a result is set on *future*.  *future*
+   is an instance of :py:class:`concurrent.futures.Future`.
 
 .. asyncfunction:: _join_task(task)
 
-   Sleep until the indicated *task* completes.  The final return value
-   of the task is returned if it completed successfully. If the task
-   failed with an exception, a :exc:`curio.TaskError` exception is
-   raised.  This is a chained exception.  ``TaskError.__cause__``
-   attribute of this exception contains the actual exception raised in
-   the task.
+   Blocking trap. Sleep until the indicated *task* completes. After
+   this trap completes, then the task's return value or raised
+   exception information is available in ``task.next_value`` or
+   ``task.exc_info``, respectively.
 
 .. asyncfunction:: _cancel_task(task)
 
-   Cancel the indicated *task*.  Does not return until the task actually
-   completes the cancellation.  Note: It is usually better to use
-   :meth:`Task.cancel` instead of this function.
+   Synchronous trap. Cancel the indicated *task*.
 
 .. asyncfunction:: _wait_on_queue(kqueue, state_name)
 
-   Go to sleep on a queue. *kqueue* is an instance of a kernel queue
-   which is typically a :py:class:`collections.deque` instance. *state_name*
-   is the name of the wait state (used in debugging).
+   Blocking trap.  Go to sleep on a queue. *kqueue* is an instance of
+   a kernel queue which is typically a :py:class:`collections.deque`
+   instance. *state_name* is the name of the wait state (used in
+   debugging).
 
 .. asyncfunction:: _reschedule_tasks(kqueue, n=1, value=None, exc=None)
 
-   Reschedule one or more tasks from a queue. *kqueue* is an instance of a
-   kernel queue.  *n* is the number of tasks to release. *value* and *exc*
-   specify the return value or exception to raise in the task when it
-   resumes execution.
+   Synchronous trap. Reschedule one or more tasks from a
+   queue. *kqueue* is an instance of a kernel queue.  *n* is the
+   number of tasks to release. *value* and *exc* specify the return
+   value or exception to raise in the task when it resumes execution.
 
 .. asyncfunction:: _sigwatch(sigset)
 
@@ -1593,8 +1592,8 @@ timed-out.
 
 .. asyncfunction:: _sigwait(sigset)
 
-   Wait for the arrival of a signal in a given signal set. Returns the signal
-   number of the received signal.
+   Blocking trap. Wait for the arrival of a signal in a given signal
+   set. Returns the signal number of the received signal.
 
 .. asyncfunction:: _get_kernel()
 

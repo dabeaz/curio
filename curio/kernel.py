@@ -398,9 +398,21 @@ class Kernel(object):
         # and there is no public API outside the kernel.  Instead,
         # coroutines use a statement such as
         #
-        #   yield ('_trap_io', sock, EVENT_READ, 'READ_WAIT')
+        #   yield (_blocking_trap_io, sock, EVENT_READ, 'READ_WAIT')
         #
         # to invoke a specific trap.
+        #
+        # There are two calling conventions we use for implementing these:
+        #
+        # 1) Blocking trap handlers return the new values for
+        #
+        #       (task.state, task.cancel_func)
+        #
+        #    They don't have any way to pass values/exceptions back to the
+        #    invoker.
+        #
+        # 2) Sync trap handlers act like regular function calls -- whatever
+        #    they return or raise will be passed back to the invoker.
 
         # Wait for I/O
         def _blocking_trap_io(fileobj, event, state):
