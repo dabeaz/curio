@@ -91,8 +91,8 @@ class TestEvent:
         kernel.run(event_cancel(1))
 
         assert results == [
-                'event_wait',
                 'sleep',
+                'event_wait',
                 'cancel_start',
                 'event_cancel',
                 'cancel_done',
@@ -117,8 +117,8 @@ class TestEvent:
         kernel.run(event_run(1))
 
         assert results == [
-                'event_wait',
                 'sleep',
+                'event_wait',
                 'event_timeout',
                 'sleep_done',
                 ]
@@ -153,8 +153,8 @@ class TestEvent:
 
         kernel.run(event_run())
         assert results == [
-                'event_wait',
                 'sleep',
+                'event_wait',
                 'event_set',
                 'got event',
                 'event_set',
@@ -254,10 +254,10 @@ class TestLock:
                 True,
                 'work3 wait',
                 True,
-                'work2 acquire',
                 'work1 release',
-                'work3 acquire',
+                'work2 acquire',
                 'work2 release',
+                'work3 acquire',
                 'work3 release',
                 ]
 
@@ -284,8 +284,8 @@ class TestLock:
         kernel.run(worker_cancel(1))
 
         assert results == [
-                'lock_wait',
                 'sleep',
+                'lock_wait',
                 'cancel_start',
                 'lock_cancel',
                 'cancel_done',
@@ -313,8 +313,8 @@ class TestLock:
         kernel.run(worker_timeout(1))
 
         assert results == [
-                'lock_wait',
                 'sleep',
+                'lock_wait',
                 'lock_timeout',
                 'sleep_done',
                 ]
@@ -400,10 +400,10 @@ class TestSemaphore:
                 True,
                 'work3 wait',
                 True,
-                'work2 acquire',
                 'work1 release',
-                'work3 acquire',
+                'work2 acquire',
                 'work2 release',
+                'work3 acquire',
                 'work3 release',
                 ]
 
@@ -433,8 +433,8 @@ class TestSemaphore:
                 'work2 acquire',
                 'work3 wait',
                 True,
-                'work3 acquire',
                 'work1 release',
+                'work3 acquire',
                 'work2 release',
                 'work3 release',
                 ]
@@ -462,8 +462,8 @@ class TestSemaphore:
         kernel.run(worker_cancel(1))
 
         assert results == [
-                'lock_wait',
                 'sleep',
+                'lock_wait',
                 'cancel_start',
                 'lock_cancel',
                 'cancel_done',
@@ -491,8 +491,8 @@ class TestSemaphore:
         kernel.run(worker_timeout(1))
 
         assert results == [
-                'lock_wait',
                 'sleep',
+                'lock_wait',
                 'lock_timeout',
                 'sleep_done',
                 ]
@@ -596,8 +596,8 @@ class TestCondition:
         kernel.run(worker_cancel(1))
 
         assert results == [
-                'cond_wait',
                 'sleep',
+                'cond_wait',
                 'cancel_start',
                 'worker_cancel',
                 'cancel_done',
@@ -624,8 +624,8 @@ class TestCondition:
         kernel.run(worker_cancel(1))
 
         assert results == [
-                'cond_wait',
                 'sleep',
+                'cond_wait',
                 'worker_timeout',
                 'done'
                 ]
@@ -653,13 +653,13 @@ class TestCondition:
         kernel.run(worker_notify(1))
 
         assert results == [
-                'cond_wait',
-                'cond_wait',
-                'cond_wait',
                 'sleep',
+                'cond_wait',
+                'cond_wait',
+                'cond_wait',
                 'notify',
-                'wait_done',
                 'done',
+                'wait_done',
                 'wait_done',
                 'wait_done',
                 ]

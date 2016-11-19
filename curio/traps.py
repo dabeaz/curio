@@ -28,12 +28,10 @@ class Traps(IntEnum):
     _trap_io = 0
     _trap_future_wait = 1
     _trap_sleep = 2
-    _trap_spawn = 3
-    _trap_cancel_task = 4
-    _trap_join_task = 5
-    _trap_wait_queue = 6
-    _trap_reschedule_tasks = 7
-    _trap_sigwait = 8
+    _trap_cancel_task = 3
+    _trap_join_task = 4
+    _trap_wait_queue = 5
+    _trap_sigwait = 6
 
 class SyncTraps(IntEnum):
     _sync_trap_adjust_cancel_defer_depth = 0
@@ -45,6 +43,8 @@ class SyncTraps(IntEnum):
     _sync_trap_clock = 6
     _sync_trap_sigwatch = 7
     _sync_trap_sigunwatch = 8
+    _sync_trap_spawn = 9
+    _sync_trap_reschedule_tasks = 10
 
 globals().update((trap.name, trap) for trap in Traps)
 globals().update((trap.name, trap) for trap in SyncTraps)
@@ -85,7 +85,7 @@ def _spawn(coro, daemon):
     '''
     Create a new task. Returns the resulting Task object.
     '''
-    return (yield _trap_spawn, coro, daemon)
+    return (yield _sync_trap_spawn, coro, daemon)
 
 @coroutine
 def _cancel_task(task):
@@ -127,7 +127,7 @@ def _reschedule_tasks(queue, n=1):
     '''
     Reschedule one or more tasks waiting on a kernel queue.
     '''
-    yield (_trap_reschedule_tasks, queue, n)
+    yield (_sync_trap_reschedule_tasks, queue, n)
 
 @coroutine
 def _sigwatch(sigset):

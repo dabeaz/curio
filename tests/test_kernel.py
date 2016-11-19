@@ -265,8 +265,8 @@ def test_task_cancel(kernel):
 
     kernel.run(main())
     assert results == [
-            'start',
             'cancel start',
+            'start',
             'cancelling',
             'cancelled',
             'done',
@@ -322,8 +322,8 @@ def test_task_cancel_join(kernel):
 
     kernel.run(main())
     assert results == [
-            'start',
             'cancel start',
+            'start',
             'cancelling',
             'join cancel',
             'done',
@@ -359,9 +359,9 @@ def test_task_cancel_join_wait(kernel):
 
     kernel.run(main())
     assert results == [
-            'start',
             'cancel start',
             'join',
+            'start',
             'cancel',
             'join cancel',
             'done',
@@ -449,8 +449,8 @@ def test_task_ready_cancel(kernel):
     kernel.run(main())
 
     assert results == [
-            'child sleep',
             'parent sleep',
+            'child sleep',
             'cancel start',
             'child slept',
             'child cancelled',

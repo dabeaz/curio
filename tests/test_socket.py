@@ -215,12 +215,13 @@ def test_accept_cancel(kernel):
 
 def test_recv_timeout(kernel):
     results = []
-    async def server(address):
+    async def server(address, accepting_event):
         sock = socket(AF_INET, SOCK_STREAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
         sock.bind(address)
         sock.listen(1)
         results.append('accept wait')
+        await accepting_event.set()
         client, addr = await sock.accept()
         results.append('recv wait')
         try:
@@ -232,13 +233,15 @@ def test_recv_timeout(kernel):
         await sock.close()
 
     async def canceller():
-         task = await spawn(server(('',25000)))
-         sock = socket(AF_INET, SOCK_STREAM)
-         results.append('client connect')
-         await sock.connect(('localhost', 25000))
-         await sleep(1.0)
-         await sock.close()
-         results.append('client done')
+        accepting_event = Event()
+        task = await spawn(server(('',25000), accepting_event))
+        await accepting_event.wait()
+        sock = socket(AF_INET, SOCK_STREAM)
+        results.append('client connect')
+        await sock.connect(('localhost', 25000))
+        await sleep(1.0)
+        await sock.close()
+        results.append('client done')
 
     kernel.run(canceller())
 
@@ -252,12 +255,13 @@ def test_recv_timeout(kernel):
 
 def test_recv_cancel(kernel):
     results = []
-    async def server(address):
+    async def server(address, accepting_event):
         sock = socket(AF_INET, SOCK_STREAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
         sock.bind(address)
         sock.listen(1)
         results.append('accept wait')
+        await accepting_event.set()
         client, addr = await sock.accept()
         results.append('recv wait')
         try:
@@ -269,14 +273,16 @@ def test_recv_cancel(kernel):
         await sock.close()
 
     async def canceller():
-         task = await spawn(server(('',25000)))
-         sock = socket(AF_INET, SOCK_STREAM)
-         results.append('client connect')
-         await sock.connect(('localhost', 25000))
-         await sleep(1.0)
-         await task.cancel()
-         await sock.close()
-         results.append('client done')
+        accepting_event = Event()
+        task = await spawn(server(('',25000), accepting_event))
+        await accepting_event.wait()
+        sock = socket(AF_INET, SOCK_STREAM)
+        results.append('client connect')
+        await sock.connect(('localhost', 25000))
+        await sleep(1.0)
+        await task.cancel()
+        await sock.close()
+        results.append('client done')
 
     kernel.run(canceller())
 

@@ -454,16 +454,15 @@ class Kernel(object):
                 event.set()
 
         # Add a new task to the kernel
-        def _trap_spawn(coro, daemon):
+        def _sync_trap_spawn(coro, daemon):
             task = _new_task(coro, daemon)
             _copy_tasklocal(current, task)
-            _reschedule_task(current, value=task)
+            return task
 
         # Reschedule one or more tasks from a queue
-        def _trap_reschedule_tasks(queue, n):
+        def _sync_trap_reschedule_tasks(queue, n):
             for _ in range(n):
                 _reschedule_task(queue.popleft())
-            _reschedule_task(current)
 
         # Trap that returns a function for rescheduling tasks from synchronous code
         def _sync_trap_queue_reschedule_function(queue):
