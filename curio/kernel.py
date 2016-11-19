@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 from .errors import *
 from .errors import _CancelRetry
 from .task import Task
-from .traps import _read_wait, Traps, SyncTraps
+from .traps import _read_wait, BlockingTraps, SyncTraps
 from .local import _enable_tasklocal_for, _copy_tasklocal
 
 # kqueue is the datatype used by the kernel for all of its queuing functionality.
@@ -400,7 +400,7 @@ class Kernel(object):
         # to invoke a specific trap.
 
         # Wait for I/O
-        def _trap_io(fileobj, event, state):
+        def _blocking_trap_io(fileobj, event, state):
             # See comment about deferred unregister in run().  If the requested
             # I/O operation is *different* than the last I/O operation that was
             # performed by the task, we need to unregister the last I/O resource used
@@ -426,7 +426,7 @@ class Kernel(object):
             current.cancel_func = lambda: _unregister_event(fileobj, event)    # NEW
 
         # Wait on a Future
-        def _trap_future_wait(future, event):
+        def _blocking_trap_future_wait(future, event):
             if self._kernel_task_id is None:
                 _init_loopback_task()
 
@@ -476,13 +476,13 @@ class Kernel(object):
             return _reschedule
 
         # Join with a task
-        def _trap_join_task(task):
+        def _blocking_trap_join_task(task):
             if task.terminated:
-                return _trap_sleep(0, False)
+                return _blocking_trap_sleep(0, False)
             else:
                 if task.joining is None:
                     task.joining = kqueue()
-                return _trap_wait_queue(task.joining, 'TASK_JOIN')
+                return _blocking_trap_wait_queue(task.joining, 'TASK_JOIN')
 
         # Enter or exit an 'async with curio.defer_cancellation' block:
         def _sync_trap_adjust_cancel_defer_depth(n):
@@ -510,7 +510,7 @@ class Kernel(object):
                 task.cancel_pending = True
 
         # Wait on a queue
-        def _trap_wait_queue(queue, state):
+        def _blocking_trap_wait_queue(queue, state):
             queue.append(current)
             current.state = state
             current.cancel_func = lambda current=current: queue.remove(current)
@@ -518,7 +518,7 @@ class Kernel(object):
         # Sleep for a specified period. Returns value of monotonic clock.
         # absolute flag indicates whether or not an absolute or relative clock 
         # interval has been provided
-        def _trap_sleep(clock, absolute):
+        def _blocking_trap_sleep(clock, absolute):
             # We used to have a special case where sleep periods <= 0 would
             # simply reschedule the task to the end of the ready queue without
             # actually putting it on the sleep queue first. But this meant
@@ -550,7 +550,7 @@ class Kernel(object):
             self._signal_unwatch(sigset)
 
         # Wait for a signal
-        def _trap_sigwait(sigset):
+        def _blocking_trap_sigwait(sigset):
             sigset.waiting = current
             current.state = 'SIGNAL_WAIT'
             current.cancel_func = lambda: setattr(sigset, 'waiting', None)
@@ -596,9 +596,9 @@ class Kernel(object):
             return time_monotonic()
 
         # Create the traps tables
-        traps = [None] * len(Traps)
-        for trap in Traps:
-            traps[trap] = locals()[trap.name]
+        blocking_traps = [None] * len(BlockingTraps)
+        for trap in BlockingTraps:
+            blocking_traps[trap] = locals()[trap.name]
 
         sync_traps = [None] * len(SyncTraps)
         for trap in SyncTraps:
@@ -747,8 +747,8 @@ class Kernel(object):
 
                 else:
                     # Execute the trap
-                    assert type(trap[0]) is Traps
-                    traps[trap[0]](*trap[1:])
+                    assert type(trap[0]) is BlockingTraps
+                    blocking_traps[trap[0]](*trap[1:])
                     # Entering a blocking call triggers a check for pending
                     # cancellation
                     assert current.cancel_func is not None
