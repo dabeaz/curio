@@ -277,7 +277,7 @@ class Kernel(object):
             if task.terminated:
                 return True
 
-            if task.cancel_defer_depth > 0:
+            if not task.cancel_allowed_stack[-1]:
                 return False
 
             if not task.cancel_func:
@@ -498,18 +498,28 @@ class Kernel(object):
                     task.joining = kqueue()
                 return _blocking_trap_wait_queue(task.joining, 'TASK_JOIN')
 
-        # Enter or exit an 'async with curio.defer_cancellation' block:
-        def _sync_trap_adjust_cancel_defer_depth(n):
-            current.cancel_defer_depth += n
-            if current.cancel_defer_depth == 0:
-                if current.cancel_pending:
-                    current.cancel_pending = False
-                    raise CancelledError("CancelledError")
-                else:
-                    if task.timeout is not None:
-                        now = time_monotonic()
-                        if task.timeout <= now:
-                            raise TaskTimeout(now)
+        # Enter a {defer,allow}_cancellation block
+        def _sync_trap_cancel_allowed_stack_push(state):
+            current.cancel_allowed_stack.append(state)
+            _check_pending_cancellation()
+
+        def _sync_trap_cancel_allowed_stack_pop(state):
+            previous = current.cancel_allowed_stack.pop()
+            assert previous == state
+            assert current.cancel_allowed_stack
+            _check_pending_cancellation()
+
+        def _check_pending_cancellation():
+            if not current.cancel_allowed_stack[-1]:
+                return
+            if current.cancel_pending:
+                current.cancel_pending = False
+                raise CancelledError("CancelledError")
+            else:
+                if task.timeout is not None:
+                    now = time_monotonic()
+                    if task.timeout <= now:
+                        raise TaskTimeout(now)
 
         # Cancel a task
         def _sync_trap_cancel_task(task):
@@ -769,7 +779,7 @@ class Kernel(object):
                     # Entering a blocking call triggers a check for pending
                     # cancellation
                     assert current.cancel_func is not None
-                    if current.cancel_defer_depth == 0 and current.cancel_pending:
+                    if (current.cancel_allowed_stack[-1] and current.cancel_pending):
                         result = _try_cancel_blocked_task(current, CancelledError)
                         assert result
 

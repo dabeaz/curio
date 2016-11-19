@@ -1615,13 +1615,15 @@ cancellation point.
    task. *previous* is the value returned by the _set_timeout() call
    used to set the timeout.
 
-.. asyncfunction:: _adjust_cancel_defer_depth(n)
+.. asyncfunction:: _cancel_allowed_stack_push(state)
+.. asyncfunction:: _cancel_allowed_stack_pop(state)
 
-   Synchronous trap. For each task, we keep track of how deeply nested
-   we are inside ``curio.defer_cancellation`` blocks. This trap is
-   used to increment/decrement this count when we enter/exit these
-   blocks. If the count reaches zero and a cancellation is pending,
-   then raises ``CancelledError``.
+   Synchronous traps. For each task, cancellation can be either
+   enabled or disabled by ``curio.{defer,allow}_cancellation``
+   blocks. These traps push/pop the current setting when we enter/exit
+   these blocks. If cancellation becomes enabled while a cancellation
+   is pending, then these traps can raise ``CancelledError`` or
+   ``TaskTimeout``.
 
 .. asyncfunction:: _queue_reschedule_function(queue)
 

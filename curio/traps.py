@@ -12,7 +12,8 @@
 
 __all__ = [
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
-    '_cancel_task', '_adjust_cancel_defer_depth', '_join_task',
+    '_cancel_task', '_cancel_allowed_stack_push', '_cancel_allowed_stack_pop',
+    '_join_task',
     '_wait_on_queue', '_reschedule_tasks', '_queue_reschedule_function',
     '_sigwatch', '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
     '_set_timeout', '_unset_timeout', '_clock', 
@@ -33,7 +34,7 @@ class BlockingTraps(IntEnum):
     _blocking_trap_sigwait = 5
 
 class SyncTraps(IntEnum):
-    _sync_trap_adjust_cancel_defer_depth = 0
+    _sync_trap_cancel_task = 0
     _sync_trap_get_kernel = 1
     _sync_trap_get_current = 2
     _sync_trap_set_timeout = 3
@@ -44,7 +45,8 @@ class SyncTraps(IntEnum):
     _sync_trap_sigunwatch = 8
     _sync_trap_spawn = 9
     _sync_trap_reschedule_tasks = 10
-    _sync_trap_cancel_task = 11
+    _sync_trap_cancel_allowed_stack_push = 11
+    _sync_trap_cancel_allowed_stack_pop = 12
 
 globals().update((trap.name, trap) for trap in BlockingTraps)
 globals().update((trap.name, trap) for trap in SyncTraps)
@@ -95,12 +97,25 @@ def _cancel_task(task):
     yield (_sync_trap_cancel_task, task)
 
 @coroutine
-def _adjust_cancel_defer_depth(n):
+def _cancel_allowed_stack_push(state):
     '''
-    Increment or decrement the current task's cancel_defer_depth. If it goes
-    to 0, and the task was previously cancelled, then raises CancelledError.
+    Set whether cancellation is allowed in this task.
     '''
-    yield (_sync_trap_adjust_cancel_defer_depth, n)
+    yield (_sync_trap_cancel_allowed_stack_push, n)
+
+@coroutine
+def _cancel_allowed_stack_pop(state):
+    '''
+    Undo the previous call to _cancel_allowed_stack_push
+    '''
+    yield (_sync_trap_cancel_allowed_stack_pop, state)
+
+@coroutine
+def _cancel_allowed_stack_push(state):
+    '''
+    Set the current
+    '''
+    yield (_sync_trap_cancel_allowed_stack_push, state)
 
 @coroutine
 def _join_task(task):
