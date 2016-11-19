@@ -424,18 +424,13 @@ class Kernel(object):
             # This step indicates that we have managed any deferred I/O management
             # for the task.  Otherwise the run() method will perform an unregistration step.
             current._last_io = None
-            current.state = state
-            # current.cancel_func = lambda: selector_unregister(fileobj)
-            current.cancel_func = lambda: _unregister_event(fileobj, event)    # NEW
+            return (state, lambda: _unregister_event(fileobj, event))
 
         # Wait on a Future
         def _blocking_trap_future_wait(future, event):
             if self._kernel_task_id is None:
                 _init_loopback_task()
 
-            current.state = 'FUTURE_WAIT'
-            current.cancel_func = (lambda task=current:
-                                   setattr(task, 'future', future.cancel() and None))
             current.future = future
 
             # Discussion: Each task records the future that it is
@@ -459,6 +454,10 @@ class Kernel(object):
             # callback function has been set above.
             if event:
                 event.set()
+
+            return ('FUTURE_WAIT',
+                    lambda task=current:
+                        setattr(task, 'future', future.cancel() and None))
 
         # Add a new task to the kernel
         def _sync_trap_spawn(coro, daemon):
@@ -520,8 +519,7 @@ class Kernel(object):
         # Wait on a queue
         def _blocking_trap_wait_queue(queue, state):
             queue.append(current)
-            current.state = state
-            current.cancel_func = lambda current=current: queue.remove(current)
+            return (state, lambda current=current: queue.remove(current))
 
         # Sleep for a specified period. Returns value of monotonic clock.
         # absolute flag indicates whether or not an absolute or relative clock 
@@ -538,8 +536,8 @@ class Kernel(object):
             if not absolute:
                 clock += time_monotonic()
             _set_timeout(clock, 'sleep')
-            current.state = 'TIME_SLEEP'
-            current.cancel_func = lambda task=current: setattr(task, 'sleep', None)
+            return ('TIME_SLEEP',
+                    lambda task=current: setattr(task, 'sleep', None))
 
         # Watch signals
         def _sync_trap_sigwatch(sigset):
@@ -560,8 +558,7 @@ class Kernel(object):
         # Wait for a signal
         def _blocking_trap_sigwait(sigset):
             sigset.waiting = current
-            current.state = 'SIGNAL_WAIT'
-            current.cancel_func = lambda: setattr(sigset, 'waiting', None)
+            return ('SIGNAL_WAIT', lambda: setattr(sigset, 'waiting', None))
 
         # Set a timeout to be delivered to the calling task
         def _sync_trap_set_timeout(timeout):
@@ -756,7 +753,7 @@ class Kernel(object):
                 else:
                     # Execute the trap
                     assert type(trap[0]) is BlockingTraps
-                    blocking_traps[trap[0]](*trap[1:])
+                    current.state, current.cancel_func = blocking_traps[trap[0]](*trap[1:])
                     # Entering a blocking call triggers a check for pending
                     # cancellation
                     assert current.cancel_func is not None
