@@ -71,29 +71,27 @@ class Task(object):
         else:
             return self.next_value
 
-    async def cancel(self):
+    async def cancel(self, blocking=True):
         '''
-        Cancel a task by raising a CancelledError exception.  Does not
-        return until the task actually terminates.  Returns True if
-        the task was actually cancelled. False is returned if the task
-        was already completed.
-        '''
-        result = await self.cancel_no_wait()
-        await _join_task(self)
-        return result
+        Cancel a task by raising a CancelledError exception.
 
-    async def cancel_no_wait(self):
-        '''
-        Cancel a task by raising a CancelledError exception.  Returns
-        immediately, without waiting for the task to terminate.  Returns True
-        if the task was actually cancelled. False is returned if the task was
-        already completed.
+        If blocking=False, schedules the cancellation and returns
+        synchronously.
+
+        If blocking=True (the default), then does not
+        return until the task actually terminates.
+
+        Returns True if the task was actually cancelled. False is returned if
+        the task was already completed.
         '''
         if self.terminated:
+            if blocking:
+                await _sleep(0, False)
             return False
-        else:
-            await _cancel_task(self)
-            return True
+        await _cancel_task(self)
+        if blocking:
+            await _join_task(self)
+        return True
 
 # ----------------------------------------------------------------------
 # Public-facing task-related functions.  Some of these functions are

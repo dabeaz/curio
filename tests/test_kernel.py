@@ -273,7 +273,7 @@ def test_task_cancel(kernel):
             ]
 
 
-def test_task_cancel_no_wait(kernel):
+def test_task_cancel_not_blocking(kernel):
     async def child(e1, e2):
         await e1.set()
         try:
@@ -287,7 +287,7 @@ def test_task_cancel_no_wait(kernel):
         e2 = Event()
         task = await spawn(child(e1, e2))
         await e1.wait()
-        await task.cancel_no_wait()
+        await task.cancel(blocking=False)
         await e2.set()
         try:
             await task.join()
@@ -758,7 +758,7 @@ def test_defer_cancellation(kernel):
         e2 = Event()
         task = await spawn(cancel_me(e1, e2))
         await e1.wait()
-        await task.cancel_no_wait()
+        await task.cancel(blocking=False)
         await e2.set()
         await task.join()
 

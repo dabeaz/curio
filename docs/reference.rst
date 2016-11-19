@@ -117,18 +117,19 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
    If called on a task that has been cancelled, the `__cause__`
    attribute is set to :exc:`curio.CancelledError`.
 
-.. asyncmethod:: Task.cancel()
+.. asyncmethod:: Task.cancel(blocking=True)
 
-   Cancels the task.  This raises a :exc:`curio.CancelledError` exception in
-   the task which may choose to handle it in order to perform cleanup
-   actions.  Does not return until the task actually terminates.
-   Curio only allows a task to be cancelled once.  If this method is
-   somehow invoked more than once on a still running task, the second
-   request will merely wait until the task is cancelled from the first
-   request.  If the task has already run to completion, this method
-   does nothing and returns immediately.  Returns ``True`` if the task
-   was actually cancelled. ``False`` is returned if the task was
-   already finished prior to the cancellation request.
+   Cancels the task. This raises a :exc:`curio.CancelledError`
+   exception in the task which may choose to handle it in order to
+   perform cleanup actions. If ``blocking=True`` (the default), does
+   not return until the task actually terminates.  Curio only allows a
+   task to be cancelled once. If this method is somehow invoked more
+   than once on a still running task, the second request will merely
+   wait until the task is cancelled from the first request.  If the
+   task has already run to completion, this method does nothing and
+   returns immediately.  Returns ``True`` if the task was actually
+   cancelled. ``False`` is returned if the task was already finished
+   prior to the cancellation request.
 
 The following public attributes are available of :class:`Task` instances:
 
