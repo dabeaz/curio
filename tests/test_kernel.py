@@ -265,15 +265,15 @@ def test_task_cancel(kernel):
 
     kernel.run(main())
     assert results == [
-            'start',
             'cancel start',
+            'start',
             'cancelling',
             'cancelled',
             'done',
             ]
 
 
-def test_task_cancel_no_wait(kernel):
+def test_task_cancel_not_blocking(kernel):
     async def child(e1, e2):
         await e1.set()
         try:
@@ -287,7 +287,7 @@ def test_task_cancel_no_wait(kernel):
         e2 = Event()
         task = await spawn(child(e1, e2))
         await e1.wait()
-        await task.cancel_no_wait()
+        await task.cancel(blocking=False)
         await e2.set()
         try:
             await task.join()
@@ -322,8 +322,8 @@ def test_task_cancel_join(kernel):
 
     kernel.run(main())
     assert results == [
-            'start',
             'cancel start',
+            'start',
             'cancelling',
             'join cancel',
             'done',
@@ -359,9 +359,9 @@ def test_task_cancel_join_wait(kernel):
 
     kernel.run(main())
     assert results == [
-            'start',
             'cancel start',
             'join',
+            'start',
             'cancel',
             'join cancel',
             'done',
@@ -449,8 +449,8 @@ def test_task_ready_cancel(kernel):
     kernel.run(main())
 
     assert results == [
-            'child sleep',
             'parent sleep',
+            'child sleep',
             'cancel start',
             'child slept',
             'child cancelled',
@@ -758,12 +758,35 @@ def test_defer_cancellation(kernel):
         e2 = Event()
         task = await spawn(cancel_me(e1, e2))
         await e1.wait()
-        await task.cancel_no_wait()
+        await task.cancel(blocking=False)
         await e2.set()
         await task.join()
 
     kernel.run(main())
 
+def test_defer_cancellation_timeout(kernel):
+    async def main(results):
+        # Nesting a timeout inside a defer_cancellation block makes no
+        # sense (the timeout_after is a no-op), but test it anyway:
+        async with defer_cancellation:
+            async with timeout_after(0.1):
+                # Should succeed, despite the timeout
+                results.append("sleeping 1")
+                await sleep(0.5)
+                results.append("slept 1")
+        # defer_cancellation inside a timeout should raise when exiting the
+        # defer_cancellation
+        async with timeout_after(0.1):
+            await defer_cancellation.__aenter__()
+            results.append("sleeping 2")
+            await sleep(0.5)
+            results.append("slept 2")
+            with pytest.raises(TaskTimeout):
+                await defer_cancellation.__aexit__(None, None, None)
+
+    results = []
+    kernel.run(main(results))
+    assert results == ["sleeping 1", "slept 1", "sleeping 2", "slept 2"]
 
 def test_sleep_0_starvation(kernel):
     # This task should not block other tasks from running, and should be

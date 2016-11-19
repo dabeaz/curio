@@ -38,9 +38,9 @@ def test_queue_simple(kernel):
             ('cons2', 1),
             ('cons1', 2),
             ('cons2', 3),
+            'producer_join',
             'cons1 done',
             'cons2 done',
-            'producer_join',
             'producer_done',
             ]
 
@@ -72,12 +72,12 @@ def test_queue_unbounded(kernel):
 
     assert results == [
             'producer_start',
+            'producer_join',
             ('cons1', 0),
             ('cons1', 1),
             ('cons1', 2),
             ('cons1', 3),
             'cons1 done',
-            'producer_join',
             'producer_done',
             ]
 
@@ -112,17 +112,17 @@ def test_queue_bounded(kernel):
 
     assert results == [
             'producer_start',
-            ('cons1', 0),
             ('produced', 0),
             ('produced', 1),
+            ('cons1', 0),
             ('produced', 2),
-            ('produced', 3),
             ('cons1', 1),
-            'producer_join',
+            ('produced', 3),
             ('cons1', 2),
+            'producer_join',
             ('cons1', 3),
-            'producer_done',
             'cons1 done',
+            'producer_done',
             ]
 
 def test_queue_get_cancel(kernel):
@@ -251,8 +251,8 @@ def test_queue_sync(kernel):
             ('cons2', 3),
             'producer_join',
             'cons1 done',
-            'producer_done',
             'cons2 done',
+            'producer_done',
             ]
 
 

@@ -24,16 +24,13 @@ from enum import IntEnum
 
 from .errors import _CancelRetry
 
-class Traps(IntEnum):
-    _trap_io = 0
-    _trap_future_wait = 1
-    _trap_sleep = 2
-    _trap_spawn = 3
-    _trap_cancel_task = 4
-    _trap_join_task = 5
-    _trap_wait_queue = 6
-    _trap_reschedule_tasks = 7
-    _trap_sigwait = 8
+class BlockingTraps(IntEnum):
+    _blocking_trap_io = 0
+    _blocking_trap_future_wait = 1
+    _blocking_trap_sleep = 2
+    _blocking_trap_join_task = 3
+    _blocking_trap_wait_queue = 4
+    _blocking_trap_sigwait = 5
 
 class SyncTraps(IntEnum):
     _sync_trap_adjust_cancel_defer_depth = 0
@@ -45,8 +42,11 @@ class SyncTraps(IntEnum):
     _sync_trap_clock = 6
     _sync_trap_sigwatch = 7
     _sync_trap_sigunwatch = 8
+    _sync_trap_spawn = 9
+    _sync_trap_reschedule_tasks = 10
+    _sync_trap_cancel_task = 11
 
-globals().update((trap.name, trap) for trap in Traps)
+globals().update((trap.name, trap) for trap in BlockingTraps)
 globals().update((trap.name, trap) for trap in SyncTraps)
 
 @coroutine
@@ -54,21 +54,21 @@ def _read_wait(fileobj):
     '''
     Wait until reading can be performed.
     '''
-    yield (_trap_io, fileobj, EVENT_READ, 'READ_WAIT')
+    yield (_blocking_trap_io, fileobj, EVENT_READ, 'READ_WAIT')
 
 @coroutine
 def _write_wait(fileobj):
     '''
     Wait until writing can be performed.
     '''
-    yield (_trap_io, fileobj, EVENT_WRITE, 'WRITE_WAIT')
+    yield (_blocking_trap_io, fileobj, EVENT_WRITE, 'WRITE_WAIT')
 
 @coroutine
 def _future_wait(future, event=None):
     '''
     Wait for the result of a Future to be ready.
     '''
-    yield (_trap_future_wait, future, event)
+    yield (_blocking_trap_future_wait, future, event)
 
 @coroutine
 def _sleep(clock, absolute):
@@ -78,27 +78,21 @@ def _sleep(clock, absolute):
     absolute is a boolean flag that indicates whether or not the clock
     period is an absolute time or relative.
     '''
-    return (yield (_trap_sleep, clock, absolute))
+    return (yield (_blocking_trap_sleep, clock, absolute))
 
 @coroutine
 def _spawn(coro, daemon):
     '''
     Create a new task. Returns the resulting Task object.
     '''
-    return (yield _trap_spawn, coro, daemon)
+    return (yield _sync_trap_spawn, coro, daemon)
 
 @coroutine
 def _cancel_task(task):
     '''
     Cancel a task. Causes a CancelledError exception to raise in the task.
-    The exception can be changed by specifying exc.
     '''
-    while True:
-        try:
-            yield (_trap_cancel_task, task)
-            return
-        except _CancelRetry:
-            pass
+    yield (_sync_trap_cancel_task, task)
 
 @coroutine
 def _adjust_cancel_defer_depth(n):
@@ -113,21 +107,21 @@ def _join_task(task):
     '''
     Wait for a task to terminate.
     '''
-    yield (_trap_join_task, task)
+    yield (_blocking_trap_join_task, task)
 
 @coroutine
 def _wait_on_queue(queue, state):
     '''
     Put the task to sleep on a queue.
     '''
-    yield (_trap_wait_queue, queue, state)
+    yield (_blocking_trap_wait_queue, queue, state)
 
 @coroutine
 def _reschedule_tasks(queue, n=1):
     '''
     Reschedule one or more tasks waiting on a kernel queue.
     '''
-    yield (_trap_reschedule_tasks, queue, n)
+    yield (_sync_trap_reschedule_tasks, queue, n)
 
 @coroutine
 def _sigwatch(sigset):
@@ -148,7 +142,7 @@ def _sigwait(sigset):
     '''
     Wait for a signal to arrive.
     '''
-    yield (_trap_sigwait, sigset)
+    yield (_blocking_trap_sigwait, sigset)
 
 @coroutine
 def _get_kernel():
