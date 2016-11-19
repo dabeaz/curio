@@ -764,6 +764,28 @@ def test_defer_cancellation(kernel):
 
     kernel.run(main())
 
+def test_defer_cancellation_nesting(kernel):
+    async def f(started, e):
+        async with defer_cancellation:
+            await started.set()
+            # Can't be cancelled here
+            await e.wait()
+            with pytest.raises(CancelledError):
+                async with allow_cancellation:
+                    pass
+
+    async def main():
+        started = Event()
+        e = Event()
+        task = await spawn(f(started, e))
+        await started.wait()
+        await task.cancel(blocking=False)
+        await sleep(0)
+        await e.set()
+        await task.join()
+
+    kernel.run(main())
+
 def test_defer_cancellation_timeout(kernel):
     async def main(results):
         # Nesting a timeout inside a defer_cancellation block makes no
