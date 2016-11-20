@@ -810,6 +810,16 @@ def test_defer_cancellation_timeout(kernel):
     kernel.run(main(results))
     assert results == ["sleeping 1", "slept 1", "sleeping 2", "slept 2"]
 
+def test_self_cancellation(kernel):
+    async def suicidal_task():
+        task = await current_task()
+        await task.cancel(blocking=False)
+        # Cancellation is delivered the next time we block
+        with pytest.raises(CancelledError):
+            await sleep(0)
+
+    kernel.run(suicidal_task())
+
 def test_sleep_0_starvation(kernel):
     # This task should not block other tasks from running, and should be
     # cancellable. We used to have a bug where neither were true...

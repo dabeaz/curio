@@ -523,9 +523,6 @@ class Kernel(object):
 
         # Cancel a task
         def _sync_trap_cancel_task(task):
-            if task == current:
-                raise CurioError("A task can't cancel itself")
-
             if task.cancelled:
                 return
             task.cancelled = True
