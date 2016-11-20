@@ -181,7 +181,7 @@ class Monitor(object):
             resp = sin.readline()
             try:
                 if not resp or resp.startswith('q'):
-                    sout.write('Leaving monitor\n')
+                    self.command_exit(sout)
                     return
 
                 elif resp.startswith('p'):
@@ -189,6 +189,7 @@ class Monitor(object):
 
                 elif resp.startswith('exit'):
                     self.command_exit(sout)
+                    return
 
                 elif resp.startswith('cancel'):
                     _, taskid_s = resp.split()
@@ -259,7 +260,8 @@ class Monitor(object):
             self.monitor_queue.put(task)
 
     def command_exit(self, sout):
-        pass
+        sout.write('Leaving monitor. Hit Ctrl-C to exit\n')
+        sout.flush()
 
 def monitor_client(host, port):
     '''
@@ -267,8 +269,12 @@ def monitor_client(host, port):
     '''
     tn = telnetlib.Telnet()
     tn.open(host, port, timeout=0.5)
-    tn.interact()
-    tn.close()
+    try:
+        tn.interact()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        tn.close()
 
 
 def main():
