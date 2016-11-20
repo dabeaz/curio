@@ -516,9 +516,9 @@ class Kernel(object):
                 current.cancel_pending = False
                 raise CancelledError("CancelledError")
             else:
-                if task.timeout is not None:
+                if current.timeout is not None:
                     now = time_monotonic()
-                    if task.timeout <= now:
+                    if current.timeout <= now:
                         raise TaskTimeout(now)
 
         # Cancel a task
