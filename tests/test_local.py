@@ -17,20 +17,21 @@ def run_with_real_exceptions(*args, **kwargs):
         e.__cause__ = None
         raise real from None
 
+
 def test_smoketest():
     local = Local()
 
     async def smoketest():
-        assert local.__dict__ == {}
+        assert vars(local) == {}
         local.a = 1
         assert local.a == 1
-        assert local.__dict__ == {"a": 1}
+        assert vars(local) == {"a": 1}
         del local.a
         with pytest.raises(AttributeError):
             local.a
         with pytest.raises(AttributeError):
             del local.a
-        assert local.__dict__ == {}
+        assert vars(local) == {}
 
         local.__dict__["b"] = 2
         assert local.b == 2
