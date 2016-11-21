@@ -62,6 +62,7 @@ from contextlib import contextmanager
 _current_task_local_storage = threading.local()
 _current_task_local_storage.value = None
 
+
 @contextmanager
 def _enable_tasklocal_for(task):
     # Using a full save/restore pattern here is a little paranoid, but
@@ -74,36 +75,42 @@ def _enable_tasklocal_for(task):
     finally:
         _current_task_local_storage.value = old
 
+
 # Called from _trap_spawn to implement task local inheritance.
 def _copy_tasklocal(parent, child):
     # Make a shallow copy of the values associated with each Local object.
     for local, values in parent.task_local_storage.items():
         child.task_local_storage[local] = dict(values)
 
+
 # Given a Local object, find its associated dict in the current task (creating
 # it if necessary.)  Normally would be a method on Local, but __getattribute__
 # makes that annoying. This is the simplest workaround.
 def _local_dict(local):
+    # forbid accessing attributes when no task is running, which is equivalent
+    # to using task local outside of any asynchronous code
+    if _current_task_local_storage.value is None:
+        raise RuntimeError('Accessing task local outside of the task context')
     return _current_task_local_storage.value.setdefault(local, {})
 
+
+# make self.__dict__ point to the current task local storage
+def _patch_magic_dict(self):
+    object.__setattr__(self, '__dict__', _local_dict(self))
+
+
 class Local:
+
+    __slots__ = '__dict__',
+
     def __getattribute__(self, name):
-        if name == "__dict__":
-            return _local_dict(self)
-        try:
-            return _local_dict(self)[name]
-        except KeyError:
-            # "from None" preserves the context, but makes it hidden from
-            # tracebacks by default; see PEP 409
-            raise AttributeError(name) from None
+        _patch_magic_dict(self)
+        return object.__getattribute__(self, name)
 
     def __setattr__(self, name, value):
-        _local_dict(self)[name] = value
+        _patch_magic_dict(self)
+        object.__setattr__(self, name, value)
 
     def __delattr__(self, name):
-        try:
-            del _local_dict(self)[name]
-        except KeyError:
-            # "from None" preserves the context, but makes it hidden from
-            # tracebacks by default; see PEP 409
-            raise AttributeError(name) from None
+        _patch_magic_dict(self)
+        return object.__delattr__(self, name)
