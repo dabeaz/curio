@@ -87,6 +87,10 @@ def _copy_tasklocal(parent, child):
 # it if necessary.)  Normally would be a method on Local, but __getattribute__
 # makes that annoying. This is the simplest workaround.
 def _local_dict(local):
+    # forbid accessing attributes when no task is running, which is equivalent
+    # to using task local outside of any asynchronous code
+    if _current_task_local_storage.value is None:
+        raise RuntimeError('Accessing task local outside of the task context')
     return _current_task_local_storage.value.setdefault(local, {})
 
 
