@@ -24,8 +24,13 @@ News
 The version 0.4 release of curio cleans up a lot of APIs and makes a
 wide variety of performance improvements. If you were using version
 0.1, a lot of stuff is probably going to break.  Sorry about that.
-However, curio is still in its infancy. APIs might change--hopefully
+However, curio is still in its infancy. APIs might change |---| hopefully
 for the better though.
+
+Quick install
+-------------
+
+``pip install git+https://github.com/dabeaz/curio.git``
 
 An Example
 ----------
@@ -99,7 +104,7 @@ Additional Features
 -------------------
 
 Curio provides additional support for SSL connections, synchronization
-primitives (events, locks, semaphores, and condition variables),
+primitives (events, locks, recursive locks, semaphores, and condition variables),
 queues, Unix signals, subprocesses, as well as running tasks in
 threads and processes. The task model fully supports cancellation,
 timeouts, monitoring, and other features critical to writing reliable
@@ -230,6 +235,11 @@ A: Absolutely. Please use the Github page at
 https://github.com/dabeaz/curio as the primary point of discussion
 concerning pull requests, bugs, and feature requests.
 
+Documentation
+-------------
+
+Read the official docs here: https://curio.readthedocs.io
+
 Discussion Forum
 ----------------
 
@@ -251,10 +261,9 @@ Curio was created by David Beazley (@dabeaz).  http://www.dabeaz.com
 It is a young project.  All contributions welcome.
 
 
+.. |--| unicode:: U+2013   .. en dash
+.. |---| unicode:: U+2014  .. em dash, trimming surrounding whitespace
+   :trim:
 
 
 
-
-
-
- 
