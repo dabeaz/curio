@@ -420,18 +420,10 @@ class Kernel(object):
             # I/O operation is *different* than the last I/O operation that was
             # performed by the task, we need to unregister the last I/O resource used
             # and register a new one with the selector.
-            '''
-            if current._last_io != (state, fileobj):
-                if current._last_io:
-                    selector_unregister(current._last_io[1])
-                selector_register(fileobj, event, current)
-            '''
-            # NEW
             if current._last_io != (fileobj, event):
                 if current._last_io:
                     _unregister_event(*current._last_io)
                 _register_event(fileobj, event, current)
-            # ---
             
             # This step indicates that we have managed any deferred I/O management
             # for the task.  Otherwise the run() method will perform an unregistration step.
@@ -651,33 +643,44 @@ class Kernel(object):
                 # Reschedule tasks with completed I/O
                 for key, mask in events:
                     rtask, wtask = key.data
+                    intfd = type(key.fileobj) is int
                     if mask & EVENT_READ:
-                        rtask._last_io = (key.fileobj, EVENT_READ)
+                        # Discussion: If the associated fileobj is
+                        # *not* a bare integer file descriptor, we
+                        # keep a record of the last I/O event in
+                        # _last_io and leave the task registered on
+                        # the event loop.  If it performs the same I/O
+                        # operation again, it will get a speed boost
+                        # from not having to re-register its
+                        # event. However, it's not safe to use this
+                        # optimization with bare integer fds.  These
+                        # fds often get reused and there is a
+                        # possibility that a fd will get closed and
+                        # reopened on a different resource without it
+                        # being detected by the kernel.  For that case,
+                        # its critical that we not leave the fd on the 
+                        # event loop.
+                        rtask._last_io = None if intfd else (key.fileobj, EVENT_READ)
                         rtask.state = 'READY'
                         rtask.cancel_func = None
                         ready_append(rtask)
                         rtask = None
                         mask &= ~EVENT_READ
                     if mask & EVENT_WRITE:
-                        wtask._last_io = (key.fileobj, EVENT_WRITE)
+                        wtask._last_io = None if intfd else (key.fileobj, EVENT_WRITE)
                         wtask.state = 'READY'
                         wtask.cancel_func = None
                         ready_append(wtask)
                         wtask = None
                         mask &= ~EVENT_WRITE
-                    #if mask:
-                    #    selector_modify(key.fileobj, mask, (rtask, wtask))
-                    #else:
-                    #    selector_unregister(key.fileobj)
-
-                    '''
-                    task = key.data
-                    # Please see comment regarding deferred_unregister in run()
-                    task._last_io = (task.state, key.fileobj)
-                    task.state = 'READY'
-                    task.cancel_func = None
-                    ready_append(task)
-                    '''
+                    
+                    # Unregister the task if fileobj is not an integer fd (see 
+                    # note above).
+                    if intfd:
+                        if mask:
+                            selector_modify(key.fileobj, mask, (rtask, wtask))
+                        else:
+                            selector_unregister(key.fileobj)
 
                 # Process sleeping tasks (if any)
                 if sleeping:
@@ -802,7 +805,6 @@ class Kernel(object):
                     # prior I/O operation.  There is coordination with code in _trap_io().
 
                     if current._last_io:
-                        #selector_unregister(current._last_io[1])
                         _unregister_event(*current._last_io)
                         current._last_io = None
 

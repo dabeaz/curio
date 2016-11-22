@@ -48,6 +48,29 @@ except ImportError:
     WantRead = BlockingIOError
     WantWrite = BlockingIOError
 
+# Wrapper class around an integer file descriptor. This is used 
+# to take advantage of an I/O scheduling performance optimization
+# in the kernel.  If a non-integer file object is given, the
+# kernel is able to reuse prior registrations on the event loop.
+# The reason this wrapper class is used is that even though an
+# integer file descriptor might be reused by the host OS,
+# instances of _Fd will not be reused. Thus, if a file is closed
+# and a new file opened on the same descriptor, it will be
+# detected as a different file.  
+#
+# See also: https://github.com/dabeaz/curio/issues/104
+
+class _Fd(object):
+    __slots__ = ('fd',)
+    def __init__(self, fd):
+        self.fd = fd
+
+    def fileno(self):
+        return self.fd
+
+    def __int__(self):
+        return self.fd
+
 # There is a certain amount of repetition in this class.  It can
 # probably be shortened with some sort of decorator magic. On the
 # other, the KISSS (Keep it Stupid Simple Stupid) principle might be a
@@ -61,7 +84,7 @@ class Socket(object):
     def __init__(self, sock):
         self._socket = sock
         self._socket.setblocking(False)
-        self._fileno = sock.fileno()
+        self._fileno = _Fd(sock.fileno())
 
         # Commonly used bound methods
         self._socket_send = sock.send
@@ -74,7 +97,7 @@ class Socket(object):
         return getattr(self._socket, name)
 
     def fileno(self):
-        return self._fileno
+        return int(self._fileno)
 
     def settimeout(self, seconds):
         raise RuntimeError('Use timeout_after() to set a timeout')
@@ -286,14 +309,14 @@ class StreamBase(object):
     '''
     def __init__(self, fileobj):
         self._file = fileobj
-        self._fileno = fileobj.fileno()
+        self._fileno = _Fd(fileobj.fileno())
         self._buffer = bytearray()
 
     def __repr__(self):
         return '<curio.%s %r>' % (type(self).__name__, self._file)
 
     def fileno(self):
-        return self._fileno
+        return int(self._fileno)
 
     # ---- Methods that must be implemented in child classes
     async def _read(self, maxbytes=-1):
@@ -410,7 +433,7 @@ class FileStream(StreamBase):
     def __init__(self, fileobj):
         assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
         super().__init__(fileobj)
-        os.set_blocking(self._fileno, False)
+        os.set_blocking(int(self._fileno), False)
 
         # Common bound methods
         self._file_read = fileobj.read
@@ -424,10 +447,10 @@ class FileStream(StreamBase):
         if self._buffer:
             raise IOError('There is unread buffered data.')
         try:
-            os.set_blocking(self._fileno, True)
+            os.set_blocking(int(self._fileno), True)
             yield self._file
         finally:
-            os.set_blocking(self._fileno, False)
+            os.set_blocking(int(self._fileno), False)
 
     async def _read(self, maxbytes=-1):
         while True:
@@ -494,7 +517,7 @@ class SocketStream(StreamBase):
             raise IOError('There is unread buffered data.')
         try:
             self._file.setblocking(True)
-            yield open(self._fileno, 'rb+', buffering=0, closefd=False)
+            yield open(int(self._fileno), 'rb+', buffering=0, closefd=False)
         finally:
             self._file.setblocking(False)
 
