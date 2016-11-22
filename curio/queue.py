@@ -7,11 +7,16 @@
 
 from collections import deque
 from heapq import heappush, heappop
+import threading
+import queue as thread_queue
 
 from .traps import _wait_on_queue, _reschedule_tasks, _queue_reschedule_function
 from .kernel import kqueue
 from .errors import CurioError
 from .meta import awaitable
+from . import workers
+from .task import spawn
+from . import sync
 
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue']
 
@@ -91,11 +96,11 @@ class Queue(object):
 
 
 class PriorityQueue(Queue):
-    """A Queue that outputs an item with the lowest priority first
+    '''
+    A Queue that outputs an item with the lowest priority first
 
     Items have to be orderable objects
-
-    """
+    '''
 
     def _init_internal_queue(self):
         return []
@@ -108,11 +113,11 @@ class PriorityQueue(Queue):
 
 
 class LifoQueue(Queue):
-    """Last In First Out queue
+    '''
+    Last In First Out queue
 
     Retrieves most recently added items first
-
-    """
+    '''
 
     def _init_internal_queue(self):
         return []
@@ -122,3 +127,120 @@ class LifoQueue(Queue):
 
     def _get(self):
         return self._queue.pop()
+
+class EpicQueue(object):
+    '''
+    The name says it all.
+    '''
+    def __init__(self, queue=None):
+        self._tqueue = queue if queue else thread_queue.Queue()
+        self._aqueue = Queue()
+        self._get_task = None
+        self._put_task = None
+        self._join_task = None
+        self._joining = None
+        self._all_tasks_done = threading.Condition()
+        self._unfinished_tasks = 0
+
+    def __del__(self):
+        assert self._get_task is None, 'Queue %r not properly terminated' % self
+
+    async def shutdown(self):
+        if self._get_task:
+            await self._get_task.cancel()
+            
+        if self._put_task:
+            await self._put_task.cancel()
+
+        if self._join_task:
+            await self._join_task.cancel()
+
+    async def _put_worker(self):
+        w = workers.ThreadWorker()
+        try:
+            while True:
+                item = await self._aqueue.get()
+                await w.apply(self._tqueue.put, (item,))
+        finally:
+            w.shutdown()
+            self._put_task = None
+
+    def put(self, item):
+        if self._tqueue.full():
+            raise Full('queue full')
+
+        with self._all_tasks_done:
+            self._unfinished_tasks += 1
+
+        self._tqueue.put(item)
+
+    @awaitable(put)
+    async def put(self, item):
+        if self._put_task is None:
+            self._put_task = await spawn(self._put_worker())
+
+        if self._tqueue.full():
+            raise Full('queue full')
+
+        async with sync.abide(self._all_tasks_done):
+            self._unfinished_tasks += 1
+
+        await self._aqueue.put(item)
+
+    async def _get_worker(self):
+        w = workers.ThreadWorker()
+        try:
+            while True:
+                item = await w.apply(self._tqueue.get)
+                await self._aqueue.put(item)
+        finally:
+            w.shutdown()
+            self._get_task = None
+
+    def get(self):
+        return self._tqueue.get()
+
+    @awaitable(get)
+    async def get(self):
+        if self._get_task is None:
+            self._get_task = await spawn(self._get_worker())
+        return (await self._aqueue.get())
+
+    def _sync_task_done(self):
+        with self._all_tasks_done:
+            self._unfinished_tasks -= 1
+            if self._unfinished_tasks == 0:
+                self._all_tasks_done.notify_all()
+
+    @awaitable(_sync_task_done)
+    async def task_done(self):
+         await sync.abide(self._sync_task_done)
+
+    async def _join_worker(self):
+        w = workers.WorkerThread()
+        try:
+            await w.apply(self._join)
+            await self._joining.set()
+        finally:
+            self._joining = None
+            self._join_task = None
+            w.shutdown()
+
+    def join(self):
+        with self._all_tasks_done:
+            while self._unfinished_tasks:
+                self._all_tasks_done.wait()
+
+    @awaitable(join)
+    async def join(self):
+        async with sync.abide(self._all_tasks_done):
+            if self._unfinished_tasks > 0:
+                if self._join_task is None:
+                    self._joining = sync.Event()
+                    self._join_task = await spawn(self._join_worker())
+
+        if self._joining:
+            await self._joining.wait()
+
+    # Footnote: all of the code in this class is experimental.
+    # It's probably an epically bad idea.  YOLO. 
