@@ -188,7 +188,6 @@ class Kernel(object):
 
         ready_popleft = ready.popleft
         ready_append = ready.append
-        ready_appendleft = ready.appendleft
         time_monotonic = time.monotonic
         _wake = self._wake     
 
@@ -632,94 +631,98 @@ class Kernel(object):
         # Main Kernel Loop
         # ------------------------------------------------------------
         while njobs > 0:
-            # --------
-            # Poll for I/O as long as there is nothing to run
-            # --------
-            while not ready:
-                # Wait for an I/O event (or timeout)
-                timeout = (sleeping[0][0] - time_monotonic()) if sleeping else None
-                events = selector_select(timeout)
+            # Wait for an I/O event (or timeout)
+            if ready:
+                timeout = 0
+            elif sleeping:
+                timeout = sleeping[0][0] - time_monotonic()
+            else:
+                timeout = None
+            events = selector_select(timeout)
 
-                # Reschedule tasks with completed I/O
-                for key, mask in events:
-                    rtask, wtask = key.data
-                    intfd = type(key.fileobj) is int
-                    if mask & EVENT_READ:
-                        # Discussion: If the associated fileobj is
-                        # *not* a bare integer file descriptor, we
-                        # keep a record of the last I/O event in
-                        # _last_io and leave the task registered on
-                        # the event loop.  If it performs the same I/O
-                        # operation again, it will get a speed boost
-                        # from not having to re-register its
-                        # event. However, it's not safe to use this
-                        # optimization with bare integer fds.  These
-                        # fds often get reused and there is a
-                        # possibility that a fd will get closed and
-                        # reopened on a different resource without it
-                        # being detected by the kernel.  For that case,
-                        # its critical that we not leave the fd on the 
-                        # event loop.
-                        rtask._last_io = None if intfd else (key.fileobj, EVENT_READ)
-                        rtask.state = 'READY'
-                        rtask.cancel_func = None
-                        ready_append(rtask)
-                        rtask = None
-                        mask &= ~EVENT_READ
-                    if mask & EVENT_WRITE:
-                        wtask._last_io = None if intfd else (key.fileobj, EVENT_WRITE)
-                        wtask.state = 'READY'
-                        wtask.cancel_func = None
-                        ready_append(wtask)
-                        wtask = None
-                        mask &= ~EVENT_WRITE
-                    
-                    # Unregister the task if fileobj is not an integer fd (see 
-                    # note above).
-                    if intfd:
-                        if mask:
-                            selector_modify(key.fileobj, mask, (rtask, wtask))
+            # Reschedule tasks with completed I/O
+            for key, mask in events:
+                rtask, wtask = key.data
+                intfd = type(key.fileobj) is int
+                if mask & EVENT_READ:
+                    # Discussion: If the associated fileobj is
+                    # *not* a bare integer file descriptor, we
+                    # keep a record of the last I/O event in
+                    # _last_io and leave the task registered on
+                    # the event loop.  If it performs the same I/O
+                    # operation again, it will get a speed boost
+                    # from not having to re-register its
+                    # event. However, it's not safe to use this
+                    # optimization with bare integer fds.  These
+                    # fds often get reused and there is a
+                    # possibility that a fd will get closed and
+                    # reopened on a different resource without it
+                    # being detected by the kernel.  For that case,
+                    # its critical that we not leave the fd on the
+                    # event loop.
+                    rtask._last_io = None if intfd else (key.fileobj, EVENT_READ)
+                    _reschedule_task(rtask)
+                    mask &= ~EVENT_READ
+                    rtask = None
+                if mask & EVENT_WRITE:
+                    wtask._last_io = None if intfd else (key.fileobj, EVENT_WRITE)
+                    _reschedule_task(wtask)
+                    mask &= ~EVENT_WRITE
+                    wtask = None
+
+                # Unregister the task if fileobj is not an integer fd (see
+                # note above).
+                if intfd:
+                    if mask:
+                        selector_modify(key.fileobj, mask, (rtask, wtask))
+                    else:
+                        selector_unregister(key.fileobj)
+
+            # Process sleeping tasks (if any)
+            if sleeping:
+                current_time = time_monotonic()
+                cancel_retry = []
+                while sleeping and sleeping[0][0] <= current_time:
+                    tm, taskid, sleep_type = heapq.heappop(sleeping)
+                    # When a task wakes, verify that the timeout value matches that stored
+                    # on the task. If it differs, it means that the task completed its
+                    # operation, was cancelled, or is no longer concerned with this
+                    # sleep operation.  In that case, we do nothing
+                    if taskid in tasks:
+                        task = tasks[taskid]
+                        if sleep_type == 'sleep':
+                            if tm == task.sleep:
+                                task.sleep = None
+                                _reschedule_task(task, value=current_time)
                         else:
-                            selector_unregister(key.fileobj)
+                            if tm == task.timeout:
+                                if _try_cancel_blocked_task(task, exc=TaskTimeout, val=current_time):
+                                    task.timeout = None
+                                else:
+                                    # Note: There is a possibility that a task will be
+                                    # marked for timeout-cancellation even though it is
+                                    # sitting on the ready queue.  In this case, the
+                                    # rescheduled task is given priority. However, the
+                                    # cancellation timeout will be put back on the sleep
+                                    # queue and reprocessed the next time around.
+                                    cancel_retry.append((tm, taskid, sleep_type))
 
-                # Process sleeping tasks (if any)
-                if sleeping:
-                    current_time = time_monotonic()
-                    cancel_retry = []
-                    while sleeping and sleeping[0][0] <= current_time:
-                        tm, taskid, sleep_type = heapq.heappop(sleeping)
-                        # When a task wakes, verify that the timeout value matches that stored
-                        # on the task. If it differs, it means that the task completed its
-                        # operation, was cancelled, or is no longer concerned with this
-                        # sleep operation.  In that case, we do nothing
-                        if taskid in tasks:
-                            task = tasks[taskid]
-                            if sleep_type == 'sleep':
-                                if tm == task.sleep:
-                                    task.sleep = None
-                                    _reschedule_task(task, value=current_time)
-                            else:
-                                if tm == task.timeout:
-                                    if _try_cancel_blocked_task(task, exc=TaskTimeout, val=current_time):
-                                        task.timeout = None
-                                    else:
-                                        # Note: There is a possibility that a task will be
-                                        # marked for timeout-cancellation even though it is
-                                        # sitting on the ready queue.  In this case, the
-                                        # rescheduled task is given priority. However, the
-                                        # cancellation timeout will be put back on the sleep
-                                        # queue and reprocessed the next time around. 
-                                        cancel_retry.append((tm, taskid, sleep_type))
-
-                    # Put deferred cancellation requests back on sleep queue
-                    for item in cancel_retry:
-                        heapq.heappush(sleeping, item)
+                # Put deferred cancellation requests back on sleep queue
+                for item in cancel_retry:
+                    heapq.heappush(sleeping, item)
 
             # --------
             # Run ready tasks
             # --------
-            while ready:
-                current = ready_popleft()
+            # We only run the tasks that were already in the queue when we
+            # started the loop. Any new tasks that are rescheduled onto the
+            # ready queue while we're going will have to wait until the next
+            # iteration of the outer loop, after we've checked for I/O and
+            # sleepers. This avoids various potential pathologies that could
+            # otherwise occur where tasks repeatedly reschedule themselves so
+            # the queue never empties and we end up never checking for I/O.
+            for _ in range(len(ready)):
+                current = ready.popleft()
                 try:
                     current.state = 'RUNNING'
                     current.cycles += 1
@@ -733,9 +736,9 @@ class Kernel(object):
 
                         # If the trap is synchronous, then handle it
                         # immediately without rescheduling. Sync trap handlers
-                        # have a different API than regular traps -- they just
-                        # return or raise whatever the trap should return or
-                        # raise.
+                        # have a different API than blocking trap handlers --
+                        # they just return or raise whatever the trap should
+                        # return or raise.
                         while type(trap[0]) is SyncTraps:
                             try:
                                 next_value = sync_traps[trap[0]](*trap[1:])
