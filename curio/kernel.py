@@ -11,6 +11,7 @@ import logging
 import signal
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
+import warnings
 
 # Logger where uncaught exceptions from crashed tasks are logged
 log = logging.getLogger(__name__)
@@ -20,6 +21,9 @@ from .errors import _CancelRetry
 from .task import Task
 from .traps import _read_wait, BlockingTraps, SyncTraps
 from .local import _enable_tasklocal_for, _copy_tasklocal
+
+class BlockingTaskWarning(RuntimeWarning):
+    pass
 
 # kqueue is the datatype used by the kernel for all of its queuing functionality.
 # Any time a task queue is needed, use this type instead of directly hard-coding the
@@ -34,7 +38,7 @@ kqueue = deque
 
 class Kernel(object):
     def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=True,
-                 crash_handler=None):
+                 crash_handler=None, warn_if_task_blocks_for=0.05):
         if selector is None:
             selector = DefaultSelector()
 
@@ -62,6 +66,8 @@ class Kernel(object):
 
         # Optional crash handler callback
         self._crash_handler = crash_handler
+
+        self._warn_if_task_blocks_for = warn_if_task_blocks_for
 
         self._pdb = pdb
         self._log_errors = log_errors
@@ -724,6 +730,7 @@ class Kernel(object):
             for _ in range(len(ready)):
                 current = ready.popleft()
                 try:
+                    task_start = time_monotonic()
                     current.state = 'RUNNING'
                     current.cycles += 1
                     with _enable_tasklocal_for(current):
@@ -787,6 +794,15 @@ class Kernel(object):
                         assert result
 
                 finally:
+                    duration = time_monotonic() - task_start
+                    if duration > self._warn_if_task_blocks_for:
+                        msg = ("Event loop blocked for {:0.1f} ms "
+                               "inside '{}' (task {})"
+                               .format(1000 * duration,
+                                       current.coro.__qualname__,
+                                       current.id))
+                        warnings.warn(BlockingTaskWarning(msg))
+
                     # Unregister previous I/O request. Discussion follows:
                     #
                     # When a task performs I/O, it registers itself with the underlying
@@ -824,7 +840,7 @@ class Kernel(object):
             return None
 
 def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None, 
-        crash_handler=None, **extra):
+        crash_handler=None, warn_if_task_blocks_for=0.05, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
@@ -838,11 +854,13 @@ def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None,
     use its run() method instead.
     '''
     kernel = Kernel(selector=selector, with_monitor=with_monitor,
-                    log_errors=log_errors, pdb=pdb, crash_handler=crash_handler, **extra)
+                    log_errors=log_errors, pdb=pdb, crash_handler=crash_handler,
+                    warn_if_task_blocks_for=warn_if_task_blocks_for,
+                    **extra)
     with kernel:
         result = kernel.run(coro)
     return result
 
-__all__ = [ 'Kernel', 'run' ]
+__all__ = [ 'Kernel', 'run', 'BlockingTaskWarning' ]
 
 from .monitor import Monitor
