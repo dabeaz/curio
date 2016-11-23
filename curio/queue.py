@@ -50,7 +50,7 @@ class Queue(object):
         return self.maxsize and len(self._queue) == self.maxsize
 
     async def get(self):
-        if self.empty():
+        if self._get_waiting or self.empty():
             if self._get_reschedule_func is None:
                 self._get_reschedule_func = await _queue_reschedule_function(self._get_waiting)
             await _wait_on_queue(self._get_waiting, 'QUEUE_GET')
@@ -132,9 +132,10 @@ class EpicQueue(object):
     '''
     The name says it all.
     '''
-    def __init__(self, queue=None):
-        self._tqueue = queue if queue else thread_queue.Queue()
-        self._aqueue = Queue()
+    def __init__(self, queue=None, maxsize=0):
+        self._tqueue = queue if queue else thread_queue.Queue(maxsize=maxsize)
+        self._getting_queue = Queue(maxsize=1)
+        self._putting_queue = Queue(maxsize=1)
         self._get_task = None
         self._put_task = None
         self._join_task = None
@@ -159,16 +160,13 @@ class EpicQueue(object):
         w = workers.ThreadWorker()
         try:
             while True:
-                item = await self._aqueue.get()
+                item = await self._putting_queue.get()
                 await w.apply(self._tqueue.put, (item,))
         finally:
             w.shutdown()
             self._put_task = None
 
     def put(self, item):
-        if self._tqueue.full():
-            raise Full('queue full')
-
         with self._all_tasks_done:
             self._unfinished_tasks += 1
 
@@ -179,20 +177,17 @@ class EpicQueue(object):
         if self._put_task is None:
             self._put_task = await spawn(self._put_worker())
 
-        if self._tqueue.full():
-            raise Full('queue full')
-
         async with sync.abide(self._all_tasks_done):
             self._unfinished_tasks += 1
 
-        await self._aqueue.put(item)
+        await self._putting_queue.put(item)
 
     async def _get_worker(self):
         w = workers.ThreadWorker()
         try:
             while True:
                 item = await w.apply(self._tqueue.get)
-                await self._aqueue.put(item)
+                await self._getting_queue.put(item)
         finally:
             w.shutdown()
             self._get_task = None
@@ -204,7 +199,7 @@ class EpicQueue(object):
     async def get(self):
         if self._get_task is None:
             self._get_task = await spawn(self._get_worker())
-        return (await self._aqueue.get())
+        return (await self._getting_queue.get())
 
     def _sync_task_done(self):
         with self._all_tasks_done:
@@ -217,21 +212,21 @@ class EpicQueue(object):
          await sync.abide(self._sync_task_done)
 
     async def _join_worker(self):
-        w = workers.WorkerThread()
+        w = workers.ThreadWorker()
         try:
-            await w.apply(self._join)
+            await w.apply(self._join_sync)
             await self._joining.set()
         finally:
             self._joining = None
             self._join_task = None
             w.shutdown()
 
-    def join(self):
+    def _join_sync(self):
         with self._all_tasks_done:
             while self._unfinished_tasks:
                 self._all_tasks_done.wait()
 
-    @awaitable(join)
+    @awaitable(_join_sync)
     async def join(self):
         async with sync.abide(self._all_tasks_done):
             if self._unfinished_tasks > 0:
