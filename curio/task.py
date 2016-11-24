@@ -11,7 +11,8 @@ from time import monotonic
 from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError
 from .traps import *
 
-class Task(object):
+
+class Task:
     '''
     The Task class wraps a coroutine and provides some additional attributes
     related to execution state and debugging.
