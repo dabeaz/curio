@@ -2,16 +2,38 @@
 #
 # Task class and task related functions.
 
-__all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather', 
-            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
-            'wait', 'clock' , 'defer_cancellation', 'allow_cancellation',
-            'schedule']
+__all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
+           'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
+           'wait', 'clock', 'defer_cancellation', 'allow_cancellation',
+           'schedule', 'State','INITIAL', 'READY', 'RUNNING', 'CANCELLED',
+           'CRASHED', 'READ_WAIT', 'WRITE_WAIT', 'FUTURE_WAIT', 'TASK_JOIN',
+           'TIME_SLEEP', 'SIGNAL_WAIT']
 
+from enum import Enum
 from time import monotonic
 from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError
-from .traps import *
 
-class Task(object):
+
+class State(Enum):
+    """
+    Each task can be in one of the following states
+    """
+    INITIAL = 'INITIAL'          # State of a new task
+    READY = 'READY'              # Task is ready to run
+    RUNNING = 'RUNNING'          # Task is running
+    CANCELLED = 'CANCELLED'      # Task is cancelled
+    CRASHED = 'CRASHED'          # Task crashed
+    READ_WAIT = 'READ_WAIT'      # Task is waiting for read IO
+    WRITE_WAIT = 'WRITE_WAIT'    # Task is waiting for write IO
+    FUTURE_WAIT = 'FUTURE_WAIT'  # Task is waiting on a future
+    TASK_JOIN = 'TASK_JOIN'      # Task waits to join with another task
+    TIME_SLEEP = 'TIME_SLEEP'    # Task sleep
+    SIGNAL_WAIT = 'SIGNAL_WAIT'  # Task is waiting for a UNIX signal
+
+globals().update((state.name, state.value) for state in State)
+
+
+class Task:
     '''
     The Task class wraps a coroutine and provides some additional attributes
     related to execution state and debugging.
@@ -33,7 +55,7 @@ class Task(object):
         self.coro = coro           # Underlying generator/coroutine
         self.daemon = daemon       # Daemonic flag
         self.cycles = 0            # Execution cycles completed
-        self.state = 'INITIAL'     # Execution state
+        self.state = INITIAL       # Execution state
         self.cancel_func = None    # Cancellation function
         self.future = None         # Pending Future (if any)
         self.sleep = None          # Pending sleep (if any)
@@ -446,3 +468,4 @@ def ignore_after(seconds, coro=None, *, timeout_result=None):
         return _timeout_after_func(seconds, False, coro, ignore=True, timeout_result=timeout_result)
 
 from . import queue
+from .traps import *

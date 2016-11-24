@@ -56,14 +56,14 @@ def _read_wait(fileobj):
     '''
     Wait until reading can be performed.
     '''
-    yield (_blocking_trap_io, fileobj, EVENT_READ, 'READ_WAIT')
+    yield (_blocking_trap_io, fileobj, EVENT_READ, READ_WAIT)
 
 @coroutine
 def _write_wait(fileobj):
     '''
     Wait until writing can be performed.
     '''
-    yield (_blocking_trap_io, fileobj, EVENT_WRITE, 'WRITE_WAIT')
+    yield (_blocking_trap_io, fileobj, EVENT_WRITE, WRITE_WAIT)
 
 @coroutine
 def _future_wait(future, event=None):
@@ -203,3 +203,5 @@ def _clock():
     Return the value of the kernel clock
     '''
     return (yield (_sync_trap_clock,))
+
+from .task import *
