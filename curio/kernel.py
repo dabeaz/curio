@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 from .errors import *
 from .errors import _CancelRetry
-from .task import Task
+from .task import *
 from .traps import _read_wait, BlockingTraps, SyncTraps
 from .local import _enable_tasklocal_for, _copy_tasklocal
 
@@ -190,7 +190,9 @@ class Kernel(object):
         ready_append = ready.append
         ready_appendleft = ready.appendleft
         time_monotonic = time.monotonic
-        _wake = self._wake     
+        _wake = self._wake
+
+        locals().update((state.name, state.value) for state in State)
 
         # ---- In-kernel task used for processing signals and futures
 
@@ -225,7 +227,7 @@ class Kernel(object):
                     if future and task.future is not future:
                         continue
                     task.future = None
-                    task.state = 'READY'
+                    task.state = READY
                     task.cancel_func = None
                     ready_append(task)
 
@@ -459,7 +461,7 @@ class Kernel(object):
             if event:
                 event.set()
 
-            return ('FUTURE_WAIT',
+            return (FUTURE_WAIT,
                     lambda task=current:
                         setattr(task, 'future', future.cancel() and None))
 
@@ -488,7 +490,7 @@ class Kernel(object):
             else:
                 if task.joining is None:
                     task.joining = kqueue()
-                return _blocking_trap_wait_queue(task.joining, 'TASK_JOIN')
+                return _blocking_trap_wait_queue(task.joining, TASK_JOIN)
 
         # Enter a {defer,allow}_cancellation block
         def _sync_trap_cancel_allowed_stack_push(state):
@@ -547,7 +549,7 @@ class Kernel(object):
             if not absolute:
                 clock += time_monotonic()
             _set_timeout(clock, 'sleep')
-            return ('TIME_SLEEP',
+            return (TIME_SLEEP,
                     lambda task=current: setattr(task, 'sleep', None))
 
         # Watch signals
@@ -569,7 +571,7 @@ class Kernel(object):
         # Wait for a signal
         def _blocking_trap_sigwait(sigset):
             sigset.waiting = current
-            return ('SIGNAL_WAIT', lambda: setattr(sigset, 'waiting', None))
+            return SIGNAL_WAIT, lambda: setattr(sigset, 'waiting', None)
 
         # Set a timeout to be delivered to the calling task
         def _sync_trap_set_timeout(timeout):
@@ -661,14 +663,14 @@ class Kernel(object):
                         # its critical that we not leave the fd on the 
                         # event loop.
                         rtask._last_io = None if intfd else (key.fileobj, EVENT_READ)
-                        rtask.state = 'READY'
+                        rtask.state = READY
                         rtask.cancel_func = None
                         ready_append(rtask)
                         rtask = None
                         mask &= ~EVENT_READ
                     if mask & EVENT_WRITE:
                         wtask._last_io = None if intfd else (key.fileobj, EVENT_WRITE)
-                        wtask.state = 'READY'
+                        wtask.state = READY
                         wtask.cancel_func = None
                         ready_append(wtask)
                         wtask = None
@@ -721,7 +723,7 @@ class Kernel(object):
             while ready:
                 current = ready_popleft()
                 try:
-                    current.state = 'RUNNING'
+                    current.state = RUNNING
                     current.cycles += 1
                     with _enable_tasklocal_for(current):
                         if current.next_exc is None:
@@ -749,12 +751,12 @@ class Kernel(object):
 
                 except (CancelledError, TaskExit) as e:
                     current.exc_info = sys.exc_info()
-                    current.state = 'CANCELLED'
+                    current.state = CANCELLED
                     _cleanup_task(current, exc=e)
 
                 except Exception as e:
                     current.exc_info = sys.exc_info()
-                    current.state = 'CRASHED'
+                    current.state = CRASHED
                     exc = TaskError('Task Crashed')
                     exc.__cause__ = e
                     _cleanup_task(current, exc=exc)
