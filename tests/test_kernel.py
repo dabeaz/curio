@@ -850,3 +850,28 @@ def test_sleep_0_starvation(kernel):
         await loop_task.cancel()
 
     kernel.run(main())
+
+def test_ping_pong_starvation(kernel):
+    # It used to be that two of these tasks could starve out other tasks
+    async def pingpong(inq, outq):
+        while True:
+            await outq.put(await inq.get())
+
+    async def i_will_survive():
+        for _ in range(10):
+            await sleep(0)
+        return "i survived!"
+
+    async def main():
+        q1 = Queue()
+        q2 = Queue()
+        await q1.put("something")
+        pp1 = await spawn(pingpong(q1, q2))
+        pp2 = await spawn(pingpong(q2, q1))
+        iws = await spawn(i_will_survive())
+
+        assert (await iws.join()) == "i survived!"
+        await pp1.cancel()
+        await pp2.cancel()
+
+    kernel.run(main())
