@@ -38,7 +38,7 @@ kqueue = deque
 
 class Kernel(object):
     def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=True,
-                 crash_handler=None, warn_if_task_blocks_for=0.05):
+                 crash_handler=None, warn_if_task_blocks_for=None):
         if selector is None:
             selector = DefaultSelector()
 
@@ -181,6 +181,7 @@ class Kernel(object):
         tasks = self._tasks                     # Task table
         sleeping = self._sleeping               # Sleeping task queue
         wake_queue = self._wake_queue           # External wake queue
+        warn_if_task_blocks_for = self._warn_if_task_blocks_for
 
         # ---- Number of non-daemonic tasks running
         njobs = sum(not task.daemon for task in tasks.values())
@@ -728,9 +729,10 @@ class Kernel(object):
             # otherwise occur where tasks repeatedly reschedule themselves so
             # the queue never empties and we end up never checking for I/O.
             for _ in range(len(ready)):
-                current = ready.popleft()
+                current = ready_popleft()
                 try:
-                    task_start = time_monotonic()
+                    if warn_if_task_blocks_for:
+                        task_start = time_monotonic()
                     current.state = 'RUNNING'
                     current.cycles += 1
                     with _enable_tasklocal_for(current):
@@ -794,14 +796,15 @@ class Kernel(object):
                         assert result
 
                 finally:
-                    duration = time_monotonic() - task_start
-                    if duration > self._warn_if_task_blocks_for:
-                        msg = ("Event loop blocked for {:0.1f} ms "
-                               "inside '{}' (task {})"
-                               .format(1000 * duration,
-                                       current.coro.__qualname__,
-                                       current.id))
-                        warnings.warn(BlockingTaskWarning(msg))
+                    if warn_if_task_blocks_for:
+                        duration = time_monotonic() - task_start
+                        if duration > warn_if_task_blocks_for:
+                            msg = ("Event loop blocked for {:0.1f} ms "
+                                   "inside '{}' (task {})"
+                                   .format(1000 * duration,
+                                           current.coro.__qualname__,
+                                           current.id))
+                            warnings.warn(BlockingTaskWarning(msg))
 
                     # Unregister previous I/O request. Discussion follows:
                     #
@@ -840,7 +843,7 @@ class Kernel(object):
             return None
 
 def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None, 
-        crash_handler=None, warn_if_task_blocks_for=0.05, **extra):
+        crash_handler=None, warn_if_task_blocks_for=None, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
