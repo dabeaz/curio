@@ -332,8 +332,12 @@ class Kernel(object):
             task.terminated = True
 
             _, parent, child_tasks = tasks[task.id]
+
+            # there are cases when parent is already gone from tasks, so
+            # we need to check if it is still there
             if parent is not None and parent.id in tasks:
                 tasks[parent.id][2].remove(task)
+            # set the maintask to be a new parent to avoid orphaned tasks
             for child in child_tasks:
                 tasks[child.id][1] = maintask
             del tasks[task.id]

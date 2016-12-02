@@ -208,4 +208,7 @@ def _clock():
 
 @coroutine
 def _get_child_tasks(task):
+    """
+    Return the list of child tasks of the task
+    """
     return (yield (_sync_trap_get_child_tasks, task))
