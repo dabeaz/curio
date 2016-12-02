@@ -44,7 +44,7 @@ class Kernel(object):
 
         self._selector = selector
         self._ready = kqueue()            # Tasks ready to run
-        self._tasks = { }                 # Task table
+        self._tasks = {}                 # Task table
         # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
         self._signal_sets = None
         self._default_signals = None      # Dict of default signal handlers
@@ -183,7 +183,7 @@ class Kernel(object):
         wake_queue = self._wake_queue           # External wake queue
 
         # ---- Number of non-daemonic tasks running
-        njobs = sum(not task.daemon for task in tasks.values())
+        njobs = sum(not task[0].daemon for task in tasks.values())
 
         # ---- Bound methods
         selector_register = selector.register
@@ -205,7 +205,7 @@ class Kernel(object):
             task = Task(_kernel_task(), taskid=0, daemon=True)
             _reschedule_task(task)
             self._kernel_task_id = task.id
-            self._tasks[task.id] = task
+            self._tasks[task.id] = [task, current, set()]
 
         # Internal task that monitors the loopback socket--allowing the kernel to
         # awake for non-I/O events.  Also processes incoming signals.  This only
@@ -253,7 +253,9 @@ class Kernel(object):
         def _new_task(coro, daemon=False):
             nonlocal njobs
             task = Task(coro, daemon)
-            tasks[task.id] = task
+            tasks[task.id] = [task, current, set()]
+            if current is not None:
+                tasks[current.id][2].add(task)
             if not daemon:
                 njobs += 1
             _reschedule_task(task)
@@ -329,6 +331,11 @@ class Kernel(object):
                 task.joining = None
             task.terminated = True
 
+            _, parent, child_tasks = tasks[task.id]
+            if parent is not None and parent.id in tasks:
+                tasks[parent.id][2].remove(task)
+            for child in child_tasks:
+                tasks[child.id][1] = maintask
             del tasks[task.id]
 
         # For "reasons" related to task scheduling, the task
@@ -347,14 +354,14 @@ class Kernel(object):
         # resources are cleaned up.
         def _shutdown():
             nonlocal njobs
-            tocancel = [task for task in tasks.values() if task.id != self._kernel_task_id]
+            tocancel = [task[0] for task in tasks.values() if task[0].id != self._kernel_task_id]
 
             # Cancel all non-daemonic tasks first
             tocancel.sort(key=lambda task: task.daemon)
 
             # Cancel the kernel loopback task last
             if self._kernel_task_id is not None:
-                tocancel.append(tasks[self._kernel_task_id])
+                tocancel.append(tasks[self._kernel_task_id][0])
 
             if tocancel:
                 _new_task(_shutdown_tasks(tocancel))
@@ -695,7 +702,7 @@ class Kernel(object):
                     # operation, was cancelled, or is no longer concerned with this
                     # sleep operation.  In that case, we do nothing
                     if taskid in tasks:
-                        task = tasks[taskid]
+                        task = tasks[taskid][0]
                         if sleep_type == 'sleep':
                             if tm == task.sleep:
                                 task.sleep = None
