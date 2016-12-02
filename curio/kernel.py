@@ -619,6 +619,9 @@ class Kernel(object):
         def _sync_trap_get_current():
             return current
 
+        def _sync_trap_get_child_tasks(task):
+            return list(tasks[task.id][2])
+
         # Return the current value of the kernel clock
         def _sync_trap_clock():
             return time_monotonic()
