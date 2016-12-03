@@ -1063,14 +1063,6 @@ The monitor can show you the state of each task and you can get stack
 traces. Remember that you enter the monitor by running ``python3 -m curio.monitor``
 in a separate window.
 
-As another possible debugging tool, you can have curio launch ``pdb``
-when a task crashes.  Do this::
-
-    run(..., pdb=True)
-
-Be aware that launching ``pdb`` causes the entire kernel to stop.  When
-you quit ``pdb``, the kernel will resume.
-
 More Information
 ----------------
 

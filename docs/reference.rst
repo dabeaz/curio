@@ -36,29 +36,24 @@ The Kernel
 All coroutines in curio are executed by an underlying kernel.  Normally, you would
 run a top-level coroutine using the following function:
 
-.. function:: run(coro, *, pdb=False, log_errors=True, selector=None,
-              with_monitor=False, crash_handler=None,
-              warn_if_task_blocks_for=0.05, **other_kernel_args)
+.. function:: run(coro, *, log_errors=True, selector=None,
+              with_monitor=False, 
+              warn_if_task_blocks_for=None, **other_kernel_args)
 
    Run the coroutine *coro* to completion and return its final return
-   value.  If *pdb* is ``True``, pdb is launched if any task crashes.
-   If *log_errors* is ``True``, a traceback is written to the log on
-   crash.  If *with_monitor* is ``True``, then the monitor debugging
-   task executes in the background.  If *selector* is given, it should
-   be an instance of a selector from the :mod:`selectors
-   <python:selectors>` module. If *crash_handler* is given, it will be
-   called on each ``Task`` that exits with an exception. If
-   *warn_if_task_blocks_for* is given, then any tasks which blocks the
-   event loop for the given number of seconds will trigger a
-   ``curio.BlockingTaskWarning``. (The default is somewhat arbitrarily
-   set to 50 ms; this may change in the future as best practices
-   develop.)
+   value.  If *log_errors* is ``True``, a traceback is written to the
+   log on crash.  If *with_monitor* is ``True``, then the monitor
+   debugging task executes in the background.  If *selector* is given,
+   it should be an instance of a selector from the :mod:`selectors
+   <python:selectors>` module. If *warn_if_task_blocks_for* is given,
+   then any tasks which blocks the event loop for the given number of
+   seconds will trigger a ``curio.BlockingTaskWarning``.
 
 If you are going to repeatedly run coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
 them using its ``run()`` method as described below:
 
-.. class:: Kernel(pdb=False, log_errors=True, selector=None, with_monitor=False)
+.. class:: Kernel(log_errors=True, selector=None, with_monitor=False)
 
    Create an instance of a curio kernel.  The arguments are the same
    as described above for the :func:`run()` function.

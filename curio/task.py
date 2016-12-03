@@ -45,6 +45,7 @@ class Task(object):
         self.cancelled = False     # Cancelled?
         self.terminated = False    # Terminated?
         self.cancel_pending = False  # Deferred cancellation pending?
+
         # Last entry says whether cancellations are currently allowed
         self.cancel_allowed_stack = [True]
         self.task_local_storage = {} # Task local storage
@@ -94,6 +95,14 @@ class Task(object):
         if blocking:
             await _join_task(self)
         return True
+
+    def pdb(self):
+        '''
+        Run a pdb post-mortem on any pending exception information
+        '''
+        import pdb
+        if self.exc_info:
+            pdb.post_mortem(self.exc_info[2])
 
 # ----------------------------------------------------------------------
 # Public-facing task-related functions.  Some of these functions are

@@ -37,8 +37,8 @@ kqueue = deque
 # ----------------------------------------------------------------------
 
 class Kernel(object):
-    def __init__(self, *, selector=None, with_monitor=False, pdb=False, log_errors=True,
-                 crash_handler=None, warn_if_task_blocks_for=None):
+    def __init__(self, *, selector=None, with_monitor=False, log_errors=True,
+                 warn_if_task_blocks_for=None):
         if selector is None:
             selector = DefaultSelector()
 
@@ -64,14 +64,9 @@ class Kernel(object):
         self._thread_pool = None
         self._process_pool = None
 
-        # Optional crash handler callback
-        self._crash_handler = crash_handler
-
+        # Optional settings
         self._warn_if_task_blocks_for = warn_if_task_blocks_for
-
-        self._pdb = pdb
         self._log_errors = log_errors
-
         self._monitor = None
 
         # If a monitor is specified, launch it
@@ -773,13 +768,6 @@ class Kernel(object):
                     if self._log_errors:
                         log.error('Curio: Task Crash: %s' % current, exc_info=True)
 
-                    if self._crash_handler:
-                        self._crash_handler(current)
-
-                    if self._pdb:
-                        import pdb as _pdb
-                        _pdb.post_mortem(current.exc_info[2])
-
                 except: # (SystemExit, KeyboardInterrupt):
                     _cleanup_task(current)
                     raise
@@ -842,8 +830,8 @@ class Kernel(object):
         else:
             return None
 
-def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None, 
-        crash_handler=None, warn_if_task_blocks_for=None, **extra):
+def run(coro, *, log_errors=True, with_monitor=False, selector=None, 
+        warn_if_task_blocks_for=None, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
@@ -857,7 +845,7 @@ def run(coro, *, pdb=False, log_errors=True, with_monitor=False, selector=None,
     use its run() method instead.
     '''
     kernel = Kernel(selector=selector, with_monitor=with_monitor,
-                    log_errors=log_errors, pdb=pdb, crash_handler=crash_handler,
+                    log_errors=log_errors, 
                     warn_if_task_blocks_for=warn_if_task_blocks_for,
                     **extra)
     with kernel:

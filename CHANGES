@@ -1,5 +1,13 @@
 CHANGES
 -------
+12/03/2016 Withdrew the pdb and crash_handler arguments to Kernel() and the
+           run() function.  Added a pdb() method to tasks that can be used
+	   to enter the debugger on a crashed task.  High-level handling
+	   of crashed/terminated tasks is being rethought.   The old
+	   crash_handler() callback was next to useless since no useful
+	   actions could be performed (i.e., there was no ability to respawn
+	   tasks or execute any kind of coroutine in response to a crash).
+
 11/05/2016 Pulled time related functionality into the kernel as a new call.
            Use the following to get the current value of the kernel clock:
             
