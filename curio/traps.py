@@ -16,7 +16,7 @@ __all__ = [
     '_join_task',
     '_wait_on_queue', '_reschedule_tasks', '_queue_reschedule_function',
     '_sigwatch', '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
-    '_set_timeout', '_unset_timeout', '_clock', 
+    '_get_child_tasks','_set_timeout', '_unset_timeout', '_clock',
     ]
 
 from types import coroutine
@@ -47,6 +47,8 @@ class SyncTraps(IntEnum):
     _sync_trap_reschedule_tasks = 10
     _sync_trap_cancel_allowed_stack_push = 11
     _sync_trap_cancel_allowed_stack_pop = 12
+    _sync_trap_get_child_tasks = 13
+
 
 globals().update((trap.name, trap) for trap in BlockingTraps)
 globals().update((trap.name, trap) for trap in SyncTraps)
@@ -203,3 +205,10 @@ def _clock():
     Return the value of the kernel clock
     '''
     return (yield (_sync_trap_clock,))
+
+@coroutine
+def _get_child_tasks(task):
+    """
+    Return the list of child tasks of the task
+    """
+    return (yield (_sync_trap_get_child_tasks, task))

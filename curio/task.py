@@ -74,6 +74,12 @@ class Task(object):
         else:
             return self.next_value
 
+    async def child_tasks(self):
+        """
+        Get the list of all not terminated tasks spawned by this task
+        """
+        return await _get_child_tasks(self)
+
     async def cancel(self, blocking=True):
         '''
         Cancel a task by raising a CancelledError exception.
