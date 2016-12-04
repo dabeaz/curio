@@ -17,7 +17,7 @@ class Task(object):
     related to execution state and debugging.
     '''
     __slots__ = (
-        'id', 'daemon', 'coro', '_send', '_throw', 'cycles', 'state',
+        'id', 'parentid', 'daemon', 'coro', '_send', '_throw', 'cycles', 'state',
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
         'next_exc', 'joining', 'cancelled', 'terminated', 'cancel_pending',
         'cancel_allowed_stack', '_last_io', '_deadlines',
@@ -30,6 +30,7 @@ class Task(object):
             taskid = Task._lastid
             Task._lastid += 1
         self.id = taskid
+        self.parentid = None       # Parent task id (if any)
         self.coro = coro           # Underlying generator/coroutine
         self.daemon = daemon       # Daemonic flag
         self.cycles = 0            # Execution cycles completed

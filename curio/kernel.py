@@ -467,6 +467,7 @@ class Kernel(object):
         # Add a new task to the kernel
         def _sync_trap_spawn(coro, daemon):
             task = _new_task(coro, daemon)
+            task.parentid = current.id
             _copy_tasklocal(current, task)
             return task
 

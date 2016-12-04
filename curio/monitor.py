@@ -184,6 +184,10 @@ class Monitor(object):
                     self.command_exit(sout)
                     return
 
+                elif resp.startswith('pa'):
+                    _, taskid_s = resp.split()
+                    self.command_parents(sout, int(taskid_s))
+
                 elif resp.startswith('p'):
                     self.command_ps(sout)
 
@@ -217,6 +221,7 @@ class Monitor(object):
          where taskid     : Show stack frames for a task
          cancel taskid    : Cancel an indicated task
          signal signame   : Send a Unix signal
+         parents taskid   : List task parents
          quit             : Leave the monitor
 ''')
 
@@ -259,6 +264,15 @@ class Monitor(object):
             sout.write('Cancelling task %d\n' % taskid)
             self.monitor_queue.put(task)
 
+    def command_parents(self, sout, taskid):
+        while taskid:
+            task = self.kernel._tasks.get(taskid)
+            if task:
+                sout.write('%-6d %12s %s\n' % (task.id, task.state, task))
+                taskid = task.parentid
+            else:
+                break
+        
     def command_exit(self, sout):
         sout.write('Leaving monitor. Hit Ctrl-C to exit\n')
         sout.flush()
