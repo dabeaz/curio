@@ -14,7 +14,7 @@ __all__ = [
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
     '_cancel_task', '_cancel_allowed_stack_push', '_cancel_allowed_stack_pop',
     '_join_task',
-    '_wait_on_queue', '_reschedule_tasks', '_queue_reschedule_function',
+    '_wait_on_ksync', '_reschedule_tasks', '_ksync_reschedule_function',
     '_sigwatch', '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
     '_set_timeout', '_unset_timeout', '_clock', 
     ]
@@ -30,7 +30,7 @@ class BlockingTraps(IntEnum):
     _blocking_trap_future_wait = 1
     _blocking_trap_sleep = 2
     _blocking_trap_join_task = 3
-    _blocking_trap_wait_queue = 4
+    _blocking_trap_wait_ksync = 4
     _blocking_trap_sigwait = 5
 
 class SyncTraps(IntEnum):
@@ -39,12 +39,12 @@ class SyncTraps(IntEnum):
     _sync_trap_get_current = 2
     _sync_trap_set_timeout = 3
     _sync_trap_unset_timeout = 4
-    _sync_trap_queue_reschedule_function = 5
+    _sync_trap_ksync_reschedule_function = 5
     _sync_trap_clock = 6
     _sync_trap_sigwatch = 7
     _sync_trap_sigunwatch = 8
     _sync_trap_spawn = 9
-    _sync_trap_reschedule_tasks = 10
+    _sync_trap_ksync_reschedule_tasks = 10
     _sync_trap_cancel_allowed_stack_push = 11
     _sync_trap_cancel_allowed_stack_pop = 12
 
@@ -125,18 +125,18 @@ def _join_task(task):
     yield (_blocking_trap_join_task, task)
 
 @coroutine
-def _wait_on_queue(queue, state):
+def _wait_on_ksync(ksync, state):
     '''
-    Put the task to sleep on a queue.
+    Put the task to sleep on a kernel synchronization primitive.
     '''
-    yield (_blocking_trap_wait_queue, queue, state)
+    yield (_blocking_trap_wait_ksync, ksync, state)
 
 @coroutine
-def _reschedule_tasks(queue, n=1):
+def _reschedule_tasks(ksync, n=1):
     '''
-    Reschedule one or more tasks waiting on a kernel queue.
+    Reschedule one or more tasks waiting on a kernel sync primitive.
     '''
-    yield (_sync_trap_reschedule_tasks, queue, n)
+    yield (_sync_trap_ksync_reschedule_tasks, ksync, n)
 
 @coroutine
 def _sigwatch(sigset):
@@ -189,13 +189,14 @@ def _unset_timeout(previous):
     yield (_sync_trap_unset_timeout, previous)
 
 @coroutine
-def _queue_reschedule_function(queue):
+def _ksync_reschedule_function(queue):
     '''
-    Return a function that allows tasks to be rescheduled from a queue without
-    the use of await.   Can be used in synchronous code as long as it runs
-    in the same thread as the Curio kernel.
+    Return a function that allows tasks to be rescheduled from a
+    kernel sync primitive without the use of await.  Can be used in
+    synchronous code as long as it runs in the same thread as the
+    Curio kernel.
     '''
-    return (yield (_sync_trap_queue_reschedule_function, queue))
+    return (yield (_sync_trap_ksync_reschedule_function, queue))
 
 @coroutine
 def _clock():

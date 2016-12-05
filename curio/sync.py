@@ -9,19 +9,20 @@ __all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition
 import threading
 from inspect import iscoroutinefunction
 
-from .traps import _wait_on_queue, _reschedule_tasks, _future_wait, _queue_reschedule_function
-from .kernel import kqueue
+from .traps import _wait_on_ksync, _reschedule_tasks, _future_wait, _ksync_reschedule_function
+from .kernel import KSyncQueue, KSyncEvent
 from . import workers
 from .errors import CancelledError, TaskTimeout
 from .task import spawn, current_task
 from .meta import awaitable
+
 
 class Event(object):
     __slots__ = ('_set', '_waiting', '_reschedule_func')
 
     def __init__(self):
         self._set = False
-        self._waiting = kqueue()
+        self._waiting = KSyncEvent()
         self._reschedule_func = None
 
     def __repr__(self):
@@ -40,9 +41,9 @@ class Event(object):
             return
 
         if self._reschedule_func is None:
-            self._reschedule_func = await _queue_reschedule_function(self._waiting)
+            self._reschedule_func = await _ksync_reschedule_function(self._waiting)
 
-        await _wait_on_queue(self._waiting, 'EVENT_WAIT')
+        await _wait_on_ksync(self._waiting, 'EVENT_WAIT')
 
     def set(self):
         self._set = True
@@ -68,7 +69,7 @@ class SyncEvent(Event):
 
     async def wait(self):
         if self._reschedule_func is None:
-            self._reschedule_func = await _queue_reschedule_function(self._waiting)
+            self._reschedule_func = await _ksync_reschedule_function(self._waiting)
         await super().wait()
 
     def set(self):
@@ -97,7 +98,7 @@ class Lock(_LockBase):
 
     def __init__(self):
         self._acquired = False
-        self._waiting = kqueue()
+        self._waiting = KSyncQueue()
 
     def __repr__(self):
         res = super().__repr__()
@@ -106,7 +107,7 @@ class Lock(_LockBase):
 
     async def acquire(self):
         if self._acquired:
-            await _wait_on_queue(self._waiting, 'LOCK_ACQUIRE')
+            await _wait_on_ksync(self._waiting, 'LOCK_ACQUIRE')
         self._acquired = True
         return True
 
@@ -185,7 +186,7 @@ class Semaphore(_LockBase):
 
     def __init__(self, value=1):
         self._value = value
-        self._waiting = kqueue()
+        self._waiting = KSyncQueue()
 
     def __repr__(self):
         res = super().__repr__()
@@ -194,7 +195,7 @@ class Semaphore(_LockBase):
 
     async def acquire(self):
         if self._value <= 0:
-            await _wait_on_queue(self._waiting, 'SEMA_ACQUIRE')
+            await _wait_on_ksync(self._waiting, 'SEMA_ACQUIRE')
         else:
             self._value -= 1
         return True
@@ -230,7 +231,7 @@ class Condition(_LockBase):
             self._lock = Lock()
         else:
             self._lock = lock
-        self._waiting = kqueue()
+        self._waiting = KSyncQueue()
 
     def __repr__(self):
         res = super().__repr__()
@@ -251,7 +252,7 @@ class Condition(_LockBase):
             raise RuntimeError("Can't wait on unacquired lock")
         await self.release()
         try:
-            await _wait_on_queue(self._waiting, 'COND_WAIT')
+            await _wait_on_ksync(self._waiting, 'COND_WAIT')
         finally:
             await self.acquire()
 

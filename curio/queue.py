@@ -10,8 +10,8 @@ from heapq import heappush, heappop
 import threading
 import queue as thread_queue
 
-from .traps import _wait_on_queue, _reschedule_tasks, _queue_reschedule_function
-from .kernel import kqueue
+from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function
+from .kernel import KSyncQueue
 from .errors import CurioError
 from .meta import awaitable
 from . import workers
@@ -32,9 +32,9 @@ class Queue(object):
 
     def __init__(self, maxsize=0):
         self.maxsize = maxsize
-        self._get_waiting = kqueue()
-        self._put_waiting = kqueue()
-        self._join_waiting = kqueue()
+        self._get_waiting = KSyncQueue()
+        self._put_waiting = KSyncQueue()
+        self._join_waiting = KSyncQueue()
         self._task_count = 0
         self._get_reschedule_func = None
 
@@ -52,8 +52,8 @@ class Queue(object):
     async def get(self):
         if self._get_waiting or self.empty():
             if self._get_reschedule_func is None:
-                self._get_reschedule_func = await _queue_reschedule_function(self._get_waiting)
-            await _wait_on_queue(self._get_waiting, 'QUEUE_GET')
+                self._get_reschedule_func = await _ksync_reschedule_function(self._get_waiting)
+            await _wait_on_ksync(self._get_waiting, 'QUEUE_GET')
         result = self._get()
         if self._put_waiting:
             await _reschedule_tasks(self._put_waiting, n=1)
@@ -64,7 +64,7 @@ class Queue(object):
 
     async def join(self):
         if self._task_count > 0:
-            await _wait_on_queue(self._join_waiting, 'QUEUE_JOIN')
+            await _wait_on_ksync(self._join_waiting, 'QUEUE_JOIN')
 
     def put(self, item):
         if self.full():
@@ -77,7 +77,7 @@ class Queue(object):
     @awaitable(put)
     async def put(self, item):
         if self.full():
-            await _wait_on_queue(self._put_waiting, 'QUEUE_PUT')
+            await _wait_on_ksync(self._put_waiting, 'QUEUE_PUT')
         self._put(item)
         self._task_count += 1
         if self._get_waiting:

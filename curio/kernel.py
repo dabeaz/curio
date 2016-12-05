@@ -12,6 +12,7 @@ import signal
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
 import warnings
+from abc import ABC, abstractmethod
 
 # Logger where uncaught exceptions from crashed tasks are logged
 log = logging.getLogger(__name__)
@@ -25,12 +26,77 @@ from .local import _enable_tasklocal_for, _copy_tasklocal
 class BlockingTaskWarning(RuntimeWarning):
     pass
 
-# kqueue is the datatype used by the kernel for all of its queuing functionality.
-# Any time a task queue is needed, use this type instead of directly hard-coding the
-# use of a deque.  This will make sure the code continues to work even if the
-# queue type is changed later.
+# KernelSyncBase is an abstract base class used to support synchronization
+# primitives such as Events, Locks, Semaphores, etc.  There are different
+# kinds of synchronization and policies that one might implement. This
+# is merely specifying the expected kernel-side API.
 
-kqueue = deque
+class KernelSyncBase(ABC):
+    @abstractmethod
+    def __len__(self):
+        pass
+
+    @abstractmethod
+    def add(self, task):
+        '''
+        Adds a new task.  This method *must* return a zero-argument
+        callable that can be used to remove the just added task
+        '''
+        pass
+
+    @abstractmethod
+    def pop(self, ntasks=1):
+        '''
+        Pop one or more task.  Returns a list of the removed tasks.
+        '''
+        pass
+
+# Kernel-level task synchronization primitives.  These are not
+# for end-users.  They're used to implement higher-level primitives.
+# See the curio/sync.py file.
+
+# Kernel queue with soft-delete on task cancellation
+class KSyncQueue(KernelSyncBase):
+    def __init__(self):
+        self._queue = deque()
+        self._actual_len = 0
+
+    def __len__(self):
+        return self._actual_len
+
+    def add(self, task):
+        item = [ task ]
+        self._queue.append(item)
+        self._actual_len += 1
+        def remove():
+            item[0] = None
+            self._actual_len -= 1
+        return remove
+
+    def pop(self, ntasks=1):
+        tasks = []
+        while ntasks > 0:
+            task, = self._queue.popleft()
+            if task:
+                tasks.append(task)
+                ntasks -= 1
+        self._actual_len -= len(tasks)
+        return tasks
+
+# Kernel event with delete on cancellation
+class KSyncEvent(KernelSyncBase):
+    def __init__(self):
+        self._tasks = set()
+    
+    def __len__(self):
+        return len(self._tasks)
+
+    def add(self, task):
+        self._tasks.add(task)
+        return lambda: self._tasks.remove(task)
+
+    def pop(self, ntasks=1):
+        return [ self._tasks.pop() for _ in range(ntasks) ]
 
 # ----------------------------------------------------------------------
 # Underlying kernel that drives everything
@@ -43,8 +109,9 @@ class Kernel(object):
             selector = DefaultSelector()
 
         self._selector = selector
-        self._ready = kqueue()            # Tasks ready to run
+        self._ready = deque()             # Tasks ready to run
         self._tasks = { }                 # Task table
+
         # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
         self._signal_sets = None
         self._default_signals = None      # Dict of default signal handlers
@@ -320,7 +387,7 @@ class Kernel(object):
                 njobs -= 1
 
             if task.joining:
-                for wtask in task.joining:
+                for wtask in task.joining.pop(len(task.joining)):
                     _reschedule_task(wtask)
                 task.joining = None
             task.terminated = True
@@ -470,16 +537,18 @@ class Kernel(object):
             _copy_tasklocal(current, task)
             return task
 
-        # Reschedule one or more tasks from a queue
-        def _sync_trap_reschedule_tasks(queue, n):
-            for _ in range(n):
-                _reschedule_task(queue.popleft())
+        # Reschedule one or more tasks from a kernel sync
+        def _sync_trap_ksync_reschedule_tasks(ksync, n):
+            tasks = ksync.pop(n)
+            for task in tasks:
+                _reschedule_task(task)
 
         # Trap that returns a function for rescheduling tasks from synchronous code
-        def _sync_trap_queue_reschedule_function(queue):
+        def _sync_trap_ksync_reschedule_function(ksync):
             def _reschedule(n):
-                for _ in range(n):
-                    _reschedule_task(queue.popleft())
+                tasks = ksync.pop(n)
+                for task in tasks:
+                    _reschedule_task(task)
             return _reschedule
 
         # Join with a task
@@ -488,8 +557,8 @@ class Kernel(object):
                 return _blocking_trap_sleep(0, False)
             else:
                 if task.joining is None:
-                    task.joining = kqueue()
-                return _blocking_trap_wait_queue(task.joining, 'TASK_JOIN')
+                    task.joining = KSyncQueue()
+                return _blocking_trap_wait_ksync(task.joining, 'TASK_JOIN')
 
         # Enter a {defer,allow}_cancellation block
         def _sync_trap_cancel_allowed_stack_push(state):
@@ -529,9 +598,8 @@ class Kernel(object):
                 task.cancel_pending = True
 
         # Wait on a queue
-        def _blocking_trap_wait_queue(queue, state):
-            queue.append(current)
-            return (state, lambda current=current: queue.remove(current))
+        def _blocking_trap_wait_ksync(ksync, state):
+            return (state, ksync.add(current))
 
         # Sleep for a specified period. Returns value of monotonic clock.
         # absolute flag indicates whether or not an absolute or relative clock 
