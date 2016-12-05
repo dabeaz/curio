@@ -495,12 +495,12 @@ def test_nested_timeout(kernel):
 
     async def coro1():
         results.append('coro1 start')
-        await sleep(1)
+        await sleep(2)
         results.append('coro1 done')
 
     async def coro2():
         results.append('coro2 start')
-        await sleep(1)
+        await sleep(2)
         results.append('coro2 done')
 
     # Parent should cause a timeout before the child.  
@@ -537,12 +537,12 @@ def test_nested_context_timeout(kernel):
 
     async def coro1():
         results.append('coro1 start')
-        await sleep(1)
+        await sleep(2)
         results.append('coro1 done')
 
     async def coro2():
         results.append('coro2 start')
-        await sleep(1)
+        await sleep(2)
         results.append('coro2 done')
 
     # Parent should cause a timeout before the child.  

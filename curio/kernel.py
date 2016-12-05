@@ -191,6 +191,7 @@ class Kernel(object):
         ready_popleft = ready.popleft
         ready_append = ready.append
         time_monotonic = time.monotonic
+        now = time_monotonic()
         _wake = self._wake     
 
         # ---- In-kernel task used for processing signals and futures
@@ -510,7 +511,7 @@ class Kernel(object):
                 raise CancelledError("CancelledError")
             else:
                 if current.timeout is not None:
-                    now = time_monotonic()
+                    # now = time_monotonic()
                     if current.timeout <= now:
                         raise TaskTimeout(now)
 
@@ -546,7 +547,7 @@ class Kernel(object):
             # we want; sleep(0) should mean "please give other stuff a chance
             # to run". So now we always go through the whole sleep machinery.
             if not absolute:
-                clock += time_monotonic()
+                clock += now
             _set_timeout(clock, 'sleep')
             return ('TIME_SLEEP',
                     lambda task=current: setattr(task, 'sleep', None))
@@ -595,7 +596,7 @@ class Kernel(object):
             # up with the prior timeout handling and all manner of head-explosion
             # will occur.
 
-            if previous and previous < time_monotonic():
+            if previous and previous < now:
                 _set_timeout(previous)
             else:
                 current.timeout = previous
@@ -610,7 +611,7 @@ class Kernel(object):
 
         # Return the current value of the kernel clock
         def _sync_trap_clock():
-            return time_monotonic()
+            return now
 
         # Create the traps tables
         blocking_traps = [None] * len(BlockingTraps)
@@ -633,11 +634,14 @@ class Kernel(object):
         # Main Kernel Loop
         # ------------------------------------------------------------
         while njobs > 0:
+
+            # update the now timestamp for this loop cycle 
+            now = time_monotonic()
             # Wait for an I/O event (or timeout)
             if ready:
                 timeout = 0
             elif sleeping:
-                timeout = sleeping[0][0] - time_monotonic()
+                timeout = sleeping[0][0] - now
             else:
                 timeout = None
             events = selector_select(timeout)
@@ -682,9 +686,9 @@ class Kernel(object):
 
             # Process sleeping tasks (if any)
             if sleeping:
-                current_time = time_monotonic()
+                # current_time = time_monotonic()
                 cancel_retry = []
-                while sleeping and sleeping[0][0] <= current_time:
+                while sleeping and sleeping[0][0] <= now:
                     tm, taskid, sleep_type = heapq.heappop(sleeping)
                     # When a task wakes, verify that the timeout value matches that stored
                     # on the task. If it differs, it means that the task completed its
@@ -695,10 +699,10 @@ class Kernel(object):
                         if sleep_type == 'sleep':
                             if tm == task.sleep:
                                 task.sleep = None
-                                _reschedule_task(task, value=current_time)
+                                _reschedule_task(task, value=now)
                         else:
                             if tm == task.timeout:
-                                if _try_cancel_blocked_task(task, exc=TaskTimeout, val=current_time):
+                                if _try_cancel_blocked_task(task, exc=TaskTimeout, val=now):
                                     task.timeout = None
                                 else:
                                     # Note: There is a possibility that a task will be
