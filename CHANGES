@@ -1,5 +1,8 @@
 CHANGES
 -------
+12/03/2016 Added a parentid attribute to Task instances so you can find parent
+	   tasks.   Nothing else is done with this internally.
+
 12/03/2016 Withdrew the pdb and crash_handler arguments to Kernel() and the
            run() function.  Added a pdb() method to tasks that can be used
 	   to enter the debugger on a crashed task.  High-level handling
