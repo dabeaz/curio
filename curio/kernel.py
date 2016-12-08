@@ -511,7 +511,6 @@ class Kernel(object):
                 raise CancelledError("CancelledError")
             else:
                 if current.timeout is not None:
-                    # now = time_monotonic()
                     if current.timeout <= now:
                         raise TaskTimeout(now)
 
@@ -686,7 +685,6 @@ class Kernel(object):
 
             # Process sleeping tasks (if any)
             if sleeping:
-                # current_time = time_monotonic()
                 cancel_retry = []
                 while sleeping and sleeping[0][0] <= now:
                     tm, taskid, sleep_type = heapq.heappop(sleeping)

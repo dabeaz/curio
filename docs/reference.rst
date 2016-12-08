@@ -1635,7 +1635,7 @@ cancellation point.
    synchronous code as long as it runs in the same thread as the Curio
    kernel.
 
-.. asyncfunction:: _clock():
+.. asyncfunction:: _clock()
 
    Synchronous trap. Returns the current time according to the Curio
    kernel's clock.
@@ -1646,7 +1646,7 @@ looks roughly like this::
 
     class Socket(object):
         ...
-        def recv(self, maxbytes):
+        async def recv(self, maxbytes):
             while True:
                 try:
                     return self._socket.recv(maxbytes)
