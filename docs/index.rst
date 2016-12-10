@@ -34,6 +34,10 @@ Curio requires Python 3.5 and Unix.  You can install it using ``pip``::
 
     bash % python3 -m pip install curio
 
+or better install a fresh version from git::
+
+    pip install git+https://github.com/dabeaz/curio.git
+
 An Example
 ----------
 Here is a simple TCP echo server implemented using sockets and curio::
