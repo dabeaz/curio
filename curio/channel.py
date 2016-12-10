@@ -121,7 +121,7 @@ class Channel(object):
         '''
         Send an arbitrary Python object. Uses pickle to serialize.
         '''
-        await self.send_bytes(pickle.dumps(obj))
+        await self.send_bytes(pickle.dumps(obj, pickle.HIGHEST_PROTOCOL))
 
     async def recv(self):
         '''
