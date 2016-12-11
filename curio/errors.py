@@ -28,9 +28,6 @@ class TaskError(CurioError):
 class SyncIOError(CurioError):
     pass
 
-class _CancelRetry(CurioError):
-    pass
-
 class TaskExit(CurioError):
     pass
 
