@@ -1,7 +1,6 @@
 # Shortcuts for various tasks (UNIX only).
 
 PYTHON = python3.5
-ARGS =
 
 # In not in a virtualenv, add --user options for install commands.
 INSTALL_OPTS = `$(PYTHON) -c "import sys; print('' if hasattr(sys, 'real_prefix') else '--user')"`
@@ -31,7 +30,6 @@ clean:
 	rm -rf \
 		*.core \
 		*.egg-info \
-		*\$testfile* \
 		.coverage \
 		.tox \
 		build/ \
@@ -42,7 +40,7 @@ clean:
 
 _:
 
-# Install this package + GIT hooks. Install is done:
+# Install this package:
 # - as the current user, in order to avoid permission issues
 # - in development / edit mode, so that source can be modified on the fly
 install:
