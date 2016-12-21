@@ -10,13 +10,15 @@ from heapq import heappush, heappop
 import threading
 import queue as thread_queue
 
-from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function
+from .traps import (_wait_on_ksync, _reschedule_tasks,
+                    _ksync_reschedule_function)
 from .kernel import KSyncQueue
 from .errors import CurioError
 from .meta import awaitable
 from . import workers
 from .task import spawn
 from . import sync
+
 
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue']
 
@@ -52,7 +54,8 @@ class Queue(object):
     async def get(self):
         if self._get_waiting or self.empty():
             if self._get_reschedule_func is None:
-                self._get_reschedule_func = await _ksync_reschedule_function(self._get_waiting)
+                self._get_reschedule_func = \
+                    await _ksync_reschedule_function(self._get_waiting)
             await _wait_on_ksync(self._get_waiting, 'QUEUE_GET')
         result = self._get()
         if self._put_waiting:
@@ -92,7 +95,8 @@ class Queue(object):
     async def task_done(self):
         self._task_count -= 1
         if self._task_count == 0 and self._join_waiting:
-            await _reschedule_tasks(self._join_waiting, n=len(self._join_waiting))
+            await _reschedule_tasks(
+                self._join_waiting, n=len(self._join_waiting))
 
 
 class PriorityQueue(Queue):
@@ -128,10 +132,12 @@ class LifoQueue(Queue):
     def _get(self):
         return self._queue.pop()
 
+
 class EpicQueue(object):
     '''
     The name says it all.
     '''
+
     def __init__(self, queue=None, maxsize=0):
         self._tqueue = queue if queue else thread_queue.Queue(maxsize=maxsize)
         self._getting_queue = Queue(maxsize=1)
@@ -144,12 +150,13 @@ class EpicQueue(object):
         self._unfinished_tasks = 0
 
     def __del__(self):
-        assert self._get_task is None, 'Queue %r not properly terminated' % self
+        assert self._get_task is None, \
+            'Queue %r not properly terminated' % self
 
     async def shutdown(self):
         if self._get_task:
             await self._get_task.cancel()
-            
+
         if self._put_task:
             await self._put_task.cancel()
 
@@ -209,7 +216,7 @@ class EpicQueue(object):
 
     @awaitable(_sync_task_done)
     async def task_done(self):
-         await sync.abide(self._sync_task_done)
+        await sync.abide(self._sync_task_done)
 
     async def _join_worker(self):
         w = workers.ThreadWorker()
@@ -238,4 +245,4 @@ class EpicQueue(object):
             await self._joining.wait()
 
     # Footnote: all of the code in this class is experimental.
-    # It's probably an epically bad idea.  YOLO. 
+    # It's probably an epically bad idea.  YOLO.

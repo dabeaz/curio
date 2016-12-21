@@ -4,8 +4,6 @@
 # Python objects on a stream.  Compatible with the Connection class in the
 # multiprocessing module, but rewritten for a purely asynchronous runtime.
 
-__all__ = ['Channel', 'Listener', 'Client']
-
 import os
 import pickle
 import struct
@@ -19,16 +17,23 @@ from .io import StreamBase, FileStream
 
 import multiprocessing.connection as mpc
 
+
+__all__ = ['Channel', 'Listener', 'Client']
+
+
 AUTH_MESSAGE_LENGTH = mpc.MESSAGE_LENGTH    # 20
 CHALLENGE = mpc.CHALLENGE                   # b'#CHALLENGE#'
 WELCOME = mpc.WELCOME                       # b'#WELCOME#'
 FAILURE = mpc.FAILURE                       # b'#FAILURE#'
 
+
 class ChannelError(CurioError):
     pass
 
+
 class AuthenticationError(ChannelError):
     pass
+
 
 class Channel(object):
     '''
@@ -36,8 +41,10 @@ class Channel(object):
     or pickled Python objects.  Must be passed a pair of reader/writer
     streams for performing the underlying communication.
     '''
+
     def __init__(self, reader, writer):
-        assert isinstance(reader, StreamBase) and isinstance(writer, StreamBase)
+        assert isinstance(reader, StreamBase) and isinstance(
+            writer, StreamBase)
         self._reader = reader
         self._writer = writer
 
@@ -45,7 +52,8 @@ class Channel(object):
     def from_Connection(cls, conn):
         '''
         Creates a channel from a multiprocessing Connection. Note: The
-        multiprocessing connection is detached by having its handle set to None.
+        multiprocessing connection is detached by having its handle set to
+        None.
 
         This method can be used to make curio talk over Pipes as created by
         multiprocessing.  For example:
@@ -57,7 +65,8 @@ class Channel(object):
         '''
         assert isinstance(conn, mpc._ConnectionBase)
         reader = FileStream(open(conn._handle, 'rb', buffering=0))
-        writer = FileStream(open(conn._handle, 'wb', buffering=0, closefd=False))
+        writer = FileStream(
+            open(conn._handle, 'wb', buffering=0, closefd=False))
         conn._handle = None
         return cls(reader, writer)
 
@@ -106,7 +115,9 @@ class Channel(object):
         size, = struct.unpack('!i', header)
         if maxlength is not None:
             if size > maxlength:
-                raise IOError('Message too large. %d bytes > %d maxlength' % (size, maxlength))
+                raise IOError(
+                    'Message too large. %d bytes > %d maxlength' % (
+                        size, maxlength))
 
         msg = await self._reader.read_exactly(size)
         return msg
@@ -160,8 +171,11 @@ class Channel(object):
         await self._answer_challenge(authkey)
         await self._deliver_challenge(authkey)
 
+
 class Listener(object):
-    def __init__(self, address, family=socket.AF_INET, backlog=1, authkey=None):
+
+    def __init__(self, address, family=socket.AF_INET,
+                 backlog=1, authkey=None):
         self._sock = socket.socket(family, socket.SOCK_STREAM)
         if family == socket.AF_INET:
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
@@ -172,8 +186,9 @@ class Listener(object):
     async def accept(self):
         client, addr = await self._sock.accept()
         fileno = client.detach()
-        ch = Channel(FileStream(open(fileno, 'rb', buffering=0)),
-                     FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
+        ch = Channel(
+            FileStream(open(fileno, 'rb', buffering=0)),
+            FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
         if self._authkey:
             await ch.authenticate_server(self._authkey)
         return ch

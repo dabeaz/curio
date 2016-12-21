@@ -4,17 +4,20 @@
 # events, locks, semaphores, and condition variables. These primitives
 # are only safe to use in the curio framework--they are not thread safe.
 
-__all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide' ]
-
 import threading
 from inspect import iscoroutinefunction
 
-from .traps import _wait_on_ksync, _reschedule_tasks, _future_wait, _ksync_reschedule_function
+from .traps import (_wait_on_ksync, _reschedule_tasks, _future_wait,
+                    _ksync_reschedule_function)
 from .kernel import KSyncQueue, KSyncEvent
 from . import workers
-from .errors import CancelledError, TaskTimeout
+from .errors import CancelledError
 from .task import spawn, current_task
 from .meta import awaitable
+
+
+__all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore',
+           'Condition', 'abide']
 
 
 class Event(object):
@@ -28,7 +31,8 @@ class Event(object):
     def __repr__(self):
         res = super().__repr__()
         extra = 'set' if self._set else 'unset'
-        return '<{} [{},waiters:{}]>'.format(res[1:-1], extra, len(self._waiting))
+        return '<{} [{},waiters:{}]>'.format(
+            res[1:-1], extra, len(self._waiting))
 
     def is_set(self):
         return self._set
@@ -41,7 +45,8 @@ class Event(object):
             return
 
         if self._reschedule_func is None:
-            self._reschedule_func = await _ksync_reschedule_function(self._waiting)
+            self._reschedule_func = \
+                await _ksync_reschedule_function(self._waiting)
 
         await _wait_on_ksync(self._waiting, 'EVENT_WAIT')
 
@@ -54,6 +59,7 @@ class Event(object):
     async def set(self):
         self._set = True
         await _reschedule_tasks(self._waiting, len(self._waiting))
+
 
 class SyncEvent(Event):
     '''
@@ -69,14 +75,16 @@ class SyncEvent(Event):
 
     async def wait(self):
         if self._reschedule_func is None:
-            self._reschedule_func = await _ksync_reschedule_function(self._waiting)
+            self._reschedule_func = \
+                await _ksync_reschedule_function(self._waiting)
         await super().wait()
 
     def set(self):
         self._set = True
         if self._reschedule_func:
             self._reschedule_func(len(self._waiting))
-        
+
+
 class _LockBase(object):
 
     async def __aenter__(self):
@@ -92,6 +100,7 @@ class _LockBase(object):
     def __exit__(self, *args):
         pass
 
+
 class Lock(_LockBase):
 
     __slots__ = ('_acquired', '_waiting')
@@ -103,7 +112,8 @@ class Lock(_LockBase):
     def __repr__(self):
         res = super().__repr__()
         extra = 'locked' if self.locked() else 'unlocked'
-        return '<{} [{},waiters:{}]>'.format(res[1:-1], extra, len(self._waiting))
+        return '<{} [{},waiters:{}]>'.format(
+            res[1:-1], extra, len(self._waiting))
 
     async def acquire(self):
         if self._acquired:
@@ -191,7 +201,8 @@ class Semaphore(_LockBase):
     def __repr__(self):
         res = super().__repr__()
         extra = 'locked' if self.locked() else 'unlocked'
-        return '<{} [{},value:{},waiters:{}]>'.format(res[1:-1], extra, self._value, len(self._waiting))
+        return '<{} [{},value:{},waiters:{}]>'.format(
+            res[1:-1], extra, self._value, len(self._waiting))
 
     async def acquire(self):
         if self._value <= 0:
@@ -209,6 +220,7 @@ class Semaphore(_LockBase):
     def locked(self):
         return self._value == 0
 
+
 class BoundedSemaphore(Semaphore):
 
     __slots__ = ('_bound_value',)
@@ -221,6 +233,7 @@ class BoundedSemaphore(Semaphore):
         if self._value >= self._bound_value:
             raise ValueError('BoundedSemaphore released too many times')
         await super().release()
+
 
 class Condition(_LockBase):
 
@@ -236,7 +249,8 @@ class Condition(_LockBase):
     def __repr__(self):
         res = super().__repr__()
         extra = 'locked' if self.locked() else 'unlocked'
-        return '<{} [{},waiters:{}]>'.format(res[1:-1], extra, len(self._waiting))
+        return '<{} [{},waiters:{}]>'.format(
+            res[1:-1], extra, len(self._waiting))
 
     def locked(self):
         return self._lock.locked()
@@ -272,6 +286,8 @@ class Condition(_LockBase):
         await self.notify(len(self._waiting))
 
 # Class that adapts a synchronous context-manager to an asynchronous manager
+
+
 class _contextadapt(object):
 
     def __init__(self, manager):
@@ -292,7 +308,8 @@ class _contextadapt(object):
 
         self.finish_evt.wait()
         try:
-            self.exit_future.set_result(self.manager.__exit__(*self.finish_args))
+            self.exit_future.set_result(
+                self.manager.__exit__(*self.finish_args))
         except Exception as e:
             self.exit_future.set_exception(e)
 
@@ -303,7 +320,8 @@ class _contextadapt(object):
             return self.enter_future.result()
         except CancelledError:
             # An interesting corner case... if we're cancelled while waiting to
-            # enter, we'd better arrange to exit in case it eventually succeeds.
+            # enter, we'd better arrange to exit in case it eventually
+            # succeeds.
             self.exit_future.add_done_callback(lambda f: None)
             self.finish_args = (None, None, None)
             self.finish_evt.set()
@@ -313,6 +331,7 @@ class _contextadapt(object):
         self.finish_args = args
         await _future_wait(self.exit_future, self.finish_evt)
         return self.exit_future.result()
+
 
 def abide(op, *args, **kwargs):
     '''

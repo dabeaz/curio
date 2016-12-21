@@ -2,14 +2,17 @@
 #
 # Task class and task related functions.
 
-__all__ = [ 'Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather', 
-            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
-            'wait', 'clock' , 'defer_cancellation', 'allow_cancellation',
-            'schedule']
 
-from time import monotonic
-from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError
+from .errors import (TaskTimeout, TaskError, TimeoutCancellationError,
+                     UncaughtTimeoutError)
 from .traps import *
+
+
+__all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
+           'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
+           'wait', 'clock', 'defer_cancellation', 'allow_cancellation',
+           'schedule']
+
 
 class Task(object):
     '''
@@ -17,12 +20,12 @@ class Task(object):
     related to execution state and debugging.
     '''
     __slots__ = (
-        'id', 'parentid', 'daemon', 'coro', '_send', '_throw', 'cycles', 'state',
-        'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
-        'next_exc', 'joining', 'cancelled', 'terminated', 'cancel_pending',
-        'cancel_allowed_stack', '_last_io', '_deadlines',
+        'id', 'parentid', 'daemon', 'coro', '_send', '_throw', 'cycles',
+        'state', 'cancel_func', 'future', 'sleep', 'timeout', 'exc_info',
+        'next_value', 'next_exc', 'joining', 'cancelled', 'terminated',
+        'cancel_pending', 'cancel_allowed_stack', '_last_io', '_deadlines',
         'task_local_storage', '__weakref__',
-        )
+    )
     _lastid = 1
 
     def __init__(self, coro, daemon=False, taskid=None):
@@ -42,14 +45,15 @@ class Task(object):
         self.exc_info = None       # Exception info (if any on crash)
         self.next_value = None     # Next value to send on execution
         self.next_exc = None       # Next exception to send on execution
-        self.joining = None        # Optional set of tasks waiting to join with this one
+        # Optional set of tasks waiting to join with this one
+        self.joining = None
         self.cancelled = False     # Cancelled?
         self.terminated = False    # Terminated?
         self.cancel_pending = False  # Deferred cancellation pending?
 
         # Last entry says whether cancellations are currently allowed
         self.cancel_allowed_stack = [True]
-        self.task_local_storage = {} # Task local storage
+        self.task_local_storage = {}  # Task local storage
         self._last_io = None       # Last I/O operation performed
         self._send = coro.send     # Bound coroutine methods
         self._throw = coro.throw
@@ -127,7 +131,7 @@ async def sleep(seconds):
 
 async def wake_at(clock):
     '''
-    Sleep until the kernel clock reaches the value of clock. 
+    Sleep until the kernel clock reaches the value of clock.
     Returns the value of the monotonic clock when awakened.
     '''
     return await _sleep(clock, True)
@@ -167,30 +171,31 @@ async def gather(tasks, *, return_exceptions=False):
                 raise
     return results
 
+
 class wait(object):
     '''
-    Wait for one or more tasks to complete, possibly with cancellation. 
+    Wait for one or more tasks to complete, possibly with cancellation.
     Suppose you have created some tasks:
 
          task1 = await spawn(coro())
          task2 = await spawn(coro())
          task3 = await spawn(coro())
-  
+
     wait() allows you to obtain tasks as they complete.  For example:
 
          w = wait([task1, task2, task3])
-         
+
     Obtain the next completed task:
 
          task = await w.next_done()
          result = await task.join()
-    
+
     Get all of the completed tasks in completion order:
 
          async for task in w:
              result = await task.join()
 
-    All unfinished tasks will be cancelled if you use the result of wait() 
+    All unfinished tasks will be cancelled if you use the result of wait()
     as a context manager. For example:
 
          async with wait([task1, task2, task3]) as w:
@@ -204,6 +209,7 @@ class wait(object):
     tasks.  To get the results, you still call task.join() as before.  wait()
     ensures that when you call join(), the result is immediately available.
     '''
+
     def __init__(self, tasks):
         self._initial_tasks = tasks
         self._queue = queue.Queue()
@@ -227,12 +233,12 @@ class wait(object):
 
     async def _init(self):
         async def wait_runner(task):
-             try:
-                 result = await task.join()
-             except Exception:
-                 pass
-             await self._queue.put(task)
-           
+            try:
+                await task.join()
+            except Exception:
+                pass
+            await self._queue.put(task)
+
         self._tasks = []
         for task in self._initial_tasks:
             await spawn(wait_runner(task))
@@ -257,7 +263,9 @@ class wait(object):
 
         self._tasks = []
 
+
 class _CancellationManager:
+
     def __init__(self, state):
         self._state = state
 
@@ -271,11 +279,15 @@ class _CancellationManager:
     async def __aexit__(self, ty, val, tb):
         await _cancel_allowed_stack_pop(self._state)
 
+
 defer_cancellation = _CancellationManager(False)
 allow_cancellation = _CancellationManager(True)
 
 # Helper class for running timeouts as a context manager
+
+
 class _TimeoutAfter(object):
+
     def __init__(self, clock, absolute, ignore=False, timeout_result=None):
         self._clock = clock
         self._absolute = absolute
@@ -299,10 +311,10 @@ class _TimeoutAfter(object):
         # Discussion.  If a timeout has occurred, it will either
         # present itself here as a TaskTimeout or TimeoutCancellationError
         # exception.  The value of this exception is set to the current
-        # kernel clock which can be compared against our own deadline.   
+        # kernel clock which can be compared against our own deadline.
         # What happens next is driven by these rules:
         #
-        # 1.  If we are the outer-most context where the timeout 
+        # 1.  If we are the outer-most context where the timeout
         #     period has expired, then a TaskTimeout is raised.
         #
         # 2.  If the deadline has expired for at least one outer
@@ -331,23 +343,27 @@ class _TimeoutAfter(object):
 
                 if n < len(self._deadlines) - 1:
                     if ty is TaskTimeout:
-                        raise TimeoutCancellationError(val.args[0]).with_traceback(tb) from None
+                        raise TimeoutCancellationError(
+                            val.args[0]).with_traceback(tb) from None
                     else:
                         return False
                 else:
-                    # The timeout is us.  Make sure it's a TaskTimeout (unless ignored)
+                    # The timeout is us.  Make sure it's a TaskTimeout (unless
+                    # ignored)
                     self.result = self._timeout_result
                     if self._ignore:
                         return True
                     else:
                         if ty is TimeoutCancellationError:
-                            raise TaskTimeout(val.args[0]).with_traceback(tb) from None
+                            raise TaskTimeout(
+                                val.args[0]).with_traceback(tb) from None
                         else:
                             return False
         finally:
             self._deadlines.pop()
 
-async def _timeout_after_func(clock, absolute, coro, ignore=False, timeout_result=None):
+async def _timeout_after_func(clock, absolute, coro, ignore=False,
+                              timeout_result=None):
     task = await current_task()
     if not absolute and clock:
         clock += await _clock()
@@ -365,14 +381,16 @@ async def _timeout_after_func(clock, absolute, coro, ignore=False, timeout_resul
 
         if n < len(task._deadlines) - 1:
             if isinstance(e, TaskTimeout):
-                raise TimeoutCancellationError(e.args[0]).with_traceback(e.__traceback__) from None
+                raise TimeoutCancellationError(
+                    e.args[0]).with_traceback(e.__traceback__) from None
             else:
                 raise
 
         # We're getting the timeout
         if not ignore:
             if isinstance(e, TimeoutCancellationError):
-                raise TaskTimeout(e.args[0]).with_traceback(e.__traceback__) from None
+                raise TaskTimeout(
+                    e.args[0]).with_traceback(e.__traceback__) from None
             else:
                 raise
         return timeout_result
@@ -380,6 +398,7 @@ async def _timeout_after_func(clock, absolute, coro, ignore=False, timeout_resul
     finally:
         task._deadlines.pop()
         await _unset_timeout(prior)
+
 
 def timeout_at(clock, coro=None):
     '''
@@ -390,6 +409,7 @@ def timeout_at(clock, coro=None):
         return _TimeoutAfter(clock, True)
     else:
         return _timeout_after_func(clock, True, coro)
+
 
 def timeout_after(seconds, coro=None):
     '''
@@ -412,15 +432,19 @@ def timeout_after(seconds, coro=None):
     else:
         return _timeout_after_func(seconds, False, coro)
 
+
 def ignore_at(clock, coro=None, *, timeout_result=None):
     '''
     Stop the enclosed task or block of code at an absolute
     clock value. Same usage as ignore_after().
     '''
     if coro is None:
-        return _TimeoutAfter(clock, True, ignore=True, timeout_result=timeout_result)
+        return _TimeoutAfter(clock, True, ignore=True,
+                             timeout_result=timeout_result)
     else:
-        return _timeout_after_func(clock, True, coro, ignore=True, timeout_result=timeout_result)
+        return _timeout_after_func(
+            clock, True, coro, ignore=True, timeout_result=timeout_result)
+
 
 def ignore_after(seconds, coro=None, *, timeout_result=None):
     '''
@@ -451,8 +475,11 @@ def ignore_after(seconds, coro=None, *, timeout_result=None):
     the timeout_result keyword argument.
     '''
     if coro is None:
-        return _TimeoutAfter(seconds, False, ignore=True, timeout_result=timeout_result)
+        return _TimeoutAfter(seconds, False, ignore=True,
+                             timeout_result=timeout_result)
     else:
-        return _timeout_after_func(seconds, False, coro, ignore=True, timeout_result=timeout_result)
+        return _timeout_after_func(
+            seconds, False, coro, ignore=True, timeout_result=timeout_result)
+
 
 from . import queue

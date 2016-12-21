@@ -4,6 +4,7 @@
 
 from curio import run, tcp_server
 
+
 async def echo_client(client, addr):
     print('Connection from', addr)
     s = client.as_stream()
@@ -11,6 +12,7 @@ async def echo_client(client, addr):
         await s.write(line)
     print('Connection closed')
     await s.close()
+
 
 if __name__ == '__main__':
     try:

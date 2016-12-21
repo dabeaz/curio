@@ -1,10 +1,13 @@
-# Adapted from https://hg.python.org/cpython/file/default/Doc/tools/extensions/pyspecific.py .
+# Adapted from
+# https://hg.python.org/cpython/file/default/Doc/tools/extensions/pyspecific.py
+# .
 
 from sphinx import addnodes
 from sphinx.domains.python import PyModulelevel, PyClassmember
 
 
 class PyCoroutineMixin(object):
+
     def handle_signature(self, sig, signode):
         ret = super(PyCoroutineMixin, self).handle_signature(sig, signode)
         signode.insert(0, addnodes.desc_annotation('await ', 'await '))
@@ -12,12 +15,14 @@ class PyCoroutineMixin(object):
 
 
 class PyAsyncFunction(PyCoroutineMixin, PyModulelevel):
+
     def run(self):
         self.name = 'py:function'
         return PyModulelevel.run(self)
 
 
 class PyAsyncMethod(PyCoroutineMixin, PyClassmember):
+
     def run(self):
         self.name = 'py:method'
         return PyClassmember.run(self)

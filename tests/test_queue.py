@@ -3,17 +3,18 @@
 from collections import deque
 from curio import *
 
+
 def test_queue_simple(kernel):
     results = []
     async def consumer(queue, label):
-          while True:
-              item = await queue.get()
-              if item is None:
-                  break
-              results.append((label, item))
-              await queue.task_done()
-          await queue.task_done()
-          results.append(label + ' done')
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            results.append((label, item))
+            await queue.task_done()
+        await queue.task_done()
+        results.append(label + ' done')
 
     async def producer():
         queue = Queue()
@@ -33,28 +34,29 @@ def test_queue_simple(kernel):
     kernel.run(producer())
 
     assert results == [
-            'producer_start',
-            ('cons1', 0),
-            ('cons2', 1),
-            ('cons1', 2),
-            ('cons2', 3),
-            'producer_join',
-            'cons1 done',
-            'cons2 done',
-            'producer_done',
-            ]
+        'producer_start',
+        ('cons1', 0),
+        ('cons2', 1),
+        ('cons1', 2),
+        ('cons2', 3),
+        'producer_join',
+        'cons1 done',
+        'cons2 done',
+        'producer_done',
+    ]
+
 
 def test_queue_unbounded(kernel):
     results = []
     async def consumer(queue, label):
-          while True:
-              item = await queue.get()
-              if item is None:
-                  break
-              results.append((label, item))
-              await queue.task_done()
-          await queue.task_done()
-          results.append(label + ' done')
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            results.append((label, item))
+            await queue.task_done()
+        await queue.task_done()
+        results.append(label + ' done')
 
     async def producer():
         queue = Queue()
@@ -71,29 +73,29 @@ def test_queue_unbounded(kernel):
     kernel.run(producer())
 
     assert results == [
-            'producer_start',
-            'producer_join',
-            ('cons1', 0),
-            ('cons1', 1),
-            ('cons1', 2),
-            ('cons1', 3),
-            'cons1 done',
-            'producer_done',
-            ]
+        'producer_start',
+        'producer_join',
+        ('cons1', 0),
+        ('cons1', 1),
+        ('cons1', 2),
+        ('cons1', 3),
+        'cons1 done',
+        'producer_done',
+    ]
 
 
 def test_queue_bounded(kernel):
     results = []
     async def consumer(queue, label):
-          while True:
-              item = await queue.get()
-              if item is None:
-                  break
-              results.append((label, item))
-              await sleep(0.1)
-              await queue.task_done()
-          await queue.task_done()
-          results.append(label + ' done')
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            results.append((label, item))
+            await sleep(0.1)
+            await queue.task_done()
+        await queue.task_done()
+        results.append(label + ' done')
 
     async def producer():
         queue = Queue(maxsize=2)
@@ -111,31 +113,32 @@ def test_queue_bounded(kernel):
     kernel.run(producer())
 
     assert results == [
-            'producer_start',
-            ('produced', 0),
-            ('produced', 1),
-            ('cons1', 0),
-            ('produced', 2),
-            ('cons1', 1),
-            ('produced', 3),
-            ('cons1', 2),
-            'producer_join',
-            ('cons1', 3),
-            'cons1 done',
-            'producer_done',
-            ]
+        'producer_start',
+        ('produced', 0),
+        ('produced', 1),
+        ('cons1', 0),
+        ('produced', 2),
+        ('cons1', 1),
+        ('produced', 3),
+        ('cons1', 2),
+        'producer_join',
+        ('cons1', 3),
+        'cons1 done',
+        'producer_done',
+    ]
+
 
 def test_queue_get_cancel(kernel):
     # Make sure a blocking get can be cancelled
     results = []
     async def consumer():
-          queue = Queue()
-          try:
-              results.append('consumer waiting')
-              item = await queue.get()
-              results.append('not here')
-          except CancelledError:
-              results.append('consumer cancelled')
+        queue = Queue()
+        try:
+            results.append('consumer waiting')
+            item = await queue.get()
+            results.append('not here')
+        except CancelledError:
+            results.append('consumer cancelled')
 
     async def driver():
         task = await spawn(consumer())
@@ -144,9 +147,10 @@ def test_queue_get_cancel(kernel):
 
     kernel.run(driver())
     assert results == [
-            'consumer waiting',
-            'consumer cancelled'
-            ]
+        'consumer waiting',
+        'consumer cancelled'
+    ]
+
 
 def test_queue_put_cancel(kernel):
     # Make sure a blocking put() can be cancelled
@@ -169,27 +173,29 @@ def test_queue_put_cancel(kernel):
 
     kernel.run(driver())
     assert results == [
-            'producer_start',
-            'producer_cancel'
-            ]
+        'producer_start',
+        'producer_cancel'
+    ]
+
 
 def test_queue_get_timeout(kernel):
     # Make sure a blocking get respects timeouts
     results = []
     async def consumer():
-          queue = Queue()
-          try:
-              results.append('consumer waiting')
-              item = await timeout_after(0.5, queue.get())
-              results.append('not here')
-          except TaskTimeout:
-              results.append('consumer timeout')
+        queue = Queue()
+        try:
+            results.append('consumer waiting')
+            item = await timeout_after(0.5, queue.get())
+            results.append('not here')
+        except TaskTimeout:
+            results.append('consumer timeout')
 
     kernel.run(consumer())
     assert results == [
-            'consumer waiting',
-            'consumer timeout'
-            ]
+        'consumer waiting',
+        'consumer timeout'
+    ]
+
 
 def test_queue_put_timeout(kernel):
     # Make sure a blocking put() respects timeouts
@@ -207,21 +213,22 @@ def test_queue_put_timeout(kernel):
 
     kernel.run(producer())
     assert results == [
-            'producer start',
-            'producer timeout'
-            ]
+        'producer start',
+        'producer timeout'
+    ]
+
 
 def test_queue_sync(kernel):
     results = []
     async def consumer(queue, label):
-          while True:
-              item = await queue.get()
-              if item is None:
-                  break
-              results.append((label, item))
-              await queue.task_done()
-          await queue.task_done()
-          results.append(label + ' done')
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            results.append((label, item))
+            await queue.task_done()
+        await queue.task_done()
+        results.append(label + ' done')
 
     def produce_item(queue, item):
         queue.put(item)
@@ -244,16 +251,16 @@ def test_queue_sync(kernel):
     kernel.run(producer())
 
     assert results == [
-            'producer_start',
-            ('cons1', 0),
-            ('cons2', 1),
-            ('cons1', 2),
-            ('cons2', 3),
-            'producer_join',
-            'cons1 done',
-            'cons2 done',
-            'producer_done',
-            ]
+        'producer_start',
+        ('cons1', 0),
+        ('cons2', 1),
+        ('cons1', 2),
+        ('cons2', 3),
+        'producer_join',
+        'cons1 done',
+        'cons2 done',
+        'producer_done',
+    ]
 
 
 def test_priority_queue(kernel):

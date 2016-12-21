@@ -4,8 +4,6 @@
 # running functions in threads, processes, and executors from the
 # concurrent.futures module.
 
-__all__ = [ 'run_in_executor', 'run_in_thread', 'run_in_process' ]
-
 import multiprocessing
 import threading
 import traceback
@@ -16,25 +14,34 @@ from .traps import _future_wait, _get_kernel
 from . import sync
 from .channel import Channel
 
+__all__ = ['run_in_executor', 'run_in_thread', 'run_in_process']
+
 # Code to embed a traceback in a remote exception.  This is borrowed
 # straight from multiprocessing.pool.  Copied here to avoid possible
 # confusion when reading the traceback message (it will identify itself
 # as originating from curio as opposed to multiprocessing.pool).
 
+
 class RemoteTraceback(Exception):
+
     def __init__(self, tb):
         self.tb = tb
+
     def __str__(self):
         return self.tb
 
+
 class ExceptionWithTraceback:
+
     def __init__(self, exc, tb):
         tb = traceback.format_exception(type(exc), exc, tb)
         tb = ''.join(tb)
         self.exc = exc
         self.tb = '\n"""\n%s"""' % tb
+
     def __reduce__(self):
         return rebuild_exc, (self.exc, self.tb)
+
 
 def rebuild_exc(exc, tb):
     exc.__cause__ = RemoteTraceback(tb)
@@ -115,6 +122,8 @@ async def run_in_process(callable, *args, **kwargs):
 # notification support.  By eliminating that, the overhead associated
 # with the handoff between curio tasks and threads is substantially
 # faster.
+
+
 class _FutureLess(object):
     __slots__ = ('_callback', '_exception', '_result')
 
@@ -144,10 +153,13 @@ class _FutureLess(object):
 # executes it.  While this takes place, the curio task blocks, waiting
 # for a result to be set on an internal Future.
 
+
 class ThreadWorker(object):
     '''
-    Worker that executes a callable on behalf of a curio task in a separate thread.
+    Worker that executes a callable on behalf of a curio task in a
+    separate thread.
     '''
+
     def __init__(self):
         self.thread = None
         self.start_evt = None
@@ -198,6 +210,7 @@ class ThreadWorker(object):
         await _future_wait(future, self.start_evt)
         return future.result()
 
+
 class ProcessWorker(object):
     '''
     Managed process worker for running CPU-intensive tasks.  The main
@@ -213,7 +226,8 @@ class ProcessWorker(object):
 
     def _launch(self):
         client_ch, server_ch = multiprocessing.Pipe()
-        self.process = multiprocessing.Process(target=self.run_server, args=(server_ch,), daemon=True)
+        self.process = multiprocessing.Process(
+            target=self.run_server, args=(server_ch,), daemon=True)
         self.process.start()
         server_ch.close()
         self.client_ch = Channel.from_Connection(client_ch)
@@ -232,7 +246,7 @@ class ProcessWorker(object):
                 result = func(*args, **kwargs)
                 ch.send((True, result))
             except Exception as e:
-                e = ExceptionWithTraceback(e, e.__traceback__)                
+                e = ExceptionWithTraceback(e, e.__traceback__)
                 ch.send((False, e))
             func = args = kwargs = None
 
@@ -260,7 +274,9 @@ class ProcessWorker(object):
 # thread will continue to run until it completes, at which point it
 # will terminate.
 
+
 class WorkerPool(object):
+
     def __init__(self, workercls, nworkers):
         self.nworkers = sync.Semaphore(nworkers)
         self.workercls = workercls
@@ -285,6 +301,7 @@ class WorkerPool(object):
             finally:
                 if self.workers is not None:
                     self.workers.append(worker)
+
 
 # Pool definitions should anyone want to use them directly
 ProcessPool = lambda nworkers: WorkerPool(ProcessWorker, nworkers)

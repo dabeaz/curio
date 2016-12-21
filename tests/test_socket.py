@@ -1,12 +1,13 @@
 # test_socket.py
 
 import os
-
 from curio import *
 from curio.socket import *
 
+
 def test_tcp_echo(kernel):
     results = []
+
     async def server(address):
         sock = socket(AF_INET, SOCK_STREAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
@@ -47,29 +48,31 @@ def test_tcp_echo(kernel):
         await sock.close()
 
     async def main():
-        await spawn(server(('',25000)))
-        await spawn(client(('localhost',25000)))
+        await spawn(server(('', 25000)))
+        await spawn(client(('localhost', 25000)))
 
     kernel.run(main())
 
     assert results == [
-            'accept wait',
-            'client start',
-            'accept done',
-            'handler start',
-            'recv wait',
-            ('handler', b'Msg1'),
-            'recv wait',
-            ('client', b'Msg1'),
-            ('handler', b'Msg2'),
-            'recv wait',
-            ('client', b'Msg2'),
-            'client close',
-            'handler done'
-            ]
+        'accept wait',
+        'client start',
+        'accept done',
+        'handler start',
+        'recv wait',
+        ('handler', b'Msg1'),
+        'recv wait',
+        ('client', b'Msg1'),
+        ('handler', b'Msg2'),
+        'recv wait',
+        ('client', b'Msg2'),
+        'client close',
+        'handler done'
+    ]
+
 
 def test_tcp_file_echo(kernel):
     results = []
+
     async def server(address):
         sock = socket(AF_INET, SOCK_STREAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
@@ -107,26 +110,28 @@ def test_tcp_file_echo(kernel):
         await sock.close()
 
     async def main():
-        await spawn(server(('',25000)))
-        await spawn(client(('localhost',25000)))
+        await spawn(server(('', 25000)))
+        await spawn(client(('localhost', 25000)))
 
     kernel.run(main())
 
     assert results == [
-            'accept wait',
-            'client start',
-            'accept done',
-            'handler start',
-            ('handler', b'Msg1\n'),
-            ('client', b'Msg1\n'),
-            ('handler', b'Msg2\n'),
-            ('client', b'Msg2\n'),
-            'client close',
-            'handler done'
-            ]
+        'accept wait',
+        'client start',
+        'accept done',
+        'handler start',
+        ('handler', b'Msg1\n'),
+        ('client', b'Msg1\n'),
+        ('handler', b'Msg2\n'),
+        ('client', b'Msg2\n'),
+        'client close',
+        'handler done'
+    ]
+
 
 def test_udp_echo(kernel):
     results = []
+
     async def server(address):
         sock = socket(AF_INET, SOCK_DGRAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
@@ -148,25 +153,26 @@ def test_udp_echo(kernel):
         await sock.close()
         results.append('client close')
 
-
     async def main():
-        await spawn(server(('',25000)))
-        await spawn(client(('localhost',25000)))
+        await spawn(server(('', 25000)))
+        await spawn(client(('localhost', 25000)))
 
     kernel.run(main())
 
     assert results == [
-            'recvfrom wait',
-            'client start',
-            'client send',
-            ('server', b'Msg1'),
-            'server close',
-            ('client', b'Msg1'),
-            'client close'
-            ]
+        'recvfrom wait',
+        'client start',
+        'client send',
+        ('server', b'Msg1'),
+        'server close',
+        ('client', b'Msg1'),
+        'client close'
+    ]
+
 
 def test_accept_timeout(kernel):
     results = []
+
     async def server(address):
         sock = socket(AF_INET, SOCK_STREAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
@@ -180,15 +186,17 @@ def test_accept_timeout(kernel):
             results.append('accept timeout')
         await sock.close()
 
-    kernel.run(server(('',25000)))
+    kernel.run(server(('', 25000)))
 
     assert results == [
-            'accept wait',
-            'accept timeout'
-            ]
+        'accept wait',
+        'accept timeout'
+    ]
+
 
 def test_accept_cancel(kernel):
     results = []
+
     async def server(address):
         sock = socket(AF_INET, SOCK_STREAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
@@ -203,18 +211,20 @@ def test_accept_cancel(kernel):
         await sock.close()
 
     async def canceller():
-         task = await spawn(server(('',25000)))
-         await sleep(0.5)
-         await task.cancel()
+        task = await spawn(server(('', 25000)))
+        await sleep(0.5)
+        await task.cancel()
 
     kernel.run(canceller())
     assert results == [
-            'accept wait',
-            'accept cancel'
-            ]
+        'accept wait',
+        'accept cancel'
+    ]
+
 
 def test_recv_timeout(kernel):
     results = []
+
     async def server(address, accepting_event):
         sock = socket(AF_INET, SOCK_STREAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
@@ -234,7 +244,7 @@ def test_recv_timeout(kernel):
 
     async def canceller():
         accepting_event = Event()
-        task = await spawn(server(('',25000), accepting_event))
+        task = await spawn(server(('', 25000), accepting_event))
         await accepting_event.wait()
         sock = socket(AF_INET, SOCK_STREAM)
         results.append('client connect')
@@ -246,15 +256,17 @@ def test_recv_timeout(kernel):
     kernel.run(canceller())
 
     assert results == [
-            'accept wait',
-            'client connect',
-            'recv wait',
-            'recv timeout',
-            'client done'
-            ]
+        'accept wait',
+        'client connect',
+        'recv wait',
+        'recv timeout',
+        'client done'
+    ]
+
 
 def test_recv_cancel(kernel):
     results = []
+
     async def server(address, accepting_event):
         sock = socket(AF_INET, SOCK_STREAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
@@ -274,7 +286,7 @@ def test_recv_cancel(kernel):
 
     async def canceller():
         accepting_event = Event()
-        task = await spawn(server(('',25000), accepting_event))
+        task = await spawn(server(('', 25000), accepting_event))
         await accepting_event.wait()
         sock = socket(AF_INET, SOCK_STREAM)
         results.append('client connect')
@@ -287,15 +299,17 @@ def test_recv_cancel(kernel):
     kernel.run(canceller())
 
     assert results == [
-            'accept wait',
-            'client connect',
-            'recv wait',
-            'recv cancel',
-            'client done'
-            ]
+        'accept wait',
+        'client connect',
+        'recv wait',
+        'recv cancel',
+        'client done'
+    ]
+
 
 def test_recvfrom_timeout(kernel):
     results = []
+
     async def server(address):
         sock = socket(AF_INET, SOCK_DGRAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
@@ -309,20 +323,22 @@ def test_recvfrom_timeout(kernel):
         await sock.close()
 
     async def canceller():
-         await spawn(server(('',25000)))
-         await sleep(1.0)
-         results.append('client done')
+        await spawn(server(('', 25000)))
+        await sleep(1.0)
+        results.append('client done')
 
     kernel.run(canceller())
 
     assert results == [
-            'recvfrom wait',
-            'recvfrom timeout',
-            'client done'
-            ]
+        'recvfrom wait',
+        'recvfrom timeout',
+        'client done'
+    ]
+
 
 def test_recvfrom_cancel(kernel):
     results = []
+
     async def server(address):
         sock = socket(AF_INET, SOCK_DGRAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
@@ -336,22 +352,24 @@ def test_recvfrom_cancel(kernel):
         await sock.close()
 
     async def canceller():
-         task = await spawn(server(('',25000)))
-         await sleep(1.0)
-         await task.cancel()
-         results.append('client done')
+        task = await spawn(server(('', 25000)))
+        await sleep(1.0)
+        await task.cancel()
+        results.append('client done')
 
     kernel.run(canceller())
-    
+
     assert results == [
-            'recvfrom wait',
-            'recvfrom cancel',
-            'client done'
-            ]
+        'recvfrom wait',
+        'recvfrom cancel',
+        'client done'
+    ]
+
 
 def test_buffer_into(kernel):
     from array import array
     results = []
+
     async def sender(s1):
         a = array('i', range(1000000))
         await s1.sendall(a)
@@ -369,7 +387,7 @@ def test_buffer_into(kernel):
 
         results.append(a)
 
-    s1, s2 = socketpair() 
+    s1, s2 = socketpair()
 
     async def main():
         await spawn(sender(s1))
@@ -379,7 +397,8 @@ def test_buffer_into(kernel):
     s1._socket.close()
     s2._socket.close()
 
-    assert all(n==x for n,x in enumerate(results[0]))
+    assert all(n == x for n, x in enumerate(results[0]))
+
 
 def test_read_write_on_same_socket(kernel):
     async def main():

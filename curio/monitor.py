@@ -22,7 +22,8 @@
 # Where host and port configure the network address on which the monitor
 # operates.
 #
-# To connect to the monitor, run python3 -m curio.monitor -H [host] -p [port]. For example:
+# To connect to the monitor, run:
+# python3 -m curio.monitor -H [host] -p [port]
 #
 # Theory of operation:
 # --------------------
@@ -47,7 +48,6 @@
 # Since this loop runs on curio, it can safely make cancellation requests
 # and perform other kernel-related actions.
 
-import sys
 import os
 import traceback
 import linecache
@@ -69,6 +69,7 @@ log = logging.getLogger(__name__)
 MONITOR_HOST = '127.0.0.1'
 MONITOR_PORT = 48802
 
+
 def _get_stack(task):
     '''
     Extracts a list of stack frames from a chain of generator/coroutine calls
@@ -79,8 +80,10 @@ def _get_stack(task):
         f = coro.cr_frame if hasattr(coro, 'cr_frame') else coro.gi_frame
         if f is not None:
             frames.append(f)
-        coro = coro.cr_await if hasattr(coro, 'cr_await') else coro.gi_yieldfrom
+        coro = \
+            coro.cr_await if hasattr(coro, 'cr_await') else coro.gi_yieldfrom
     return frames
+
 
 def _format_stack(task):
     '''
@@ -111,6 +114,7 @@ class Monitor(object):
     Task monitor that runs concurrently to the curio kernel in a
     separate thread. This can watch the kernel and provide debugging.
     '''
+
     def __init__(self, kern, host=MONITOR_HOST, port=MONITOR_PORT):
         self.kernel = kern
         self.address = (host, port)
@@ -120,7 +124,8 @@ class Monitor(object):
 
         # The monitor launches both a separate thread and helper task
         # that runs inside curio itself to manage cancellation events
-        self._ui_thread = threading.Thread(target=self.server, args=(), daemon=True)
+        self._ui_thread = threading.Thread(
+            target=self.server, args=(), daemon=True)
         self._closing = threading.Event()
         self._ui_thread.start()
 
@@ -173,7 +178,8 @@ class Monitor(object):
         '''
         Main interactive loop of the monitor
         '''
-        sout.write('\nCurio Monitor: %d tasks running\n' % len(self.kernel._tasks))
+        sout.write('\nCurio Monitor: %d tasks running\n' %
+                   len(self.kernel._tasks))
         sout.write('Type help for commands\n')
         while not self._closing.is_set():
             sout.write('curio > ')
@@ -216,7 +222,7 @@ class Monitor(object):
 
     def command_help(self, sout):
         sout.write(
-     '''Commands:
+            '''Commands:
          ps               : Show task table
          where taskid     : Show stack frames for a task
          cancel taskid    : Cancel an indicated task
@@ -237,12 +243,14 @@ class Monitor(object):
         for taskid in sorted(self.kernel._tasks):
             task = self.kernel._tasks.get(taskid)
             if task:
-                remaining = format((task.timeout - timestamp), '0.6f')[:7] if task.timeout else 'None'
-                sout.write('%-*d %-*s %-*d %-*s %-*s\n' % (widths[0], taskid,
-                                                           widths[1], task.state,
-                                                           widths[2], task.cycles,
-                                                           widths[3], remaining,
-                                                           widths[4], task))
+                remaining = format((task.timeout - timestamp),
+                                   '0.6f')[:7] if task.timeout else 'None'
+                sout.write('%-*d %-*s %-*d %-*s %-*s\n' % (
+                    widths[0], taskid,
+                    widths[1], task.state,
+                    widths[2], task.cycles,
+                    widths[3], remaining,
+                    widths[4], task))
 
     def command_where(self, sout, taskid):
         task = self.kernel._tasks.get(taskid)
@@ -272,10 +280,11 @@ class Monitor(object):
                 taskid = task.parentid
             else:
                 break
-        
+
     def command_exit(self, sout):
         sout.write('Leaving monitor. Hit Ctrl-C to exit\n')
         sout.flush()
+
 
 def monitor_client(host, port):
     '''
@@ -292,7 +301,8 @@ def monitor_client(host, port):
 
 
 def main():
-    parser = argparse.ArgumentParser("usage: python -m curio.monitor [options]")
+    parser = argparse.ArgumentParser(
+        "usage: python -m curio.monitor [options]")
     parser.add_argument("-H", "--host", dest="monitor_host",
                         default=MONITOR_HOST, type=str,
                         help="monitor host ip")

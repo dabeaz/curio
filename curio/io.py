@@ -25,7 +25,6 @@
 # selector used by the kernel.  For example, can it detect I/O events
 # on the provided file or socket?  If so, it will probably work here.
 
-__all__ = ['Socket', 'FileStream', 'SocketStream']
 
 from socket import SOL_SOCKET, SO_ERROR
 from select import select
@@ -36,9 +35,10 @@ import os
 from .traps import _read_wait, _write_wait
 from . import errors
 
-# Exceptions raised for non-blocking I/O.  For normal sockets, blocking operations
-# normally just raise BlockingIOError.  For SSL sockets, more specific exceptions
-# are raised.  Here we're just making some aliases for the possible exceptions.
+# Exceptions raised for non-blocking I/O.  For normal sockets, blocking
+# operations normally just raise BlockingIOError.  For SSL sockets,
+# more specific exceptions are raised.  Here we're just making some
+# aliases for the possible exceptions.
 
 try:
     from ssl import SSLWantReadError, SSLWantWriteError
@@ -48,7 +48,11 @@ except ImportError:
     WantRead = BlockingIOError
     WantWrite = BlockingIOError
 
-# Wrapper class around an integer file descriptor. This is used 
+
+__all__ = ['Socket', 'FileStream', 'SocketStream']
+
+
+# Wrapper class around an integer file descriptor. This is used
 # to take advantage of an I/O scheduling performance optimization
 # in the kernel.  If a non-integer file object is given, the
 # kernel is able to reuse prior registrations on the event loop.
@@ -56,12 +60,14 @@ except ImportError:
 # integer file descriptor might be reused by the host OS,
 # instances of _Fd will not be reused. Thus, if a file is closed
 # and a new file opened on the same descriptor, it will be
-# detected as a different file.  
+# detected as a different file.
 #
 # See also: https://github.com/dabeaz/curio/issues/104
 
+
 class _Fd(object):
     __slots__ = ('fd',)
+
     def __init__(self, fd):
         self.fd = fd
 
@@ -76,11 +82,13 @@ class _Fd(object):
 # other, the KISSS (Keep it Stupid Simple Stupid) principle might be a
 # better policy--just in case someone needs to debug it.
 
+
 class Socket(object):
     '''
     Non-blocking wrapper around a socket object.   The original socket is put
     into a non-blocking mode when it's wrapped.
     '''
+
     def __init__(self, sock):
         self._socket = sock
         self._socket.setblocking(False)
@@ -108,7 +116,8 @@ class Socket(object):
     def dup(self):
         return type(self)(self._socket.dup())
 
-    def makefile(self, mode, buffering=0, *, encoding=None, errors=None, newline=None):
+    def makefile(self, mode, buffering=0, *, encoding=None, errors=None,
+                 newline=None):
         if 'b' not in mode:
             raise RuntimeError('File can only be created in binary mode')
         f = self._socket.makefile(mode, buffering=buffering)
@@ -148,7 +157,7 @@ class Socket(object):
                 await _read_wait(self._fileno)
             except WantWrite:
                 await _write_wait(self._fileno)
-  
+
     async def send(self, data, flags=0):
         while True:
             try:
@@ -286,7 +295,7 @@ class Socket(object):
     # This is declared as async for the same reason as close()
     async def shutdown(self, how):
         self._socket.shutdown(how)
-        
+
     async def __aenter__(self):
         self._socket.__enter__()
         return self
@@ -301,12 +310,15 @@ class Socket(object):
     def __exit__(self, *args):
         pass
 
+
 MAX_READ = 65536
+
 
 class StreamBase(object):
     '''
     Base class for file-like objects.
     '''
+
     def __init__(self, fileobj):
         self._file = fileobj
         self._fileno = _Fd(fileobj.fileno())
@@ -390,9 +402,9 @@ class StreamBase(object):
     async def flush(self):
         pass
 
-    # Why async close()?   If the underlying file is buffered, the contents need
-    # to be flushed first--a process that might cause a BlockingIOError.  In
-    # that case, we have to suspend briefly until the buffers free up space.
+    # Why async close()?   If the underlying file is buffered, the contents
+    # need to be flushed first--a process that might cause a BlockingIOError.
+    # In that case, we have to suspend briefly until the buffers free up space.
     async def close(self):
         await self.flush()
         if self._file:
@@ -425,13 +437,16 @@ class StreamBase(object):
     def __exit__(self, *args):
         pass
 
+
 class FileStream(StreamBase):
     '''
     Wrapper around a file-like object.  File is put into non-blocking mode.
     The underlying file must be in binary mode.
     '''
+
     def __init__(self, fileobj):
-        assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
+        assert not isinstance(
+            fileobj, io.TextIOBase), 'Only binary mode files allowed'
         super().__init__(fileobj)
         os.set_blocking(int(self._fileno), False)
 
@@ -454,8 +469,9 @@ class FileStream(StreamBase):
 
     async def _read(self, maxbytes=-1):
         while True:
-            # In non-blocking mode, a file-like object might return None if no data is
-            # available.  Alternatively, we'll catch the usual blocking exceptions just to be safe
+            # In non-blocking mode, a file-like object might return None
+            # if no data is available.  Alternatively, we'll catch the
+            # usual blocking exceptions just to be safe
             try:
                 data = self._file_read(maxbytes)
                 if data is None:
@@ -496,10 +512,12 @@ class FileStream(StreamBase):
             except WantRead:
                 await _read_wait(self._fileno)
 
+
 class SocketStream(StreamBase):
     '''
     Stream wrapper for a socket.
     '''
+
     def __init__(self, sock):
         super().__init__(sock)
         sock.setblocking(False)
@@ -524,7 +542,8 @@ class SocketStream(StreamBase):
     async def _read(self, maxbytes=-1):
         while True:
             try:
-                data = self._socket_recv(maxbytes if maxbytes > 0 else MAX_READ)
+                data = self._socket_recv(
+                    maxbytes if maxbytes > 0 else MAX_READ)
                 return data
             except WantRead:
                 await _read_wait(self._fileno)
