@@ -11,7 +11,7 @@ from .traps import (_wait_on_ksync, _reschedule_tasks, _future_wait,
                     _ksync_reschedule_function)
 from .kernel import KSyncQueue, KSyncEvent
 from . import workers
-from .errors import CancelledError, TaskTimeout
+from .errors import CancelledError
 from .task import spawn, current_task
 from .meta import awaitable
 

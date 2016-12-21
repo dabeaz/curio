@@ -1,4 +1,4 @@
-from curio import run, spawn, tcp_server
+from curio import run, tcp_server
 from curio import ssl
 from socket import *
 

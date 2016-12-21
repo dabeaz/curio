@@ -5,7 +5,6 @@
 import curio
 from curio import ssl
 from curio import network
-from curio import socket
 
 
 async def main(host, port):

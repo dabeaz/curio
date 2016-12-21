@@ -14,7 +14,7 @@
 
 import sys
 import os
-import shlex
+
 sys.path.append(os.getcwd())
 
 # If extensions (or modules to document with autodoc) are in another directory,
