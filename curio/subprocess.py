@@ -4,9 +4,6 @@
 # asynchronous compatible versions of Popen(), check_output(),
 # and run() functions.
 
-__all__ = [ 'run', 'Popen', 'CompletedProcess', 'CalledProcessError',
-            'TimeoutExpired', 'SubprocessError', 'check_output',
-            'PIPE', 'STDOUT', 'DEVNULL' ]
 
 import subprocess
 import os
@@ -19,11 +16,17 @@ from subprocess import (
     PIPE,
     STDOUT,
     DEVNULL,
-    )
+)
 
 from .task import spawn, sleep, timeout_after
 from .errors import TaskTimeout
 from .io import FileStream
+
+
+__all__ = ['run', 'Popen', 'CompletedProcess', 'CalledProcessError',
+           'TimeoutExpired', 'SubprocessError', 'check_output',
+           'PIPE', 'STDOUT', 'DEVNULL']
+
 
 class Popen(object):
     '''
@@ -33,6 +36,7 @@ class Popen(object):
     Certain blocking operations (e.g., wait() and communicate()) have been
     replaced by async compatible implementations.
     '''
+
     def __init__(self, args, **kwargs):
         if 'universal_newlines' in kwargs:
             raise RuntimeError('universal_newlines argument not supported')
@@ -42,9 +46,10 @@ class Popen(object):
         if 'stdin' in kwargs:
             stdin = kwargs['stdin']
             if isinstance(stdin, FileStream):
-                # At hell's heart I stab thy coroutine attempting to read from a stream
-                # that's been used as a pipe input to a subprocess.  Must set back to
-                # blocking or all hell breaks loose in the child.  
+                # At hell's heart I stab thy coroutine attempting to read
+                # from a stream that's been used as a pipe input to a
+                # subprocess.  Must set back to blocking or all hell breaks
+                # loose in the child.
                 os.set_blocking(stdin.fileno(), True)
 
         self._popen = subprocess.Popen(args, **kwargs)
@@ -74,8 +79,10 @@ class Popen(object):
             raise TimeoutExpired(self.args, timeout) from None
 
     async def communicate(self, input=b'', timeout=None):
-        stdout_task = await spawn(self.stdout.readall()) if self.stdout else None
-        stderr_task = await spawn(self.stderr.readall()) if self.stderr else None
+        stdout_task = \
+            await spawn(self.stdout.readall()) if self.stdout else None
+        stderr_task = \
+            await spawn(self.stderr.readall()) if self.stderr else None
         try:
             async with timeout_after(timeout):
                 if input:
@@ -111,7 +118,8 @@ class Popen(object):
         # Wait for the process to terminate
         await self.wait()
 
-async def run(args, *, stdin=None, input=None, stdout=None, stderr=None, shell=False, timeout=None, check=False):
+async def run(args, *, stdin=None, input=None, stdout=None, stderr=None,
+              shell=False, timeout=None, check=False):
     '''
     Curio-compatible version of subprocess.run()
     '''
@@ -120,13 +128,15 @@ async def run(args, *, stdin=None, input=None, stdout=None, stderr=None, shell=F
     else:
         stdin = None
 
-    async with Popen(args, stdin=stdin, stdout=stdout, stderr=stderr, shell=shell) as process:
+    async with Popen(args, stdin=stdin, stdout=stdout, stderr=stderr,
+                     shell=shell) as process:
         try:
             stdout, stderr = await process.communicate(input, timeout)
         except TaskTimeout:
             process.kill()
             stdout, stderr = await process.communicate()
-            raise TimeoutExpired(process.args, timeout, output=stdout, stderr=stderr)
+            raise TimeoutExpired(process.args, timeout,
+                                 output=stdout, stderr=stderr)
         except:
             process.kill()
             raise
@@ -137,7 +147,8 @@ async def run(args, *, stdin=None, input=None, stdout=None, stderr=None, shell=F
                                  output=stdout, stderr=stderr)
     return CompletedProcess(process.args, retcode, stdout, stderr)
 
-async def check_output(args, *, stdin=None, stderr=None, shell=False, input=None, timeout=None):
+async def check_output(args, *, stdin=None, stderr=None, shell=False,
+                       input=None, timeout=None):
     '''
     Curio compatible version of subprocess.check_output()
     '''

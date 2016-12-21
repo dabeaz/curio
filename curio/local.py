@@ -2,8 +2,6 @@
 #
 # Task local storage
 
-__all__ = ["Local"]
-
 # Our public API is intentionally almost identical to that of threading.local:
 # the user allocates a curio.Local() object, and then can attach arbitrary
 # attributes to it. Reading one of these attributes later will return the last
@@ -48,14 +46,18 @@ __all__ = ["Local"]
 #  _current_task_local_storage.value[local_obj]["attr"]
 #
 # An unusual feature of this implementation (and our main deviation from
-# threading.Local) is that we implement *task local inheritance*, i.e., when you
-# spawn a new task, then all task local values set in the parent task are (shallowly)
-# copied to the child task. This is a bit experimental, but very handy in
-# cases like when a request handler spawns some small short-lived worker tasks
-# as part of its processing and those want to do logging as well.
+# threading.Local) is that we implement *task local inheritance*, i.e., when
+# you spawn a new task, then all task local values set in the parent task
+# are (shallowly) copied to the child task.
+# This is a bit experimental, but very handy in cases like when a request
+# handler spawns some small short-lived worker tasks as part of its processing
+# and those want to do logging as well.
 
 import threading
 from contextlib import contextmanager
+
+
+__all__ = ["Local"]
 
 # The thread-local storage slot that points to the task-local storage dict for
 # whatever task is currently running.
