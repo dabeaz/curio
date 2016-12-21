@@ -1,6 +1,7 @@
 from curio import run, spawn, tcp_server
 from socket import *
 
+
 async def echo_handler(client, addr):
     print('Connection from', addr)
     try:
@@ -15,6 +16,7 @@ async def echo_handler(client, addr):
         await s.write(data)
     await s.close()
     print('Connection closed')
+
 
 if __name__ == '__main__':
     run(tcp_server('', 25000, echo_handler))
