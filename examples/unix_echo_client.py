@@ -4,6 +4,7 @@
 
 import curio
 
+
 async def main(addr):
     sock = await curio.open_unix_connection(addr)
     for i in range(1000):
@@ -13,6 +14,7 @@ async def main(addr):
         resp = await sock.recv(1000)
         assert msg == resp
     await sock.close()
+
 
 if __name__ == '__main__':
     try:
