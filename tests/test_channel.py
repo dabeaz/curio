@@ -6,6 +6,7 @@ from curio.channel import Channel
 from curio.io import SocketStream
 from curio import spawn, sleep, CancelledError, TaskTimeout, timeout_after
 
+
 @pytest.fixture
 def chs():
     sock1, sock2 = socketpair()
@@ -25,6 +26,7 @@ def chs():
                   Stream(open(fileno2, 'wb', buffering=0, closefd=False)))
     return (ch1, ch2)
 
+
 def test_channel_hello(kernel, chs):
     results = []
 
@@ -38,14 +40,15 @@ def test_channel_hello(kernel, chs):
             msg = await ch.recv()
             results.append(msg)
             await ch.send('client hello world')
-        
+
     async def main(ch1, ch2):
-         await spawn(server(ch1))
-         await spawn(client(ch2))
+        await spawn(server(ch1))
+        await spawn(client(ch2))
 
     kernel.run(main(*chs))
-    assert results == [ 'server hello world',
-                        'client hello world' ]
+    assert results == ['server hello world',
+                       'client hello world']
+
 
 def test_channel_hello_bytes(kernel, chs):
     results = []
@@ -62,12 +65,13 @@ def test_channel_hello_bytes(kernel, chs):
             await ch.send(b'client hello world')
 
     async def main(ch1, ch2):
-         await spawn(server(ch1))
-         await spawn(client(ch2))
+        await spawn(server(ch1))
+        await spawn(client(ch2))
 
     kernel.run(main(*chs))
-    assert results == [ b'server hello world',
-                        b'client hello world' ]
+    assert results == [b'server hello world',
+                       b'client hello world']
+
 
 def test_channel_large(kernel, chs):
     results = []
@@ -85,12 +89,13 @@ def test_channel_large(kernel, chs):
             await ch.send(len(msg))
 
     async def main(ch1, ch2):
-         await spawn(server(ch1))
-         await spawn(client(ch2))
+        await spawn(server(ch1))
+        await spawn(client(ch2))
 
     kernel.run(main(*chs))
-    assert results == [ data,
-                        len(data) ]
+    assert results == [data,
+                       len(data)]
+
 
 def test_channel_auth(kernel, chs):
     results = []
@@ -109,13 +114,14 @@ def test_channel_auth(kernel, chs):
             await ch.send('client hello world')
 
     async def main(ch1, ch2):
-         await spawn(server(ch1))
-         await spawn(client(ch2))
+        await spawn(server(ch1))
+        await spawn(client(ch2))
 
     kernel.run(main(*chs))
 
-    assert results == [ 'server hello world',
-                        'client hello world' ]
+    assert results == ['server hello world',
+                       'client hello world']
+
 
 def test_channel_send_partial_bytes(kernel, chs):
     results = []
@@ -164,26 +170,27 @@ def test_channel_send_partial_bytes(kernel, chs):
             await ch.send(len(msg))
 
     async def main(ch1, ch2):
-         await spawn(server(ch1))
-         await spawn(client(ch2))
+        await spawn(server(ch1))
+        await spawn(client(ch2))
 
     kernel.run(main(*chs))
-    assert results == [ data[5:15], 10,
-                        data[5:], len(data[5:]),
-                        data[:10], 10,
-                        'buffer length < offset',
-                        'buffer length < offset + size',
-                        'offset is negative',
-                        'size is negative',
+    assert results == [data[5:15], 10,
+                       data[5:], len(data[5:]),
+                       data[:10], 10,
+                       'buffer length < offset',
+                       'buffer length < offset + size',
+                       'offset is negative',
+                       'size is negative',
 
-                        ]
+                       ]
+
 
 def test_channel_from_connection(kernel):
     import multiprocessing
     p1, p2 = multiprocessing.Pipe()
     ch1 = Channel.from_Connection(p1)
     ch2 = Channel.from_Connection(p2)
-    
+
     results = []
 
     async def server(ch):
@@ -196,14 +203,14 @@ def test_channel_from_connection(kernel):
             msg = await ch.recv()
             results.append(msg)
             await ch.send('client hello world')
-        
+
     async def main(ch1, ch2):
-         await spawn(server(ch1))
-         await spawn(client(ch2))
+        await spawn(server(ch1))
+        await spawn(client(ch2))
 
     kernel.run(main(ch1, ch2))
-    assert results == [ 'server hello world',
-                        'client hello world' ]
+    assert results == ['server hello world',
+                       'client hello world']
 
 
 def test_channel_recv_cancel(kernel, chs):
@@ -225,7 +232,7 @@ def test_channel_recv_cancel(kernel, chs):
 
     ch1, ch2 = chs
     kernel.run(main(ch2))
-    assert results == [ 'cancel', 'done cancel' ]
+    assert results == ['cancel', 'done cancel']
 
 
 def test_channel_recv_timeout(kernel, chs):
@@ -245,7 +252,8 @@ def test_channel_recv_timeout(kernel, chs):
 
     ch1, ch2 = chs
     kernel.run(main(ch2))
-    assert results == [ 'timeout', 'done' ]
+    assert results == ['timeout', 'done']
+
 
 def test_channel_send_cancel(kernel, chs):
     results = []
@@ -253,7 +261,7 @@ def test_channel_send_cancel(kernel, chs):
     async def client(ch):
         async with ch:
             try:
-                msg = 'x'*10000000   # Should be large enough to cause send blocking
+                msg = 'x' * 10000000   # Should be large enough to cause send blocking
                 await ch.send(msg)
                 results.append('success')
             except CancelledError:
@@ -267,7 +275,7 @@ def test_channel_send_cancel(kernel, chs):
 
     ch1, ch2 = chs
     kernel.run(main(ch2))
-    assert results == [ 'cancel', 'done cancel' ]
+    assert results == ['cancel', 'done cancel']
 
 
 def test_channel_send_timeout(kernel, chs):
@@ -275,7 +283,7 @@ def test_channel_send_timeout(kernel, chs):
 
     async def client(ch):
         try:
-            msg = 'x'*10000000
+            msg = 'x' * 10000000
             await timeout_after(1, ch.send(msg))
             results.append('success')
         except TaskTimeout:
@@ -288,4 +296,4 @@ def test_channel_send_timeout(kernel, chs):
 
     ch1, ch2 = chs
     kernel.run(main(ch2))
-    assert results == [ 'timeout', 'done' ]
+    assert results == ['timeout', 'done']

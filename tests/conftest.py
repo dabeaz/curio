@@ -1,6 +1,7 @@
 import pytest
 from curio import Kernel
 
+
 @pytest.fixture(scope='session')
 def kernel(request):
     k = Kernel()

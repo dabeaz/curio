@@ -2,7 +2,9 @@
 
 import time
 from curio import *
-import signal, os
+import signal
+import os
+
 
 def test_task_signal(kernel):
     results = []
@@ -27,12 +29,13 @@ def test_task_signal(kernel):
 
     kernel.run(main())
     assert results == [
-            'sending USR1',
-            signal.SIGUSR1,
-            'sending USR2',
-            signal.SIGUSR2,
-            'done',
-            ]
+        'sending USR1',
+        signal.SIGUSR1,
+        'sending USR2',
+        signal.SIGUSR2,
+        'done',
+    ]
+
 
 def test_task_signal_waitone(kernel):
     results = []
@@ -57,12 +60,13 @@ def test_task_signal_waitone(kernel):
 
     kernel.run(main())
     assert results == [
-            'sending USR1',
-            signal.SIGUSR1,
-            'sending USR2',
-            signal.SIGUSR2,
-            'done',
-            ]
+        'sending USR1',
+        signal.SIGUSR1,
+        'sending USR2',
+        signal.SIGUSR2,
+        'done',
+    ]
+
 
 def test_task_signal_ignore(kernel):
     results = []
@@ -70,11 +74,11 @@ def test_task_signal_ignore(kernel):
     async def child():
         sig = SignalSet(signal.SIGUSR1, signal.SIGUSR2)
         async with sig:
-             signo = await sig.wait()
-             results.append(signo)
-             with sig.ignore():
-                 await sleep(1)
-             results.append('here')
+            signo = await sig.wait()
+            results.append(signo)
+            with sig.ignore():
+                await sleep(1)
+            results.append('here')
 
     async def main():
         task = await spawn(child())
@@ -90,12 +94,13 @@ def test_task_signal_ignore(kernel):
 
     kernel.run(main())
     assert results == [
-            'sending USR1',
-            signal.SIGUSR1,
-            'sending USR1',
-            'here',
-            'done',
-            ]
+        'sending USR1',
+        signal.SIGUSR1,
+        'sending USR1',
+        'here',
+        'done',
+    ]
+
 
 def test_task_signal_timeout(kernel):
     results = []
@@ -115,6 +120,6 @@ def test_task_signal_timeout(kernel):
 
     kernel.run(main())
     assert results == [
-            'timeout',
-            'done',
-            ]
+        'timeout',
+        'done',
+    ]
