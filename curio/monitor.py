@@ -80,8 +80,8 @@ def _get_stack(task):
         f = coro.cr_frame if hasattr(coro, 'cr_frame') else coro.gi_frame
         if f is not None:
             frames.append(f)
-        coro = coro.cr_await if hasattr(
-            coro, 'cr_await') else coro.gi_yieldfrom
+        coro = \
+            coro.cr_await if hasattr(coro, 'cr_await') else coro.gi_yieldfrom
     return frames
 
 
@@ -245,14 +245,12 @@ class Monitor(object):
             if task:
                 remaining = format((task.timeout - timestamp),
                                    '0.6f')[:7] if task.timeout else 'None'
-                sout.write('%-*d %-*s %-*d %-*s %-*s\n' % (widths[0], taskid,
-                                                           widths[
-                                                               1], task.state,
-                                                           widths[
-                                                               2], task.cycles,
-                                                           widths[
-                                                               3], remaining,
-                                                           widths[4], task))
+                sout.write('%-*d %-*s %-*d %-*s %-*s\n' % (
+                    widths[0], taskid,
+                    widths[1], task.state,
+                    widths[2], task.cycles,
+                    widths[3], remaining,
+                    widths[4], task))
 
     def command_where(self, sout, taskid):
         task = self.kernel._tasks.get(taskid)
