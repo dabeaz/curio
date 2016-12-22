@@ -46,7 +46,8 @@ if _ssl:
             return getattr(self._context, name)
 
         def wrap_socket(self, sock, *args, do_handshake_on_connect=True, **kwargs):
-            sock = self._context.wrap_socket(sock._socket, *args, do_handshake_on_connect=False, **kwargs)
+            sock = self._context.wrap_socket(
+                sock._socket, *args, do_handshake_on_connect=False, **kwargs)
             csock = Socket(sock)
             csock.do_handshake_on_connect = do_handshake_on_connect
             return csock

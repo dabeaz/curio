@@ -322,7 +322,7 @@ def test_task_cancel_join(kernel):
         try:
             await task.join()
         except TaskError as e:
-            if type(e.__cause__) == CancelledError:
+            if isinstance(e.__cause__, CancelledError):
                 results.append('join cancel')
             else:
                 results.append(str(e.__cause__))
@@ -359,7 +359,7 @@ def test_task_cancel_join_wait(kernel):
             results.append('join')
             await task.join()     # Should raise TaskError... with CancelledError as cause
         except TaskError as e:
-            if type(e.__cause__) == CancelledError:
+            if isinstance(e.__cause__, CancelledError):
                 results.append('join cancel')
             else:
                 results.append(str(e.__cause__))

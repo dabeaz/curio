@@ -169,7 +169,8 @@ class Kernel(object):
 
     def __del__(self):
         if self._selector is not None:
-            raise RuntimeError('Curio kernel not properly terminated.  Please use Kernel.run(shutdown=True)')
+            raise RuntimeError(
+                'Curio kernel not properly terminated.  Please use Kernel.run(shutdown=True)')
 
     def __enter__(self):
         return self
@@ -469,7 +470,7 @@ class Kernel(object):
             try:
                 key = selector_getkey(fileobj)
                 mask, (rtask, wtask) = key.events, key.data
-                selector_modify(fileobj,  mask | event,
+                selector_modify(fileobj, mask | event,
                                 (task, wtask) if event == EVENT_READ else (rtask, task))
             except KeyError:
                 selector_register(fileobj, event,
@@ -756,7 +757,7 @@ class Kernel(object):
             # Reschedule tasks with completed I/O
             for key, mask in events:
                 rtask, wtask = key.data
-                intfd = type(key.fileobj) is int
+                intfd = isinstance(key.fileobj, int)
                 if mask & EVENT_READ:
                     # Discussion: If the associated fileobj is
                     # *not* a bare integer file descriptor, we
@@ -809,7 +810,8 @@ class Kernel(object):
                                 _reschedule_task(task, value=current_time)
                         else:
                             if tm == task.timeout:
-                                if _try_cancel_blocked_task(task, exc=TaskTimeout, val=current_time):
+                                if _try_cancel_blocked_task(
+                                        task, exc=TaskTimeout, val=current_time):
                                     task.timeout = None
                                 else:
                                     # Note: There is a possibility that a task will be

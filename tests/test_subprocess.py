@@ -14,7 +14,8 @@ dirname = os.path.dirname(__file__)
 def test_simple(kernel):
     results = []
     async def subproc():
-        #        out = await subprocess.run([executable, '-m', 'curio.test.slow'], stdout=subprocess.PIPE)
+        # out = await subprocess.run([executable, '-m', 'curio.test.slow'],
+        # stdout=subprocess.PIPE)
         out = await subprocess.run([executable, os.path.join(dirname, 'child.py')], stdout=subprocess.PIPE)
         results.append(out.stdout)
         results.append(out.returncode)

@@ -49,7 +49,7 @@ def blocking(func):
     Decorator indicating that a function performs a blocking operation.
     If called from synchronous Python code, the function runs normally.
     However, if called from a coroutine, curio arranges for it to run
-    in a thread.  
+    in a thread.
     '''
     from . import workers
 
@@ -140,7 +140,7 @@ class AsyncABCMeta(ABCMeta):
     '''
     Metaclass that gives all of the features of an abstract base class, but
     additionally enforces coroutine correctness on subclasses. If any method
-    is defined as a coroutine in a parent, it must also be defined as a 
+    is defined as a coroutine in a parent, it must also be defined as a
     coroutine in any child.
     '''
     def __init__(cls, name, bases, methods):
@@ -169,7 +169,7 @@ class AsyncInstanceType(AsyncABCMeta):
             self.x = x
             self.y = y
 
-    async def main(): 
+    async def main():
          s = await Spam(2, 3)
          ...
     '''

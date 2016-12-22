@@ -190,7 +190,7 @@ def _get_current():
 def _set_timeout(clock):
     '''
     Set a timeout for the current task that occurs at the specified clock value.
-    Setting a clock of None clears any previous timeout. 
+    Setting a clock of None clears any previous timeout.
     '''
     return (yield (_trap_set_timeout, clock))
 

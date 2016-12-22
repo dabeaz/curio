@@ -128,7 +128,7 @@ async def sleep(seconds):
 
 async def wake_at(clock):
     '''
-    Sleep until the kernel clock reaches the value of clock. 
+    Sleep until the kernel clock reaches the value of clock.
     Returns the value of the monotonic clock when awakened.
     '''
     return await _sleep(clock, True)
@@ -171,7 +171,7 @@ async def gather(tasks, *, return_exceptions=False):
 
 class wait(object):
     '''
-    Wait for one or more tasks to complete, possibly with cancellation. 
+    Wait for one or more tasks to complete, possibly with cancellation.
     Suppose you have created some tasks:
 
          task1 = await spawn(coro())
@@ -192,7 +192,7 @@ class wait(object):
          async for task in w:
              result = await task.join()
 
-    All unfinished tasks will be cancelled if you use the result of wait() 
+    All unfinished tasks will be cancelled if you use the result of wait()
     as a context manager. For example:
 
          async with wait([task1, task2, task3]) as w:

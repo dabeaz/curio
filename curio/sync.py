@@ -194,7 +194,8 @@ class Semaphore(_LockBase):
     def __repr__(self):
         res = super().__repr__()
         extra = 'locked' if self.locked() else 'unlocked'
-        return '<{} [{},value:{},waiters:{}]>'.format(res[1:-1], extra, self._value, len(self._waiting))
+        return '<{} [{},value:{},waiters:{}]>'.format(
+            res[1:-1], extra, self._value, len(self._waiting))
 
     async def acquire(self):
         if self._value <= 0:

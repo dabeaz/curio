@@ -240,7 +240,9 @@ class Monitor(object):
         for taskid in sorted(self.kernel._tasks):
             task = self.kernel._tasks.get(taskid)
             if task:
-                remaining = format((task.timeout - timestamp), '0.6f')[:7] if task.timeout else 'None'
+                remaining = format(
+                    (task.timeout - timestamp),
+                    '0.6f')[:7] if task.timeout else 'None'
                 sout.write('%-*d %-*s %-*d %-*s %-*s\n' % (widths[0], taskid,
                                                            widths[1], task.state,
                                                            widths[2], task.cycles,

@@ -225,7 +225,8 @@ class ProcessWorker(object):
 
     def _launch(self):
         client_ch, server_ch = multiprocessing.Pipe()
-        self.process = multiprocessing.Process(target=self.run_server, args=(server_ch,), daemon=True)
+        self.process = multiprocessing.Process(
+            target=self.run_server, args=(server_ch, ), daemon=True)
         self.process.start()
         server_ch.close()
         self.client_ch = Channel.from_Connection(client_ch)
