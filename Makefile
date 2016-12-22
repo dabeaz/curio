@@ -8,7 +8,9 @@ INSTALL_OPTS = `$(PYTHON) -c "import sys; print('' if hasattr(sys, 'real_prefix'
 DEPS = pytest \
 	sphinx \
 	flake8 \
-	pep8
+	pep8 \
+	autopep8 \
+	pyflakes
 
 all: test
 
