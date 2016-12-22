@@ -6,6 +6,7 @@
 from twisted.internet import reactor, protocol, ssl
 from twisted.internet.protocol import Factory
 
+
 class Echo(protocol.Protocol):
     """This is just about the simplest possible protocol"""
 
@@ -18,6 +19,7 @@ class Echo(protocol.Protocol):
 
 KEYFILE = "ssl_test_rsa"    # Private key
 CERTFILE = "ssl_test.crt"   # Certificate (self-signed)
+
 
 def main():
     """This runs the protocol on port 25000"""

@@ -2,7 +2,9 @@
 from tornado.ioloop import IOLoop
 from tornado.tcpserver import TCPServer
 
+
 class EchoServer(TCPServer):
+
     def handle_stream(self, stream, address):
         self._stream = stream
         self._stream.read_until_close(None, self.handle_read)

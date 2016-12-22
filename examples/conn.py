@@ -13,7 +13,7 @@ async def main():
             if not chunk:
                 break
             chunks.append(chunk)
-        
+
     response = b''.join(chunks)
     print(response.decode('latin-1'))
 

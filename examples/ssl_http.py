@@ -19,7 +19,7 @@ async def handler(client, addr):
         print(line)
 
     await s.write(
-b'''HTTP/1.0 200 OK\r
+        b'''HTTP/1.0 200 OK\r
 Content-type: text/plain\r
 \r
 If you're seeing this, it probably worked. Yay!

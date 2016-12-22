@@ -45,15 +45,17 @@ from contextlib import contextmanager
 from .workers import run_in_thread
 from .errors import SyncIOError
 
+
 class AsyncFile(object):
     '''
     An async wrapper around a standard file object.  Uses threads to
     execute various I/O operations in a way that avoids blocking
     the Curio kernel loop.
     '''
+
     def __init__(self, fileobj, open_args=None, open_kwargs=None):
         self._fileobj = fileobj
-        self._open_args= open_args
+        self._open_args = open_args
         self._open_kwargs = open_kwargs
 
     def __repr__(self):
@@ -139,9 +141,10 @@ class AsyncFile(object):
         if data is None:
             raise StopAsyncIteration
         return data
-        
+
     def __getattr__(self, name):
         return getattr(self._file, name)
+
 
 def aopen(*args, **kwargs):
     '''
@@ -155,7 +158,7 @@ async def anext(f, sentinel=object):
     '''
     Async version of the builtin next() function that advances an async iterator.
     Sometimes used to skip a single line in files.
-    '''    
+    '''
     try:
         return await f.__anext__()
     except StopAsyncIteration:
@@ -163,4 +166,3 @@ async def anext(f, sentinel=object):
             return sentinel
         else:
             raise
-

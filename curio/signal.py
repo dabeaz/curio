@@ -2,7 +2,7 @@
 #
 # Signal sets and signal related functionality
 
-__all__ = [ 'SignalSet' ]
+__all__ = ['SignalSet']
 
 from contextlib import contextmanager
 from collections import deque
@@ -10,7 +10,9 @@ import signal
 
 from .traps import *
 
+
 class SignalSet(object):
+
     def __init__(self, *signos):
         self.signos = signos          # List of all signal numbers being tracked
         self.pending = deque()        # Pending signals received
@@ -52,7 +54,7 @@ class SignalSet(object):
         Context manager. Temporarily ignores all signals in the signal set.
         '''
         try:
-            orig_signals = [ (signo, signal.signal(signo, signal.SIG_IGN)) for signo in self.signos ]
+            orig_signals = [(signo, signal.signal(signo, signal.SIG_IGN)) for signo in self.signos]
             yield
         finally:
             for signo, handler in orig_signals:

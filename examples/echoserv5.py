@@ -20,7 +20,7 @@ async def echo_client(client, addr):
         await client.sendall(b'Server going down\n')
     finally:
         clients.remove(task)
-    
+
 async def main(host, port):
     while True:
         async with SignalSet(signal.SIGHUP) as sigset:

@@ -13,11 +13,12 @@ async def countdown(n):
 
 start_evt = curio.Event()
 
+
 def fib(n):
     if n <= 2:
         return 1
     else:
-        return fib(n-1) + fib(n-2)
+        return fib(n - 1) + fib(n - 2)
 
 async def kid():
     while True:
@@ -31,7 +32,7 @@ async def kid():
         print('Building the Millenium Falcon in Minecraft')
         total = 0
         for n in range(50):
-             total += await curio.run_in_process(fib, n)
+            total += await curio.run_in_process(fib, n)
     except curio.CancelledError:
         print('Fine. Saving my work. I got to', total)
 

@@ -13,14 +13,14 @@ from .network import *
 from .file import *
 from .local import *
 
-__all__ = [ *errors.__all__,
-            *task.__all__,
-            *signal.__all__,
-            *kernel.__all__,
-            *sync.__all__,
-            *queue.__all__,
-            *workers.__all__,
-            *network.__all__,
-            *file.__all__,
-            *local.__all__,
+__all__ = [*errors.__all__,
+           *task.__all__,
+           *signal.__all__,
+           *kernel.__all__,
+           *sync.__all__,
+           *queue.__all__,
+           *workers.__all__,
+           *network.__all__,
+           *file.__all__,
+           *local.__all__,
            ]

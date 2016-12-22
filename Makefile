@@ -79,4 +79,7 @@ pyflakes:
 		git ls-files | grep \\.py$ | xargs $(PYTHON) -m pyflakes
 
 flake8:
-	@git ls-files | grep \\.py$ | xargs $(PYTHON) -m flake8
+	@git ls-files | grep \\.py$ | xargs $(PYTHON) -m flake8 --max-line-length=100
+
+autopep8:
+	@git ls-files | grep \\.py$ | xargs $(PYTHON) -m autopep8 --in-place --max-line-length=100

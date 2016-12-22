@@ -1,6 +1,6 @@
 # udp_echo
 #
-# An example of a simple UDP echo server. 
+# An example of a simple UDP echo server.
 
 import curio
 from curio import socket

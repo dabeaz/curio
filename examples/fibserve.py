@@ -1,13 +1,14 @@
-# An example of a server involving a CPU-intensive task.  We'll farm the 
+# An example of a server involving a CPU-intensive task.  We'll farm the
 # CPU-intensive work out to a separate process.
 
 from curio import run, run_in_process, tcp_server
+
 
 def fib(n):
     if n <= 2:
         return 1
     else:
-        return fib(n-1) + fib(n-2)
+        return fib(n - 1) + fib(n - 2)
 
 async def fib_handler(client, addr):
     print('Connection from', addr)
@@ -28,7 +29,3 @@ if __name__ == '__main__':
         run(tcp_server('', 25000, fib_handler))
     except KeyboardInterrupt:
         pass
-
-
-
-    

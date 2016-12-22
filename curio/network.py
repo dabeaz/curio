@@ -9,7 +9,7 @@ __all__ = [
     'tcp_server',
     'open_unix_connection',
     'unix_server'
-    ]
+]
 
 from . import socket
 from . import ssl as curiossl
@@ -23,7 +23,7 @@ async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
             if not server_hostname:
                 sslcontext._context.check_hostname = False
                 sslcontext._context.verify_mode = curiossl.CERT_NONE
-            
+
             if alpn_protocols:
                 sslcontext.set_alpn_protocols(alpn_protocols)
         else:
@@ -33,8 +33,7 @@ async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
         if server_hostname:
             extra_args = {'server_hostname': server_hostname}
         else:
-            extra_args = { }
-
+            extra_args = {}
 
         sock = sslcontext.wrap_socket(sock, **extra_args)
         await sock.do_handshake()

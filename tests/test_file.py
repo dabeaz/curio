@@ -6,6 +6,7 @@ from curio import *
 dirname = os.path.dirname(__file__)
 testinput = os.path.join(dirname, 'testdata.txt')
 
+
 def test_read(kernel):
     async def main():
         async with aopen(testinput, 'r') as f:
@@ -14,6 +15,7 @@ def test_read(kernel):
 
     kernel.run(main())
 
+
 def test_read1(kernel):
     async def main():
         async with aopen(testinput, 'rb') as f:
@@ -21,6 +23,7 @@ def test_read1(kernel):
         assert data == b'line 1\nline 2\nline 3\n'
 
     kernel.run(main())
+
 
 def test_readinto(kernel):
     async def main():
@@ -31,6 +34,7 @@ def test_readinto(kernel):
 
     kernel.run(main())
 
+
 def test_readinto1(kernel):
     async def main():
         async with aopen(testinput, 'rb') as f:
@@ -39,6 +43,7 @@ def test_readinto1(kernel):
         assert buf[:n] == b'line 1\nline 2\nline 3\n'
 
     kernel.run(main())
+
 
 def test_readline(kernel):
     async def main():
@@ -54,6 +59,7 @@ def test_readline(kernel):
 
     kernel.run(main())
 
+
 def test_readlines(kernel):
     async def main():
         async with aopen(testinput, 'r') as f:
@@ -62,6 +68,7 @@ def test_readlines(kernel):
         assert lines == ['line 1\n', 'line 2\n', 'line 3\n']
 
     kernel.run(main())
+
 
 def test_readiter(kernel):
     async def main():
@@ -77,6 +84,7 @@ def test_readiter(kernel):
 
 wlines = ['line1\n', 'line2\n', 'line3\n']
 
+
 def test_write(kernel):
     async def main():
         outname = os.path.join(dirname, 'tmp.txt')
@@ -89,6 +97,7 @@ def test_write(kernel):
 
     kernel.run(main())
 
+
 def test_writelines(kernel):
     async def main():
         outname = os.path.join(dirname, 'tmp.txt')
@@ -98,6 +107,7 @@ def test_writelines(kernel):
         assert open(outname).readlines() == wlines
 
     kernel.run(main())
+
 
 def test_seek_tell(kernel):
     async def main():
@@ -111,36 +121,39 @@ def test_seek_tell(kernel):
 
     kernel.run(main())
 
+
 def test_sync_iter(kernel):
     async def main():
         async with aopen(testinput, 'r') as f:
             try:
-               for line in f:
-                   pass
+                for line in f:
+                    pass
 
-               assert False, 'sync-iteration should have failed'
+                assert False, 'sync-iteration should have failed'
             except SyncIOError:
-               assert True
+                assert True
 
     kernel.run(main())
+
 
 def test_sync_with(kernel):
     async def main():
         f = aopen(testinput, 'r')
         try:
-           with f:
-               pass
-           assert False, 'sync-with should have failed'
+            with f:
+                pass
+            assert False, 'sync-with should have failed'
         except SyncIOError:
             assert True
 
     kernel.run(main())
 
+
 def test_blocking(kernel):
     async def main():
         async with aopen(testinput, 'r') as f:
             with f.blocking() as sync_f:
-                 data = sync_f.read()
+                data = sync_f.read()
 
         assert data == 'line 1\nline 2\nline 3\n'
 

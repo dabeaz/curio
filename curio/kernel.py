@@ -22,18 +22,22 @@ from .task import Task
 from .traps import _read_wait, Traps
 from .local import _enable_tasklocal_for, _copy_tasklocal
 
-# Decorators that indicate the trap type.  
+# Decorators that indicate the trap type.
 #
 # A nonblocking trap is one that executes immediately and returns a
 # result back to the caller.  A blocking trap is one that suspends the
 # currently executing task and switches to another.
+
+
 def nonblocking(trap_func):
     trap_func.blocking = False
     return trap_func
 
+
 def blocking(trap_func):
     trap_func.blocking = True
     return trap_func
+
 
 class BlockingTaskWarning(RuntimeWarning):
     pass
@@ -43,7 +47,9 @@ class BlockingTaskWarning(RuntimeWarning):
 # kinds of synchronization and policies that one might implement. This
 # is merely specifying the expected kernel-side API.
 
+
 class KernelSyncBase(ABC):
+
     @abstractmethod
     def __len__(self):
         pass
@@ -68,7 +74,10 @@ class KernelSyncBase(ABC):
 # See the curio/sync.py file.
 
 # Kernel queue with soft-delete on task cancellation
+
+
 class KSyncQueue(KernelSyncBase):
+
     def __init__(self):
         self._queue = deque()
         self._actual_len = 0
@@ -77,9 +86,10 @@ class KSyncQueue(KernelSyncBase):
         return self._actual_len
 
     def add(self, task):
-        item = [ task ]
+        item = [task]
         self._queue.append(item)
         self._actual_len += 1
+
         def remove():
             item[0] = None
             self._actual_len -= 1
@@ -96,10 +106,13 @@ class KSyncQueue(KernelSyncBase):
         return tasks
 
 # Kernel event with delete on cancellation
+
+
 class KSyncEvent(KernelSyncBase):
+
     def __init__(self):
         self._tasks = set()
-    
+
     def __len__(self):
         return len(self._tasks)
 
@@ -108,13 +121,15 @@ class KSyncEvent(KernelSyncBase):
         return lambda: self._tasks.remove(task)
 
     def pop(self, ntasks=1):
-        return [ self._tasks.pop() for _ in range(ntasks) ]
+        return [self._tasks.pop() for _ in range(ntasks)]
 
 # ----------------------------------------------------------------------
 # Underlying kernel that drives everything
 # ----------------------------------------------------------------------
 
+
 class Kernel(object):
+
     def __init__(self, *, selector=None, with_monitor=False, log_errors=True,
                  warn_if_task_blocks_for=None):
         if selector is None:
@@ -122,7 +137,7 @@ class Kernel(object):
 
         self._selector = selector
         self._ready = deque()             # Tasks ready to run
-        self._tasks = { }                 # Task table
+        self._tasks = {}                 # Task table
 
         # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
         self._signal_sets = None
@@ -187,7 +202,7 @@ class Kernel(object):
 
     def _init_signals(self):
         self._signal_sets = defaultdict(list)
-        self._default_signals = { }
+        self._default_signals = {}
         old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())
         assert old_fd < 0, 'Signals already initialized %d' % old_fd
 
@@ -227,7 +242,7 @@ class Kernel(object):
         if self._thread_pool:
             self._thread_pool.shutdown()
             self._thread_pool = None
-        
+
         if self._process_pool:
             self._process_pool.shutdown()
             self._process_pool = None
@@ -270,7 +285,7 @@ class Kernel(object):
         ready_popleft = ready.popleft
         ready_append = ready.append
         time_monotonic = time.monotonic
-        _wake = self._wake     
+        _wake = self._wake
 
         # ---- In-kernel task used for processing signals and futures
 
@@ -416,7 +431,6 @@ class Kernel(object):
                 except Exception as e:
                     log.error('Exception %r ignored in curio shutdown' % e, exc_info=True)
 
-
         # Shut down the kernel. All remaining tasks are run through a cancellation
         # process so that they can cleanup properly.  After that, internal
         # resources are cleaned up.
@@ -506,7 +520,7 @@ class Kernel(object):
                 if current._last_io:
                     _unregister_event(*current._last_io)
                 _register_event(fileobj, event, current)
-            
+
             # This step indicates that we have managed any deferred I/O management
             # for the task.  Otherwise the run() method will perform an unregistration step.
             current._last_io = None
@@ -626,7 +640,7 @@ class Kernel(object):
             return (state, ksync.add(current))
 
         # Sleep for a specified period. Returns value of monotonic clock.
-        # absolute flag indicates whether or not an absolute or relative clock 
+        # absolute flag indicates whether or not an absolute or relative clock
         # interval has been provided
         @blocking
         def _trap_sleep(clock, absolute):
@@ -878,7 +892,7 @@ class Kernel(object):
                     if self._log_errors:
                         log.error('Curio: Task Crash: %s' % current, exc_info=True)
 
-                except: # (SystemExit, KeyboardInterrupt):
+                except:  # (SystemExit, KeyboardInterrupt):
                     _cleanup_task(current)
                     raise
 
@@ -929,7 +943,8 @@ class Kernel(object):
         else:
             return None
 
-def run(coro, *, log_errors=True, with_monitor=False, selector=None, 
+
+def run(coro, *, log_errors=True, with_monitor=False, selector=None,
         warn_if_task_blocks_for=None, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
@@ -944,13 +959,13 @@ def run(coro, *, log_errors=True, with_monitor=False, selector=None,
     use its run() method instead.
     '''
     kernel = Kernel(selector=selector, with_monitor=with_monitor,
-                    log_errors=log_errors, 
+                    log_errors=log_errors,
                     warn_if_task_blocks_for=warn_if_task_blocks_for,
                     **extra)
     with kernel:
         result = kernel.run(coro)
     return result
 
-__all__ = [ 'Kernel', 'run', 'BlockingTaskWarning' ]
+__all__ = ['Kernel', 'run', 'BlockingTaskWarning']
 
 from .monitor import Monitor

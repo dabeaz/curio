@@ -11,17 +11,17 @@ async def echo_server(address):
     print('Server listening at', address)
     async with sock:
         while True:
-             client, addr = await sock.accept()
-             print('Connection from', addr)
-             await spawn(echo_client(client))
+            client, addr = await sock.accept()
+            print('Connection from', addr)
+            await spawn(echo_client(client))
 
 async def echo_client(client):
     async with client:
-         while True:
-             data = await client.recv(10000)
-             if not data:
-                  break
-             await client.sendall(data)
+        while True:
+            data = await client.recv(10000)
+            if not data:
+                break
+            await client.sendall(data)
     print('Connection closed')
 
 if __name__ == '__main__':

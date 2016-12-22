@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     MSGSIZE = args.msize
 
-    msg = b'x'*MSGSIZE
+    msg = b'x' * MSGSIZE
 
     def run_test(n):
         print('Sending', NMESSAGES, 'messages')
@@ -62,6 +62,6 @@ if __name__ == '__main__':
             for _ in range(N):
                 e.submit(run_test, NMESSAGES)
     end = time.time()
-    duration = end-start
-    print(NMESSAGES*N*TIMES,'in', duration)
-    print(NMESSAGES*N*TIMES/duration, 'requests/sec')
+    duration = end - start
+    print(NMESSAGES * N * TIMES, 'in', duration)
+    print(NMESSAGES * N * TIMES / duration, 'requests/sec')

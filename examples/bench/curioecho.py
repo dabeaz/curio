@@ -1,4 +1,4 @@
-# A simple echo server 
+# A simple echo server
 
 from curio import run, tcp_server
 from curio.socket import IPPROTO_TCP, TCP_NODELAY

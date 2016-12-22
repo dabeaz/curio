@@ -27,5 +27,3 @@ if __name__ == '__main__':
         curio.run(network.tcp_server('', 10000, handle, ssl=ssl_context))
     except KeyboardInterrupt:
         pass
-
-

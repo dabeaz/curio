@@ -1,6 +1,8 @@
 from gevent.server import StreamServer
 
 # this handler will be run for each incoming connection in a dedicated greenlet
+
+
 def echo(socket, address):
     print('New connection from %s:%s' % address)
     while True:

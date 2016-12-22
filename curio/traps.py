@@ -7,7 +7,7 @@
 # instead.  Direct use by users is allowed, but if you're working with
 # these traps directly, there is probably a higher level interface
 # that simplifies the problem you're trying to solve (e.g., Socket,
-# File, objects, etc.).    
+# File, objects, etc.).
 # ----------------------------------------------------------------------
 
 __all__ = [
@@ -15,12 +15,13 @@ __all__ = [
     '_cancel_task', '_cancel_allowed_stack_push', '_cancel_allowed_stack_pop',
     '_wait_on_ksync', '_reschedule_tasks', '_ksync_reschedule_function',
     '_sigwatch', '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
-    '_set_timeout', '_unset_timeout', '_clock', 
-    ]
+    '_set_timeout', '_unset_timeout', '_clock',
+]
 
 from types import coroutine
 from selectors import EVENT_READ, EVENT_WRITE
 from enum import IntEnum
+
 
 class Traps(IntEnum):
     _trap_io = 0
@@ -45,12 +46,14 @@ class Traps(IntEnum):
 
 globals().update((trap.name, trap) for trap in Traps)
 
+
 @coroutine
 def _read_wait(fileobj):
     '''
     Wait until reading can be performed.
     '''
     yield (_trap_io, fileobj, EVENT_READ, 'READ_WAIT')
+
 
 @coroutine
 def _write_wait(fileobj):
@@ -59,12 +62,14 @@ def _write_wait(fileobj):
     '''
     yield (_trap_io, fileobj, EVENT_WRITE, 'WRITE_WAIT')
 
+
 @coroutine
 def _future_wait(future, event=None):
     '''
     Wait for the result of a Future to be ready.
     '''
     yield (_trap_future_wait, future, event)
+
 
 @coroutine
 def _sleep(clock, absolute):
@@ -76,12 +81,14 @@ def _sleep(clock, absolute):
     '''
     return (yield (_trap_sleep, clock, absolute))
 
+
 @coroutine
 def _spawn(coro, daemon):
     '''
     Create a new task. Returns the resulting Task object.
     '''
     return (yield _trap_spawn, coro, daemon)
+
 
 @coroutine
 def _cancel_task(task):
@@ -90,12 +97,14 @@ def _cancel_task(task):
     '''
     yield (_trap_cancel_task, task)
 
+
 @coroutine
 def _cancel_allowed_stack_push(state):
     '''
     Set whether cancellation is allowed in this task.
     '''
     yield (_trap_cancel_allowed_stack_push, n)
+
 
 @coroutine
 def _cancel_allowed_stack_pop(state):
@@ -104,12 +113,14 @@ def _cancel_allowed_stack_pop(state):
     '''
     yield (_trap_cancel_allowed_stack_pop, state)
 
+
 @coroutine
 def _cancel_allowed_stack_push(state):
     '''
     Set the current
     '''
     yield (_trap_cancel_allowed_stack_push, state)
+
 
 @coroutine
 def _join_task(task):
@@ -118,12 +129,14 @@ def _join_task(task):
     '''
     yield (_trap_join_task, task)
 
+
 @coroutine
 def _wait_on_ksync(ksync, state):
     '''
     Put the task to sleep on a kernel synchronization primitive.
     '''
     yield (_trap_wait_ksync, ksync, state)
+
 
 @coroutine
 def _reschedule_tasks(ksync, n=1):
@@ -132,12 +145,14 @@ def _reschedule_tasks(ksync, n=1):
     '''
     yield (_trap_ksync_reschedule_tasks, ksync, n)
 
+
 @coroutine
 def _sigwatch(sigset):
     '''
     Start monitoring a signal set
     '''
     yield (_trap_sigwatch, sigset)
+
 
 @coroutine
 def _sigunwatch(sigset):
@@ -146,12 +161,14 @@ def _sigunwatch(sigset):
     '''
     yield (_trap_sigunwatch, sigset)
 
+
 @coroutine
 def _sigwait(sigset):
     '''
     Wait for a signal to arrive.
     '''
     yield (_trap_sigwait, sigset)
+
 
 @coroutine
 def _get_kernel():
@@ -160,12 +177,14 @@ def _get_kernel():
     '''
     return (yield (_trap_get_kernel,))
 
+
 @coroutine
 def _get_current():
     '''
     Get the currently executing task
     '''
     return (yield (_trap_get_current,))
+
 
 @coroutine
 def _set_timeout(clock):
@@ -175,12 +194,14 @@ def _set_timeout(clock):
     '''
     return (yield (_trap_set_timeout, clock))
 
+
 @coroutine
 def _unset_timeout(previous):
     '''
     Restore the previous timeout for the current task.
     '''
     yield (_trap_unset_timeout, previous)
+
 
 @coroutine
 def _ksync_reschedule_function(queue):
@@ -191,6 +212,7 @@ def _ksync_reschedule_function(queue):
     Curio kernel.
     '''
     return (yield (_trap_ksync_reschedule_function, queue))
+
 
 @coroutine
 def _clock():

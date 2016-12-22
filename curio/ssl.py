@@ -38,6 +38,7 @@ if _ssl:
 
     # Small wrapper class to make sure the wrap_socket() method returns the right type
     class CurioSSLContext(object):
+
         def __init__(self, context):
             self._context = context
 
