@@ -28,10 +28,10 @@
 __all__ = ['Socket', 'FileStream', 'SocketStream']
 
 from socket import SOL_SOCKET, SO_ERROR
-from select import select
 from contextlib import contextmanager
 import io
 import os
+import selectors
 
 from .traps import _read_wait, _write_wait
 from . import errors
@@ -48,7 +48,7 @@ except ImportError:
     WantRead = BlockingIOError
     WantWrite = BlockingIOError
 
-# Wrapper class around an integer file descriptor. This is used 
+# Wrapper class around an integer file descriptor. This is used
 # to take advantage of an I/O scheduling performance optimization
 # in the kernel.  If a non-integer file object is given, the
 # kernel is able to reuse prior registrations on the event loop.
@@ -56,7 +56,7 @@ except ImportError:
 # integer file descriptor might be reused by the host OS,
 # instances of _Fd will not be reused. Thus, if a file is closed
 # and a new file opened on the same descriptor, it will be
-# detected as a different file.  
+# detected as a different file.
 #
 # See also: https://github.com/dabeaz/curio/issues/104
 
@@ -85,6 +85,7 @@ class Socket(object):
         self._socket = sock
         self._socket.setblocking(False)
         self._fileno = _Fd(sock.fileno())
+        self._w_selector = None
 
         # Commonly used bound methods
         self._socket_send = sock.send
@@ -148,7 +149,7 @@ class Socket(object):
                 await _read_wait(self._fileno)
             except WantWrite:
                 await _write_wait(self._fileno)
-  
+
     async def send(self, data, flags=0):
         while True:
             try:
@@ -176,7 +177,21 @@ class Socket(object):
             raise
 
     async def writeable(self):
-        if not select([], [self._fileno], [], 0)[1]:
+        '''
+        Awaits until the socket becomes write-able.
+        '''
+        if self._w_selector is None:
+            # poll/select have the advantage of not requiring any extra
+            # file descriptor, contrarily to epoll/kqueue.  Also, they
+            # require a single syscall.  poll() is preferred over select()
+            # as the latter crashes if fd > 1024.
+            if hasattr(selectors, 'PollSelector'):
+                self._w_selector = selectors.PollSelector()
+            else:
+                self._w_selector = selectors.SelectSelector()
+            self._w_selector.register(self._fileno, selectors.EVENT_WRITE)
+
+        if not self._w_selector.select(timeout=0):
             await _write_wait(self._fileno)
 
     async def accept(self):
@@ -280,13 +295,15 @@ class Socket(object):
     async def close(self):
         if self._socket:
             self._socket.close()
+        if self._w_selector is not None:
+            self._w_selector.close()
         self._socket = None
         self._fileno = -1
 
     # This is declared as async for the same reason as close()
     async def shutdown(self, how):
         self._socket.shutdown(how)
-        
+
     async def __aenter__(self):
         self._socket.__enter__()
         return self
