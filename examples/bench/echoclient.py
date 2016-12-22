@@ -28,6 +28,7 @@ def run_test(n):
             nrecv += len(resp)
         n -= 1
 
+
 NMESSAGES = 1000000
 print('Sending', NMESSAGES, 'messages')
 start = time.time()

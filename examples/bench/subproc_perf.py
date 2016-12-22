@@ -11,6 +11,7 @@ COUNT = 1000
 input = (b'aaa ' * 10 + b'\n') * 10000
 cmd = ['cat']
 
+
 async def main(n):
     for x in range(n):
         out = await check_output(cmd, input=input)
@@ -36,9 +37,10 @@ def subprocess_test(n):
 def asyncio_test(n):
     async def main(n):
         for x in range(n):
-            proc = await asyncio.create_subprocess_exec(*cmd,
-                                                        stdin=asyncio.subprocess.PIPE,
-                                                        stdout=asyncio.subprocess.PIPE)
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE)
             stdout, stderr = await proc.communicate(input=input)
             await proc.wait()
         assert stdout == input
@@ -58,9 +60,10 @@ def uvloop_test(n):
 
     async def main(n):
         for x in range(n):
-            proc = await asyncio.create_subprocess_exec(*cmd,
-                                                        stdin=asyncio.subprocess.PIPE,
-                                                        stdout=asyncio.subprocess.PIPE)
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE)
             stdout, stderr = await proc.communicate(input=input)
             await proc.wait()
         assert stdout == input
@@ -71,6 +74,7 @@ def uvloop_test(n):
     loop.run_until_complete(asyncio.ensure_future(main(n)))
     end = time.time()
     print('uvloop:', end - start)
+
 
 if __name__ == '__main__':
     curio_test(COUNT)

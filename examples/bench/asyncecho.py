@@ -3,6 +3,7 @@
 import asyncio
 from socket import *
 
+
 async def echo_server(loop, address):
     sock = socket(AF_INET, SOCK_STREAM)
     sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
@@ -16,6 +17,7 @@ async def echo_server(loop, address):
             print('Connection from', addr)
             loop.create_task(echo_client(loop, client))
 
+
 async def echo_client(loop, client):
     client.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
     with client:
@@ -25,6 +27,7 @@ async def echo_client(loop, client):
                 break
             await loop.sock_sendall(client, data)
     print('Connection closed')
+
 
 if __name__ == '__main__':
     loop = asyncio.new_event_loop()

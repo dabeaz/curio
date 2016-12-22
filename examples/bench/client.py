@@ -31,12 +31,15 @@ def monitor():
         results.append(N)
         N = 0
 
+
 Thread(target=monitor, daemon=True).start()
 
 
 def print_average():
     import statistics
     print('Average', statistics.mean(results), 'requests/sec')
+
+
 atexit.register(print_average)
 
 while True:

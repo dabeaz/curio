@@ -14,8 +14,10 @@ def echo(socket, address):
         socket.sendall(data)
     socket.close()
 
+
 if __name__ == '__main__':
     KEYFILE = "ssl_test_rsa"
     CERTFILE = "ssl_test.crt"
-    server = StreamServer(('0.0.0.0', 25000), echo, keyfile=KEYFILE, certfile=CERTFILE)
+    server = StreamServer(('0.0.0.0', 25000), echo,
+                          keyfile=KEYFILE, certfile=CERTFILE)
     server.serve_forever()

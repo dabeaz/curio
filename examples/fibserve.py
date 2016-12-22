@@ -10,6 +10,7 @@ def fib(n):
     else:
         return fib(n - 1) + fib(n - 2)
 
+
 async def fib_handler(client, addr):
     print('Connection from', addr)
     s = client.as_stream()
@@ -23,6 +24,7 @@ async def fib_handler(client, addr):
             await s.write(b'Bad input\n')
     print('Connection closed')
     await client.close()
+
 
 if __name__ == '__main__':
     try:

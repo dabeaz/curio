@@ -25,5 +25,6 @@ def echo_handler(client, addr):
             client.sendall(data)
     print('Connection closed')
 
+
 if __name__ == '__main__':
     echo_server(('', 25000))

@@ -2,6 +2,7 @@
 
 import asyncio
 
+
 async def echo_client(reader, writer):
     print('Here!')
     addr = writer.get_extra_info('peername')
@@ -13,6 +14,7 @@ async def echo_client(reader, writer):
         writer.write(data)
         await writer.drain()
     print('Connection closed')
+
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()

@@ -6,7 +6,7 @@ from concurrent.futures import ProcessPoolExecutor
 import argparse
 from socket import *
 import time
-import sys
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

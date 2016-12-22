@@ -7,8 +7,11 @@ import curio
 from curio import ssl
 import time
 
+
 KEYFILE = os.path.dirname(__file__) + "/ssl_test_rsa"    # Private key
-CERTFILE = os.path.dirname(__file__) + "/ssl_test.crt"   # Certificate (self-signed)
+# Certificate (self-signed)
+CERTFILE = os.path.dirname(__file__) + "/ssl_test.crt"
+
 
 async def handler(client, addr):
     s = client.as_stream()
@@ -26,6 +29,7 @@ If you're seeing this, it probably worked. Yay!
 ''')
     await s.write(time.asctime().encode('ascii'))
     await client.close()
+
 
 if __name__ == '__main__':
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)

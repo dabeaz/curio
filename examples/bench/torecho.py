@@ -12,6 +12,7 @@ class EchoServer(TCPServer):
     def handle_read(self, data):
         self._stream.write(data)
 
+
 if __name__ == '__main__':
     server = EchoServer()
     server.bind(25000)

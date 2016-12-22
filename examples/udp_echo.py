@@ -5,6 +5,7 @@
 import curio
 from curio import socket
 
+
 async def main(addr):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(addr)
@@ -12,6 +13,7 @@ async def main(addr):
         data, addr = await sock.recvfrom(10000)
         print('Received from', addr, data)
         await sock.sendto(data, addr)
+
 
 if __name__ == '__main__':
     try:

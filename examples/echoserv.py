@@ -3,6 +3,7 @@
 from curio import run, spawn
 from curio.socket import *
 
+
 async def echo_server(address):
     sock = socket(AF_INET, SOCK_STREAM)
     sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
@@ -15,6 +16,7 @@ async def echo_server(address):
             print('Connection from', addr)
             await spawn(echo_client(client))
 
+
 async def echo_client(client):
     async with client:
         while True:
@@ -23,6 +25,7 @@ async def echo_client(client):
                 break
             await client.sendall(data)
     print('Connection closed')
+
 
 if __name__ == '__main__':
     try:

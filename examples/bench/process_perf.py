@@ -21,7 +21,8 @@ def fib(n):
 def curio_test(x):
     async def main():
         for n in range(COUNT):
-            r = await curio.run_in_process(fib, x)
+            await curio.run_in_process(fib, x)
+
     start = time.time()
     curio.run(main())
     end = time.time()
@@ -33,7 +34,7 @@ def mp_test(x):
 
     def main():
         for n in range(COUNT):
-            r = pool.apply(fib, (x,))
+            pool.apply(fib, (x,))
     start = time.time()
     main()
     end = time.time()
@@ -46,7 +47,7 @@ def future_test(x):
     def main():
         for n in range(COUNT):
             f = pool.submit(fib, x)
-            r = f.result()
+            f.result()
     start = time.time()
     main()
     end = time.time()
@@ -55,9 +56,10 @@ def future_test(x):
 
 def asyncio_test(x):
     pool = ProcessPoolExecutor()
+
     async def main(loop):
         for n in range(COUNT):
-            r = await loop.run_in_executor(pool, fib, x)
+            await loop.run_in_executor(pool, fib, x)
 
     loop = asyncio.get_event_loop()
     start = time.time()
@@ -73,9 +75,10 @@ def uvloop_test(x):
         return
 
     pool = ProcessPoolExecutor()
+
     async def main(loop):
         for n in range(COUNT):
-            r = await loop.run_in_executor(pool, fib, x)
+            await loop.run_in_executor(pool, fib, x)
 
     loop = uvloop.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -83,6 +86,7 @@ def uvloop_test(x):
     loop.run_until_complete(asyncio.ensure_future(main(loop)))
     end = time.time()
     print('uvloop:', end - start)
+
 
 if __name__ == '__main__':
     import sys

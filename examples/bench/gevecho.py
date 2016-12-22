@@ -12,6 +12,7 @@ def echo(socket, address):
         socket.sendall(data)
     socket.close()
 
+
 if __name__ == '__main__':
     server = StreamServer(('0.0.0.0', 25000), echo)
     server.serve_forever()
