@@ -353,7 +353,11 @@ class StreamBase(object):
             chunks.append(bytes(self._buffer))
             self._buffer.clear()
         while True:
-            chunk = await self.read(maxread)
+            try:
+                chunk = await self.read(maxread)
+            except errors.CancelledError as e:
+                e.bytes_read = b''.join(chunks)
+                raise
             if not chunk:
                 return b''.join(chunks)
             chunks.append(chunk)
@@ -363,9 +367,15 @@ class StreamBase(object):
     async def read_exactly(self, nbytes):
         chunks = []
         while nbytes > 0:
-            chunk = await self.read(nbytes)
+            try:
+                chunk = await self.read(nbytes)
+            except errors.CancelledError as e:
+                e.bytes_read = b''.join(chunks)
+                raise
             if not chunk:
-                raise EOFError('Unexpected end of data')
+                e = EOFError('Unexpected end of data')
+                e.bytes_read = b''.join(chunks)
+                raise e
             chunks.append(chunk)
             nbytes -= len(chunk)
         return b''.join(chunks)
@@ -386,13 +396,23 @@ class StreamBase(object):
 
     async def readlines(self):
         lines = []
-        async for line in self:
-            lines.append(line)
-        return lines
+        try:
+            async for line in self:
+                lines.append(line)
+            return lines
+        except errors.CancelledError as e:
+            e.lines_read = lines
+            raise
 
     async def writelines(self, lines):
+        nwritten = 0
         for line in lines:
-            await self.write(line)
+            try:
+                await self.write(line)
+                nwritten += len(line)
+            except errors.CancelledError as e:
+                e.bytes_written += nwritten
+                raise
 
     async def flush(self):
         pass
@@ -479,22 +499,28 @@ class FileStream(StreamBase):
     async def write(self, data):
         nwritten = 0
         view = memoryview(data).cast('b')
-        while view:
-            try:
-                nbytes = self._file_write(view)
-                if nbytes is None:
-                    raise BlockingIOError()
-                nwritten += nbytes
-                view = view[nbytes:]
-            except WantWrite as e:
-                if hasattr(e, 'characters_written'):
-                    nwritten += e.characters_written
-                    view = view[e.characters_written:]
-                await _write_wait(self._fileno)
-            except WantRead:
-                await _read_wait(self._fileno)
+        try:
+            while view:
+                try:
+                    nbytes = self._file_write(view)
+                    if nbytes is None:
+                        raise BlockingIOError()
+                    nwritten += nbytes
+                    view = view[nbytes:]
+                except WantWrite as e:
+                    if hasattr(e, 'characters_written'):
+                        nwritten += e.characters_written
+                        view = view[e.characters_written:]
+                    await _write_wait(self._fileno)
+                except WantRead:
+                    await _read_wait(self._fileno)
+            return nwritten
 
-        return nwritten
+        except errors.CancelledError as e:
+            e.bytes_written = nwritten
+            raise
+
+
 
     async def flush(self):
         while True:
@@ -545,13 +571,17 @@ class SocketStream(StreamBase):
     async def write(self, data):
         nwritten = 0
         view = memoryview(data).cast('b')
-        while view:
-            try:
-                nbytes = self._socket_send(view)
-                nwritten += nbytes
-                view = view[nbytes:]
-            except WantWrite:
-                await _write_wait(self._fileno)
-            except WantRead:
-                await _read_wait(self._fileno)
-        return nwritten
+        try:
+            while view:
+                try:
+                    nbytes = self._socket_send(view)
+                    nwritten += nbytes
+                    view = view[nbytes:]
+                except WantWrite:
+                    await _write_wait(self._fileno)
+                except WantRead:
+                    await _read_wait(self._fileno)
+            return nwritten
+        except errors.CancelledError as e:
+            e.bytes_written = nwritten
+            raise

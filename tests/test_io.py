@@ -168,6 +168,42 @@ def test_readall(kernel):
     ]
 
 
+def test_readall_timeout(kernel):
+    results = []
+
+    async def handler(client, addr):
+        results.append('handler start')
+        await client.send(b'OK')
+        s = client.as_stream()
+        try:
+            data = await timeout_after(0.5, s.readall())
+        except TaskTimeout as e:
+            results.append(e.bytes_read)
+        results.append('handler done')
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sock.send(b'Msg1\n')
+        await sleep(1)
+        await sock.send(b'Msg2\n')
+        await sock.close()
+        await serv.cancel()
+
+    async def main():
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
+
+    kernel.run(main())
+
+    assert results == [
+        'handler start',
+        b'Msg1\n',
+        'handler done'
+    ]
+
+
 def test_read_exactly(kernel):
     results = []
 
@@ -200,6 +236,44 @@ def test_read_exactly(kernel):
         b'Msg3\n',
         'handler done'
     ]
+
+
+def test_read_exactly_timeout(kernel):
+    results = []
+
+    async def handler(client, addr):
+        results.append('handler start')
+        await client.send(b'OK')
+        s = client.as_stream()
+        try:
+            data = await timeout_after(0.5, s.read_exactly(10))
+            results.append(data)
+        except TaskTimeout as e:
+            results.append(e.bytes_read)
+        results.append('handler done')
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sock.send(b'Msg1\n')
+        await sleep(1)
+        await sock.send(b'Msg2\n')
+        await sock.close()
+        await serv.cancel()
+
+    async def main():
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
+
+    kernel.run(main())
+
+    assert results == [
+        'handler start',
+        b'Msg1\n',
+        'handler done'
+    ]
+
 
 
 def test_readline(kernel):
@@ -269,6 +343,43 @@ def test_readlines(kernel):
     ]
 
 
+def test_readlines_timeout(kernel):
+    results = []
+
+    async def handler(client, addr):
+        await client.send(b'OK')
+        results.append('handler start')
+        s = client.as_stream()
+        try:
+            await timeout_after(0.5, s.readlines())
+        except TaskTimeout as e:
+            results.extend(e.lines_read)
+        results.append('handler done')
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sock.send(b'Msg1\nMsg2\n')
+        await sleep(1)
+        await sock.send(b'Msg3\n')
+        await sock.close()
+        await serv.cancel()
+
+    async def main():
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
+
+    kernel.run(main())
+
+    assert results == [
+        'handler start',
+        b'Msg1\n',
+        b'Msg2\n',
+        'handler done'
+    ]
+
+
 def test_writelines(kernel):
     results = []
 
@@ -300,6 +411,70 @@ def test_writelines(kernel):
         'handler done'
     ]
 
+
+def test_writelines_timeout(kernel):
+    results = []
+    async def handler(client, addr):
+        await client.send(b'OK')
+        s = client.as_stream()
+        await sleep(1)
+        results.append(await s.readall())
+
+    def line_generator():
+        n = 0
+        while True:
+            yield b'Msg%d\n' % n
+            n += 1
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        s = sock.as_stream()
+        try:
+            await timeout_after(0.5, s.writelines(line_generator()))
+        except TaskTimeout as e:
+            results.append(e.bytes_written)
+        await sock.close()
+        await serv.cancel()
+
+    async def main():
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
+
+    kernel.run(main())
+
+    assert results[0] == len(results[1])
+
+
+def test_write_timeout(kernel):
+    results = []
+    async def handler(client, addr):
+        await client.send(b'OK')
+        s = client.as_stream()
+        await sleep(1)
+        results.append(await s.readall())
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        s = sock.as_stream()
+        try:
+            msg = b'x'*10000000  # Must be big enough to fill buffers
+            await timeout_after(0.5, s.write(msg))
+        except TaskTimeout as e:
+            results.append(e.bytes_written)
+        await sock.close()
+        await serv.cancel()
+
+    async def main():
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
+
+    kernel.run(main())
+
+    assert results[0] == len(results[1])
 
 def test_iterline(kernel):
     results = []
@@ -333,3 +508,4 @@ def test_iterline(kernel):
         b'Msg3\n',
         'handler done'
     ]
+

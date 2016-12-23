@@ -1,5 +1,43 @@
 CHANGES
 -------
+12/23/2016 Added further information to cancellation/timeout exceptions
+           where partial I/O may have been performed. For readall() and
+           read_exactly() methods, the bytes_read attribute contains
+           all data read so far.  The readlines() method attaches a 
+           lines_read attribute.  For write() and writelines(), a bytes_written
+           attribute is added to the exception.   For example:
+
+               try:
+                  data = timeout_after(5, s.readall())
+               except TimeoutError as e:
+                  data = e.bytes_read     # Data received prior to timeout
+
+           Here is a sending example:
+
+               try:
+                   timeout_after(5, s.write(data))
+               except TimeoutError as e:
+                   nwritten = e.bytes_written
+
+           The primary purpose of these attributes is to allow more
+           robust recovery in the event of cancellation. 
+
+12/23/2016 The timeout arguments to subprocess related functions have been
+           removed.  Use the curio timeout_after() function instead to deal
+           with this case.  For example:
+
+               try:
+                   out = timeout_after(5, subprocess.check_output(args))
+               except TaskTimeout as e:
+                   # Get the partially read output
+                   partial_stdout = e.stdout_read
+                   partial_stderr = e.stderr_read
+                   ... other recovery ...
+
+           If there is an exception, the stdout_read and stderr_read
+           attributes contain any partially read data on standard output
+           and standard error.
+
 12/03/2016 Added a parentid attribute to Task instances so you can find parent
 	   tasks.   Nothing else is done with this internally.
 

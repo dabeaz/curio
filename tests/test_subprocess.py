@@ -70,12 +70,13 @@ def test_timeout(kernel):
     results = []
     async def subproc():
         try:
-            # out = await subprocess.run([executable, '-m', 'curio.test.slow'],
-            # stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
-            out = await subprocess.run([executable, os.path.join(dirname, 'child.py')], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
-            results.append('what?')
-        except subprocess.TimeoutExpired:
+            async with timeout_after(0.5):
+                out = await subprocess.run([executable, os.path.join(dirname, 'child.py')], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                results.append('what?')
+        except TaskTimeout as e:
             results.append('timeout')
+            results.append(e.stdout_read)
+            results.append(e.stderr_read)
 
     kernel.run(subproc())
-    assert results == ['timeout']
+    assert results == ['timeout', b't-minus 4\n', b'']
