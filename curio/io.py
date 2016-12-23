@@ -31,7 +31,6 @@ from socket import SOL_SOCKET, SO_ERROR
 from contextlib import contextmanager
 import io
 import os
-import selectors
 
 from .traps import _read_wait, _write_wait
 from . import errors
