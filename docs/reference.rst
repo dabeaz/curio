@@ -37,7 +37,7 @@ All coroutines in curio are executed by an underlying kernel.  Normally, you wou
 run a top-level coroutine using the following function:
 
 .. function:: run(coro, *, log_errors=True, selector=None,
-              with_monitor=False, 
+              with_monitor=False,
               warn_if_task_blocks_for=None, **other_kernel_args)
 
    Run the coroutine *coro* to completion and return its final return
@@ -205,13 +205,13 @@ functions can be used for this purpose:
    function serves as an asynchronous context manager that applies a
    timeout to a block of statements.
 
-   :func:`timeout_after` may be composed with other :func:`timeout_after` 
+   :func:`timeout_after` may be composed with other :func:`timeout_after`
    operations (i.e., nested timeouts).   If an outer timeout expires
    first, then ``curio.TimeoutCancellationError`` is raised
    instead of :py:exc:`curio.TaskTimeout`.  If an inner timeout
    expires and fails to properly catch :py:exc:`curio.TaskTimeout`,
    a ``curio.UncaughtTimeoutError`` is raised in the outer
-   timeout.  
+   timeout.
 
 .. asyncfunction:: ignore_after(seconds, coro=None, *, timeout_result=None)
 
@@ -417,6 +417,10 @@ exception.
 .. asyncmethod:: Socket.connect_ex(address)
 
    Make a connection and return an error code instead of raising an exception.
+
+.. asyncmethod:: Socket.writeable()
+
+   Waits until the socket is writeable.
 
 .. asyncmethod:: Socket.close()
 
@@ -745,7 +749,7 @@ file wrapper module
 .. module:: curio.file
 
 One problem concerning coroutines and async concerns access to files on the
-normal file system.  Yes, you can use the built-in ``open()`` function, but 
+normal file system.  Yes, you can use the built-in ``open()`` function, but
 what happens afterwards is hard to predict.  Under the covers, the operating
 system might have to access a disk drive or perform networking of its own.
 Either way, the operation might take a long time to complete and while it does,
@@ -757,19 +761,19 @@ replacement for the built-in ``open()`` function and associated file
 objects, should you want to read and write traditional files on the
 filesystem.  The underlying implementation avoids blocking.  How this
 is accomplished is an implementation detail (although threads are used
-in the initial version). 
+in the initial version).
 
 .. function:: aopen(*args, **kwargs)
 
    Creates a :class:`curio.file.AsyncFile` wrapper around a traditional file object as
    returned by Python's builtin ``open()`` function.   The arguments are exactly the
    same as for ``open()``.  The returned file object must be used as an asynchronous
-   context manager.  
+   context manager.
 
 .. class:: AsyncFile(fileobj)
 
-   This class represents an asynchronous file as returned by the ``aopen()`` 
-   function.  Normally, instances are created by the ``aopen()`` function. 
+   This class represents an asynchronous file as returned by the ``aopen()``
+   function.  Normally, instances are created by the ``aopen()`` function.
    However, it can be wrapped around an already-existing file object that
    was opened using the built-in ``open()`` function.
 
@@ -777,7 +781,7 @@ The following methods are redefined on :class:`AsyncFile` objects to be
 compatible with coroutines.  Any method not listed here will be
 delegated directly to the underlying file.  These methods take the same arguments
 as the underlying file object.  Be aware that not all of these methods are
-available on all kinds of files (e.g., ``read1()``, ``readinto()`` and similar 
+available on all kinds of files (e.g., ``read1()``, ``readinto()`` and similar
 methods are only available in binary-mode files).
 
 .. asyncmethod:: AsyncFile.read(*args, **kwargs)
@@ -923,7 +927,7 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
 
 .. asyncmethod:: Lock.acquire()
 
-   Acquire the lock, incrementing the recursion by 1. Can be used multiple times withing 
+   Acquire the lock, incrementing the recursion by 1. Can be used multiple times withing
    the same task, that owns this lock.
 
 .. asyncmethod:: Lock.release()
@@ -1121,7 +1125,7 @@ Here is an example of using queues in a producer-consumer problem::
 
   Creates a **priority** queue with a maximum number of elements in *maxsize*.
 
-In a :class:`PriorityQueue` items are retrieved in priority order with the 
+In a :class:`PriorityQueue` items are retrieved in priority order with the
 lowest priority first::
 
     import curio

@@ -28,7 +28,6 @@
 __all__ = ['Socket', 'FileStream', 'SocketStream']
 
 from socket import SOL_SOCKET, SO_ERROR
-from select import select
 from contextlib import contextmanager
 import io
 import os
@@ -180,8 +179,10 @@ class Socket(object):
             raise
 
     async def writeable(self):
-        if not select([], [self._fileno], [], 0)[1]:
-            await _write_wait(self._fileno)
+        '''
+        Waits until the socket is writeable.
+        '''
+        await _write_wait(self._fileno)
 
     async def accept(self):
         while True:
