@@ -89,7 +89,6 @@ class Socket(object):
         self._socket = sock
         self._socket.setblocking(False)
         self._fileno = _Fd(sock.fileno())
-        self._w_selector = None
 
         # Commonly used bound methods
         self._socket_send = sock.send
@@ -287,8 +286,6 @@ class Socket(object):
     async def close(self):
         if self._socket:
             self._socket.close()
-        if self._w_selector is not None:
-            self._w_selector.close()
         self._socket = None
         self._fileno = -1
 
