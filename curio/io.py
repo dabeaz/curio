@@ -182,21 +182,9 @@ class Socket(object):
 
     async def writeable(self):
         '''
-        Awaits until the socket becomes write-able.
+        Waits until the socket is writeable.
         '''
-        if self._w_selector is None:
-            # poll/select have the advantage of not requiring any extra
-            # file descriptor, contrarily to epoll/kqueue.  Also, they
-            # require a single syscall.  poll() is preferred over select()
-            # as the latter crashes if fd > 1024.
-            if hasattr(selectors, 'PollSelector'):
-                self._w_selector = selectors.PollSelector()
-            else:
-                self._w_selector = selectors.SelectSelector()
-            self._w_selector.register(self._fileno, selectors.EVENT_WRITE)
-
-        if not self._w_selector.select(timeout=0):
-            await _write_wait(self._fileno)
+        await _write_wait(self._fileno)
 
     async def accept(self):
         while True:

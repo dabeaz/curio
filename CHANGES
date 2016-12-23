@@ -1,10 +1,5 @@
 CHANGES
 -------
-
-22/12/2016 Socket.writable() may crash if passed a fd > 1024. poll() is now
-           used instead of select() in order to prevent this.  (patch by
-           Giampaolo Rodola)
-
 12/03/2016 Added a parentid attribute to Task instances so you can find parent
 	   tasks.   Nothing else is done with this internally.
 
