@@ -5,6 +5,8 @@ from curio import *
 
 # Like run, but unwraps exceptions so pytest can see them properly.
 # Lets us use assert from inside async functions.
+
+
 def run_with_real_exceptions(*args, **kwargs):
     try:
         return run(*args, **kwargs)
@@ -41,6 +43,7 @@ def test_smoketest():
 
     run_with_real_exceptions(smoketest())
 
+
 def test_isolation():
     local = Local()
 
@@ -67,6 +70,7 @@ def test_isolation():
             await task.join()
 
     run_with_real_exceptions(check_isolated())
+
 
 def test_inheritance():
     local = Local()
@@ -95,6 +99,7 @@ def test_inheritance():
         assert local.a == "child"
 
     run_with_real_exceptions(parent())
+
 
 def test_nested_curio():
     # You should never do this. But that doesn't mean it should crash.

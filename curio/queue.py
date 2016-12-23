@@ -128,10 +128,12 @@ class LifoQueue(Queue):
     def _get(self):
         return self._queue.pop()
 
+
 class EpicQueue(object):
     '''
     The name says it all.
     '''
+
     def __init__(self, queue=None, maxsize=0):
         self._tqueue = queue if queue else thread_queue.Queue(maxsize=maxsize)
         self._getting_queue = Queue(maxsize=1)
@@ -149,7 +151,7 @@ class EpicQueue(object):
     async def shutdown(self):
         if self._get_task:
             await self._get_task.cancel()
-            
+
         if self._put_task:
             await self._put_task.cancel()
 
@@ -209,7 +211,7 @@ class EpicQueue(object):
 
     @awaitable(_sync_task_done)
     async def task_done(self):
-         await sync.abide(self._sync_task_done)
+        await sync.abide(self._sync_task_done)
 
     async def _join_worker(self):
         w = workers.ThreadWorker()
@@ -238,4 +240,4 @@ class EpicQueue(object):
             await self._joining.wait()
 
     # Footnote: all of the code in this class is experimental.
-    # It's probably an epically bad idea.  YOLO. 
+    # It's probably an epically bad idea.  YOLO.

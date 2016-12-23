@@ -3,6 +3,7 @@
 from curio import *
 from curio.socket import *
 
+
 def test_tcp_echo(kernel):
     results = []
 
@@ -34,21 +35,21 @@ def test_tcp_echo(kernel):
         await serv.cancel()
 
     async def main():
-       serv = await spawn(tcp_server('',25000,handler))
-       await spawn(client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(client(('localhost', 25000), serv))
 
     kernel.run(main())
 
     assert results == [
-            'client start',
-            'handler start',
-            'recv wait',
-            ('handler', b'Msg1'),
-            'recv wait',
-            ('client', b'Msg1'),
-            ('handler', b'Msg2'),
-            'recv wait',
-            ('client', b'Msg2'),
-            'client close',
-            'handler done'
-            ]
+        'client start',
+        'handler start',
+        'recv wait',
+        ('handler', b'Msg1'),
+        'recv wait',
+        ('client', b'Msg1'),
+        ('handler', b'Msg2'),
+        'recv wait',
+        ('client', b'Msg2'),
+        'client close',
+        'handler done'
+    ]

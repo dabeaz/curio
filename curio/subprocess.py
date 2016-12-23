@@ -4,9 +4,9 @@
 # asynchronous compatible versions of Popen(), check_output(),
 # and run() functions.
 
-__all__ = [ 'run', 'Popen', 'CompletedProcess', 'CalledProcessError',
-            'TimeoutExpired', 'SubprocessError', 'check_output',
-            'PIPE', 'STDOUT', 'DEVNULL' ]
+__all__ = ['run', 'Popen', 'CompletedProcess', 'CalledProcessError',
+           'TimeoutExpired', 'SubprocessError', 'check_output',
+           'PIPE', 'STDOUT', 'DEVNULL']
 
 import subprocess
 import os
@@ -19,11 +19,12 @@ from subprocess import (
     PIPE,
     STDOUT,
     DEVNULL,
-    )
+)
 
 from .task import spawn, sleep, timeout_after
 from .errors import TaskTimeout
 from .io import FileStream
+
 
 class Popen(object):
     '''
@@ -33,6 +34,7 @@ class Popen(object):
     Certain blocking operations (e.g., wait() and communicate()) have been
     replaced by async compatible implementations.
     '''
+
     def __init__(self, args, **kwargs):
         if 'universal_newlines' in kwargs:
             raise RuntimeError('universal_newlines argument not supported')
@@ -44,7 +46,7 @@ class Popen(object):
             if isinstance(stdin, FileStream):
                 # At hell's heart I stab thy coroutine attempting to read from a stream
                 # that's been used as a pipe input to a subprocess.  Must set back to
-                # blocking or all hell breaks loose in the child.  
+                # blocking or all hell breaks loose in the child.
                 os.set_blocking(stdin.fileno(), True)
 
         self._popen = subprocess.Popen(args, **kwargs)

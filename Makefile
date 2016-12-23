@@ -8,7 +8,9 @@ INSTALL_OPTS = `$(PYTHON) -c "import sys; print('' if hasattr(sys, 'real_prefix'
 DEPS = pytest \
 	sphinx \
 	flake8 \
-	pep8
+	pep8 \
+	autopep8 \
+	pyflakes
 
 all: test
 
@@ -79,4 +81,7 @@ pyflakes:
 		git ls-files | grep \\.py$ | xargs $(PYTHON) -m pyflakes
 
 flake8:
-	@git ls-files | grep \\.py$ | xargs $(PYTHON) -m flake8
+	@git ls-files | grep \\.py$ | xargs $(PYTHON) -m flake8 --max-line-length=100
+
+autopep8:
+	@git ls-files | grep \\.py$ | xargs $(PYTHON) -m autopep8 --in-place --aggressive --max-line-length=100

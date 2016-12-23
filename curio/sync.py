@@ -4,7 +4,7 @@
 # events, locks, semaphores, and condition variables. These primitives
 # are only safe to use in the curio framework--they are not thread safe.
 
-__all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide' ]
+__all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide']
 
 import threading
 from inspect import iscoroutinefunction
@@ -55,6 +55,7 @@ class Event(object):
         self._set = True
         await _reschedule_tasks(self._waiting, len(self._waiting))
 
+
 class SyncEvent(Event):
     '''
     An Event object that can only be awaited in asynchronous code, set
@@ -76,7 +77,8 @@ class SyncEvent(Event):
         self._set = True
         if self._reschedule_func:
             self._reschedule_func(len(self._waiting))
-        
+
+
 class _LockBase(object):
 
     async def __aenter__(self):
@@ -91,6 +93,7 @@ class _LockBase(object):
 
     def __exit__(self, *args):
         pass
+
 
 class Lock(_LockBase):
 
@@ -191,7 +194,8 @@ class Semaphore(_LockBase):
     def __repr__(self):
         res = super().__repr__()
         extra = 'locked' if self.locked() else 'unlocked'
-        return '<{} [{},value:{},waiters:{}]>'.format(res[1:-1], extra, self._value, len(self._waiting))
+        return '<{} [{},value:{},waiters:{}]>'.format(
+            res[1:-1], extra, self._value, len(self._waiting))
 
     async def acquire(self):
         if self._value <= 0:
@@ -209,6 +213,7 @@ class Semaphore(_LockBase):
     def locked(self):
         return self._value == 0
 
+
 class BoundedSemaphore(Semaphore):
 
     __slots__ = ('_bound_value',)
@@ -221,6 +226,7 @@ class BoundedSemaphore(Semaphore):
         if self._value >= self._bound_value:
             raise ValueError('BoundedSemaphore released too many times')
         await super().release()
+
 
 class Condition(_LockBase):
 
@@ -272,6 +278,8 @@ class Condition(_LockBase):
         await self.notify(len(self._waiting))
 
 # Class that adapts a synchronous context-manager to an asynchronous manager
+
+
 class _contextadapt(object):
 
     def __init__(self, manager):
@@ -313,6 +321,7 @@ class _contextadapt(object):
         self.finish_args = args
         await _future_wait(self.exit_future, self.finish_evt)
         return self.exit_future.result()
+
 
 def abide(op, *args, **kwargs):
     '''

@@ -7,8 +7,11 @@ import curio
 from curio import ssl
 from curio import network
 
+
 KEYFILE = os.path.dirname(__file__) + "/ssl_test_rsa"    # Private key
-CERTFILE = os.path.dirname(__file__) + "/ssl_test.crt"   # Certificate (self-signed)
+# Certificate (self-signed)
+CERTFILE = os.path.dirname(__file__) + "/ssl_test.crt"
+
 
 async def handle(client, addr):
     print('Connection from', addr)
@@ -20,6 +23,7 @@ async def handle(client, addr):
             await client.send(data)
     print('Connection closed')
 
+
 if __name__ == '__main__':
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
@@ -27,5 +31,3 @@ if __name__ == '__main__':
         curio.run(network.tcp_server('', 10000, handle, ssl=ssl_context))
     except KeyboardInterrupt:
         pass
-
-

@@ -1,9 +1,11 @@
-from curio import run, spawn, tcp_server
+from curio import run, tcp_server
 from curio import ssl
 from socket import *
 
+
 KEYFILE = "ssl_test_rsa"    # Private key
 CERTFILE = "ssl_test.crt"   # Certificate (self-signed)
+
 
 async def echo_handler(client, addr):
     print('Connection from', addr)
@@ -19,6 +21,7 @@ async def echo_handler(client, addr):
         await s.write(data)
     await s.close()
     print('Connection closed')
+
 
 if __name__ == '__main__':
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)

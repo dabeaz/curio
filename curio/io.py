@@ -48,7 +48,7 @@ except ImportError:
     WantRead = BlockingIOError
     WantWrite = BlockingIOError
 
-# Wrapper class around an integer file descriptor. This is used 
+# Wrapper class around an integer file descriptor. This is used
 # to take advantage of an I/O scheduling performance optimization
 # in the kernel.  If a non-integer file object is given, the
 # kernel is able to reuse prior registrations on the event loop.
@@ -56,12 +56,14 @@ except ImportError:
 # integer file descriptor might be reused by the host OS,
 # instances of _Fd will not be reused. Thus, if a file is closed
 # and a new file opened on the same descriptor, it will be
-# detected as a different file.  
+# detected as a different file.
 #
 # See also: https://github.com/dabeaz/curio/issues/104
 
+
 class _Fd(object):
     __slots__ = ('fd',)
+
     def __init__(self, fd):
         self.fd = fd
 
@@ -76,11 +78,13 @@ class _Fd(object):
 # other, the KISSS (Keep it Stupid Simple Stupid) principle might be a
 # better policy--just in case someone needs to debug it.
 
+
 class Socket(object):
     '''
     Non-blocking wrapper around a socket object.   The original socket is put
     into a non-blocking mode when it's wrapped.
     '''
+
     def __init__(self, sock):
         self._socket = sock
         self._socket.setblocking(False)
@@ -148,7 +152,7 @@ class Socket(object):
                 await _read_wait(self._fileno)
             except WantWrite:
                 await _write_wait(self._fileno)
-  
+
     async def send(self, data, flags=0):
         while True:
             try:
@@ -286,7 +290,7 @@ class Socket(object):
     # This is declared as async for the same reason as close()
     async def shutdown(self, how):
         self._socket.shutdown(how)
-        
+
     async def __aenter__(self):
         self._socket.__enter__()
         return self
@@ -303,10 +307,12 @@ class Socket(object):
 
 MAX_READ = 65536
 
+
 class StreamBase(object):
     '''
     Base class for file-like objects.
     '''
+
     def __init__(self, fileobj):
         self._file = fileobj
         self._fileno = _Fd(fileobj.fileno())
@@ -425,11 +431,13 @@ class StreamBase(object):
     def __exit__(self, *args):
         pass
 
+
 class FileStream(StreamBase):
     '''
     Wrapper around a file-like object.  File is put into non-blocking mode.
     The underlying file must be in binary mode.
     '''
+
     def __init__(self, fileobj):
         assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
         super().__init__(fileobj)
@@ -496,10 +504,12 @@ class FileStream(StreamBase):
             except WantRead:
                 await _read_wait(self._fileno)
 
+
 class SocketStream(StreamBase):
     '''
     Stream wrapper for a socket.
     '''
+
     def __init__(self, sock):
         super().__init__(sock)
         sock.setblocking(False)
