@@ -24,11 +24,14 @@ CHALLENGE = mpc.CHALLENGE                   # b'#CHALLENGE#'
 WELCOME = mpc.WELCOME                       # b'#WELCOME#'
 FAILURE = mpc.FAILURE                       # b'#FAILURE#'
 
+
 class ChannelError(CurioError):
     pass
 
+
 class AuthenticationError(ChannelError):
     pass
+
 
 class Channel(object):
     '''
@@ -36,6 +39,7 @@ class Channel(object):
     or pickled Python objects.  Must be passed a pair of reader/writer
     streams for performing the underlying communication.
     '''
+
     def __init__(self, reader, writer):
         assert isinstance(reader, StreamBase) and isinstance(writer, StreamBase)
         self._reader = reader
@@ -160,7 +164,9 @@ class Channel(object):
         await self._answer_challenge(authkey)
         await self._deliver_challenge(authkey)
 
+
 class Listener(object):
+
     def __init__(self, address, family=socket.AF_INET, backlog=1, authkey=None):
         self._sock = socket.socket(family, socket.SOCK_STREAM)
         if family == socket.AF_INET:

@@ -1,9 +1,10 @@
 # A hello world program. From the Curio tutorial at
 # https://curio.readthedocs.io/en/latest/tutorial.html
-#
+
 import curio
 import signal
 import os
+
 
 async def countdown(n):
     while n > 0:
@@ -13,11 +14,13 @@ async def countdown(n):
 
 start_evt = curio.Event()
 
+
 def fib(n):
     if n <= 2:
         return 1
     else:
-        return fib(n-1) + fib(n-2)
+        return fib(n - 1) + fib(n - 2)
+
 
 async def kid():
     while True:
@@ -31,9 +34,10 @@ async def kid():
         print('Building the Millenium Falcon in Minecraft')
         total = 0
         for n in range(50):
-             total += await curio.run_in_process(fib, n)
+            total += await curio.run_in_process(fib, n)
     except curio.CancelledError:
         print('Fine. Saving my work. I got to', total)
+
 
 async def parent():
     print('Parent PID', os.getpid())
@@ -55,6 +59,7 @@ async def parent():
         print('I warned you!')
         await kid_task.cancel()
     print("Leaving!")
+
 
 if __name__ == '__main__':
     try:

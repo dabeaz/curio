@@ -5,6 +5,7 @@ from curio.socket import *
 import io
 import socket as std_socket
 
+
 def test_socket_blocking(kernel):
     '''
     Test of exposing a socket in blocking mode
@@ -34,23 +35,24 @@ def test_socket_blocking(kernel):
         await serv.cancel()
 
     async def main():
-       serv = await spawn(tcp_server('',25000, handler))
-       await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
 
     kernel.run(main())
 
     assert results == [
-            'handler start',
-            ('client', b'Message'),
-            'handler done'
-            ]
+        'handler start',
+        ('client', b'Message'),
+        'handler done'
+    ]
+
 
 def test_socketstream_blocking(kernel):
     '''
     Test of exposing a socket stream in blocking mode
     '''
     results = []
-    
+
     def sync_client(f):
         assert isinstance(f, io.RawIOBase)
         data = f.read(8192)
@@ -75,16 +77,17 @@ def test_socketstream_blocking(kernel):
         await serv.cancel()
 
     async def main():
-       serv = await spawn(tcp_server('',25000, handler))
-       await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
 
     kernel.run(main())
 
     assert results == [
-            'handler start',
-            ('client', b'Message'),
-            'handler done'
-            ]
+        'handler start',
+        ('client', b'Message'),
+        'handler done'
+    ]
+
 
 def test_filestream_blocking(kernel):
     '''
@@ -116,16 +119,17 @@ def test_filestream_blocking(kernel):
         await serv.cancel()
 
     async def main():
-       serv = await spawn(tcp_server('',25000, handler))
-       await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
 
     kernel.run(main())
 
     assert results == [
-            'handler start',
-            ('client', b'Message'),
-            'handler done'
-            ]
+        'handler start',
+        ('client', b'Message'),
+        'handler done'
+    ]
+
 
 def test_readall(kernel):
     results = []
@@ -152,16 +156,16 @@ def test_readall(kernel):
         await serv.cancel()
 
     async def main():
-       serv = await spawn(tcp_server('',25000, handler))
-       await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
 
     kernel.run(main())
 
     assert results == [
-            'handler start',
-            b'Msg1\nMsg2\nMsg3\n',
-            'handler done'
-            ]
+        'handler start',
+        b'Msg1\nMsg2\nMsg3\n',
+        'handler done'
+    ]
 
 
 def test_read_exactly(kernel):
@@ -184,18 +188,19 @@ def test_read_exactly(kernel):
         await serv.cancel()
 
     async def main():
-       serv = await spawn(tcp_server('',25000, handler))
-       await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
 
     kernel.run(main())
 
     assert results == [
-            'handler start',
-            b'Msg1\n',
-            b'Msg2\n',
-            b'Msg3\n',
-            'handler done'
-            ]
+        'handler start',
+        b'Msg1\n',
+        b'Msg2\n',
+        b'Msg3\n',
+        'handler done'
+    ]
+
 
 def test_readline(kernel):
     results = []
@@ -217,18 +222,19 @@ def test_readline(kernel):
         await serv.cancel()
 
     async def main():
-       serv = await spawn(tcp_server('',25000, handler))
-       await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
 
     kernel.run(main())
 
     assert results == [
-            'handler start',
-            b'Msg1\n',
-            b'Msg2\n',
-            b'Msg3\n',
-            'handler done'
-            ]
+        'handler start',
+        b'Msg1\n',
+        b'Msg2\n',
+        b'Msg3\n',
+        'handler done'
+    ]
+
 
 def test_readlines(kernel):
     results = []
@@ -249,18 +255,19 @@ def test_readlines(kernel):
         await serv.cancel()
 
     async def main():
-       serv = await spawn(tcp_server('',25000, handler))
-       await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
 
     kernel.run(main())
 
     assert results == [
-            'handler start',
-            b'Msg1\n',
-            b'Msg2\n',
-            b'Msg3\n',
-            'handler done'
-            ]
+        'handler start',
+        b'Msg1\n',
+        b'Msg2\n',
+        b'Msg3\n',
+        'handler done'
+    ]
+
 
 def test_writelines(kernel):
     results = []
@@ -282,16 +289,17 @@ def test_writelines(kernel):
         await serv.cancel()
 
     async def main():
-       serv = await spawn(tcp_server('',25000, handler))
-       await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
 
     kernel.run(main())
 
     assert results == [
-            'handler start',
-            b'Msg1\nMsg2\nMsg3\n',
-            'handler done'
-            ]
+        'handler start',
+        b'Msg1\nMsg2\nMsg3\n',
+        'handler done'
+    ]
+
 
 def test_iterline(kernel):
     results = []
@@ -313,15 +321,15 @@ def test_iterline(kernel):
         await serv.cancel()
 
     async def main():
-       serv = await spawn(tcp_server('',25000, handler))
-       await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
 
     kernel.run(main())
 
     assert results == [
-            'handler start',
-            b'Msg1\n',
-            b'Msg2\n',
-            b'Msg3\n',
-            'handler done'
-            ]
+        'handler start',
+        b'Msg1\n',
+        b'Msg2\n',
+        b'Msg3\n',
+        'handler done'
+    ]

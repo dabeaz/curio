@@ -1,9 +1,11 @@
 # Echo server with cancellation and signal handling
 
 import signal
-from curio import run, spawn, SignalSet, CancelledError, tcp_server, current_task
+from curio import (run, spawn, SignalSet, CancelledError, tcp_server,
+                   current_task)
 
 clients = set()
+
 
 async def echo_client(client, addr):
     task = await current_task()
@@ -20,7 +22,8 @@ async def echo_client(client, addr):
         await client.sendall(b'Server going down\n')
     finally:
         clients.remove(task)
-    
+
+
 async def main(host, port):
     while True:
         async with SignalSet(signal.SIGHUP) as sigset:
@@ -32,6 +35,7 @@ async def main(host, port):
 
             for task in list(clients):
                 await task.cancel()
+
 
 if __name__ == '__main__':
     try:

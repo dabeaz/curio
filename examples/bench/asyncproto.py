@@ -1,7 +1,9 @@
 import asyncio
 from socket import *
 
+
 class EchoProtocol(asyncio.Protocol):
+
     def connection_made(self, transport):
         self.transport = transport
         sock = transport.get_extra_info('socket')
@@ -15,6 +17,7 @@ class EchoProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         self.transport.write(data)
+
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()

@@ -5,7 +5,7 @@
 #   \/   \/             If you use it, you might die. No seriously.
 #
 
-__all__ = [ 'blocking', 'cpubound', 'awaitable', 'sync_only', 'AsyncABC', 'AsyncObject' ]
+__all__ = ['blocking', 'cpubound', 'awaitable', 'sync_only', 'AsyncABC', 'AsyncObject']
 
 import sys
 import inspect
@@ -20,6 +20,7 @@ _CO_GENERATOR = 0x0020
 _CO_COROUTINE = 0x0080
 _CO_ITERABLE_COROUTINE = 0x0100
 _CO_ASYNC_GENERATOR = 0x0200
+
 
 def _from_coroutine(level=2):
     f_code = sys._getframe(level).f_code
@@ -38,18 +39,20 @@ def _from_coroutine(level=2):
         # Where func() is some function that we've wrapped with one of the decorators
         # below.  If so, the code object is nested and has a name such as <listcomp> or <genexpr>
         if (f_code.co_flags & _CO_NESTED and f_code.co_name[0] == '<'):
-            return _from_coroutine(level+2)
+            return _from_coroutine(level + 2)
         else:
             return False
+
 
 def blocking(func):
     '''
     Decorator indicating that a function performs a blocking operation.
     If called from synchronous Python code, the function runs normally.
     However, if called from a coroutine, curio arranges for it to run
-    in a thread.  
+    in a thread.
     '''
     from . import workers
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         if _from_coroutine():
@@ -57,6 +60,7 @@ def blocking(func):
         else:
             return func(*args, **kwargs)
     return wrapper
+
 
 def cpubound(func):
     '''
@@ -66,6 +70,7 @@ def cpubound(func):
     in a process.
     '''
     from . import workers
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         if _from_coroutine():
@@ -74,6 +79,7 @@ def cpubound(func):
         else:
             return func(*args, **kwargs)
     return wrapper
+
 
 def sync_only(func):
     '''
@@ -86,7 +92,8 @@ def sync_only(func):
         else:
             return func(*args, **kwargs)
     return wrapper
-    
+
+
 def awaitable(syncfunc):
     '''
     Decorator that allows an asynchronous function to be paired with a
@@ -128,11 +135,12 @@ def awaitable(syncfunc):
         return wrapper
     return decorate
 
+
 class AsyncABCMeta(ABCMeta):
     '''
     Metaclass that gives all of the features of an abstract base class, but
     additionally enforces coroutine correctness on subclasses. If any method
-    is defined as a coroutine in a parent, it must also be defined as a 
+    is defined as a coroutine in a parent, it must also be defined as a
     coroutine in any child.
     '''
     def __init__(cls, name, bases, methods):
@@ -146,8 +154,10 @@ class AsyncABCMeta(ABCMeta):
                 raise TypeError('Must use async def %s%s' % (name, inspect.signature(val)))
         super().__init__(name, bases, methods)
 
+
 class AsyncABC(metaclass=AsyncABCMeta):
     pass
+
 
 class AsyncInstanceType(AsyncABCMeta):
     '''
@@ -159,7 +169,7 @@ class AsyncInstanceType(AsyncABCMeta):
             self.x = x
             self.y = y
 
-    async def main(): 
+    async def main():
          s = await Spam(2, 3)
          ...
     '''
@@ -170,9 +180,10 @@ class AsyncInstanceType(AsyncABCMeta):
         return super().__new__(meta, clsname, bases, attributes)
 
     async def __call__(cls, *args, **kwargs):
-         self = cls.__new__(cls, *args, **kwargs)
-         await self.__init__(*args, **kwargs)
-         return self
+        self = cls.__new__(cls, *args, **kwargs)
+        await self.__init__(*args, **kwargs)
+        return self
+
 
 class AsyncObject(metaclass=AsyncInstanceType):
     pass
