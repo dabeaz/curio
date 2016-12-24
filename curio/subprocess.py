@@ -89,15 +89,15 @@ class Popen(object):
         except CancelledError as err:
             if stdout_task:
                 await stdout_task.cancel()
-                err.stdout_read = stdout_task.exc_info[1].bytes_read
+                err.stdout = stdout_task.exc_info[1].bytes_read
             else:
-                err.stdout_read = b''
+                err.stdout = b''
 
             if stderr_task:
                 await stderr_task.cancel()
-                err.stderr_read = stderr_task.exc_info[1].bytes_read
+                err.stderr = stderr_task.exc_info[1].bytes_read
             else:
-                err.stderr_read = b''
+                err.stderr = b''
             raise
 
     def __enter__(self):
@@ -135,8 +135,8 @@ async def run(args, *, stdin=None, input=None, stdout=None, stderr=None, shell=F
             process.kill()
             stdout, stderr = await process.communicate()
             # Append the remaining stdout, stderr to the exception
-            err.stdout_read += stdout
-            err.stderr_read += stderr
+            err.stdout += stdout
+            err.stderr += stderr
             raise err
         except:
             process.kill()

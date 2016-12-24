@@ -75,8 +75,8 @@ def test_timeout(kernel):
                 results.append('what?')
         except TaskTimeout as e:
             results.append('timeout')
-            results.append(e.stdout_read)
-            results.append(e.stderr_read)
+            results.append(e.stdout)
+            results.append(e.stderr)
 
     kernel.run(subproc())
     assert results == ['timeout', b't-minus 4\n', b'']

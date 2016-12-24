@@ -30,13 +30,14 @@ CHANGES
                    out = timeout_after(5, subprocess.check_output(args))
                except TaskTimeout as e:
                    # Get the partially read output
-                   partial_stdout = e.stdout_read
-                   partial_stderr = e.stderr_read
+                   partial_stdout = e.stdout
+                   partial_stderr = e.stderr
                    ... other recovery ...
 
-           If there is an exception, the stdout_read and stderr_read
+           If there is an exception, the stdout and stderr
            attributes contain any partially read data on standard output
-           and standard error.
+           and standard error.  These attributes mirror those present
+           on the CalledProcessError exception raised if there is an error.
 
 12/03/2016 Added a parentid attribute to Task instances so you can find parent
 	   tasks.   Nothing else is done with this internally.
