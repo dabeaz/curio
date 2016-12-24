@@ -720,28 +720,33 @@ subprocess with curio::
 
 The following methods of :class:`Popen` have been replaced by asynchronous equivalents:
 
-.. asyncmethod:: Popen.wait(timeout=None)
+.. asyncmethod:: Popen.wait()
 
    Wait for a subprocess to exit.
 
-.. asyncmethod:: Popen.communicate(input=b'', timeout=None)
+.. asyncmethod:: Popen.communicate(input=b'')
 
    Communicate with the subprocess, sending the specified input on standard input.
    Returns a tuple ``(stdout, stderr)`` with the resulting output of standard output
-   and standard error.
+   and standard error.  If cancelled, the resulting exception has ``stdout`` and
+   ``stderr`` attributes that contain the output read prior to cancellation. 
+   Cancellation does not terminate the underlying subprocess.
 
 The following functions are also available.  They accept the same arguments as their
 equivalents in the :mod:`subprocess` module:
 
-.. asyncfunction:: run(args, stdin=None, input=None, stdout=None, stderr=None, shell=False, timeout=None, check=False)
+.. asyncfunction:: run(args, stdin=None, input=None, stdout=None, stderr=None, shell=False, check=False)
 
    Run a command in a subprocess.  Returns a :class:`subprocess.CompletedProcess` instance.
+   If cancelled, the underlying process is terminated using the process ``kill()`` method.
+   The resulting exception will have ``stdout`` and ``stderr`` attributes containing
+   output read prior to cancellation.
 
-.. asyncfunction:: check_output(args, stdout=None, stderr=None, shell=False, timeout=None)
+.. asyncfunction:: check_output(args, stdout=None, stderr=None, shell=False)
 
    Run a command in a subprocess and return the resulting output. Raises a
    :py:exc:`subprocess.CalledProcessError` exception if an error occurred.
-
+   The behavior on cancellation is the same as for ``run()``. 
 
 file wrapper module
 ---------------------
