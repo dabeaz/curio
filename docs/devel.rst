@@ -924,18 +924,53 @@ program will look like this::
 Bottom line:  Don't catch ``TaskTimeout`` exceptions unless you're also
 using ``timeout_after()``. 
 
-It should be noted that timeouts can be temporarily suspended if you use
-``None`` as a timeout.  For example::
+As a special case, you can also supply ``None`` as a timeout for the ``timeout_after()`` 
+function.   For example::
 
     await timeout_after(None, coro())
 
-In this case, ``coro()`` is guaranteed to run fully to completion
-without a timeout.  This is true even if another timeout was already
-in effect.  In some sense, this shields ``coro()`` from a timeout.
-As a general rule, you probably want to avoid doing this except for
-extremely critical operations that have to complete no matter what.
-If a timeout has been applied, it was probably applied for a good reason.
-Your code should try to honor that.
+When supplied, this leaves any previously set outer timeout in effect.
+If an outer timeout expires, a ``TimeoutCancellationError`` is
+raised.  If no timeout is effect, it does nothing.
+
+The primary use case of this is to more cleanly write code that involves an
+optional timeout setting.  For example::
+
+    async def func(..., timeout=None):
+        try:
+            async with timeout_after(timeout):
+                statements
+                ...
+        except TaskTimeout as e:
+            # Timeout occurred directly due to the supplied timeout argument
+            ...
+        except TimeoutCancellationError as e:
+            # Timeout occurred, but it was due to an outer timeout
+            ...
+            raise
+
+Without this feature, you would have to special case the timeout. For example::
+
+    async def func(..., timeout=None):
+        if timeout:
+            try:
+                async with timeout_after(timeout):
+                    statements
+                    ...
+            except TaskTimeout as e:
+                # Timeout occurred directly due to the supplied timeout argument
+                ...
+        else:
+            statements
+            ...
+
+That's rather ugly--don't do that.  Prefer to use ``timeout_after(None)`` to deal with
+an optional timeout.
+
+Controlling Cancellation
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Add section about deferring and allowing cancellation.
 
 Waiting for Multiple Tasks and Concurrency
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
