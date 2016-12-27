@@ -1,5 +1,26 @@
 CHANGES
 -------
+12/27/2016 Modified timeout_after(None) so that it leaves any prior timeout
+           setting in place (if any).  However, if a timeout occurs, it
+           will appear as a TimeoutCancellationError instead of the usual
+           TaskTimeout exception.  This is subtle, but it means that the
+           timeout occurred to due to an outer timeout setting.   This
+           change makes it easier to write functions that accept optional
+           timeout settings.  For example:
+
+              async def func(args, timeout=None):
+                  try:
+                      async with timeout_after(timeout):
+                          statements
+                          ...
+                  except TaskTimeout as e:
+                       # Timeout specifically due to timeout setting supplied
+                       ...
+                  except CancelledError as e:
+                       # Function cancelled for some other reason
+                       # (possibly an outer timeout)
+                       ...
+           
 12/23/2016 Added further information to cancellation/timeout exceptions
            where partial I/O may have been performed. For readall() and
            read_exactly() methods, the bytes_read attribute contains

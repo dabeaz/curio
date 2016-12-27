@@ -692,7 +692,9 @@ class Kernel(object):
                 if old_timeout and current.timeout > old_timeout:
                     current.timeout = old_timeout
             else:
-                current.timeout = None
+                # If no timeout period given, we leave the current timeout in effect
+                pass
+                # current.timeout = None
 
             return old_timeout
 
