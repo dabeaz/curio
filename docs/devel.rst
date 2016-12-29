@@ -681,9 +681,10 @@ Curio allows any task to be cancelled.  Here's an example::
 
     curio.run(main())
 
-Cancellation only occurs on blocking operations (e.g., the ``curio.sleep()`` call in the child).
-When a task is cancelled, the current operation fails with a ``CancelledError`` exception. This
-exception can be caught::
+Cancellation only occurs on blocking operations involving the
+``await`` keyword (e.g., the ``curio.sleep()`` call in the child).
+When a task is cancelled, the current operation fails with a
+``CancelledError`` exception. This exception can be caught::
 
     async def child(n):
         print('Sleeping')
@@ -722,8 +723,8 @@ have been spawned.  For example, consider this code::
 
     run(main())
 
-If you run this code, the ``coro()`` coroutine is cancelled, but its child task continues to run afterwards.
-The output looks like this::
+If you run this code, the ``coro()`` coroutine is cancelled, but its
+child task continues to run afterwards.  The output looks like this::
 
     Sleeping for 10
     Cancelled
@@ -768,11 +769,13 @@ it is applied through ``timeout_after(seconds [, coro])``.  For example::
 
 After the specified timeout period expires, a ``TaskTimeout``
 exception is raised by whatever blocking operation happens to be in
-progress.  It is critical to emphasize that timeouts can only
-occur on operations that block in Curio.  If the code runs
-away to go compute gigantic fibonacci numbers for the next ten minutes,
-a timeout won't be raised--remember that coroutines can't be preempted
-except on blocking operations.
+progress.  ``TaskTimeout`` is a subclass of ``CancelledError`` so code that
+catches the latter exception can be used to catch both kinds of cancellation. 
+It is critical to emphasize that timeouts can only occur on
+operations that block in Curio.  If the code runs away to go compute
+gigantic fibonacci numbers for the next ten minutes, a timeout won't
+be raised--remember that coroutines can't be preempted except on
+blocking operations.
 
 The ``timeout_after()`` function can also be used as a context manager.
 This allows it to be applied to an entire block of statements. For
@@ -970,7 +973,35 @@ an optional timeout.
 Controlling Cancellation
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-Add section about deferring and allowing cancellation.
+Sometimes it is advantageous to defer cancellation or only allow task cancellation at 
+specific points in your code.  To defer cancellation, use the ``defer_cancellation`` context
+manager like this::
+
+    async def coro():
+        ...
+        async with defer_cancellation:
+            statements
+            ...
+
+When used, the enclosed statements are allowed to run uninterrupted by any explicit
+cancellation request or timeout.  If a cancellation request has been issued, it won't
+be processed until the next blocking operation outside of the context manager.
+
+There is also a corresponding ``allow_cancellation`` context manager::
+
+    async def coro():
+        ...
+        async with defer_cancellation:
+            statements
+            ...
+             async with allow_cancellation:
+                 statements
+                 ...
+
+``allow_cancellation`` allows you to specify exact points at which cancellation
+and timeouts can be processed.  
+
+Both ``defer_cancellation`` and ``allow_cancellation`` can be nested. 
 
 Waiting for Multiple Tasks and Concurrency
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
