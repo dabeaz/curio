@@ -191,9 +191,10 @@ class Kernel(object):
     # https://docs.python.org/3/library/collections.html#collections.deque
     # ----------
     def _wake(self, task=None, future=None):
-        if task:
-            self._wake_queue.append((task, future))
-        self._notify_sock.send(b'\x00')
+        if self._selector:
+            if task:
+                self._wake_queue.append((task, future))
+            self._notify_sock.send(b'\x00')
 
     def _init_loopback(self):
         self._notify_sock, self._wait_sock = socket.socketpair()
@@ -225,6 +226,11 @@ class Kernel(object):
 
     def _shutdown_resources(self):
         log.debug('Kernel %r shutting down', self)
+
+        if self._selector:
+            self._selector.close()
+            self._selector = None
+
         if self._notify_sock:
             self._notify_sock.close()
             self._notify_sock = None
@@ -235,10 +241,6 @@ class Kernel(object):
             signal.set_wakeup_fd(-1)
             self._signal_sets = None
             self._default_signals = None
-
-        if self._selector:
-            self._selector.close()
-            self._selector = None
 
         if self._thread_pool:
             self._thread_pool.shutdown()

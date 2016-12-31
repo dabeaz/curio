@@ -99,14 +99,6 @@ def _cancel_task(task):
 
 
 @coroutine
-def _cancel_allowed_stack_push(state):
-    '''
-    Set whether cancellation is allowed in this task.
-    '''
-    yield (_trap_cancel_allowed_stack_push, n)
-
-
-@coroutine
 def _cancel_allowed_stack_pop(state):
     '''
     Undo the previous call to _cancel_allowed_stack_push
