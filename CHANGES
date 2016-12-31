@@ -1,5 +1,20 @@
 CHANGES
 -------
+12/31/2016 Added defer_timeout context manager to delay the delivery of a timeout
+           (if any) to a more advantageous point.  For example:
+
+                async with defer_timeout:
+                     await coro1()
+                     await coro2()
+                     await coro3()
+                     # <<- Timeout (if any) delivered here
+
+                await coro4()
+
+           Use this sparingly.  The main use of this is to protect critical
+           operations from unexpected cancellation due to a timeout setting
+           applied elsewhere.
+           
 12/27/2016 Modified timeout_after(None) so that it leaves any prior timeout
            setting in place (if any).  However, if a timeout occurs, it
            will appear as a TimeoutCancellationError instead of the usual

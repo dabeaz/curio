@@ -687,14 +687,16 @@ class Kernel(object):
         @nonblocking
         def _trap_set_timeout(timeout):
             old_timeout = current.timeout
-            if timeout:
+            if timeout is None:
+                # If no timeout period is given, leave the current timeout in effect
+                pass
+            elif timeout >= 0:
                 _set_timeout(timeout)
                 if old_timeout and current.timeout > old_timeout:
                     current.timeout = old_timeout
             else:
-                # If no timeout period given, we leave the current timeout in effect
-                pass
-                # current.timeout = None
+                # A negative timeout means disable timeouts
+                current.timeout = -1
 
             return old_timeout
 
@@ -708,10 +710,17 @@ class Kernel(object):
             # is usually done in the finalization stage of the previous timeout
             # handling.  If we were to raise a TaskTimeout here, it would get mixed
             # up with the prior timeout handling and all manner of head-explosion
-            # will occur.
-
-            if previous and previous < time_monotonic():
-                _set_timeout(previous)
+            # will occur.   A special exception is made for restoring deferred
+            # timeouts.  In that case, the timeout is raised immediately upon 
+            # restoration if time has expired.
+            
+            now = time_monotonic()
+            if previous and previous >= 0 and previous < now:
+                if current.timeout == -1:
+                    current.timeout = previous
+                    raise TaskTimeout(now)    
+                else:
+                    _set_timeout(previous)
             else:
                 current.timeout = previous
 

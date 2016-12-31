@@ -5,7 +5,7 @@
 __all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
            'wait', 'clock', 'defer_cancellation', 'allow_cancellation',
-           'schedule']
+           'schedule', 'defer_timeout' ]
 
 from time import monotonic
 from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError
@@ -466,5 +466,14 @@ def ignore_after(seconds, coro=None, *, timeout_result=None):
         return _TimeoutAfter(seconds, False, ignore=True, timeout_result=timeout_result)
     else:
         return _timeout_after_func(seconds, False, coro, ignore=True, timeout_result=timeout_result)
+
+class _DeferredTimeoutManager:
+    async def __aenter__(self):
+        self._prior = await _set_timeout(-1)
+
+    async def __aexit__(self, ty, val, tb):
+        await _unset_timeout(self._prior)
+
+defer_timeout = _DeferredTimeoutManager()
 
 from . import queue
