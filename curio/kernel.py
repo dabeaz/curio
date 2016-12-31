@@ -439,23 +439,21 @@ class Kernel(object):
         # resources are cleaned up.
         def _shutdown():
             nonlocal njobs
-            tocancel = [task for task in tasks.values() if task.id != self._kernel_task_id]
+            while tasks:
+                tocancel = [task for task in tasks.values() if task.id != self._kernel_task_id]
 
-            # Cancel all non-daemonic tasks first
-            tocancel.sort(key=lambda task: task.daemon)
+                # Cancel all non-daemonic tasks first
+                tocancel.sort(key=lambda task: task.daemon)
 
-            # Cancel the kernel loopback task last
-            if self._kernel_task_id is not None:
-                tocancel.append(tasks[self._kernel_task_id])
+                # Cancel the kernel loopback task last
+                if self._kernel_task_id is not None:
+                    tocancel.append(tasks[self._kernel_task_id])
 
-            if tocancel:
-                _new_task(_shutdown_tasks(tocancel))
-                self.run()
+                if tocancel:
+                    _new_task(_shutdown_tasks(tocancel))
+                    self.run()
 
-            self._kernel_task_id = None
-
-            # There had better not be any tasks left
-            assert not tasks
+                self._kernel_task_id = None
 
             # Cleanup other resources
             self._shutdown_resources()
