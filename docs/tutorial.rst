@@ -10,26 +10,22 @@ the covers, it is based on a task queuing system, not a callback-based
 event loop.  If you've programmed with threads, curio will feel familiar.
 
 This tutorial will take you through the basics of creating and 
-managing tasks in curio as well as some useful debugging features. 
+managing tasks in curio as well as some useful debugging features.
 Various I/O related features come a bit later.
+
+Tip
+---
+
+You can download all Python files examples in the documentation repository.
 
 Getting Started
 ---------------
 
 Here is a simple curio hello world program--a task that prints a simple
-countdown as you wait for your kid to put their shoes on::
+countdown as you wait for your kid to put their shoes on:
  
-    # hello.py
-    import curio
-    
-    async def countdown(n):
-        while n > 0:
-            print('T-minus', n)
-            await curio.sleep(1)
-            n -= 1
+.. literalinclude:: examples/getting_started.py
 
-    if __name__ == '__main__':
-        curio.run(countdown(10))
 
 Run it and you'll see a countdown.  Yes, some jolly fun to be
 sure. Curio is based around the idea of tasks.  Tasks are functions
@@ -41,35 +37,10 @@ are no more tasks to complete.
 Tasks
 -----
 
-Let's add a few more tasks into the mix::
+Let's add a few more tasks into the mix:
 
-    # hello.py
-    import curio
+.. literalinclude:: examples/several_tasks.py
 
-    async def countdown(n):
-        while n > 0:
-            print('T-minus', n)
-            await curio.sleep(1)
-            n -= 1
-
-    async def kid():
-        print('Building the Millenium Falcon in Minecraft')
-        await curio.sleep(1000)
-
-    async def parent():
-        kid_task = await curio.spawn(kid())
-        await curio.sleep(5)
-
-        print("Let's go")
-        count_task = await curio.spawn(countdown(10))
-        await count_task.join()
-
-        print("We're leaving!")
-        await kid_task.join()
-        print('Leaving')
-
-    if __name__ == '__main__':
-        curio.run(parent())
 
 This program illustrates the process of creating and joining with
 tasks.  Here, the ``parent()`` task uses the ``curio.spawn()``
@@ -256,38 +227,10 @@ to worry about task synchronization issues (e.g., if more than one
 task is working with mutable state).  For this purpose, curio provides
 ``Event``, ``Lock``, ``Semaphore``, and ``Condition`` objects.  For
 example, let's introduce an event that makes the child wait for the
-parent's permission to start playing::
+parent's permission to start playing:
 
-    start_evt = curio.Event()
+.. literalinclude:: examples/task_synchronization.py
 
-    async def kid():
-        print('Can I play?')
-        await start_evt.wait()
-        try:
-            print('Building the Millenium Falcon in Minecraft')
-            await curio.sleep(1000)
-        except curio.CancelledError:
-            print('Fine. Saving my work.')
-
-    async def parent():
-        kid_task = await curio.spawn(kid())
-        await curio.sleep(5)
-
-        print('Yes, go play')
-        await start_evt.set()
-        await curio.sleep(5)
-
-        print("Let's go")
-        count_task = await curio.spawn(countdown(10))
-        await count_task.join()
-
-        print("We're leaving!")
-        try:
-            await curio.timeout_after(10, kid_task.join())
-        except curio.TaskTimeout:
-            print('I warned you!')
-            await kid_task.cancel()
-        print('Leaving!')
 
 All of the synchronization primitives work the same way that they do
 in the ``threading`` module.  The main difference is that all operations
@@ -319,30 +262,10 @@ Signals
 What kind of helicopter parent lets their child play Minecraft for a measly 5
 seconds?  Instead, let's have the parent allow the child to play as
 much as they want until a Unix signal arrives, indicating that it's
-time to go.  Modify the code to wait on a ``SignalSet`` like this::
+time to go.  Modify the code to wait on a ``SignalSet`` like this:
 
-    import signal, os
+.. literalinclude:: examples/with_signals.py
 
-    async def parent():
-        print('Parent PID', os.getpid())
-        kid_task = await curio.spawn(kid())
-        await curio.sleep(5)
-
-        print('Yes, go play')
-        await start_evt.set()
-        
-        await curio.SignalSet(signal.SIGHUP).wait()
-     
-        print("Let's go")
-        count_task = await curio.spawn(countdown(10))
-        await count_task.join()
-        print("We're leaving!")
-        try:
-            await curio.timeout_after(10, kid_task.join())
-        except curio.TaskTimeout:
-            print('I warned you!')
-            await kid_task.cancel()
-        print('Leaving!')
 
 If you run this program, the parent lets the kid play 
 indefinitely--well, until a ``SIGHUP`` arrives.  When you run the
@@ -474,34 +397,10 @@ A Simple Echo Server
 --------------------
 
 Now that you've got the basics down, let's look at some I/O. Here
-is a simple echo server written directly with sockets using curio::
+is a simple echo server written directly with sockets using curio:
 
-    from curio import run, spawn
-    from curio.socket import *
-    
-    async def echo_server(address):
-        sock = socket(AF_INET, SOCK_STREAM)
-        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        sock.bind(address)
-        sock.listen(5)
-        print('Server listening at', address)
-        async with sock:
-            while True:
-                client, addr = await sock.accept()
-                await spawn(echo_client(client, addr))
-    
-    async def echo_client(client, addr):
-        print('Connection from', addr)
-        async with client:
-             while True:
-                 data = await client.recv(1000)
-                 if not data:
-                     break
-                 await client.sendall(data)
-        print('Connection closed')
+.. literalinclude:: examples/simple_echo_server.py
 
-    if __name__ == '__main__':
-        run(echo_server(('',25000)))
 
 Run this program and try connecting to it using a command such as ``nc``
 or ``telnet``.  You'll see the program echoing back data to you.  Open
@@ -567,40 +466,15 @@ A Stream-Based Echo Server
 --------------------------
 
 In certain cases, it might be easier to work with a socket connection
-using a file-like stream interface.  Here is an example::
+using a file-like stream interface.  Here is an example:
 
-    from curio import run, spawn, tcp_server
-
-    async def echo_client(client, addr):
-        print('Connection from', addr)
-        s = client.as_stream()
-        while True:
-            data = await s.read(1000)
-            if not data:
-                break
-            await s.write(data)
-        print('Connection closed')
-
-    if __name__ == '__main__':
-        run(tcp_server('', 25000, echo_client))
+.. literalinclude:: examples/stream_echo_server.py
 
 The ``socket.as_stream()`` method can be used to wrap the socket in a
 file-like object for reading and writing.  On this object, you would
 now use standard file methods such as ``read()``, ``readline()``, and
 ``write()``.  One feature of a stream is that you can easily read data
 line-by-line using an ``async for`` statement like this::
-
-    from curio import run, spawn, tcp_server
-
-    async def echo_client(client, addr):
-        print('Connection from', addr)
-        s = client.as_stream()
-        async for line in s:
-            await s.write(line)
-        print('Connection closed')
-
-    if __name__ == '__main__':
-        run(tcp_server('', 25000, echo_client))
 
 This is potentially useful if you're writing code to read HTTP headers or
 some similar task.
@@ -609,43 +483,10 @@ A Managed Echo Server
 ---------------------
 
 Let's make a slightly more sophisticated echo server that responds
-to a Unix signal::
+to a Unix signal:
 
-    import signal
-    from curio import run, spawn, SignalSet, CancelledError, tcp_server, current_task
+.. literalinclude:: examples/managed_echo_server.py
 
-    clients = set()
-
-    async def echo_client(client, addr):
-        task = await current_task()
-        clients.add(task)
-        print('Connection from', addr)
-        try:
-            while True:
-                data = await client.recv(1000)
-                if not data:
-                    break
-                await client.sendall(data)
-            print('Connection closed')
-        except CancelledError:
-            await client.sendall(b'Server going down\n')
-        finally:
-            clients.remove(task)
-    
-    async def main(host, port):
-        while True:
-            async with SignalSet(signal.SIGHUP) as sigset:
-                print('Starting the server')
-                serv_task = await spawn(tcp_server(host, port, echo_client))
-                await sigset.wait()
-                print('Server shutting down')
-                await serv_task.cancel()
-
-                for task in list(clients):
-                    await task.cancel()
-
-    if __name__ == '__main__':
-        run(main('', 25000))
 
 In this code, the ``main()`` coroutine launches the server, but then
 waits for the arrival of a ``SIGHUP`` signal.  When received, it
@@ -663,26 +504,10 @@ Making Connections
 ------------------
 
 Curio provides some high-level functions for making outgoing connections.
-For example, here is a task that makes a connection to ``www.python.org``::
+For example, here is a task that makes a connection to ``www.python.org``:
 
-    import curio
+.. literalinclude:: examples/simple_http_client.py
 
-    async def main():
-        sock = await curio.open_connection('www.python.org', 80)
-        async with sock:
-            await sock.sendall(b'GET / HTTP/1.0\r\nHost: www.python.org\r\n\r\n')
-            chunks = []
-            while True:
-                chunk = await sock.recv(10000)
-                if not chunk:
-                    break
-                chunks.append(chunk)
-
-        response = b''.join(chunks)
-        print(response.decode('latin-1'))
-
-    if __name__ == '__main__':
-        curio.run(main())
 
 If you run this, you should get some output that looks similar to this::
 
@@ -700,28 +525,10 @@ If you run this, you should get some output that looks similar to this::
     X-Cache-Hits: 0
     Strict-Transport-Security: max-age=63072000; includeSubDomains
 
-Ah, a redirect to HTTPS.  Let's make a connection with SSL applied to it::
+Ah, a redirect to HTTPS.  Let's make a connection with SSL applied to it:
 
-    import curio
+.. literalinclude:: examples/simple_http_client.py
 
-    async def main():
-        sock = await curio.open_connection('www.python.org', 443, 
-	                                   ssl=True, 
-					   server_hostname='www.python.org')
-        async with sock:
-            await sock.sendall(b'GET / HTTP/1.0\r\nHost: www.python.org\r\n\r\n')
-            chunks = []
-            while True:
-                chunk = await sock.recv(10000)
-                if not chunk:
-                    break
-                chunks.append(chunk)
-
-        response = b''.join(chunks)
-        print(response.decode('latin-1'))
-
-    if __name__ == '__main__':
-        curio.run(main())
 
 At this point it's worth noting that the primary purpose of curio is
 merely concurrency and I/O.  You can create sockets and you can apply
@@ -733,39 +540,10 @@ An SSL Server
 -------------
 
 Since we're on the subject of SSL, here's an example of a server that speaks
-SSL::
+SSL:
 
-    import curio
-    from curio import ssl
-    import time
+.. literalinclude:: examples/simple_ssl_server.py
 
-    KEYFILE = 'privkey_rsa'       # Private key
-    CERTFILE = 'certificate.crt'  # Server certificate
- 
-    async def handler(client, addr):
-        client_f = client.as_stream()
-
-	# Read the HTTP request
-        async for line in client_f:
-           line = line.strip()
-           if not line:
-               break
-           print(line)
-
-	# Send a response
-        await client_f.write(
-    b'''HTTP/1.0 200 OK\r
-    Content-type: text/plain\r
-    \r
-    If you're seeing this, it probably worked. Yay!
-    ''')
-        await client_f.write(time.asctime().encode('ascii'))
-	await client.close()
-
-    if __name__ == '__main__':
-        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
-        curio.run(curio.tcp_server('', 10000, handler, ssl=ssl_context))
 
 The ``curio.ssl`` submodule is a wrapper around the ``ssl`` module in the standard
 library.  It has been modified slightly so that functions responsible for wrapping
@@ -785,25 +563,10 @@ using functions that make explicit use of ``await``.  However, you may
 encounter situations where you want to interoperate with existing
 synchronous code outside of curio.  To do this, you can temporarily put sockets and
 streams into blocking mode and expose the raw socket or file
-underneath.  Use the ``blocking()`` context manager method as shown here::
+underneath.  Use the ``blocking()`` context manager method as shown here:
 
-    from curio import run, spawn, tcp_server
+.. literalinclude:: examples/blocking_io.py
 
-    async def echo_client(client, addr):
-        print('Connection from', addr)
-        while True:
-            data = await client.recv(1000)
-            if not data:
-                break
-
-	    # Temporarily enter blocking mode and use as a normal socket
-            with client.blocking() as _client:
-                _client.sendall(data)
-
-        print('Connection closed')
-
-    if __name__ == '__main__':
-        run(tcp_server('', 25000, echo_client))
 
 The ``blocking()`` method unwraps the low-level socket, places it in
 blocking mode, and returns it back to you.  In this example the
@@ -812,25 +575,10 @@ blocking mode, and returns it back to you.  In this example the
 work with a normal socket.  Just be aware that any I/O operations on
 it could potentially block the curio kernel.  If you're not sure,
 combine your operation with the ``run_in_thread()`` function. For
-example::
+example:
 
-    from curio import run, spawn, tcp_server, run_in_thread
+.. literalinclude:: examples/blocking_io_in_thread.py
 
-    async def echo_client(client, addr):
-        print('Connection from', addr)
-        while True:
-            data = await client.recv(1000)
-            if not data:
-                break
-
-	    # Temporarily enter blocking mode
-            with client.blocking() as _client:
-                await run_in_thread(_client.sendall, data)
-
-        print('Connection closed')
-
-    if __name__ == '__main__':
-        run(tcp_server('', 25000, echo_client))
 
 Normally, you wouldn't do this for such a operation like ``sendall()``.  However,
 the combination of the ``blocking()`` method and ``run_in_thread()`` function
@@ -844,29 +592,16 @@ Subprocesses
 
 Curio provides a wrapper around the ``subprocess`` module for launching subprocesses.
 For example, suppose you wanted to write a task to watch the output of the ``ping``
-command in real time::
+command in real time:
 
-    from curio import subprocess
-    import curio
+.. literalinclude:: examples/simple_subprocess.py
 
-    async def main():
-        p = subprocess.Popen(['ping', 'www.python.org'], 
-	                     stdout=subprocess.PIPE)
-        async for line in p.stdout:
-            print('Got:', line.decode('ascii'), end='')
-
-    if __name__ == '__main__':
-        curio.run(main())
 
 In addition to ``Popen()``, you can also use higher level functions
-such as ``subprocess.run()`` and ``subprocess.check_output()``.  For example::
+such as ``subprocess.run()`` and ``subprocess.check_output()``.  For example:
 
-    from curio import subprocess
-    async def main():
-        try:
-            out = await subprocess.check_output(['netstat', '-a'])
-        except subprocess.CalledProcessError as e:
-            print('It failed!', e)
+.. literalinclude:: examples/subprocess_check_output.py
+
 
 These functions operate exactly as they do in the normal
 ``subprocess`` module except that they're written on top of the
@@ -876,33 +611,10 @@ Intertask Communication
 -----------------------
 
 If you have multiple tasks and want them to communicate, use a ``Queue``.
-For example::
+For example:
 
-    # prodcons.py
+.. literalinclude:: examples/intertask_communication.py
 
-    import curio
-
-    async def producer(queue):
-        for n in range(10):
-            await queue.put(n)
-        await queue.join()
-        print('Producer done')
-
-    async def consumer(queue):
-        while True:
-            item = await queue.get()
-            print('Consumer got', item)
-            await queue.task_done()
-
-    async def main():
-        q = curio.Queue()
-        prod_task = await curio.spawn(producer(q))
-        cons_task = await curio.spawn(consumer(q))
-        await prod_task.join()
-        await cons_task.cancel()
-
-    if __name__ == '__main__':
-        curio.run(main())
 
 Curio provides the same synchronization primitives as found in the built-in
 ``threading`` module.  The same techniques used by threads can be used with
