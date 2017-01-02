@@ -1,9 +1,31 @@
 CHANGES
 -------
+01/02/2017 Have added an option to tasks to control whether or not they're
+           allowed to receive a cancellation exception.   This must be
+           specified at the time of spawning:
+
+                task = await spawn(coro(), allow_cancellation=False)
+
+           If a task disables cancellation, it is the task's responsibility
+           to poll for it.   For example:
+
+                async def coro():
+                    myself = await current_task()
+                    while True:
+                        ...
+                        if myself.cancelled:
+                            break
+                    print('Goodbye')
+
+           This feature allows certain critical tasks such as supervisors
+           and managers to explicitly control their cancellation point. 
+           It is an error for a task to ignore cancellation completely--
+           doing so will cause Curio to hang on program termination. 
+
 12/31/2016 Added defer_timeout context manager to delay the delivery of a timeout
            (if any) to a more advantageous point.  For example:
 
-                async with defer_timeout:
+                async with defer_timeout():
                      await coro1()
                      await coro2()
                      await coro3()

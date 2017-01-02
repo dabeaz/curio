@@ -626,6 +626,10 @@ class Kernel(object):
             if task.cancelled:
                 return
             task.cancelled = True
+            
+            # If the task has indicated it doesn't want cancellation, nothing more to do
+            if not task.allow_cancellation:
+                return
 
             if _try_cancel_blocked_task(task, CancelledError):
                 # we were able to do it immediately

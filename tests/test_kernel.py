@@ -280,6 +280,35 @@ def test_task_cancel(kernel):
     ]
 
 
+def test_task_cancel_poll(kernel):
+    results = []
+
+    async def child():
+        myself = await current_task()
+        results.append('start')
+        await sleep(0.5)
+        if myself.cancelled:
+            results.append('cancelled')
+        else:
+            results.append('end')
+
+    async def main():
+        task = await spawn(child(), allow_cancellation=False)
+        results.append('cancel start')
+        await sleep(0.1)
+        results.append('cancelling')
+        await task.cancel()
+        results.append('done')
+
+    kernel.run(main())
+    assert results == [
+        'cancel start',
+        'start',
+        'cancelling',
+        'cancelled',
+        'done',
+    ]
+
 def test_task_cancel_not_blocking(kernel):
     async def child(e1, e2):
         await e1.set()
@@ -691,7 +720,7 @@ def test_nested_timeout_defer(kernel):
         results.append('coro2 done')
 
     async def child():
-        async with defer_timeout:
+        async with defer_timeout():
             await coro1()
             results.append('coro1 success')
 

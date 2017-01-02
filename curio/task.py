@@ -8,7 +8,7 @@ __all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
            'schedule', 'defer_timeout' ]
 
 from time import monotonic
-from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError
+from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError, CancelledError
 from .traps import *
 
 
@@ -22,7 +22,7 @@ class Task(object):
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
         'next_exc', 'joining', 'cancelled', 'terminated', 'cancel_pending',
         'cancel_allowed_stack', '_last_io', '_deadlines',
-        'task_local_storage', '__weakref__',
+        'task_local_storage', 'allow_cancellation', '__weakref__',
     )
     _lastid = 1
 
@@ -47,6 +47,7 @@ class Task(object):
         self.cancelled = False     # Cancelled?
         self.terminated = False    # Terminated?
         self.cancel_pending = False  # Deferred cancellation pending?
+        self.allow_cancellation = True   # Flag indicating if cancellation exceptions are allowed
 
         # Last entry says whether cancellations are currently allowed
         self.cancel_allowed_stack = [True]
@@ -146,12 +147,16 @@ async def schedule():
     '''
     await sleep(0)
 
-async def spawn(coro, *, daemon=False):
+async def spawn(coro, *, daemon=False, allow_cancellation=True):
     '''
     Create a new task.  Use the daemon=True option if the task runs
-    forever as a background task.
+    forever as a background task.  If poll_cancellation=True is supplied,
+    the task will never receive exceptions related to task cancellation.
+    Instead, it will be the responsibility of the task to poll.
     '''
-    return await _spawn(coro, daemon)
+    task = await _spawn(coro, daemon)
+    task.allow_cancellation = allow_cancellation
+    return task
 
 async def gather(tasks, *, return_exceptions=False):
     '''
@@ -280,7 +285,6 @@ defer_cancellation = _CancellationManager(False)
 allow_cancellation = _CancellationManager(True)
 
 # Helper class for running timeouts as a context manager
-
 
 class _TimeoutAfter(object):
 
@@ -474,6 +478,7 @@ class _DeferredTimeoutManager:
     async def __aexit__(self, ty, val, tb):
         await _unset_timeout(self._prior)
 
-defer_timeout = _DeferredTimeoutManager()
+def defer_timeout():
+    return _DeferredTimeoutManager()
 
 from . import queue
