@@ -5,6 +5,7 @@
 __all__ = [
     'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError', 'SyncIOError',
     'TaskExit', 'KernelExit', 'TimeoutCancellationError', 'UncaughtTimeoutError',
+    'TaskCancelled',
 ]
 
 
@@ -13,6 +14,10 @@ class CurioError(Exception):
 
 
 class CancelledError(CurioError):
+    pass
+
+
+class TaskCancelled(CancelledError):
     pass
 
 

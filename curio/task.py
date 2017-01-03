@@ -308,20 +308,33 @@ class _CancellationManager(object):
 enable_cancellation = lambda: _CancellationManager(True)
 disable_cancellation = lambda: _CancellationManager(False)
 
-async def check_cancellation():
+async def check_cancellation(exc_type=None):
     '''
     Check if there is any kind of pending cancellation. If cancellations
-    are currently allowed, it results in an exception.  If not, it returns
-    the pending cancellation exception.
+    are currently allowed, and there is a pending exception, it raises the
+    exception.  If cancellations are not allowed, it returns the pending
+    exception object.
+
+    If exc_type is specified, the function checks the type of the specified
+    exception against the given type.  If there is a match, the exception
+    is returned and cleared. 
     '''
     task = await current_task()
+
+    if exc_type and not isinstance(task.cancel_pending, exc_type):
+        return None
+
     if task.cancel_pending and task.allow_cancel:
         try:
             raise task.cancel_pending
         finally:
             task.cancel_pending = None
     else:
-        return task.cancel_pending
+        try:
+            return task.cancel_pending
+        finally:
+            if exc_type:
+                task.cancel_pending = None
 
 async def set_cancellation(exc):
     '''

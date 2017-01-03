@@ -555,7 +555,7 @@ class Kernel(object):
 
         # Cancel a task
         @nonblocking
-        def _trap_cancel_task(task, exc=CancelledError, val=None):
+        def _trap_cancel_task(task, exc=TaskCancelled, val=None):
             if task.cancelled:
                 return
 
@@ -829,7 +829,12 @@ class Kernel(object):
                             current.state, current.cancel_func = trapfunc(*trap[1:])
 
                 except StopIteration as e:
-                    _cleanup_task(current, value=e.value)
+                    if current.cancel_pending:
+                        _cleanup_task(current, exc=current.cancel_pending)
+                        current.state = 'CANCELLED'
+                    else:
+                        _cleanup_task(current, value=e.value)
+                        current.state = 'TERMINATED'
 
                 except (CancelledError, TaskExit) as e:
                     current.exc_info = sys.exc_info()

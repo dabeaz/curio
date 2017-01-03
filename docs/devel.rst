@@ -1021,6 +1021,30 @@ of a cancellation request using ``check_cancellation()`` like this::
 
        await blocking_op()     # Cancellation delivered here (if any)
 
+The ``check_cancellation()`` function returns the pending
+exception. You can use the result to find out more specific
+information if you want. For example::
+
+    async def coro():
+        ...
+        async with disable_cancellation():
+            while True:
+                await op1()
+                await op2()
+                 ...
+                cancel_exc = await check_cancellation()
+                if isinstance(cancel_exc, TaskTimeout):
+                     print('Time expired (shrug)')
+                     await set_cancellation(None)
+		else:
+                     break
+
+       await blocking_op()     # Cancellation delivered here (if any)
+
+The ``set_cancellation()`` function can be used to clear or change the
+pending cancellation exception to something else.  The above code ignores
+the ``TaskTimeout`` exception and keeps running.
+
 When cancellation is disabled, it can be selectively enabled again using
 ``enable_cancellation()`` like this::
 

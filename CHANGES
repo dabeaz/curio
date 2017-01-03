@@ -1,5 +1,13 @@
 CHANGES
 -------
+01/03/2017 Added a TaskCancelled exception.  This is now what gets 
+           raised when tasks are cancelled using the task.cancel()
+           method.  It is a subclass of CancelledError.   This change 
+	   makes CancelledError more of an abstract exception class
+           for cancellation.  The TaskCancelled, TaskTimeout, and 
+           TimeoutCancellationError exceptions are more specific
+           subclasses that indicates exactly what has happened.
+
 01/02/2017 Major reorganization of how task cancellation works. There
 	   are two major parts to it.
 
