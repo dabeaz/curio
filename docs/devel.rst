@@ -654,11 +654,11 @@ The use of ``TaskError`` serves an important, but subtle, purpose
 here.  Due to cancellation and timeouts, the ``task.join()`` operation
 might raise an exception that's unrelated to the underlying task
 itself.  This means that you need to have some way to separate
-exceptions related to the ``join()`` operation versus an
-exception that was raised inside the task.  The ``TaskError`` solves
-this issue--if you get that exception, it means that the task being joined exited 
-with an exception.  If you get other exceptions, they
-are related to some aspect of the ``join()`` operation itself (i.e.,
+exceptions related to the ``join()`` operation versus an exception
+that was raised inside the task.  The ``TaskError`` solves this
+issue--if you get that exception, it means that the task being joined
+exited with an exception.  If you get other exceptions, they are
+related to some aspect of the ``join()`` operation itself (i.e.,
 cancellation), not the underlying task.
 
 Task Cancellation
@@ -693,16 +693,18 @@ When a task is cancelled, the current operation fails with a
             print('Awake again!')
         except curio.CancelledError:
             print('Rudely cancelled')
+            raise
 
 A cancellation should not be ignored.  In fact, the ``task.cancel()``
 method blocks until the task actually terminates.  If ignored, the
 cancelling task would simply hang forever waiting.  That's probably
-not what you want.
+not what you want.  In most cases, code that catches cancellation
+should perform some cleanup and then re-raise the exception as shown above.
 
-Cancellation does not propagate to child tasks that a coroutine might
-have been spawned.  For example, consider this code::
+Cancellation does not propagate to child tasks.
+For example, consider this code::
 
-    from curio import sleep, spawn, run
+    from curio import sleep, spawn, run, CancelledError
 
     async def sleeper(n):
         print('Sleeping for', n)
@@ -715,6 +717,7 @@ have been spawned.  For example, consider this code::
             await task.join()
         except CancelledError:
             print('Cancelled')
+            raise
 
     async def main():
         task = await spawn(coro())
@@ -739,6 +742,7 @@ To cancel children, they must be explicitly cancelled.  Rewrite ``coro()`` like 
         except CancelledError:
             print('Cancelled')
             await task.cancel()        # Cancel child task
+            raise
 
 Since cancellation doesn't propagate except explicitly as shown, one
 way to shield a coroutine from cancellation is to launch it as a
@@ -769,17 +773,17 @@ it is applied through ``timeout_after(seconds [, coro])``.  For example::
 
 After the specified timeout period expires, a ``TaskTimeout``
 exception is raised by whatever blocking operation happens to be in
-progress.  ``TaskTimeout`` is a subclass of ``CancelledError`` so code that
-catches the latter exception can be used to catch both kinds of cancellation. 
-It is critical to emphasize that timeouts can only occur on
-operations that block in Curio.  If the code runs away to go compute
-gigantic fibonacci numbers for the next ten minutes, a timeout won't
-be raised--remember that coroutines can't be preempted except on
+progress.  ``TaskTimeout`` is a subclass of ``CancelledError`` so code
+that catches the latter exception can be used to catch both kinds of
+cancellation.  It is critical to emphasize that timeouts can only
+occur on operations that block in Curio.  If the code runs away to go
+compute gigantic fibonacci numbers for the next ten minutes, a timeout
+won't be raised--remember that coroutines can't be preempted except on
 blocking operations.
 
-The ``timeout_after()`` function can also be used as a context manager.
-This allows it to be applied to an entire block of statements. For
-example::
+The ``timeout_after()`` function can also be used as a context
+manager.  This allows it to be applied to an entire block of
+statements. For example::
 
     try:
         async with timeout_after(5):
@@ -803,7 +807,7 @@ of using ``try-except``, you could do this::
         print('Timeout')
 
 The ``ignore_after()`` function also works as a context-manager. When
-used in this way, a ``result`` attribute is set to ``None`` when a 
+used in this way, a ``result`` attribute is set to ``None`` when a
 timeout occurs. For example::
 
     async with ignore_after(seconds) as t:
@@ -814,6 +818,9 @@ timeout occurs. For example::
 
     if t.result == None:
         print('Timeout')
+
+Nested Timeouts
+^^^^^^^^^^^^^^^
 
 Timeouts can be nested, but the semantics are a bit hair-raising and
 tricky.  To illustrate, consider this bit of code::
@@ -852,7 +859,7 @@ First, the actual timeout period in effect is always the smallest of
 all of the applied timeout values. In this code, the outer ``main()``
 coroutine applies a 5 second timeout to the ``child()`` coroutine.
 Even though the ``child()`` coroutine attempts to apply a 50 second
-timeout to ``coro1()``, the 5 second expiration already applied is
+timeout to ``coro1()``, the 5 second expiration of the outer timeout is
 kept in force.  This is why ``coro1()`` is cancelled when it sleeps
 for 10 seconds.
 
@@ -862,11 +869,11 @@ expires receives a ``TaskTimeout`` exception.  In this case, the
 expired.  Thus, it gets the exception.  The inner call to
 ``timeout_after(50)`` also aborts with an exception, but it is a
 ``TimeoutCancellationError``.  This signals that the code is being
-cancelled due to a timeout, but not the one that was specifically
-requested.  That is, the operation is NOT being cancelled due to 50
-seconds passing. Instead, some kind of outer timeout is responsible.
-Normally, ``TimeoutCancellationError`` would not be caught.  Instead, it
-silently propagates to the outer timeout which handles it.
+cancelled due to a timeout, but not the one that was requested.  That
+is, the operation is NOT being cancelled due to 50 seconds
+passing. Instead, some kind of outer timeout is responsible.
+Normally, ``TimeoutCancellationError`` would not be caught.  Instead,
+it silently propagates to the outer timeout which handles it.
 
 Admittedly, all of this is a bit subtle, but the key idea is that 
 an outer timeout is always allowed to cancel an inner timeout. Moreover,
@@ -891,8 +898,8 @@ such as this example::
 In this code, it might appear that ``child()`` will never terminate
 due to the fact that it catches ``TaskTimeout`` exceptions and
 continues to loop forever.  Not so--when the ``timeout_after()``
-operation in ``parent()`` expires, a ``TimeoutCancellationError`` will
-be raised in ``child()`` instead.  This causes the loop to stop.
+operation in ``parent()`` expires, a ``TimeoutCancellationError`` is
+raised in ``child()`` instead.  This causes the loop to stop.
 
 There are are still some ways that timeouts can go wrong and you'll
 find yourself battling a sky full of swooping manta rays.  The best
@@ -924,11 +931,14 @@ program will look like this::
     Sleeping
     ... forever...
 
-Bottom line:  Don't catch ``TaskTimeout`` exceptions unless you're also
-using ``timeout_after()``. 
+Bottom line:  Don't catch ``TaskTimeout`` exceptions unless your code
+immediately re-raises them.
 
-As a special case, you can also supply ``None`` as a timeout for the ``timeout_after()`` 
-function.   For example::
+Optional Timeouts
+^^^^^^^^^^^^^^^^^
+
+As a special case, you can also supply ``None`` as a timeout for the
+``timeout_after()`` and ``ignore_after()`` functions.  For example::
 
     await timeout_after(None, coro())
 
@@ -936,8 +946,8 @@ When supplied, this leaves any previously set outer timeout in effect.
 If an outer timeout expires, a ``TimeoutCancellationError`` is
 raised.  If no timeout is effect, it does nothing.
 
-The primary use case of this is to more cleanly write code that involves an
-optional timeout setting.  For example::
+The primary use case of this is to more cleanly write code that
+involves an optional timeout setting.  For example::
 
     async def func(..., timeout=None):
         try:
@@ -949,6 +959,7 @@ optional timeout setting.  For example::
             ...
         except TimeoutCancellationError as e:
             # Timeout occurred, but it was due to an outer timeout
+            # (Normally you wouldn't catch this exception)
             ...
             raise
 
@@ -956,6 +967,7 @@ Without this feature, you would have to special case the timeout. For example::
 
     async def func(..., timeout=None):
         if timeout:
+            # Code with a timeout applied
             try:
                 async with timeout_after(timeout):
                     statements
@@ -964,44 +976,251 @@ Without this feature, you would have to special case the timeout. For example::
                 # Timeout occurred directly due to the supplied timeout argument
                 ...
         else:
+            # Code without a timeout applied
             statements
             ...
 
 That's rather ugly--don't do that.  Prefer to use ``timeout_after(None)`` to deal with
 an optional timeout.
 
-Controlling Cancellation
-^^^^^^^^^^^^^^^^^^^^^^^^
+Cancellation Control
+^^^^^^^^^^^^^^^^^^^^
 
-Sometimes it is advantageous to defer cancellation or only allow task cancellation at 
-specific points in your code.  To defer cancellation, use the ``defer_cancellation`` context
-manager like this::
-
-    async def coro():
-        ...
-        async with defer_cancellation:
-            statements
-            ...
-
-When used, the enclosed statements are allowed to run uninterrupted by any explicit
-cancellation request or timeout.  If a cancellation request has been issued, it won't
-be processed until the next blocking operation outside of the context manager.
-
-There is also a corresponding ``allow_cancellation`` context manager::
+Sometimes it is advantageous to block the delivery of cancellation
+exceptions at specific points in your code.  Perhaps your program is
+performing a critical operation that shouldn't be interrupted.  To
+block cancellation, use the ``disable_cancellation()`` function as a
+context manager like this::
 
     async def coro():
         ...
-        async with defer_cancellation:
-            statements
+        async with disable_cancellation():
+            await op1()
+            await op2()
             ...
-             async with allow_cancellation:
-                 statements
+
+       await blocking_op()     # Cancellation delivered here (if any)
+
+When used, the enclosed statements are guaranteed to never abort with
+a ``CancelledError`` exception (this includes timeouts).  If any kind
+of cancellation request has occurred, it won't be processed until the
+next blocking operation outside of the context manager.
+
+Code that disables cancellation can explicitly poll for the presence
+of a cancellation request using ``check_cancellation()`` like this::
+
+    async def coro():
+        ...
+        async with disable_cancellation():
+            while True:
+                await op1()
+                await op2()
                  ...
+                if await check_cancellation():
+                    break    # We're done
 
-``allow_cancellation`` allows you to specify exact points at which cancellation
-and timeouts can be processed.  
+       await blocking_op()     # Cancellation delivered here (if any)
 
-Both ``defer_cancellation`` and ``allow_cancellation`` can be nested. 
+When cancellation is disabled, it can be selectively enabled again using
+``enable_cancellation()`` like this::
+
+    async def coro():
+        ...
+        async with disable_cancellation():
+            while True:
+                await op1()
+                await op2()
+
+                async with enable_cancellation():
+                    # These operations can be cancelled
+                    await op3()
+                    await op4()
+
+                if await check_cancellation():
+                    break    # We're done
+
+       await blocking_op()     # Cancellation delivered here (if any)
+
+When cancellation is re-enabled, it allows the enclosed statements to 
+receive cancellation requests and timeouts as exceptions as normal.
+
+An important feature of ``enable_cancellation()`` is that it does not
+propagate cancellation exceptions--meaning that it does not allow
+such exceptions to be raised in the outer block of statements
+where cancellation is disabled.  Instead, if there is a cancellation,
+it becomes "pending" at the conclusion of the ``enable_cancellation()``
+context.  It will be delivered at the next blocking operation where 
+cancellation is allowed.   Here is a concrete example that illustrates
+this behavior::
+
+    async def coro():
+        async with disable_cancellation():
+            print('Hello')
+            async with enable_cancellation():
+                print('About to die')
+                raise CancelledError()
+                print('Never printed')
+            print('Yawn')
+            await sleep(2)
+
+        print('About to deep sleep')
+        await sleep(5000)
+
+    run(coro())
+
+If you run this code, you'll get output like this::
+
+    Hello
+    About to die
+    Yawn
+    About to deep sleep
+    Traceback (most recent call last):
+    ...
+    curio.errors.CancelledError
+
+Carefully observe that cancellation is being reported on the first blocking operation
+outside the `disable_cancellation()` block.  There will be a quiz later.
+
+It is fine for ``disable_cancellation()`` blocks to be nested.   This makes them
+safe for use in subroutines.  For example::
+
+    async def coro1():
+         async with disable_cancellation():
+              await coro2()
+
+         await blocking_op1()  # <-- Cancellation reported here
+
+    async def coro2():
+         async with disable_cancellation():
+              ...
+
+         await blocking_op2()
+
+    run(coro1())
+
+If nested, cancellation is reported at the first blocking operation
+that occurs when cancellation is re-enabled.   
+
+It is illegal for ``enable_cancellation()`` to be used outside of a
+``disable_cancellation()`` context.  Doing so results in a
+``RuntimeError`` exception.  Cancellation is normally enabled in Curio
+so it makes little sense to use this feature in isolation.  Correct
+usage also tends to require careful coordination with code in which
+cancellation is disabled.  For that reason, it can't be used by
+itself.  
+
+It is also illegal for any kind of cancellation exception to be raised
+in a ``disable_cancellation()`` context. For example::
+
+    async def coro():
+        async with disable_cancellation():
+            ...
+            raise CancelledError()    # ILLEGAL
+            ...
+
+Doing this causes your program to die with a ``RuntimeError``.  The
+``disable_cancellation()`` feature is meant to be a strong guarantee
+that cancellation-related exceptions are not raised in the given block
+of statements.  If you raise such an exception, you're violating the
+rules.  
+
+It is legal for cancellation exceptions to be raised inside a
+``enable_cancellation()`` context.  For example::
+
+    async def coro():
+        async with disable_cancellation():
+            ...
+            async with enable_cancellation():
+                ...
+                raise CancelledError()    # LEGAL
+
+            # Exception becomes "pending" here
+            ...
+
+        await blocking_op()  # Cancellation reported here
+
+Cancellation exceptions that escape ``enable_cancellation()`` become
+pending and are reported when blocking operations are performed later.
+
+Programming Considerations for Cancellation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Cancellation and timeouts are an important part of Curio and there
+are a few considerations to keep in mind when writing library
+functions.
+
+First, if you need to perform some kind of cleanup action such as
+killing a helper task, you'll probably want to wrap it in a
+``try-finally`` block like this::
+
+    async def coro():
+        task = await spawn(helper())
+        try:
+            ...
+        finally:
+            await task.cancel()
+
+This will make sure you properly clean up after yourself.  Certain
+objects might work as asynchronous context managers.  Prefer to
+use that if available.  For example::
+
+    async def coro():
+        task = await spawn(helper())
+        async with task:
+            ...
+        # task cancelled here
+
+Second, if you must catch cancellation errors, make sure you re-raise them.
+It's not legal to simply ignore cancellation. For example::
+
+    async def coro():
+        try:
+            ...
+        except CancelledError:
+            # Some kind of cleanup
+            ...
+            raise
+
+Third, you might consider writing code that returns partially
+completed results on cancellation.  Partial results can be
+attached to the resulting exception.  For example::
+
+    async def sendall(sock, data):
+        bytes_sent = 0
+        try:
+            while data:
+                nsent = await sock.send(data)
+                bytes_sent += nsent
+                data = data[nsent:]
+        except CancelledError as e:
+            e.bytes_sent = bytes_sent
+            raise
+
+This allows code further up the call-stack to take action and maybe
+recover in some sane way.  For example::
+
+    async def send_message(sock, msg):
+         try:
+             await sendall(sock, msg)
+         except TaskTimeout as e:
+             print('Well, that sure is slow')
+             print('Only sent %d bytes' % e.bytes_sent)
+
+Finally, be extremely careful writing library code that involves infinite loops.
+In particular, don't rely solely on the delivery of a cancellation exception to
+terminate the loop for you.  Instead, put an explicit
+``check_cancellation()`` check in the loop someplace like this::
+
+    async def run_forever():
+        while True:
+            await coro()
+            ...
+            if await check_cancellation():
+                break
+
+The reason you'd do this is that's entirely possible that someone has
+disabled cancellation exceptions somewhere.  If so, you'll never be
+able to get out of the loop unless you check.
 
 Waiting for Multiple Tasks and Concurrency
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

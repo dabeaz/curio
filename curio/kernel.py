@@ -362,48 +362,6 @@ class Kernel(object):
             task.state = 'READY'
             task.cancel_func = None
 
-        # Attempt to cancel a task. This causes a CancelledError exception to
-        # raise in the underlying coroutine.  The coroutine can elect to catch
-        # the exception and continue to run to perform cleanup actions.
-        # However, it would normally terminate shortly afterwards.  This
-        # method is also used to raise timeouts.
-        #
-        # This only works if the task is currently blocked. If it succeeds, it
-        # returns True. If it fails, it returns False. (And in that case, we
-        # need to arrange for the cancellation to happen some other way.)
-        def _try_cancel_blocked_task(task, exc=CancelledError, val=None):
-            if task.terminated:
-                return True
-
-            if not task.cancel_allowed_stack[-1]:
-                return False
-
-            if not task.cancel_func:
-                # All tasks set a cancellation function when they
-                # block.  If there is no cancellation function set. It
-                # means that the task finished whatever it might have
-                # been working on and it's sitting in the ready queue
-                # ready to run.  This presents a rather tricky corner
-                # case of cancellation. First, it means that the task
-                # successfully completed whatever it was waiting to
-                # do, but it has not yet communicated the result back.
-                # This could be something critical like acquiring a
-                # lock.  Because of that, can't just arbitrarily nuke
-                # the task.  Instead, we have to let it be rescheduled
-                # and properly process the result of the successfully
-                # completed operation.  The return of False here means
-                # that cancellation failed and that it should be
-                # retried.  Public facing API calls that cancel tasks
-                # need to check this return value and retry.
-                return False
-
-            # Detach the task from where it might be waiting at this moment
-            task.cancel_func()
-
-            # Reschedule it with a pending exception
-            _reschedule_task(task, exc=exc(exc.__name__ if val is None else val))
-            return True
-
         # Cleanup task.  This is called after the underlying coroutine has
         # terminated.  value and exc give the return value or exception of
         # the coroutine.  This wakes any tasks waiting to join.
@@ -595,49 +553,33 @@ class Kernel(object):
                     task.joining = KSyncQueue()
                 return _trap_wait_ksync(task.joining, 'TASK_JOIN')
 
-        # Enter a {defer,allow}_cancellation block
-        def _check_pending_cancellation():
-            if not current.cancel_allowed_stack[-1]:
-                return
-            if current.cancel_pending:
-                current.cancel_pending = False
-                raise CancelledError("CancelledError")
-            else:
-                if current.timeout is not None:
-                    now = time_monotonic()
-                    if current.timeout <= now:
-                        raise TaskTimeout(now)
-
-        @nonblocking
-        def _trap_cancel_allowed_stack_push(state):
-            current.cancel_allowed_stack.append(state)
-            _check_pending_cancellation()
-
-        @nonblocking
-        def _trap_cancel_allowed_stack_pop(state):
-            previous = current.cancel_allowed_stack.pop()
-            assert previous == state
-            assert current.cancel_allowed_stack
-            _check_pending_cancellation()
-
         # Cancel a task
         @nonblocking
-        def _trap_cancel_task(task):
+        def _trap_cancel_task(task, exc=CancelledError, val=None):
             if task.cancelled:
                 return
+
             task.cancelled = True
-            
-            # If the task has indicated it doesn't want cancellation, nothing more to do
-            if not task.allow_cancellation:
+
+            # Set the cancellation exception
+            task.cancel_pending = exc(exc.__name__ if val is None else val)
+
+            # If the task doesn't allow the delivery of a cancellation exception right now
+            # we're done.  It's up to the task to check for it later
+            if not task.allow_cancel:
+                return 
+
+            # If the task doesn't have a cancellation function set, it means the task
+            # is on the ready-queue.  It's not safe to deliver a cancellation exception
+            # to it right now.  Instead, we simply return.  It will get cancelled
+            # the next time it performs a blocking operation
+            if not task.cancel_func:
                 return
 
-            if _try_cancel_blocked_task(task, CancelledError):
-                # we were able to do it immediately
-                pass
-            else:
-                # wait for the next cancellation point (either exiting a 'with
-                # defer_cancellation' block, or entering a blocking call).
-                task.cancel_pending = True
+            # Cancel and reschedule the task
+            task.cancel_func()
+            _reschedule_task(task, exc=task.cancel_pending)
+            task.cancel_pending = None
 
         # Wait on a queue
         @blocking
@@ -810,7 +752,6 @@ class Kernel(object):
             # Process sleeping tasks (if any)
             if sleeping:
                 current_time = time_monotonic()
-                cancel_retry = []
                 while sleeping and sleeping[0][0] <= current_time:
                     tm, taskid, sleep_type = heapq.heappop(sleeping)
                     # When a task wakes, verify that the timeout value matches that stored
@@ -825,21 +766,15 @@ class Kernel(object):
                                 _reschedule_task(task, value=current_time)
                         else:
                             if tm == task.timeout:
-                                if _try_cancel_blocked_task(
-                                        task, exc=TaskTimeout, val=current_time):
-                                    task.timeout = None
+                                task.timeout = None
+                                # If cancellation is allowed and the task is blocked, reschedule it
+                                if task.allow_cancel and task.cancel_func:
+                                    task.cancel_func()
+                                    _reschedule_task(task, exc=TaskTimeout(current_time))
                                 else:
-                                    # Note: There is a possibility that a task will be
-                                    # marked for timeout-cancellation even though it is
-                                    # sitting on the ready queue.  In this case, the
-                                    # rescheduled task is given priority. However, the
-                                    # cancellation timeout will be put back on the sleep
-                                    # queue and reprocessed the next time around.
-                                    cancel_retry.append((tm, taskid, sleep_type))
-
-                # Put deferred cancellation requests back on sleep queue
-                for item in cancel_retry:
-                    heapq.heappush(sleeping, item)
+                                    # Task is on the ready queue or can't be cancelled right now, 
+                                    # mark it as pending cancellation
+                                    task.cancel_pending = TaskTimeout(current_time)
 
             # --------
             # Run ready tasks
@@ -884,13 +819,14 @@ class Kernel(object):
 
                         # Execute a blocking trap
                         assert trapfunc.blocking
-                        current.state, current.cancel_func = trapfunc(*trap[1:])
-                        # Entering a blocking call triggers a check for pending
-                        # cancellation
-                        assert current.cancel_func is not None
-                        if (current.cancel_allowed_stack[-1] and current.cancel_pending):
-                            result = _try_cancel_blocked_task(current, CancelledError)
-                            assert result
+                        
+                        # If there is a cancellation pending and delivery is allowed,
+                        # reschedule the task with the pending exception
+                        if current.allow_cancel and current.cancel_pending:
+                            _reschedule_task(current, exc=current.cancel_pending)
+                            current.cancel_pending = None
+                        else:
+                            current.state, current.cancel_func = trapfunc(*trap[1:])
 
                 except StopIteration as e:
                     _cleanup_task(current, value=e.value)

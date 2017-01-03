@@ -4,8 +4,8 @@
 
 __all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
-           'wait', 'clock', 'defer_cancellation', 'allow_cancellation',
-           'schedule', 'defer_timeout' ]
+           'wait', 'clock', 'enable_cancellation', 'disable_cancellation',
+           'check_cancellation', 'set_cancellation', 'schedule', 'defer_timeout' ]
 
 from time import monotonic
 from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError, CancelledError
@@ -21,8 +21,8 @@ class Task(object):
         'id', 'parentid', 'daemon', 'coro', '_send', '_throw', 'cycles', 'state',
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
         'next_exc', 'joining', 'cancelled', 'terminated', 'cancel_pending',
-        'cancel_allowed_stack', '_last_io', '_deadlines',
-        'task_local_storage', 'allow_cancellation', '__weakref__',
+        '_last_io', '_deadlines', 'task_local_storage', 'allow_cancel', 
+        '__weakref__',
     )
     _lastid = 1
 
@@ -44,13 +44,11 @@ class Task(object):
         self.next_value = None     # Next value to send on execution
         self.next_exc = None       # Next exception to send on execution
         self.joining = None        # Optional set of tasks waiting to join with this one
-        self.cancelled = False     # Cancelled?
-        self.terminated = False    # Terminated?
-        self.cancel_pending = False  # Deferred cancellation pending?
-        self.allow_cancellation = True   # Flag indicating if cancellation exceptions are allowed
+        self.cancelled = None      # Has the task been cancelled?
+        self.terminated = False    # Has the task actually Terminated?
+        self.cancel_pending = None # Deferred cancellation exception pending (if any)
+        self.allow_cancel = True   # Can cancellation exceptions be delivered?
 
-        # Last entry says whether cancellations are currently allowed
-        self.cancel_allowed_stack = [True]
         self.task_local_storage = {}  # Task local storage
         self._last_io = None       # Last I/O operation performed
         self._send = coro.send     # Bound coroutine methods
@@ -147,15 +145,15 @@ async def schedule():
     '''
     await sleep(0)
 
-async def spawn(coro, *, daemon=False, allow_cancellation=True):
+async def spawn(coro, *, daemon=False, allow_cancel=True):
     '''
     Create a new task.  Use the daemon=True option if the task runs
-    forever as a background task.  If poll_cancellation=True is supplied,
-    the task will never receive exceptions related to task cancellation.
-    Instead, it will be the responsibility of the task to poll.
+    forever as a background task.  If allow_cancel=False is
+    specified, the task disables the delivery of cancellation related
+    exceptions (including timeouts).
     '''
     task = await _spawn(coro, daemon)
-    task.allow_cancellation = allow_cancellation
+    task.allow_cancel = allow_cancel
     return task
 
 async def gather(tasks, *, return_exceptions=False):
@@ -265,24 +263,74 @@ class wait(object):
 
         self._tasks = []
 
+# Utility functions for controlling cancellation
+class _CancellationManager(object):
 
-class _CancellationManager:
-
-    def __init__(self, state):
-        self._state = state
+    def __init__(self, allow_cancel):
+        self.allow_cancel = allow_cancel
+        self.cancel_pending = None
 
     async def __aenter__(self):
-        try:
-            await _cancel_allowed_stack_push(self._state)
-        except Exception:
-            await _cancel_allowed_stack_pop(self._state)
-            raise
+        self.task = await current_task()
+        if self.task.allow_cancel and self.allow_cancel:
+            raise RuntimeError('enable_cancellation() may not be used in a context where cancellation is already allowed')
+        self._last_allow_cancel = self.task.allow_cancel
+        self.task.allow_cancel = self.allow_cancel
+        return self
 
     async def __aexit__(self, ty, val, tb):
-        await _cancel_allowed_stack_pop(self._state)
+        self.task.allow_cancel = self._last_allow_cancel
 
-defer_cancellation = _CancellationManager(False)
-allow_cancellation = _CancellationManager(True)
+        # If a CancelledError is raised on exit from a block, the
+        # following rules are in play:
+        #
+        # 1. If the block did not allow cancellation in the first place,
+        #    a RuntimeError occurs.  It illegal for CancelledError to
+        #    be raised in any form when cancellation is disabled.
+        #
+        # 2. If cancellation is not allowed in the outer block,
+        #    the CancelledError is transformed back into a pending
+        #    exception.  The outer block can certainly check for
+        #    this if it wants, but it can also just defer the 
+        #    cancellation to a point where cancellation is allowed again.
+        #
+        if isinstance(val, CancelledError):
+            if not self.allow_cancel:
+                raise RuntimeError('%s must not be raised in a disable_cancellation block' % 
+                                   ty.__name__)
+            if not self.task.allow_cancel:
+                self.cancel_pending = self.task.cancel_pending = val
+                return True
+        else:
+            self.cancel_pending = self.task.cancel_pending
+            return False
+
+enable_cancellation = lambda: _CancellationManager(True)
+disable_cancellation = lambda: _CancellationManager(False)
+
+async def check_cancellation():
+    '''
+    Check if there is any kind of pending cancellation. If cancellations
+    are currently allowed, it results in an exception.  If not, it returns
+    the pending cancellation exception.
+    '''
+    task = await current_task()
+    if task.cancel_pending and task.allow_cancel:
+        try:
+            raise task.cancel_pending
+        finally:
+            task.cancel_pending = None
+    else:
+        return task.cancel_pending
+
+async def set_cancellation(exc):
+    '''
+    Set a new pending cancellation exception. Returns the old exception.
+    '''
+    task = await current_task()
+    result = task.cancel_pending
+    task.cancel_pending = exc
+    return result
 
 # Helper class for running timeouts as a context manager
 

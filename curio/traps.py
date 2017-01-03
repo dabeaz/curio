@@ -12,7 +12,7 @@
 
 __all__ = [
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn', '_join_task',
-    '_cancel_task', '_cancel_allowed_stack_push', '_cancel_allowed_stack_pop',
+    '_cancel_task', 
     '_wait_on_ksync', '_reschedule_tasks', '_ksync_reschedule_function',
     '_sigwatch', '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
     '_set_timeout', '_unset_timeout', '_clock',
@@ -41,8 +41,6 @@ class Traps(IntEnum):
     _trap_sigunwatch = 14
     _trap_spawn = 15
     _trap_ksync_reschedule_tasks = 16
-    _trap_cancel_allowed_stack_push = 17
-    _trap_cancel_allowed_stack_pop = 18
 
 globals().update((trap.name, trap) for trap in Traps)
 
@@ -96,22 +94,6 @@ def _cancel_task(task):
     Cancel a task. Causes a CancelledError exception to raise in the task.
     '''
     yield (_trap_cancel_task, task)
-
-
-@coroutine
-def _cancel_allowed_stack_pop(state):
-    '''
-    Undo the previous call to _cancel_allowed_stack_push
-    '''
-    yield (_trap_cancel_allowed_stack_pop, state)
-
-
-@coroutine
-def _cancel_allowed_stack_push(state):
-    '''
-    Set the current
-    '''
-    yield (_trap_cancel_allowed_stack_push, state)
 
 
 @coroutine

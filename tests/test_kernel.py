@@ -284,16 +284,18 @@ def test_task_cancel_poll(kernel):
     results = []
 
     async def child():
-        myself = await current_task()
-        results.append('start')
-        await sleep(0.5)
-        if myself.cancelled:
-            results.append('cancelled')
-        else:
-            results.append('end')
+        async with disable_cancellation():
+            myself = await current_task()
+            results.append('start')
+            await sleep(0.5)
+            if await check_cancellation():
+                results.append('cancelled')
+                return
+            else:
+                results.append('end')
 
     async def main():
-        task = await spawn(child(), allow_cancellation=False)
+        task = await spawn(child())
         results.append('cancel start')
         await sleep(0.1)
         results.append('cancelling')
@@ -824,12 +826,10 @@ def test_task_run_error(kernel):
 def test_defer_cancellation(kernel):
     async def cancel_me(e1, e2):
         with pytest.raises(CancelledError):
-            async with defer_cancellation:
-                try:
-                    await e1.set()
-                    await e2.wait()
-                except CancelledError:
-                    assert False
+            async with disable_cancellation():
+                await e1.set()
+                await e2.wait()
+            await check_cancellation()
 
     async def main():
         e1 = Event()
@@ -843,54 +843,6 @@ def test_defer_cancellation(kernel):
     kernel.run(main())
 
 
-def test_defer_cancellation_nesting(kernel):
-    async def f(started, e):
-        async with defer_cancellation:
-            await started.set()
-            # Can't be cancelled here
-            await e.wait()
-            with pytest.raises(CancelledError):
-                async with allow_cancellation:
-                    pass
-
-    async def main():
-        started = Event()
-        e = Event()
-        task = await spawn(f(started, e))
-        await started.wait()
-        await task.cancel(blocking=False)
-        await sleep(0)
-        await e.set()
-        await task.join()
-
-    kernel.run(main())
-
-
-def test_defer_cancellation_timeout(kernel):
-    async def main(results):
-        # Nesting a timeout inside a defer_cancellation block makes no
-        # sense (the timeout_after is a no-op), but test it anyway:
-        async with defer_cancellation:
-            async with timeout_after(0.1):
-                # Should succeed, despite the timeout
-                results.append("sleeping 1")
-                await sleep(0.5)
-                results.append("slept 1")
-        # defer_cancellation inside a timeout should raise when exiting the
-        # defer_cancellation
-        async with timeout_after(0.1):
-            await defer_cancellation.__aenter__()
-            results.append("sleeping 2")
-            await sleep(0.5)
-            results.append("slept 2")
-            with pytest.raises(TaskTimeout):
-                await defer_cancellation.__aexit__(None, None, None)
-
-    results = []
-    kernel.run(main(results))
-    assert results == ["sleeping 1", "slept 1", "sleeping 2", "slept 2"]
-
-
 def test_self_cancellation(kernel):
     async def suicidal_task():
         task = await current_task()
@@ -901,6 +853,21 @@ def test_self_cancellation(kernel):
 
     kernel.run(suicidal_task())
 
+def test_illegal_enable_cancellation(kernel):
+    async def task():
+        with pytest.raises(RuntimeError):
+             async with enable_cancellation():
+                 pass
+
+    kernel.run(task())
+
+def test_illegal_disable_cancellation_exception(kernel):
+    async def task():
+        with pytest.raises(RuntimeError):
+             async with disable_cancellation():
+                 raise CancelledError()
+
+    kernel.run(task())
 
 def test_sleep_0_starvation(kernel):
     # This task should not block other tasks from running, and should be

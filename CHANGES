@@ -1,26 +1,80 @@
 CHANGES
 -------
-01/02/2017 Have added an option to tasks to control whether or not they're
-           allowed to receive a cancellation exception.   This must be
-           specified at the time of spawning:
+01/02/2017 Major reorganization of how task cancellation works. There
+	   are two major parts to it.
 
-                task = await spawn(coro(), allow_cancellation=False)
+	   Kernel:
 
-           If a task disables cancellation, it is the task's responsibility
-           to poll for it.   For example:
+           Every task has a boolean flag "task.allow_cancel" that
+           determines whether or not cancellation exceptions (which
+           includes cancellation and timeouts) can be raised in the
+           task or not.  The flag acts as a simple mask. If set True,
+           a cancellation results in an exception being raised in the
+           task.  If set False, the cancellation-related exception is
+           placed into "task.cancel_pending" instead.  That attribute
+           holds onto the exception indefinitely, waiting for the task
+           to reenable cancellations.  Once reenabled, the exception
+           is raised immediately the next time the task performs a 
+	   blocking operation.
 
-                async def coro():
-                    myself = await current_task()
-                    while True:
-                        ...
-                        if myself.cancelled:
-                            break
-                    print('Goodbye')
+	   Coroutines:
 
-           This feature allows certain critical tasks such as supervisors
-           and managers to explicitly control their cancellation point. 
-           It is an error for a task to ignore cancellation completely--
-           doing so will cause Curio to hang on program termination. 
+	   From coroutines, control of the cancellation flag is
+	   performed by two functions which are used as context
+	   managers:
+
+	   To disable cancellation, use the following construct:
+
+               async def coro():
+                   async with disable_cancellation():
+                       ...
+                       await something1()
+                       await something2()
+                       ...
+
+                   await blocking_op()   # Cancellation raised here (if any)
+           
+           Within a disable_cancellation() block, it is illegal for
+           a CancelledError exception to be raised--even manually. Doing
+           so causes a RuntimeError.  
+
+	   To reenable cancellation in specific regions of code, use 
+	   enable_cancellation() like this:
+
+               async def coro():
+                   async with disable_cancellation():
+                       while True:
+                           await something1()
+                           await something2()
+                           async with enable_cancellation() as c:
+                               await blocking_op()
+
+                           if c.cancel_pending:
+                               # Cancellation is pending right now. Must bail out.
+      			       break
+
+                   await blocking_op()   # Cancellation raised here (if any)
+
+           Use of enable_cancellation() is never allowed outside of an
+           enclosing disable_cancellation() block.  Doing so will
+           cause a RuntimeError exception. Within an
+           enable_cancellation() block, all of the normal cancellation
+           rules apply.  This includes raising of exceptions,
+           timeouts, and so forth.  However, CancelledError exceptions
+           will never escape the block.  Instead, they turn back into
+           a pending exception which can be checked as shown above.
+
+	   Normally cancellations are are only delivered on blocking 
+           operations.   If you want to force a check, you can use
+           check_cancellation() like this:
+
+                if await check_cancellation():
+                    # Cancellation is pending, but not allowed right now
+                    ...
+
+           Depending on the setting of the allow_cancel flag, 
+           check_cancellation() will either raise the cancellation 
+           exception immediately or report that it is pending.
 
 12/31/2016 Added defer_timeout context manager to delay the delivery of a timeout
            (if any) to a more advantageous point.  For example:

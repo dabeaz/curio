@@ -272,6 +272,50 @@ Rather than having every possible call take an explicit *timeout* argument,
 you should wrap the call using :func:`timeout_after` or :func:`ignore_after` as
 appropriate.
 
+Cancellation Control
+--------------------
+
+.. function:: disable_cancellation()
+
+   Disables the delivery of cancellation-related exceptions to the
+   calling task.  Cancellations will be delivered to the first
+   blocking operation that's performed once cancellation delivery is
+   reenabled.  This function is used as a context manager (see example below).
+   
+.. function:: enable_cancellation()
+
+   Reenables the delivery of cancellation-related exceptions.  This
+   function is used as a context manager.  It may only be used
+   inside a context in which cancellation has been disabled.
+
+.. asyncfunction:: check_cancellation()
+
+   Checks to see if any cancellation is pending for the calling task.
+   If cancellation is allowed, a cancellation exception is raised
+   immediately.  If cancellation is not allowed, it returns the
+   pending cancellation exception instance (if any).  Returns ``None``
+   if no cancellation is pending.
+
+
+Use of these functions is highly specialized and is probably best avoided.
+Here is an example that shows typical usage::
+
+    async def coro():
+        async with disable_cancellation():
+            while True:
+                await coro1()
+                await coro2()
+                async with enable_cancellation():
+                    await coro3()   # May be cancelled
+                    await coro4()   # May be cancelled
+
+                if await check_cancellation():
+                    break   # Bail out!
+
+        await blocking_op()   # Cancellation (if any) delivered here
+
+See the section on cancellation in the Curio Developer's Guide for more detailed information.
+
 Performing External Work
 ------------------------
 .. module:: curio.workers
@@ -1626,16 +1670,6 @@ cancellation point.
    Synchronous trap. Unset a timeout in the currently running
    task. *previous* is the value returned by the _set_timeout() call
    used to set the timeout.
-
-.. asyncfunction:: _cancel_allowed_stack_push(state)
-.. asyncfunction:: _cancel_allowed_stack_pop(state)
-
-   Synchronous traps. For each task, cancellation can be either
-   enabled or disabled by ``curio.{defer,allow}_cancellation``
-   blocks. These traps push/pop the current setting when we enter/exit
-   these blocks. If cancellation becomes enabled while a cancellation
-   is pending, then these traps can raise ``CancelledError`` or
-   ``TaskTimeout``.
 
 .. asyncfunction:: _queue_reschedule_function(queue)
 
