@@ -37,7 +37,7 @@ async def kid():
             total += await curio.run_in_process(fib, n)
     except curio.CancelledError:
         print('Fine. Saving my work. I got to', total)
-
+        raise
 
 async def parent():
     print('Parent PID', os.getpid())

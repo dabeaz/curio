@@ -5,9 +5,9 @@ Curio is a modern library for performing reliable concurrent I/O using
 Python coroutines and the explicit async/await syntax introduced in
 Python 3.5.  Its programming model is based on cooperative
 multitasking and common system programming abstractions such as
-threads, sockets, files, subprocesses, locks, and queues.  Under
-the covers, it is based on a task queuing system, not a callback-based
-event loop.  If you've programmed with threads, curio will feel familiar.
+threads, sockets, files, subprocesses, locks, and queues.  Under the
+covers, it is based on a task queuing system.  If you've programmed
+with threads, curio will feel familiar.
 
 This tutorial will take you through the basics of creating and 
 managing tasks in curio as well as some useful debugging features. 
@@ -32,8 +32,8 @@ countdown as you wait for your kid to put their shoes on::
         curio.run(countdown(10))
 
 Run it and you'll see a countdown.  Yes, some jolly fun to be
-sure. Curio is based around the idea of tasks.  Tasks are functions
-defined as coroutines using the ``async`` syntax.  To make a task
+sure. Curio is based around the idea of tasks.  Tasks are 
+defined as coroutines using ``async`` functions.  To make a task
 execute, it must run inside the curio kernel.  The ``run()`` function
 starts the kernel with an initial task.  The kernel runs until there
 are no more tasks to complete.
@@ -96,7 +96,7 @@ output::
     We're leaving!
     .... hangs ....
 
-At this point, the program appears hung.  The child is sleeping for
+At this point, the program appears hung.  The child is busy for
 the next 1000 seconds, the parent is blocked on ``join()`` and nothing
 much seems to be happening--this is the mark of all good concurrent
 programs (hanging that is).  Change the last part of the program to
@@ -222,6 +222,7 @@ and cleanup. For example::
             await curio.sleep(1000)
         except curio.CancelledError:
             print('Fine. Saving my work.')
+	    raise
 
 Now your program should produce output like this::
 
@@ -268,6 +269,7 @@ parent's permission to start playing::
             await curio.sleep(1000)
         except curio.CancelledError:
             print('Fine. Saving my work.')
+            raise
 
     async def parent():
         kid_task = await curio.spawn(kid())
@@ -312,6 +314,7 @@ repeatedly nag like this::
             await curio.sleep(1000)
         except curio.CancelledError:
             print('Fine. Saving my work.')
+            raise
 
 Signals
 -------
@@ -414,9 +417,10 @@ like this::
                  total += fib(n)
         except curio.CancelledError:
             print('Fine. Saving my work.')
+            raise
 
 If you run this version, you'll find that the entire kernel becomes
-unresponsive.  The monitor doesn't work, signals aren't caught, and
+unresponsive.  For example,  signals aren't caught and
 there appears to be no way to get control back.  The problem here is
 that the kid is hogging the CPU and never yields.  Important lesson:
 curio does not provide preemptive scheduling. If a task decides to
@@ -437,6 +441,7 @@ this::
                 total += await curio.run_in_process(fib, n)
         except curio.CancelledError:
             print('Fine. Saving my work.')
+            raise
 
 In this version, the kernel remains fully responsive because the CPU
 intensive work is being carried out in a subprocess. You should be
@@ -445,11 +450,10 @@ as before.
 
 The problem of blocking might also apply to other operations involving
 I/O.  For example, accessing a database or calling out to other
-libraries.  In fact, any operation not preceded by an explicit
+libraries.  In fact, any I/O operation not preceded by an explicit
 ``await`` might block.  If you know that blocking is possible, use the
-``curio.run_in_thread()`` coroutine.
-This arranges to have the computation
-carried out in a separate thread. For example::
+``curio.run_in_thread()`` coroutine.  This arranges to have the
+computation carried out in a separate thread. For example::
 
     import time
 
@@ -473,8 +477,9 @@ sleep, use that instead.
 A Simple Echo Server
 --------------------
 
-Now that you've got the basics down, let's look at some I/O. Here
-is a simple echo server written directly with sockets using curio::
+Now that you've got the basics down, let's look at some I/O. Perhaps
+the main use of Curio is in network programming.  Here is a simple
+echo server written directly with sockets using curio::
 
     from curio import run, spawn
     from curio.socket import *
@@ -523,7 +528,7 @@ the services of the kernel is prefaced by ``await``.
 
 Carefully notice that we are using the module ``curio.socket`` instead
 of the built-in ``socket`` module here.  Under the covers, ``curio.socket``
-is actually just a wrapper around the existing ``socket`` module.  All
+is a wrapper around the existing ``socket`` module.  All
 of the existing functionality of ``socket`` is available, but all of the
 operations that might block have been replaced by coroutines and must be
 preceded by an explicit ``await``. 
@@ -629,6 +634,7 @@ to a Unix signal::
             print('Connection closed')
         except CancelledError:
             await client.sendall(b'Server going down\n')
+	    raise
         finally:
             clients.remove(task)
     
@@ -1071,6 +1077,7 @@ pull requests, and other activities.
 
 A reference manual can be found at https://curio.readthedocs.io/en/latest/reference.html.
 
+A more detailed developer's guide can be found at https://curio.readthedocs.io/en/latest/devel.html.
 
 
 

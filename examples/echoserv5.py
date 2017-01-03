@@ -20,6 +20,7 @@ async def echo_client(client, addr):
         print('Connection closed')
     except CancelledError:
         await client.sendall(b'Server going down\n')
+        raise
     finally:
         clients.remove(task)
 
