@@ -1079,7 +1079,7 @@ If you run this code, you'll get output like this::
     curio.errors.CancelledError
 
 Carefully observe that cancellation is being reported on the first blocking operation
-outside the `disable_cancellation()` block.  There will be a quiz later.
+outside the ``disable_cancellation()`` block.  There will be a quiz later.
 
 It is fine for ``disable_cancellation()`` blocks to be nested.   This makes them
 safe for use in subroutines.  For example::
