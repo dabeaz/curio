@@ -122,7 +122,7 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
 
 .. asyncmethod:: Task.cancel(blocking=True)
 
-   Cancels the task. This raises a :exc:`curio.CancelledError`
+   Cancels the task. This raises a :exc:`curio.TaskCancelled`
    exception in the task which may choose to handle it in order to
    perform cleanup actions. If ``blocking=True`` (the default), does
    not return until the task actually terminates.  Curio only allows a
@@ -132,7 +132,8 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
    task has already run to completion, this method does nothing and
    returns immediately.  Returns ``True`` if the task was actually
    cancelled. ``False`` is returned if the task was already finished
-   prior to the cancellation request.
+   prior to the cancellation request.  Cancelling a task also cancels
+   any previously set timeout. 
 
 The following public attributes are available of :class:`Task` instances:
 

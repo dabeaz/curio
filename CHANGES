@@ -1,5 +1,10 @@
 CHANGES
 -------
+01/04/2017 Modified task.cancel() so that it also cancels any pending
+           timeout. This prevents the delivery of a timeout exception
+           (if any) in code that might be executing to cleanup from
+           task cancellation.
+
 01/03/2017 Added a TaskCancelled exception.  This is now what gets 
            raised when tasks are cancelled using the task.cancel()
            method.  It is a subclass of CancelledError.   This change 

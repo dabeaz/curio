@@ -561,6 +561,11 @@ class Kernel(object):
 
             task.cancelled = True
 
+            # Cancelling a task also cancels any currently pending timeout. 
+            # If a task is being cancelled, the delivery of a timeout is
+            # somewhat immaterial--the task is already being cancelled.
+            task.timeout = None
+
             # Set the cancellation exception
             task.cancel_pending = exc(exc.__name__ if val is None else val)
 

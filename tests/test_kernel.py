@@ -925,3 +925,32 @@ def test_ping_pong_starvation(kernel):
         await pp2.cancel()
 
     kernel.run(main())
+
+def test_task_cancel_timeout(kernel):
+    # Test that cancellation also cancels timeouts
+    results = []
+
+    async def coro():
+        try:
+            await sleep(5)
+        except CancelledError:
+            results.append('cancelled')
+            await sleep(1)
+            results.append('done cancel')
+            raise
+
+    async def child():
+        results.append('child')
+        try:
+            async with timeout_after(1):
+                 await coro()
+        except TaskTimeout:
+            results.append('timeout')
+
+    async def main():
+        task = await spawn(child())
+        await sleep(0.5)
+        await task.cancel()
+
+    kernel.run(main())
+    assert results == [ 'child', 'cancelled', 'done cancel' ]
