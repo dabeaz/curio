@@ -10,6 +10,7 @@ __all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
 from time import monotonic
 from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError, CancelledError
 from .traps import *
+from .util import aiter_compat_hack
 
 
 class Task(object):
@@ -222,7 +223,8 @@ class wait(object):
     async def __aexit__(self, ty, val, tb):
         await self.cancel_remaining()
 
-    async def __aiter__(self):
+    @aiter_compat_hack
+    def __aiter__(self):
         return self
 
     async def __anext__(self):

@@ -44,6 +44,7 @@ __all__ = ['aopen', 'anext']
 from contextlib import contextmanager
 from .workers import run_in_thread
 from .errors import SyncIOError
+from .util import aiter_compat_hack
 
 
 class AsyncFile(object):
@@ -125,6 +126,7 @@ class AsyncFile(object):
     def __exit__(self, *args):
         pass
 
+    @aiter_compat_hack
     def __aiter__(self):
         return self
 
