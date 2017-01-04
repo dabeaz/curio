@@ -70,6 +70,15 @@ There is only one method that may be used on a :class:`Kernel` outside of corout
    will make the kernel cancel all remaining tasks and perform a
    clean shut down.
 
+If submitting multiple tasks, one after another, from synchronous
+code, consider using a kernel as a context manager.  For example::
+
+    with Kernel() as kernel:
+        kernel.run(coro1())
+        kernel.run(coro2())
+        ...
+    # Kernel shuts down here
+
 Tasks
 -----
 
@@ -85,17 +94,6 @@ The following functions are defined to help manage the execution of tasks.
    as long as there are non-daemonic tasks to execute.  Note: a
    daemonic task will still be cancelled if the underlying kernel is
    shut down.
-
-.. asyncfunction:: sleep(seconds)
-
-   Sleep for a specified number of seconds.  If the number of seconds is 0, the
-   kernel merely switches to the next task (if any).
-
-.. asyncfunction:: wake_at(clock)
-
-   Sleep until the monotonic clock reaches the given clock value.  Returns the
-   value of the monotonic clock at the time the task awakes.  Use this function
-   if you need to have more precise interval timing.
 
 .. asyncfunction:: current_task()
 
@@ -115,10 +113,10 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
 
    Wait for the task to terminate.  Returns the value returned by the task or
    raises a :exc:`curio.TaskError` exception if the task failed with an
-   exception. This is a chained exception.  The `__cause__` attribute of this
+   exception. This is a chained exception.  The ``__cause__`` attribute of this
    exception contains the actual exception raised by the task when it crashed.
-   If called on a task that has been cancelled, the `__cause__`
-   attribute is set to :exc:`curio.CancelledError`.
+   If called on a task that has been cancelled, the ``__cause__``
+   attribute is set to :exc:`curio.TaskCancelled`.
 
 .. asyncmethod:: Task.cancel(blocking=True)
 
@@ -191,6 +189,29 @@ Curio supports "task local storage". The API is modeled after the
    the child. This inheritance takes the form of a shallow copy --
    further changes in the parent won't affect the child, and further
    changes in the child won't affect the parent.
+
+Time
+----
+
+The following functions are used by tasks to help manage time.
+
+.. asyncfunction:: sleep(seconds)
+
+   Sleep for a specified number of seconds.  If the number of seconds is 0, the
+   kernel merely switches to the next task (if any).
+
+.. asyncfunction:: wake_at(clock)
+
+   Sleep until the monotonic clock reaches the given absolute clock
+   value.  Returns the value of the monotonic clock at the time the
+   task awakes.  Use this function if you need to have more precise
+   interval timing.
+
+.. asyncfunction:: clock()
+
+   Returns the current value of the kernel clock.   This is often used in
+   conjunction with the ``wake_at()`` function (you'd use this to get
+   an initial clock value for passing an argument).  
 
 Timeouts
 --------
@@ -345,7 +366,7 @@ calculations and blocking operations.  Use the following functions to do that:
 .. asyncfunction:: run_in_process(callable, *args, **kwargs)
 
    Run ``callable(*args, **kwargs)`` in a separate process and returns
-   the result.  If the calling task is cancelled, the underlying
+   the result.  If cancelled, the underlying
    worker process (if started) is immediately cancelled by a ``SIGTERM``
    signal.
 
@@ -458,7 +479,8 @@ exception.
 
 .. asyncmethod:: Socket.sendall(data, flags=0)
 
-   Send all of the data in *data*.
+   Send all of the data in *data*. If cancelled, the ``bytes_sent`` attribute of the
+   resulting exception contains the actual number of bytes sent.
 
 .. asyncmethod:: Socket.sendto(data, address)
 .. asyncmethod:: Socket.sendto(data, flags, address)
@@ -555,7 +577,12 @@ The following methods are available on instances of :class:`FileStream`:
 
 .. asyncmethod:: FileStream.readline()
 
-   Read a single line of data from a file.
+   Read a single line of data from a file.  
+
+.. asyncmethod:: FileStream.readlines()
+
+   Read all of the lines from a file. If cancelled, the ``lines_read`` attribute of
+   the resulting exception contains all of the lines that were read so far.
 
 .. asyncmethod:: FileStream.write(bytes)
 
@@ -563,7 +590,8 @@ The following methods are available on instances of :class:`FileStream`:
 
 .. asyncmethod:: FileStream.writelines(lines)
 
-   Writes all of the lines in *lines* to the file.
+   Writes all of the lines in *lines* to the file.  If cancelled, the ``bytes_written``
+   attribute of the exception contains the total bytes written so far.
 
 .. asyncmethod:: FileStream.flush()
 
@@ -785,7 +813,7 @@ The following methods of :class:`Popen` have been replaced by asynchronous equiv
 
 .. asyncmethod:: Popen.wait()
 
-   Wait for a subprocess to exit.
+   Wait for a subprocess to exit.  Cancellation does not terminate the process.
 
 .. asyncmethod:: Popen.communicate(input=b'')
 
@@ -882,7 +910,7 @@ For example::
 
 :class:`AsyncFile` objects are intentionally incompatible with code
 that uses files in a synchronous manner.  Partly, this is to help
-avoid unintentional errors in your program where you blocking might
+avoid unintentional errors in your program where blocking might
 occur with you realizing it.  If you know what you're doing and you
 need to access the underlying file in synchronous code, use the
 `blocking()` context manager like this::
@@ -995,12 +1023,12 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
 
 .. asyncmethod:: Lock.acquire()
 
-   Acquire the lock, incrementing the recursion by 1. Can be used multiple times withing
+   Acquire the lock, incrementing the recursion by 1. Can be used multiple times within
    the same task, that owns this lock.
 
 .. asyncmethod:: Lock.release()
 
-   Release the lock, decrementing the rerecurtion level by 1. If recursion level reaches 0,
+   Release the lock, decrementing the recursion level by 1. If recursion level reaches 0,
    the lock is unlocked. Raises ``RuntimeError`` if called not by the owner or if lock
    is not locked.
 
@@ -1191,7 +1219,7 @@ Here is an example of using queues in a producer-consumer problem::
 
 .. class:: PriorityQueue(maxsize=0)
 
-  Creates a **priority** queue with a maximum number of elements in *maxsize*.
+  Creates a priority queue with a maximum number of elements in *maxsize*.
 
 In a :class:`PriorityQueue` items are retrieved in priority order with the
 lowest priority first::
@@ -1219,7 +1247,7 @@ This will output
 
 .. class:: LifoQueue(maxsize=0)
 
-    A queue with **"Last In First Out"** retrieving policy
+    A queue with "Last In First Out" retrieving policy
 
 ::
 
@@ -1650,17 +1678,16 @@ cancellation point.
 
    Synchronous trap. Cancel the indicated *task*.
 
-.. asyncfunction:: _wait_on_queue(kqueue, state_name)
+.. asyncfunction:: _wait_on_ksync(ksync, state_name)
 
-   Blocking trap.  Go to sleep on a queue. *kqueue* is an instance of
-   a kernel queue which is typically a :py:class:`collections.deque`
-   instance. *state_name* is the name of the wait state (used in
+   Blocking trap.  Go to sleep on a kernel synchronization primitive. *ksync* is an instance of
+   ``curio.kernel.KernelSyncBase``. *state_name* is the name of the wait state (used in
    debugging).
 
-.. asyncfunction:: _reschedule_tasks(kqueue, n=1, value=None, exc=None)
+.. asyncfunction:: _reschedule_tasks(ksync, n=1, value=None, exc=None)
 
    Synchronous trap. Reschedule one or more tasks from a
-   queue. *kqueue* is an instance of a kernel queue.  *n* is the
+   kernel synchronization primitive. *n* is the
    number of tasks to release. *value* and *exc* specify the return
    value or exception to raise in the task when it resumes execution.
 
@@ -1699,12 +1726,12 @@ cancellation point.
    task. *previous* is the value returned by the _set_timeout() call
    used to set the timeout.
 
-.. asyncfunction:: _queue_reschedule_function(queue)
+.. asyncfunction:: _ksync_reschedule_function(queue)
 
    Synchronous trap. Return a function that allows tasks to be
-   rescheduled from a queue without the use of await.  Can be used in
-   synchronous code as long as it runs in the same thread as the Curio
-   kernel.
+   rescheduled on a kernel sychronization primitive without the use of
+   await.  Can be used in synchronous code as long as it runs in the
+   same thread as the Curio kernel.
 
 .. asyncfunction:: _clock():
 
