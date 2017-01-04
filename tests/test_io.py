@@ -509,3 +509,46 @@ def test_iterline(kernel):
         'handler done'
     ]
 
+
+def test_double_recv(kernel):
+    results = []
+
+    async def bad_handler(client):
+        results.append('bad handler')
+        await sleep(0.1)
+        try:
+            await client.recv(1000)   # <- This needs to fail. Task already reading on the socket
+            results.append('why am I here?')
+        except CurioError as e:
+            results.append('good handler')
+
+    async def handler(client, addr):
+        results.append('handler start')
+        await spawn(bad_handler(client))
+        await client.send(b'OK')
+        data = await client.recv(1000)
+        results.append(data)
+        results.append('handler done')
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sleep(1)
+        await sock.send(b'Msg')
+        await sock.close()
+        await serv.cancel()
+
+    async def main():
+        serv = await spawn(tcp_server('', 25000, handler))
+        await spawn(test_client(('localhost', 25000), serv))
+
+    kernel.run(main())
+
+    assert results == [
+        'handler start',
+        'bad handler',
+        'good handler',
+        b'Msg',
+        'handler done'
+        ]

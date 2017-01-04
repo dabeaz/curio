@@ -72,6 +72,10 @@ class _Fd(object):
     def __int__(self):
         return self.fd
 
+    def __repr__(self):
+        return '<fd=%r>' % self.fd
+
+
 # There is a certain amount of repetition in this class.  It can
 # probably be shortened with some sort of decorator magic. On the
 # other, the KISSS (Keep it Stupid Simple Stupid) principle might be a

@@ -1,5 +1,8 @@
 CHANGES
 -------
+01/04/2017 Two tasks that attempt to wait on the same file descriptor
+           now results in an exception.  Closes issue #104.
+
 01/04/2017 Modified the monitor so that killing the Curio process also
            kills the monitor thread and disconnects any connected clients.
            Addresses issue #108.

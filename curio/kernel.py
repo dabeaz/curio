@@ -428,6 +428,10 @@ class Kernel(object):
             try:
                 key = selector_getkey(fileobj)
                 mask, (rtask, wtask) = key.events, key.data
+                if event == EVENT_READ and rtask:
+                    raise CurioError("Multiple tasks can't wait to read on the same file descriptor %r" % fileobj)
+                if event == EVENT_WRITE and wtask:
+                    raise CurioError("Multiple tasks can't wait to write on the same file descriptor %r" % fileobj)
                 selector_modify(fileobj, mask | event,
                                 (task, wtask) if event == EVENT_READ else (rtask, task))
             except KeyError:
@@ -478,7 +482,11 @@ class Kernel(object):
             if current._last_io != (fileobj, event):
                 if current._last_io:
                     _unregister_event(*current._last_io)
-                _register_event(fileobj, event, current)
+                try:
+                    _register_event(fileobj, event, current)
+                except CurioError as e:
+                    _reschedule_task(current, exc=e)
+                    return (current.state, None)
 
             # This step indicates that we have managed any deferred I/O management
             # for the task.  Otherwise the run() method will perform an unregistration step.
