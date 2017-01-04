@@ -174,7 +174,7 @@ class Monitor(object):
                             buffer = bytearray()
                             while not self._closing.is_set():
                                 index = buffer.find(b'\n')
-                                if index > 0:
+                                if index >= 0:
                                     line = buffer[:index+1].decode('latin-1')
                                     del buffer[:index+1]
                                     yield line
@@ -204,7 +204,7 @@ class Monitor(object):
             if not resp:
                 return
             try:
-                if not resp or resp.startswith('q'):
+                if resp.startswith('q'):
                     self.command_exit(sout)
                     return
 
