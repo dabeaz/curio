@@ -708,41 +708,6 @@ def test_nested_timeout_none(kernel):
         'parent timeout'
     ]
 
-def test_nested_timeout_defer(kernel):
-    results = []
-
-    async def coro1():
-        results.append('coro1 start')
-        await sleep(2)
-        results.append('coro1 done')
-
-    async def coro2():
-        results.append('coro2 start')
-        await sleep(1)
-        results.append('coro2 done')
-
-    async def child():
-        async with defer_timeout():
-            await coro1()
-            results.append('coro1 success')
-
-        await coro2()
-        results.append('coro2 success')
-
-    async def parent():
-        try:
-            await timeout_after(1, child())
-        except TaskTimeout:
-            results.append('parent timeout')
-
-    kernel.run(parent())
-    assert results == [
-        'coro1 start',
-        'coro1 done',
-        'coro1 success',
-        'parent timeout'
-    ]
-
 def test_task_wait_no_cancel(kernel):
     results = []
 
