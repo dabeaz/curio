@@ -276,18 +276,21 @@ appropriate.
 Cancellation Control
 --------------------
 
-.. function:: disable_cancellation()
+.. function:: disable_cancellation(coro=None)
 
    Disables the delivery of cancellation-related exceptions to the
    calling task.  Cancellations will be delivered to the first
    blocking operation that's performed once cancellation delivery is
-   reenabled.  This function is used as a context manager (see example below).
+   reenabled.  This function may be used to shield a single coroutine 
+   or used as a context manager (see example below).
    
-.. function:: enable_cancellation()
+.. function:: enable_cancellation(coro=None)
 
    Reenables the delivery of cancellation-related exceptions.  This
    function is used as a context manager.  It may only be used
-   inside a context in which cancellation has been disabled.
+   inside a context in which cancellation has been disabled.  This
+   function may be used to shield a single coroutine or used as
+   a context manager (see example below).
 
 .. asyncfunction:: check_cancellation()
 
@@ -314,6 +317,21 @@ Here is an example that shows typical usage::
                     break   # Bail out!
 
         await blocking_op()   # Cancellation (if any) delivered here
+
+If you only need to shield a single operation, you can write statements like this::
+
+    async def coro():
+        ...
+        await disabled_cancellation(some_operation())
+        ...
+
+This is shorthand for writing the following::
+
+    async def coro():
+        ...
+        async with disable_cancellation():
+            await some_operation()
+        ...
 
 See the section on cancellation in the Curio Developer's Guide for more detailed information.
 

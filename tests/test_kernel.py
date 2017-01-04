@@ -843,6 +843,28 @@ def test_defer_cancellation(kernel):
     kernel.run(main())
 
 
+def test_disable_cancellation_function(kernel):
+    async def cancel_it(e1, e2):
+        await e1.set()
+        await e2.wait()
+
+    async def cancel_me(e1, e2):
+        with pytest.raises(CancelledError):
+            await disable_cancellation(cancel_it(e1, e2))
+            await check_cancellation()
+
+    async def main():
+        e1 = Event()
+        e2 = Event()
+        task = await spawn(cancel_me(e1, e2))
+        await e1.wait()
+        await task.cancel(blocking=False)
+        await e2.set()
+        await task.join()
+
+    kernel.run(main())
+
+
 def test_self_cancellation(kernel):
     async def suicidal_task():
         task = await current_task()

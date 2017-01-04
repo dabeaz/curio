@@ -305,8 +305,23 @@ class _CancellationManager(object):
             self.cancel_pending = self.task.cancel_pending
             return False
 
-enable_cancellation = lambda: _CancellationManager(True)
-disable_cancellation = lambda: _CancellationManager(False)
+def enable_cancellation(coro=None):
+    if coro is None:
+        return _CancellationManager(True)
+    else:
+        async def run():
+            async with _CancellationManager(True):
+                return await coro
+        return run()
+
+def disable_cancellation(coro=None):
+    if coro is None:
+        return _CancellationManager(False)
+    else:
+        async def run():
+            async with _CancellationManager(False):
+                return await coro
+        return run()
 
 async def check_cancellation(exc_type=None):
     '''

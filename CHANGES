@@ -1,5 +1,18 @@
 CHANGES
 -------
+01/04/2017 Modifed enable_cancellation() and disable_cancellation() so that
+           they can also be used as functions.  This makes it easier to
+           shield a single operation. For example:
+
+              await disable_cancellation(coro())
+
+           Functionally, it is the same as this:
+
+              async with disable_cancellation():
+                  await coro()
+
+           This is mostly a convenience feature.  
+
 01/04/2017 Two tasks that attempt to wait on the same file descriptor
            now results in an exception.  Closes issue #104.
 

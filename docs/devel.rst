@@ -1004,7 +1004,15 @@ context manager like this::
 When used, the enclosed statements are guaranteed to never abort with
 a ``CancelledError`` exception (this includes timeouts).  If any kind
 of cancellation request has occurred, it won't be processed until the
-next blocking operation outside of the context manager.
+next blocking operation outside of the context manager. 
+
+If you are trying to shield a single operation, you can also pass a coroutine to
+``disable_cancellation()`` like this::
+
+    async def coro():
+        ...
+        await disable_cancellation(op())
+        ...
 
 Code that disables cancellation can explicitly poll for the presence
 of a cancellation request using ``check_cancellation()`` like this::
@@ -1173,7 +1181,7 @@ Cancellation and timeouts are an important part of Curio and there
 are a few considerations to keep in mind when writing library
 functions.
 
-First, if you need to perform some kind of cleanup action such as
+If you need to perform some kind of cleanup action such as
 killing a helper task, you'll probably want to wrap it in a
 ``try-finally`` block like this::
 
@@ -1194,8 +1202,9 @@ use that if available.  For example::
             ...
         # task cancelled here
 
-Second, if you must catch cancellation errors, make sure you re-raise them.
-It's not legal to simply ignore cancellation. For example::
+If you must catch cancellation errors, make sure you re-raise them.
+It's not legal to simply ignore cancellation. Correct cancellation
+handling code will typically look like this::
 
     async def coro():
         try:
@@ -1205,9 +1214,40 @@ It's not legal to simply ignore cancellation. For example::
             ...
             raise
 
-Third, you might consider writing code that returns partially
-completed results on cancellation.  Partial results can be
-attached to the resulting exception.  For example::
+If you are going to perform cleanup actions in response to
+cancellation or timeout, be extremely careful with blocking operations
+in exception handlers.  In rare instances, it's possible that your
+code could receive ANOTHER cancellation exception while it's handling
+the first one (e.g., getting a direct cancellation request while
+handling a timeout).  Here's where things might go terribly wrong::
+
+    async def coro():
+        try:
+            ...
+        except CancelledError:
+            ...
+            await blocking_op()     # Could receive cancellation/timeout
+            other_op()              # Won't execute
+            raise
+
+If that happens, the sky will suddenly turn black from an incoming
+swarm of howling locusts. It will not end well as you try to figure
+out what combination of mysterious witchcraft led to part of your
+exception handler not fully executing.  If you absolutely must block
+to perform a cleanup action, shield that operation from cancellation like this::
+
+    async def coro():
+        try:
+            ...
+        except CancelledError:
+            ...
+            await disable_cancellation(blocking_op())  # Will not be cancelled
+            other_op()                                 # Will execute
+            raise
+
+You might consider writing code that returns partially completed
+results on cancellation.  Partial results can be attached to the
+resulting exception.  For example::
 
     async def sendall(sock, data):
         bytes_sent = 0
@@ -1230,10 +1270,11 @@ recover in some sane way.  For example::
              print('Well, that sure is slow')
              print('Only sent %d bytes' % e.bytes_sent)
 
-Finally, be extremely careful writing library code that involves infinite loops.
-In particular, don't rely solely on the delivery of a cancellation exception to
-terminate the loop for you.  Instead, put an explicit
-``check_cancellation()`` check in the loop someplace like this::
+Finally, be extremely careful writing library code that involves infinite
+loops.  In particular, don't rely solely on the delivery of a
+cancellation exception to terminate the loop for you.  Instead, put an
+explicit ``check_cancellation()`` check in the loop someplace like
+this::
 
     async def run_forever():
         while True:
