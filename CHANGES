@@ -1,5 +1,9 @@
 CHANGES
 -------
+01/04/2017 Modified the monitor so that killing the Curio process also
+           kills the monitor thread and disconnects any connected clients.
+           Addresses issue #108.
+
 01/04/2017 Modified task.cancel() so that it also cancels any pending
            timeout. This prevents the delivery of a timeout exception
            (if any) in code that might be executing to cleanup from

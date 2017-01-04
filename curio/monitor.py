@@ -166,22 +166,43 @@ class Monitor(object):
                 try:
                     client, addr = sock.accept()
                     with client:
-                        sout = client.makefile('w', encoding='utf-8')
-                        sin = client.makefile('r', encoding='utf-8')
-                        self.interactive_loop(sout, sin)
+                        client.settimeout(0.5)
+
+                        # This bit of magic is for reading lines of input while still allowing timeouts
+                        # and the ability for the monitor to die when curio exits.  See Issue #108.
+                        def readlines():
+                            buffer = bytearray()
+                            while not self._closing.is_set():
+                                index = buffer.find(b'\n')
+                                if index > 0:
+                                    line = buffer[:index+1].decode('latin-1')
+                                    del buffer[:index+1]
+                                    yield line
+                                try:
+                                    chunk = client.recv(1000)
+                                    if not chunk:
+                                        break
+                                    buffer.extend(chunk)
+                                except socket.timeout:
+                                    pass
+                                     
+                        sout = client.makefile('w', encoding='latin-1')
+                        self.interactive_loop(sout, readlines())
                 except socket.timeout:
                     continue
 
-    def interactive_loop(self, sout, sin):
+    def interactive_loop(self, sout, input_lines):
         '''
         Main interactive loop of the monitor
         '''
         sout.write('\nCurio Monitor: %d tasks running\n' % len(self.kernel._tasks))
         sout.write('Type help for commands\n')
-        while not self._closing.is_set():
+        while True:
             sout.write('curio > ')
             sout.flush()
-            resp = sin.readline()
+            resp = next(input_lines, None)
+            if not resp:
+                return
             try:
                 if not resp or resp.startswith('q'):
                     self.command_exit(sout)
