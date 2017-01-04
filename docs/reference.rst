@@ -1561,7 +1561,11 @@ The following exceptions are defined. All are subclasses of the
 
 .. exception:: CancelledError
 
-   Exception raised in a coroutine if it has been cancelled.  If ignored, the
+   Base class for all cancellation-related exceptions.
+
+.. exception:: TaskCancelled
+
+   Exception raised in a coroutine if it has been cancelled using the :meth:`Task.cancel` method.  If ignored, the
    coroutine is silently terminated.  If caught, a coroutine can continue to
    run, but should work to terminate execution.  Ignoring a cancellation
    request and continuing to execute will likely cause some other task to hang.
@@ -1569,6 +1573,11 @@ The following exceptions are defined. All are subclasses of the
 .. exception:: TaskTimeout
 
    Exception raised in a coroutine if it has been cancelled by timeout.
+
+.. exception:: TimeoutCancellationError
+
+   Exception raised in a coroutine if it has been cancelled due to a timeout,
+   but not one related to the inner-most timeout operation.
 
 .. exception:: TaskError
 
