@@ -50,14 +50,12 @@ class AsyncThread(object):
                 self._result_exc = None
 
             except BaseException as e:
-                print("Exception:", repr(e))
                 self._result_value = None
                 self._result_exc = e
                 
             # Hand it back to the thread
             self._done_evt.set()
 
-        print('Thread cancelled')
         await self._terminate_evt.set()
 
     def _func_runner(self):
