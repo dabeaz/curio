@@ -1399,6 +1399,112 @@ For example, the ``coro()`` code merely calls ``watchdog(30)``.
 There's no need to pass an extra ``Task`` instance around in the
 API--it can be easily obtained if it's needed.
 
+Programming with Threads
+------------------------
+
+Asynchronous I/O is often viewed as an alternative to thread
+programming (e.g., Threads Bad!).  However, it's really not an
+either-or question.  Threads are still useful for a variety of of
+things.  In this section, we look at some strategies for programming
+and interacting with threads in Curio.
+
+Execution of Blocking Operations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Blocking operations are a serious problem for any asynchronous code. 
+Of particular concern are calls to normal synchronous functions that
+might perform some kind of hidden I/O behind the scenes. 
+For example, suppose you had some code like this::
+
+    import socket
+
+    async def handler(client, addr):
+        hostinfo = socket.gethostbyaddr(addr[0])
+        ...
+
+In this code, the ``gethostbyaddr()`` function performs a reverse-DNS
+lookup on an address.  It's not CPU intensive, but while it completes,
+it's going to completely block the Curio kernel loop from executing any
+other work.  It's not the sort of thing that you'd want in
+your program.  Under heavy load, you might find your program to be sort
+of glitchy or laggy.
+
+To fix the problem, you could rewrite the operation entirely using
+asynchronous I/O operations.  However, that's not always practical.
+So, an alternative approach is to offload it to a background thread
+using ``run_in_thread()`` like this::
+
+    import socket
+    from curio import run_in_thread
+
+    async def handler(client, addr):
+        hostinfo = await run_in_thread(socket.gethostbyaddr, addr[0])
+        ...
+
+In this code, the execution of ``gethostbyaddr()`` takes place in its
+own thread, freeing the Curio kernel loop to work on other tasks in
+the meantime.
+
+Under the covers, Curio maintains a pool of preallocated threads dedicated
+for performing synchronous operations like this. The ``run_in_thread()`` 
+function uses this pool. You're not really supposed to worry about those
+details though.
+
+Various parts of Curio use ``run_in_thread()`` behind the scenes. For example,
+the ``curio.socket`` module provides replacements for various blocking
+operations::
+
+    from curio import socket
+
+    async def handler(client, addr):
+        hostinfo = await socket.gethostbyaddr(addr[0])  # Uses threads
+        ...
+
+Another place where threads are used internally is in file I/O with standard files on
+the file system.   For example, if you use the Curio ``aopen()`` function::
+
+    from curio import aopen
+  
+    async def coro(filename):
+        async with aopen(filename) as f:
+            data = await f.read()
+        ...
+
+In this code, it might appear as if asynchronous I/O is being performed on files.
+Not really--it's all smoke and mirrors with background threads (if you must know,
+this approach to files is not unique to Curio though).
+
+One caution with ``run_in_thread()`` is that it should probably only be used on
+short-running operations where there is an expectation of it completing soon.
+Technically, you could use it to execute blocking operations that might wait
+for long time periods.  For example, waiting on a thread-queue::
+
+    import queue
+    from curio import run_in_thread
+
+    q = queue.Queue()     # A thread-queue (not Curio)
+    
+    async def worker():
+        while True:
+            item = await run_in_thread(q.get)   # Danger
+            ...
+
+Yes, this "works", but it also consumes a worker thread and makes it
+unavailable for other use as long as it waits for an item on the
+queue.  If you launched a large number of worker tasks, there is a
+possibility that you would exhaust all of the available threads in
+Curio's internal thread pool.  At that point, all further
+``run_in_thread()`` operations will block and your code will likely
+deadlock.  Don't do that.  Reserve the ``run_in_thread()`` function
+for operations that you know are going to complete right then.
+
+Thread-Task Coordination
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Asynchronous Threads
+^^^^^^^^^^^^^^^^^^^^
+
+
 Programming Considerations and APIs
 -----------------------------------
 
