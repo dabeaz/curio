@@ -2,11 +2,12 @@
 #
 # Not your parent's threading
 
-__all__ = [ 'AsyncThread' ]
+__all__ = [ 'await', 'async_thread', 'async_context', 'async_iter' ] 
 
 import threading
 from concurrent.futures import Future
 from functools import wraps
+from inspect import iscoroutine
 
 from . import sync
 from .task import spawn, disable_cancellation
@@ -97,8 +98,12 @@ class AsyncThread(object):
 
 def await(coro):
     '''
-    Await for a coroutine in an asynchronous thread.
+    Await for a coroutine in an asynchronous thread.  If coro is
+    not a proper coroutine, this function acts a no-op, returning coro.
     '''
+    if not iscoroutine(coro):
+        return coro
+
     if hasattr(_locals, 'thread'):
         return _locals.thread.await(coro)
     else:
