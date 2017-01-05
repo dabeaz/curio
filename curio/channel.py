@@ -14,6 +14,7 @@ import hmac
 from . import socket
 from .errors import CurioError
 from .io import StreamBase, FileStream
+from . import thread
 
 # Authentication parameters (copied from multiprocessing)
 
@@ -70,6 +71,13 @@ class Channel(object):
 
     async def __aexit__(self, *args):
         await self.close()
+
+    def __enter__(self):
+        return thread.await(self.__aenter__())
+
+    def __exit__(self, *args):
+        return thread.await(self.__aexit__(*args))
+
 
     async def close(self):
         await self._reader.close()

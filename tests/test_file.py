@@ -143,7 +143,7 @@ def test_sync_with(kernel):
             with f:
                 pass
             assert False, 'sync-with should have failed'
-        except SyncIOError:
+        except AsyncOnlyError:
             assert True
 
     kernel.run(main())

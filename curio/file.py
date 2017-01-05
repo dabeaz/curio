@@ -44,7 +44,7 @@ __all__ = ['aopen', 'anext']
 from contextlib import contextmanager
 from .workers import run_in_thread
 from .errors import SyncIOError
-
+from . import thread
 
 class AsyncFile(object):
     '''
@@ -120,10 +120,10 @@ class AsyncFile(object):
         raise SyncIOError('Use asynchronous iteration')
 
     def __enter__(self):
-        raise SyncIOError('Use async with')
+        return thread.await(self.__aenter__())
 
     def __exit__(self, *args):
-        pass
+        return thread.await(self.__aexit__(*args))
 
     def __aiter__(self):
         return self

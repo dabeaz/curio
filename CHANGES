@@ -1,5 +1,49 @@
 CHANGES
 -------
+01/05/2017 Experimental new feature--asynchronous threads!  An async thread
+           is an actual real-life thread where it is safe to call Curio
+           coroutines and use its various synchronization features. 
+           As an example, suppose you had some code like this:
+
+               async def handler(client, addr):
+                   async with client:
+                       async for data in client.as_stream():
+                           n = int(data)
+                           time.sleep(n)
+                           await client.sendall(b'Awake!\n')
+                   print('Connection closed')
+
+               run(tcp_server('', 25000, handler))
+
+           Imagine that the time.sleep() function represents some kind of
+           synchronous, blocking operation.  In the above code, it would
+           block the Curio kernel, prevents all other tasks from running.
+
+           Not a problem, change the handler() function to an async thread
+           and use the await() function like this:
+
+               from curio.thread import await, async_thread
+
+               @async_thread
+               def handler(client, addr):
+                   with client:
+                       for data in client.as_stream():
+                           n = int(data)
+                           time.sleep(n)
+                           await(client.sendall(b'Awake!\n'))
+                   print('Connection closed')
+
+              run(tcp_server('', 25000, handler))
+
+
+           You'll find that the above code works fine and doesn't block
+           the kernel.
+
+           Asynchronous threads only work in the context of Curio.  They
+           may use all of Curio's features.  Everywhere you would normally
+           use await, you use the await() function. with and for statements
+           will work with objects supporting asynchronous operation. 
+
 01/04/2017 Modifed enable_cancellation() and disable_cancellation() so that
            they can also be used as functions.  This makes it easier to
            shield a single operation. For example:

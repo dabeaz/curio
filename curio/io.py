@@ -34,6 +34,7 @@ import os
 
 from .traps import _read_wait, _write_wait
 from . import errors
+from . import thread
 
 # Exceptions raised for non-blocking I/O.  For normal sockets, blocking operations
 # normally just raise BlockingIOError.  For SSL sockets, more specific exceptions
@@ -305,10 +306,10 @@ class Socket(object):
             self._socket.__exit__(*args)
 
     def __enter__(self):
-        raise RuntimeError('Use async with')
+        return thread.await(self.__aenter__())
 
     def __exit__(self, *args):
-        pass
+        return thread.await(self.__aexit__(*args))
 
 MAX_READ = 65536
 
@@ -448,13 +449,19 @@ class StreamBase(object):
         await self.close()
 
     def __iter__(self):
-        raise RuntimeError('Use: async-for to iterate')
+        return thread.await(self.__aiter__())
+
+    def __next__(self):
+        try:
+            return thread.await(self.__anext__())
+        except StopAsyncIteration:
+            raise StopIteration
 
     def __enter__(self):
-        raise RuntimeError('Use: async-with for context management')
+        return thread.await(self.__aenter__())
 
     def __exit__(self, *args):
-        pass
+        return thread.await(self.__exit__(*args))
 
 
 class FileStream(StreamBase):

@@ -23,7 +23,7 @@ from subprocess import (
 from .task import spawn, sleep
 from .errors import CancelledError
 from .io import FileStream
-
+from . import thread
 
 class Popen(object):
     '''
@@ -118,6 +118,13 @@ class Popen(object):
 
         # Wait for the process to terminate
         await self.wait()
+
+    def __enter__(self):
+        return thread.await(self.__aenter__())
+
+    def __exit__(self, *args):
+        return thread.await(self.__aexit__(*args))
+        
 
 async def run(args, *, stdin=None, input=None, stdout=None, stderr=None, shell=False, check=False):
     '''

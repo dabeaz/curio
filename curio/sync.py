@@ -15,6 +15,7 @@ from . import workers
 from .errors import CancelledError, TaskTimeout
 from .task import spawn, current_task
 from .meta import awaitable
+from . import thread
 
 
 class Event(object):
@@ -89,11 +90,10 @@ class _LockBase(object):
         await self.release()
 
     def __enter__(self):
-        raise RuntimeError('Use async with')
+        return thread.await(self.__aenter__())
 
     def __exit__(self, *args):
-        pass
-
+        return thread.await(self.__aexit__(*args))
 
 class Lock(_LockBase):
 
