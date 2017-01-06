@@ -1514,7 +1514,7 @@ program, you're probably going to want a few locks. And once you have
 a few locks, you'll probably want some semaphores. Those semaphores
 are going to be lonely without a few events and condition variables to
 keep them company.  All these things will live together in a messy
-apartment along with a pet queue. It will bechaos. However, it all
+apartment along with a pet queue. It will be chaos. However, it all
 sounds a bit better if put in an internet-connected coffee pot and
 call the apartment a coworking space.  But, I digress.
 
