@@ -1515,7 +1515,7 @@ a few locks, you'll probably want some semaphores. Those semaphores
 are going to be lonely without a few events and condition variables to
 keep them company.  All these things will live together in a messy
 apartment along with a pet queue. It will be chaos. However, it all
-sounds a bit better if put in an internet-connected coffee pot and
+sounds a bit better if you put in an internet-connected coffee pot and
 call the apartment a coworking space.  But, I digress.
 
 But wait a minute, Curio already provides all of these wonderful things.
