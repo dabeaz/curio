@@ -2,7 +2,7 @@
 #
 # Not your parent's threading
 
-__all__ = [ 'await', 'async_thread', 'async_context', 'async_iter' ] 
+__all__ = [ 'await', 'async_thread', 'async_context', 'async_iter', 'AsyncThread' ] 
 
 import threading
 from concurrent.futures import Future
@@ -148,7 +148,7 @@ def async_iter(aiter):
 
 def async_thread(func):
     @wraps(func)
-    async def wrapper(*args, **kwargs):
+    async def runner(*args, **kwargs):
         t = AsyncThread(func, args=args, kwargs=kwargs)
         await t.start()
         try:
@@ -156,5 +156,6 @@ def async_thread(func):
         except errors.CancelledError as e:
             await t.cancel()
             raise
-    return wrapper
+    return runner
+
 

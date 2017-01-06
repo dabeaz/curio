@@ -1445,14 +1445,15 @@ In this code, the execution of ``gethostbyaddr()`` takes place in its
 own thread, freeing the Curio kernel loop to work on other tasks in
 the meantime.
 
-Under the covers, Curio maintains a pool of preallocated threads dedicated
-for performing synchronous operations like this. The ``run_in_thread()`` 
-function uses this pool. You're not really supposed to worry about those
-details though.
+Under the covers, Curio maintains a pool of preallocated threads
+dedicated for performing synchronous operations like this (by default
+the pool consists of 64 worker threads). The ``run_in_thread()``
+function uses this pool. You're not really supposed to worry about
+those details though.
 
-Various parts of Curio use ``run_in_thread()`` behind the scenes. For example,
-the ``curio.socket`` module provides replacements for various blocking
-operations::
+Various parts of Curio use ``run_in_thread()`` behind the scenes. For
+example, the ``curio.socket`` module provides replacements for various
+blocking operations::
 
     from curio import socket
 
@@ -1460,8 +1461,9 @@ operations::
         hostinfo = await socket.gethostbyaddr(addr[0])  # Uses threads
         ...
 
-Another place where threads are used internally is in file I/O with standard files on
-the file system.   For example, if you use the Curio ``aopen()`` function::
+Another place where threads are used internally is in file I/O with
+standard files on the file system.  For example, if you use the Curio
+``aopen()`` function::
 
     from curio import aopen
   
@@ -1474,10 +1476,11 @@ In this code, it might appear as if asynchronous I/O is being performed on files
 Not really--it's all smoke and mirrors with background threads (if you must know,
 this approach to files is not unique to Curio though).
 
-One caution with ``run_in_thread()`` is that it should probably only be used on
-short-running operations where there is an expectation of it completing soon.
-Technically, you could use it to execute blocking operations that might wait
-for long time periods.  For example, waiting on a thread-queue::
+One caution with ``run_in_thread()`` is that it should probably only
+be used on short-running operations where there is an expectation of
+it completing soon.  Technically, you could use it to execute blocking
+operations that might wait for long time periods.  For example,
+waiting on a thread-queue::
 
     import queue
     from curio import run_in_thread
@@ -1496,7 +1499,8 @@ possibility that you would exhaust all of the available threads in
 Curio's internal thread pool.  At that point, all further
 ``run_in_thread()`` operations will block and your code will likely
 deadlock.  Don't do that.  Reserve the ``run_in_thread()`` function
-for operations that you know are going to complete right then.
+for operations that you know are basically going to complete right now
+(or a short time from now).
 
 Thread-Task Coordination
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1504,6 +1508,313 @@ Thread-Task Coordination
 Asynchronous Threads
 ^^^^^^^^^^^^^^^^^^^^
 
+Come closer. No, I mean real close.  Let's have a serious talk about
+threads for a moment.  If you're going to write a SERIOUS thread
+program, you're probably going to want a few locks. And once you have
+a few locks, you'll probably want some semaphores. Those semaphores
+are going to be lonely without a few events and condition variables to
+keep them company.  All these things will live together in a messy
+apartment along with a pet queue. It will chaos. However, it all
+sounds a bit better if put in an internet-connected coffee pot and
+call the apartment a coworking space.  However, I digress.
+
+But wait a minute, Curio already provides all of these wonderful things.
+Locks, semaphores, events, condition variables, pet queues and more. 
+You might think that they can only be used for this funny world of 
+coroutines though.  No!  "Get out!"
+
+Let's start with a little thread code::
+
+    import time
+    
+    def worker(name, lock, n, interval):
+        while n > 0:
+            with lock:
+                print('%s working %d' % (name, n))
+                time.sleep(interval)
+                n -= 1
+
+    def main():
+        from threading import Thread, Semaphore
+
+        s = Semaphore(2)
+        t1 = Thread(target=worker, args=('curly', s, 2, 2))
+        t1.start()
+        t2 = Thread(target=worker, args=('moe', s, 4, 1))
+        t2.start()
+        t3 = Thread(target=worker, args=('larry', s, 8, 0.5))
+        t3.start()
+
+        t1.join()
+        t2.join()
+        t3.join()
+
+    if __name__ == '__main__':
+        start = time.time()
+        main()
+        print('Took %s seconds' % (time.time() - start))
+
+There are three workers.  They operate on different time intervals,
+but they all execute concurrently.  However, there is a semaphore
+thrown into the mix to throttle them so that only two workers can run
+at once. The output might vary a bit due to thread scheduling, but
+it could look like this::
+
+    curly working 2
+    moe working 4
+    moe working 3
+    curly working 1
+    moe working 2
+    moe working 1
+    larry working 8
+    larry working 7
+    larry working 6
+    larry working 5
+    larry working 4
+    larry working 3
+    larry working 2
+    larry working 1
+    Took 8.033247709274292 seconds
+
+Each worker performs about 4 seconds of execution.  However, only
+two can run at once.  So, the total execution time will be more than 6
+seconds.  We see that.
+
+Now, take that code and only change the ``main()`` function::
+
+    async def main():
+        from curio import Semaphore
+        from curio.thread import AsyncThread
+
+        s = Semaphore(2)
+        t1 = AsyncThread(target=worker, args=('curly', s, 2, 2))
+        await t1.start()
+        t2 = AsyncThread(target=worker, args=('moe', s, 4, 1))
+        await t2.start()
+        t3 = AsyncThread(target=worker, args=('larry', s, 8, 0.5))
+        await t3.start()
+        await t1.join()
+        await t2.join()
+        await t3.join()
+
+    if __name__ == '__main__':
+        from curio import run
+        run(main())
+
+Make no other changes and run it in Curio.  You'll get very similar
+output. The scheduling will be a bit different, but you'll get
+something comparable::
+
+    curly working 2
+    moe working 4
+    larry working 8
+    moe working 3
+    larry working 7
+    curly working 1
+    larry working 6
+    moe working 2
+    larry working 5
+    moe working 1
+    larry working 4
+    larry working 3
+    larry working 2
+    larry working 1
+    Took 6.5362467765808105 seconds
+
+Very good.  But, wait a minute?  Did you just run some unmodified
+synchronous thread function (``worker()``) within Curio?  Yes, yes,
+you did.  That function not only performed a blocking operation
+(``time.sleep()``), it also used a synchronous context-manager on a
+Curio ``Semaphore`` object just like it did when it used a
+``Semaphore`` from the ``threading`` module.  What devious magic is
+this???
+
+In short, an asynchronous thread is a real-life fully realized thread.
+A POSIX thread.  A thread created with the ``threading`` module.  Yes,
+one of THOSE threads your parents warned you about.  You can perform
+blocking operations and everything else you might do in this thread.
+However, sitting behind this thread is a Curio task. That's the magic
+part.  This hidden task takes over and handles any kind of operation
+you might perform on synchronization objects that originate from Curio.  That
+``Semaphore`` object you passed in was handled by that task.  So, in
+the worker, there was this code fragment::
+
+    with lock:
+        print('%s working %d' % (name, n))
+        time.sleep(interval)
+        n -= 1
+
+The code sitting behind the ``with lock:`` part executes in a Curio
+backing task.  The body of statement runs in the thread. 
+
+It gets more wild.  You can have both Curio tasks and asynchronous threads
+sharing synchronization primitives.  For example, this code works fine::
+
+    import time
+    import curio
+
+    # A synchronous worker (traditional thread programming)
+    def worker(name, lock, n, interval):
+        while n > 0:
+            with lock:
+                print('%s working %d' % (name, n))
+                time.sleep(interval)
+                n -= 1
+
+    # An asynchronous worker
+    async def aworker(name, lock, n, interval):
+        while n > 0:
+            async with lock:
+                print('%s working %d' % (name, n))
+                await curio.sleep(interval)
+                n -= 1
+
+    async def main():
+        from curio.thread import AsyncThread
+        from curio import Semaphore
+
+        s = Semaphore(2)
+
+        # Launch some async-threads
+        t1 = AsyncThread(target=worker, args=('curly', s, 2, 2))
+        await t1.start()
+        t2 = AsyncThread(target=worker, args=('moe', s, 4, 1))
+        await t2.start()
+
+	# Launch a normal curio task
+        t3 = await curio.spawn(aworker('larry', s, 8, 0.5))
+
+        await t1.join()
+        await t2.join()
+        await t3.join()
+
+Just to be clear, this code involves asynchronous tasks and threads
+sharing the same synchronization primitive and all executing
+concurrently.  No problem.
+
+It gets better.  You can use ``await()`` in an asynchronous thread. For example,
+consider this code::
+
+    from curio.thread import await, AsyncThread
+    import curio
+
+    # A synchronous function
+    def consumer(q):
+        while True:
+            item = await(q.get())   # <- !!!!
+            if not item:
+                break
+            print('Got:', item)
+        print('Consumer done')
+
+    async def producer(n, q):
+        while n > 0:
+            await q.put(n)
+            await curio.sleep(1)
+            n -= 1
+        await q.put(None)
+
+    async def main():
+        q = curio.Queue()
+
+        t = AsyncThread(target=consumer, args=(q,))
+        await t.start()
+        await producer(10, q)
+        await t.join()
+
+    if __name__ == '__main__':
+        curio.run(main())
+
+Good Guido, what madness is this?  The code creates a Curio ``Queue``
+object that is used from both a task and an asynchronous thread.
+Since queue operations require the use of ``await()``, it's used in
+both places.  In the ``producer()`` coroutine, you use ``await
+q.put(n)`` to put an item on the queue.  In the ``consumer()``
+function, you use ``await(q.get())`` to get an item.  There's a bit of
+asymmetry there, but ``consumer()`` is just a normal synchronous
+function.  You can't use the ``await`` keyword in such a function, but
+Curio provides a function that takes its place. All is well. Maybe.
+
+A curious thing about the Curio ``await()`` is that it does nothing
+if you give it something other than a coroutine.  So, you could
+still use that ``consumer()`` function with a normal thread.
+Just pop into the REPL and try this::
+
+    >>> import queue
+    >>> import threading
+    >>> q = queue.Queue()
+    >>> t = threading.Thread(target=consumer, args=(q,))
+    >>> t.start()
+    >>> q.put(1)
+    Got: 1
+    >>> q.put(2)
+    Got: 2
+    >>> q.put(None)
+    Consumer done
+    >>> 
+
+Just to be clear about what's happening here,  ``consumer()`` is a normal synchronous
+function.  It uses the ``await()`` function on a queue.  We just gave
+it a normal thread queue and launched it into a normal thread at the
+interactive prompt.  It still works. Curio is not running at all.
+
+The process of launching an asynchronous thread can be a bit cumbersome.
+Therefore, there is a special decorator ``@async_thread`` that can be
+used to adapt a synchronous function.   There are two ways to use it.
+One way to use it is to apply it to a function directly like this::
+
+    from curio.thread import async_thread, await
+    from curio import run, tcp_server
+
+    @async_thread
+    def sleeping_dog(client, addr):
+        with client:
+            for data in client.makefile('rb'):
+                n = int(data)
+                time.sleep(n)
+                await(client.sendall(b'Bark!\n'))
+        print('Connection closed')
+
+    run(tcp_server('', 25000, sleeping_dog))
+
+If you do this, the function becomes a coroutine where any invocation
+automatically launches it into a thread. This is useful if you need to
+write coroutines that perform a lot of blocking operations, but you'd
+like that coroutine to work transparently with the rest of Curio.
+
+The other way to use the decorator is an adapter for existing
+synchronous code. For example, here is an alternative technique
+for launching an asynchronous thread::
+
+    from curio.thread import await, async_thread
+    import curio
+
+    # A synchronous function
+    def consumer(q):
+        while True:
+            item = await(q.get())   # <- !!!!
+            if not item:
+                break
+            print('Got:', item)
+        print('Consumer done')
+
+    async def main():
+        q = curio.Queue()
+        t = await spawn(async_thread(consumer)(q))
+        ...
+        await t.join()
+
+All of this discussion is really not presenting asynchronous threads
+in their full glory.  The key idea though is that instead of thinking
+of threads as being this completely separate universe of code that
+exists outside of Curio, you can actually create threads that work
+*with* Curio.  They can use all of Curio's synchronization primitives
+and they can interact with Curio tasks.  These threads can use all of
+Curio's normal features and they can perform blocking operations. They
+can call C extensions that release the GIL.  You can have these
+threads interact with existing libraries.  If you're organized, you
+can write synchronous functions that work with Curio and with normal
+threaded code at the same time.  It's a brave new world.
 
 Programming Considerations and APIs
 -----------------------------------
