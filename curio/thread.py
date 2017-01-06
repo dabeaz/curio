@@ -89,7 +89,7 @@ class AsyncThread(object):
     async def join(self):
         await self._terminate_evt.wait()
         if self._result_exc:
-            raise self._result_exc
+            raise errors.TaskError() from self._result_exc
         else:
             return self._result_value
 
