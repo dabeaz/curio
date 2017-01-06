@@ -1514,9 +1514,9 @@ program, you're probably going to want a few locks. And once you have
 a few locks, you'll probably want some semaphores. Those semaphores
 are going to be lonely without a few events and condition variables to
 keep them company.  All these things will live together in a messy
-apartment along with a pet queue. It will chaos. However, it all
+apartment along with a pet queue. It will bechaos. However, it all
 sounds a bit better if put in an internet-connected coffee pot and
-call the apartment a coworking space.  However, I digress.
+call the apartment a coworking space.  But, I digress.
 
 But wait a minute, Curio already provides all of these wonderful things.
 Locks, semaphores, events, condition variables, pet queues and more. 
@@ -1757,6 +1757,54 @@ Just to be clear about what's happening here,  ``consumer()`` is a normal synchr
 function.  It uses the ``await()`` function on a queue.  We just gave
 it a normal thread queue and launched it into a normal thread at the
 interactive prompt.  It still works. Curio is not running at all.
+
+Running threads within Curio have some side benefits.  If you're
+willing to abandon the limitations of the ``threading`` module, you'll
+find that Curio's features such as timeouts and cancellation work
+fine in a thread.  For example::
+
+    from curio.thread import await, AsyncThread
+    import curio
+
+    def consumer(q):
+        try:
+            while True:
+                try:
+                    with curio.timeout_after(0.5):
+                        item = await(q.get())
+                except curio.TaskTimeout:
+                    print('Ho, hum...')
+		    continue
+                print('Got:', item)
+                await(q.task_done())
+        except curio.CancelledError:
+            print('Consumer done')
+            raise
+
+    async def producer(n, q):
+        while n > 0:
+            await q.put(n)
+            await curio.sleep(1)
+            n -= 1
+        print('Producer done')
+
+    async def main():
+        q = curio.Queue()
+
+        t = AsyncThread(target=consumer, args=(q,))
+        await t.start()
+        await producer(10, q)
+        await q.join()
+        await t.cancel()
+
+    if __name__ == '__main__':
+        curio.run(main())
+
+Here the ``t.cancel()`` cancels the async-thread.  As with normal Curio
+tasks, the cancellation is reported on blocking operations involving ``await()``.
+The ``timeout_after()`` feature also works fine.  You don't use it as an
+asynchronous context manager in a synchronous function, but it has the same
+overall effect.  Don't try this with a normal thread.
 
 The process of launching an asynchronous thread can be a bit cumbersome.
 Therefore, there is a special decorator ``@async_thread`` that can be

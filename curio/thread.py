@@ -80,6 +80,7 @@ class AsyncThread(object):
         self._request.set_result(coro)
         self._done_evt.wait()
         self._done_evt.clear()
+
         if self._result_exc:
             raise self._result_exc
         else:
