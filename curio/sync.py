@@ -305,7 +305,7 @@ class _contextadapt(object):
             self.exit_future.set_exception(e)
 
     async def __aenter__(self):
-        await spawn(workers.run_in_thread(self._handler))
+        await spawn(workers.block_in_thread(self._handler))
         try:
             await _future_wait(self.enter_future, self.start_evt)
             return self.enter_future.result()
@@ -363,4 +363,4 @@ def abide(op, *args, **kwargs):
     if not callable(op):
         raise TypeError('%r object is not callable' % type(op).__name__)
 
-    return workers.run_in_thread(op, *args, **kwargs)
+    return workers.block_in_thread(op, *args, **kwargs)

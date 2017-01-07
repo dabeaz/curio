@@ -1478,9 +1478,9 @@ this approach to files is not unique to Curio though).
 
 One caution with ``run_in_thread()`` is that it should probably only
 be used on short-running operations where there is an expectation of
-it completing soon.  Technically, you could use it to execute blocking
-operations that might wait for long time periods.  For example,
-waiting on a thread-queue::
+it completing more-or-less right away.  Technically, you could use it
+to execute blocking operations that might wait for long time periods.
+For example, waiting on a thread-queue::
 
     import queue
     from curio import run_in_thread
@@ -1501,6 +1501,49 @@ Curio's internal thread pool.  At that point, all further
 deadlock.  Don't do that.  Reserve the ``run_in_thread()`` function
 for operations that you know are basically going to complete right now
 (or a short time from now).
+
+For blocking operations involving a high degree of concurrency and
+usage of shared resources such as thread locks and queues, prefer to
+use ``block_in_thread()`` instead.  For example::
+
+    import queue
+    from curio import block_in_thread
+
+    q = queue.Queue()     # A thread-queue (not Curio)
+    
+    async def worker():
+        while True:
+            item = await block_in_thread(q.get)   # Better
+            ...
+
+``block_in_thread()`` still uses a background thread, but only one
+background thread is used regardless of how many tasks try to execute
+the same callable.  For example, if you launched 1000 worker tasks and
+they all called ``block_in_thread(q.get)`` on the same queue, they are
+serviced by a single thread.  If you used ``run_in_thread(q.get)``
+instead, each request would use its own thread and you'd exhaust the
+thread pool.  It is important to note that this throttling is 
+based on each unique callable.  If two different workers used 
+``block_in_thread()`` on two different queues, then they each get
+their own background thread because the ``q.get()`` operation 
+would represent a different callable.
+
+Behind the scenes, ``block_in_thread()`` coordinates and throttles
+tasks using a semaphore.  You can use a similar technique more
+generally for throttling the use of threads (or any resource).  For
+example::
+
+    import queue
+    from curio import run_in_thread, Semaphore
+
+    q = queue.Queue()     # A thread-queue (not Curio)
+    throttle = Semaphore(5)   # Allow 5 workers to use threads at once
+    
+    async def worker():
+        while True:
+            async with throttle:
+                item = await run_in_thread(q.get)
+                ...
 
 Thread-Task Coordination
 ^^^^^^^^^^^^^^^^^^^^^^^^

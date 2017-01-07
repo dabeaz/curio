@@ -4,17 +4,20 @@
 # running functions in threads, processes, and executors from the
 # concurrent.futures module.
 
-__all__ = ['run_in_executor', 'run_in_thread', 'run_in_process']
+__all__ = ['run_in_executor', 'run_in_thread', 'run_in_process', 'block_in_thread' ]
 
 import multiprocessing
 import threading
 import traceback
 import signal
+from collections import Counter, defaultdict
 
-from .errors import CancelledError
+from .errors import CancelledError, TaskTimeout
 from .traps import _future_wait, _get_kernel
 from . import sync
+from . import task
 from .channel import Channel
+
 
 # Code to embed a traceback in a remote exception.  This is borrowed
 # straight from multiprocessing.pool.  Copied here to avoid possible
@@ -187,6 +190,8 @@ class ThreadWorker(object):
             except Exception as e:
                 future.set_exception(e)
 
+            del func, args, kwargs, future
+
     def shutdown(self):
         self.request = None
         if self.start_evt:
@@ -247,7 +252,7 @@ class ProcessWorker(object):
             except Exception as e:
                 e = ExceptionWithTraceback(e, e.__traceback__)
                 ch.send((False, e))
-            func = args = kwargs = None
+            del func, args, kwargs
 
     async def apply(self, func, args=(), kwargs={}):
         if self.process is None or not self.process.is_alive():
@@ -304,3 +309,85 @@ class WorkerPool(object):
 # Pool definitions should anyone want to use them directly
 ProcessPool = lambda nworkers: WorkerPool(ProcessWorker, nworkers)
 ThreadPool = lambda nworkers: WorkerPool(ThreadWorker, nworkers)
+
+
+# Support for blocking in threads.  
+#
+# Discussion:
+#
+# The run_in_thread() function can be used to run any synchronous function
+# in a separate thread.  However, certain kinds of operations are
+# inherently unsafe.   For example, consider a worker task that wants
+# to wait on a threading Event like this:
+#
+#    evt = threading.Event()     # Foreign Event...
+# 
+#    async def worker():
+#        await run_in_thread(evt.wait)
+#        print('Alive!')
+#
+# Now suppose Curio spins up a huge number of workers:
+#
+#    for n in range(1000):
+#        await spawn(worker())
+#
+# At this point, you're in a bad situation.  The worker tasks have
+# all called run_in_thread() and are blocked indefinitely.  Because
+# the pool of worker threads is limited, you've exhausted all
+# available resources.  Nobody call run_in_thread() without blocking.
+# There's a pretty good chance that your code is permanently deadlocked.
+# There are dark clouds.
+#
+# This problem can be solved by wrapping run_in_thread() with a 
+# semaphore. Like this:
+#
+#    _barrier = curio.Semaphore()
+#
+#    async def worker():
+#        async with _barrier:
+#            await run_in_thread(evt.wait)
+#
+# However, to make it much more convenient, we can take care of
+# a lot of fiddly details.  We can cache the requested callable,
+# build a set of semaphores and synchronize things in the background.
+# That's what the block_in_thread() function is doing.  For example:
+#
+#    async def worker():
+#        await block_in_thread(evt.wait)
+#        print('Alive!')
+#
+# Unlike run_in_thread(), spawning up 1000 workers creates a 
+# situation where only 1 worker is actually blocked in a thread.
+# The other 999 workers are blocked on a semaphore waiting for service.
+
+_pending = Counter()
+_barrier = defaultdict(sync.Semaphore)
+
+async def block_in_thread(callable, *args, **kwargs):
+    '''
+    Run callable(*args, **kwargs) in a thread with the expectation
+    that the operation is going to block for an indeterminate amount
+    of time.  Guarantees that at most only one background thread is used
+    regardless of how many curio tasks are actually waiting on the same
+    callable (e.g., if 1000 Curio tasks all decide to call
+    block_on_thread on the same callable, they'll all be handled by
+    a single thread). Primary use of this function is on foreign locks, 
+    queues, and other synchronization primitives where you have
+    to use a thread, but you just don't have any idea when the operation
+    will complete.
+    '''
+    if hasattr(callable, '__self__'):
+        call_key = (callable.__name__, id(callable.__self__))
+    else:
+        call_key = id(callable)
+    _pending[call_key] += 1
+    async with _barrier[call_key]:
+        try:
+            return await run_in_thread(callable, *args, **kwargs)
+        finally:
+            _pending[call_key] -= 1
+            if not _pending[call_key]:
+                del _pending[call_key]
+                del _barrier[call_key]
+
+from . import queue    

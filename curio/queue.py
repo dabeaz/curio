@@ -40,6 +40,10 @@ class Queue(object):
 
         self._queue = self._init_internal_queue()
 
+    def __repr__(self):
+        res = super().__repr__()
+        return '<%s, len=%d>' % (res[1:-1], len(self._queue))
+
     def _init_internal_queue(self):
         return deque()
 

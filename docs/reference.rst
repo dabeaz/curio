@@ -385,6 +385,17 @@ calculations and blocking operations.  Use the following functions to do that:
    threads should have a timeout or some other mechanism that
    puts a bound on execution time.
 
+.. asyncfunction:: block_in_thread(callable, *args, **kwargs)
+
+   The same as ``run_in_thread()``, but guarantees that only
+   one background thread is used for each unique callable
+   regardless of how many tasks simultaneously try to
+   carry out the same operation.  Use this function if there is
+   an expectation that the provided callable is going to 
+   block for an undetermined amount of time and that there 
+   might be a large amount of contention from multiple tasks.
+   The primary uses are operations on foreign locks and queues.
+
 .. asyncfunction:: run_in_executor(exc, callable, *args, **kwargs)
 
    Run ``callable(*args, **kwargs)`` callable in a user-supplied
@@ -395,6 +406,7 @@ calculations and blocking operations.  Use the following functions to do that:
    the given callable and returns a
    :class:`~concurrent.futures.Future` instance for collecting its
    result.
+
 
 When performing external work, it's almost always better to use the
 :func:`run_in_process` and :func:`run_in_thread` functions instead
