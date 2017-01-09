@@ -82,6 +82,8 @@ def test_worker_cancel(kernel, runner):
         except TaskError as e:
             if isinstance(e.__cause__, CancelledError):
                 results.append('cancel')
+            else:
+                results.append(repr(e.__cause__))
 
     async def main():
         await spawn(spin(10))

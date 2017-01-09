@@ -1,5 +1,59 @@
 CHANGES
 -------
+01/08/2017 Some refinements to the abide() function.   You can now have it
+           reserve a dedicated thread.  This allows it to work with things
+           like Condition variables.   For example::
+
+               cond = threading.Condition()    # Foreign condition variable
+
+               ...
+               async with abide(code, reserve_thread=True) as c:
+                   # c is an async-wrapper around (code)
+                   # The following operation uses the same thread that was
+                   # used to acquire the lock.
+                   await c.wait()             
+               ...
+
+           abide() also prefers to use the block_in_thread() function that
+           makes it much more efficient when synchronizing with basic locks
+           and events.
+ 
+01/08/2017 Some reworking of internals related to thread/process workers and 
+           task cancellation. One issue with launching work into a thread
+           worker is that threads have no mechanism for cancellation.  They
+           run fully to completion no matter what.  Thus, if you perform some
+           work like this:
+
+                await run_in_thread(callable, args)
+
+           and the calling task gets cancelled, it's impossible to find out
+           what happened with the thread.  Basically, it's lost to the sands
+           of time.   However, you can now supply an optional call_on_cancel
+           argument to the function and use it like this:
+
+                def cancelled_result(future):
+                    result = future.result()
+                    ...
+                    
+                await run_in_thread(callable, args, call_on_cancel=cancelled_result)
+
+           The call_on_cancel function is a normal synchronous
+           function. It receives the Future instance that was being used
+           to receive the result of the threaded operation.  This
+           Future is guaranteed to have the result/exception set.
+
+	   Be aware that there is no way to know when the call_on_cancel 
+           function might be triggered.  It might be far in the future.
+           The Curio kernel might not even be running.   Thus, it's 
+           generally not safe to make too many assumptions about it.
+           The only guarantee is that the call_on_cancel function is
+           called after a result is computed and it's called in the
+           same thread.
+
+           The main purpose of this feature is to have better support
+           for cleanup of failed synchronization operations involving
+           threads.
+
 01/06/2017 New function.  block_in_thread().   This works like run_in_thread()
            except that it's used with the expectation that whatever operation
            is being performed is likely going to block for an undetermined
@@ -26,9 +80,6 @@ CHANGES
            read items.  The block_in_thread() function only uses 1 background
            thread to handle it.   If you used run_in_thread() instead, it
            consume all available worker threads and you'd probably deadlock.
-
-           This change also affects the abide() function which now uses
-           block_in_thread().
 
 01/05/2017 Experimental new feature--asynchronous threads!  An async thread
            is an actual real-life thread where it is safe to call Curio

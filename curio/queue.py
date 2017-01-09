@@ -18,7 +18,7 @@ from . import workers
 from .task import spawn
 from . import sync
 
-__all__ = ['Queue', 'PriorityQueue', 'LifoQueue']
+__all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'EpicQueue']
 
 
 class Full(CurioError):
@@ -137,40 +137,13 @@ class EpicQueue(object):
     '''
     The name says it all.
     '''
-
     def __init__(self, queue=None, maxsize=0):
         self._tqueue = queue if queue else thread_queue.Queue(maxsize=maxsize)
-        self._getting_queue = Queue(maxsize=1)
-        self._putting_queue = Queue(maxsize=1)
-        self._get_task = None
-        self._put_task = None
-        self._join_task = None
-        self._joining = None
+        self._get_sema = sync.Semaphore(1)
+        self._put_sema = sync.Semaphore(1)
+        self._join_sema = sync.Semaphore(1)
         self._all_tasks_done = threading.Condition()
         self._unfinished_tasks = 0
-
-    def __del__(self):
-        assert self._get_task is None, 'Queue %r not properly terminated' % self
-
-    async def shutdown(self):
-        if self._get_task:
-            await self._get_task.cancel()
-
-        if self._put_task:
-            await self._put_task.cancel()
-
-        if self._join_task:
-            await self._join_task.cancel()
-
-    async def _put_worker(self):
-        w = workers.ThreadWorker()
-        try:
-            while True:
-                item = await self._putting_queue.get()
-                await w.apply(self._tqueue.put, (item,))
-        finally:
-            w.shutdown()
-            self._put_task = None
 
     def put(self, item):
         with self._all_tasks_done:
@@ -180,33 +153,19 @@ class EpicQueue(object):
 
     @awaitable(put)
     async def put(self, item):
-        if self._put_task is None:
-            self._put_task = await spawn(self._put_worker())
-
-        async with sync.abide(self._all_tasks_done):
-            self._unfinished_tasks += 1
-
-        await self._putting_queue.put(item)
-
-    async def _get_worker(self):
-        w = workers.ThreadWorker()
-        try:
-            while True:
-                item = await w.apply(self._tqueue.get)
-                await self._getting_queue.put(item)
-        finally:
-            w.shutdown()
-            self._get_task = None
+        async with self._put_sema:
+            async with sync.abide(self._all_tasks_done):
+                self._unfinished_tasks += 1
+            await workers.run_in_thread(self._tqueue.put, item)
 
     def get(self):
         return self._tqueue.get()
 
     @awaitable(get)
     async def get(self):
-        if self._get_task is None:
-            self._get_task = await spawn(self._get_worker())
-        return (await self._getting_queue.get())
-
+        async with self._get_sema:
+            return await workers.run_in_thread(self._tqueue.get)
+    
     def _sync_task_done(self):
         with self._all_tasks_done:
             self._unfinished_tasks -= 1
@@ -215,7 +174,7 @@ class EpicQueue(object):
 
     @awaitable(_sync_task_done)
     async def task_done(self):
-        await sync.abide(self._sync_task_done)
+        await workers.run_in_thread(self._sync_task_done)
 
     async def _join_worker(self):
         w = workers.ThreadWorker()
@@ -234,14 +193,10 @@ class EpicQueue(object):
 
     @awaitable(_join_sync)
     async def join(self):
-        async with sync.abide(self._all_tasks_done):
-            if self._unfinished_tasks > 0:
-                if self._join_task is None:
-                    self._joining = sync.Event()
-                    self._join_task = await spawn(self._join_worker())
+        await workers.run_in_thread(self._join_sync)
 
-        if self._joining:
-            await self._joining.wait()
+    def __getattr__(self, name):
+        return getattr(self._tqueue, name)
 
     # Footnote: all of the code in this class is experimental.
     # It's probably an epically bad idea.  YOLO.

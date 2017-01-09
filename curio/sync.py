@@ -84,7 +84,7 @@ class _LockBase(object):
 
     async def __aenter__(self):
         await self.acquire()
-        return None
+        return self
 
     async def __aexit__(self, exc_type, exc, tb):
         await self.release()
@@ -279,60 +279,62 @@ class Condition(_LockBase):
 
 # Class that adapts a synchronous context-manager to an asynchronous manager
 
-
-class _contextadapt(object):
-
+class _contextadapt_basic(object):
     def __init__(self, manager):
-        self.manager = manager
-        self.start_evt = threading.Event()
-        self.finish_evt = threading.Event()
-        self.finish_args = ()
-        self.enter_future = workers._FutureLess()
-        self.exit_future = workers._FutureLess()
-
-    def _handler(self):
-        self.start_evt.wait()
-        try:
-            self.enter_future.set_result(self.manager.__enter__())
-        except Exception as e:
-            self.enter_future.set_exception(e)
-            return
-
-        self.finish_evt.wait()
-        try:
-            self.exit_future.set_result(self.manager.__exit__(*self.finish_args))
-        except Exception as e:
-            self.exit_future.set_exception(e)
+        self._manager = manager
 
     async def __aenter__(self):
-        await spawn(workers.block_in_thread(self._handler))
-        try:
-            await _future_wait(self.enter_future, self.start_evt)
-            return self.enter_future.result()
-        except CancelledError:
-            # An interesting corner case... if we're cancelled while waiting to
-            # enter, we'd better arrange to exit in case it eventually succeeds.
-            self.exit_future.add_done_callback(lambda f: None)
-            self.finish_args = (None, None, None)
-            self.finish_evt.set()
-            raise
+        return await workers.block_in_thread(self._manager.__enter__, 
+                                             call_on_cancel=lambda fut: self._manager.__exit__(None, None, None))
 
     async def __aexit__(self, *args):
-        self.finish_args = args
-        await _future_wait(self.exit_future, self.finish_evt)
-        return self.exit_future.result()
+        return await workers.run_in_thread(self._manager.__exit__, *args)
 
+class _contextadapt_reserve(object):
+    def __init__(self, manager):
+        self._manager = manager
+
+    async def __aenter__(self):
+        self._worker = await workers.reserve_thread_worker()
+        self._result = await self._worker.apply(self._manager.__enter__, 
+                                                call_on_cancel=lambda fut: self._manager.__exit__(None, None, None))
+        return self
+
+    async def __aexit__(self, *args):
+        try:
+            await self._worker.apply(self._manager.__exit__, args)
+        finally:
+            await self._worker.release()
+
+    def __getattr__(self, name):
+        item = getattr(self._manager, name)
+        if callable(item):
+            async def call(*args, **kwargs):
+                return await self._worker.apply(item, args, kwargs)
+            return call
+        else:
+            return item
 
 def abide(op, *args, **kwargs):
     '''
-    Make curio abide by the execution requirements of a given
-    function, coroutine, or context manager.  If op is coroutine
-    function, it is called with the given arguments.  If op is an
-    asynchronous context manager, it is returned unmodified.  If op is
-    a synchronous function, it is executed in a separate thread.  If
-    op is a synchronous context manager, it is wrapped by an
-    asynchronous context manager that executes the __enter__() and
-    __exit__() methods in threads.
+    Make curio abide by the execution requirements of an external
+    synchronization primitive such as a Lock, Semaphore, or Condition
+    variable from the threading library.
+
+    sync should be an object supporting the synchronous context-management
+    protocol.  It is adapted so that the __enter__() and __exit__() 
+    methods execute in a background thread.  Cancellation is handled
+    gracefully. 
+
+    The reserve flag, if given exposes the background thread for further
+    use.  This may be required for certain kinds of synchronization
+    primitives such as condition variables:
+
+        cond = threading.Condition()
+
+        async with abide(cond, reserve_thread=True) as c:
+            await c.wait()   # Uses same thread as used to acquire the lock
+            ...
 
     The main use of this function is in code that wants to safely
     synchronize curio with threads and processes. For example, if you
@@ -344,23 +346,31 @@ def abide(op, *args, **kwargs):
     The code will work correctly if lck is an async lock defined by curio or
     a foreign lock defined by the threading or multiprocessing modules.
 
-    You can also use abide() with method calls. For example:
+    abide() can be used with simple functions and methods.  For example
+    events,
 
-        await abide(q.put, item)
+        evt = threading.Event()
+        ...
+        await abide(evt.wait)
 
-    would safely execute a put(item) method on a queue regardless of
-    whether or not q is a curio queue or a queue used for threads.
+    In this case, the operation is executed using block_in_thread().
     '''
+    
+    # If op is already a coroutine function, return it unmodified
     if iscoroutinefunction(op):
         return op(*args, **kwargs)
-
+        
+    # If the object is already an asynchronous context manager, return it unmodified
     if hasattr(op, '__aexit__'):
         return op
 
     if hasattr(op, '__exit__'):
-        return _contextadapt(op)
+        reserve_thread = kwargs.get('reserve_thread', False)
+        return _contextadapt_reserve(op) if reserve_thread else _contextadapt_basic(op)
 
+    # Object must be callable at least
     if not callable(op):
-        raise TypeError('%r object is not callable' % type(op).__name__)
+        raise TypeError('Must supply a callable')
 
     return workers.block_in_thread(op, *args, **kwargs)
+

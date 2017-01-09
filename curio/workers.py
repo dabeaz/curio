@@ -15,7 +15,7 @@ from collections import Counter, defaultdict
 from .errors import CancelledError, TaskTimeout
 from .traps import _future_wait, _get_kernel
 from . import sync
-from . import task
+from .task import spawn
 from .channel import Channel
 
 
@@ -70,25 +70,25 @@ async def run_in_executor(exc, callable, *args, **kwargs):
 
 MAX_WORKER_THREADS = 64
 
-async def run_in_thread(callable, *args, **kwargs):
+async def run_in_thread(callable, *args, call_on_cancel=None, **kwargs):
     '''
-    Run callable(*args) in a separate thread and return the result.
-    It's not possible to terminate threads so if a cancellation
-    occurs, the associated worker thread will continue to run until
-    completion as a kind of zombie.  When this happens, the cancelled
-    worker will be immediately replaced by a new worker thread that's
-    able to process further requests.  The cancelled worker thread
-    will terminate when the callable completes its work (the result is
-    discarded in that case).
-
-    Note: It is advisable that all callables submitted to threads
-    have a bound on their execution time (e.g., timeout or some
-    other mechanism).
+    Run callable(*args) in a separate thread and return the result. If
+    cancelled, be aware that the requested callable may or may not have
+    executed.  If it start running, it will run fully to completion
+    as a kind of zombie.
     '''
     kernel = await _get_kernel()
+
     if not kernel._thread_pool:
         kernel._thread_pool = WorkerPool(ThreadWorker, MAX_WORKER_THREADS)
-    return await kernel._thread_pool.apply(callable, args, kwargs)
+
+    worker = None
+    try:
+        worker = await kernel._thread_pool.reserve()
+        return await worker.apply(callable, args, kwargs, call_on_cancel)
+    finally:
+        if worker:
+            await worker.release()
 
 MAX_WORKER_PROCESSES = multiprocessing.cpu_count()
 
@@ -106,6 +106,12 @@ async def run_in_process(callable, *args, **kwargs):
     worker process.  This results in a SIGTERM signal being sent to
     the process.
 
+    The handle_cancellation flag, if True, indicates that you intend
+    to manage the worker cancellation yourself.  This an advanced
+    option.  Any resulting CancelledError has 'task' and 'worker'
+    attributes.  task is a background task that's supervising the
+    still executing work.  worker is the associated process.
+
     The worker process is a separate isolated Python interpreter.
     Nothing should be assumed about its global state including shared
     variables, files, or connections.
@@ -115,7 +121,12 @@ async def run_in_process(callable, *args, **kwargs):
         kernel._process_pool = WorkerPool(ProcessWorker,
                                           MAX_WORKER_PROCESSES)
 
-    return await kernel._process_pool.apply(callable, args, kwargs)
+    try:
+        worker = await kernel._process_pool.reserve()
+        return await worker.apply(callable, args, kwargs)
+    finally:
+        if worker:
+            await worker.release()
 
 # The _FutureLess class is a custom "Future" implementation solely for
 # use by curio. It is used by the ThreadWorker class below and
@@ -162,11 +173,13 @@ class ThreadWorker(object):
     Worker that executes a callable on behalf of a curio task in a separate thread.
     '''
 
-    def __init__(self):
+    def __init__(self, pool):
         self.thread = None
         self.start_evt = None
         self.lock = None
         self.request = None
+        self.terminated = False
+        self.pool = pool
 
     def _launch(self):
         self.start_evt = threading.Event()
@@ -182,22 +195,20 @@ class ThreadWorker(object):
             if not self.request:
                 return
 
-            func, args, kwargs, future = self.request
+            # Run the request
+            self.request()
 
-            try:
-                result = func(*args, **kwargs)
-                future.set_result(result)
-            except Exception as e:
-                future.set_exception(e)
-
-            del func, args, kwargs, future
+    async def release(self):
+        if self.pool:
+            await self.pool.release(self)
 
     def shutdown(self):
+        self.terminated = True
         self.request = None
         if self.start_evt:
             self.start_evt.set()
 
-    async def apply(self, func, args=(), kwargs={}):
+    async def apply(self, func, args=(), kwargs={}, call_on_cancel=None):
         '''
         Run the callable func in a separate thread and return the result.
         '''
@@ -205,15 +216,34 @@ class ThreadWorker(object):
             self._launch()
 
         # Set up a request for the worker thread
+        done_evt = threading.Event()
+        done_evt.clear()
+        cancelled = False
         future = _FutureLess()
-        self.request = (func, args, kwargs, future)
 
-        # Wait for the result to be computed.  Important: The
-        # start_evt passed as an argument is used to make the
-        # worker thread start processing.
-        await _future_wait(future, self.start_evt)
-        return future.result()
+        def run_callable():
+            try:
+                future.set_result(func(*args, **kwargs))
+            except Exception as err:
+                future.set_exception(err)
+            finally:
+                done_evt.wait()
+                if cancelled and call_on_cancel:
+                    call_on_cancel(future)
 
+        self.request = run_callable
+        try:
+            await _future_wait(future, self.start_evt)
+            return future.result()
+        except CancelledError as e:
+            cancelled = True
+            self.shutdown()
+            raise
+        finally:
+            done_evt.set()
+
+    async def run(self, func, *args, call_on_cancel=None, **kwargs):
+        return await self.apply(func, args, kwargs, call_on_cancel)
 
 class ProcessWorker(object):
     '''
@@ -223,10 +253,11 @@ class ProcessWorker(object):
     cancelled, the underlying process is also killed.   This, as
     opposed to having it linger on running until work is complete.
     '''
-
-    def __init__(self):
+    def __init__(self, pool):
         self.process = None
         self.client_ch = None
+        self.terminated = False
+        self.pool = pool
 
     def _launch(self):
         client_ch, server_ch = multiprocessing.Pipe()
@@ -237,10 +268,15 @@ class ProcessWorker(object):
         self.client_ch = Channel.from_Connection(client_ch)
 
     def shutdown(self):
+        self.terminated = True
         if self.process:
             self.process.terminate()
             self.process = None
             self.nrequests = 0
+
+    async def release(self):
+        if self.pool:
+            await self.pool.release(self)
 
     def run_server(self, ch):
         signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -258,58 +294,83 @@ class ProcessWorker(object):
         if self.process is None or not self.process.is_alive():
             self._launch()
 
-        msg = (func, args, kwargs)
-        await self.client_ch.send(msg)
-        success, result = await self.client_ch.recv()
-        if success:
-            return result
-        else:
-            raise result
+        msg = (func, args, kwargs)        
+        try:
+            await self.client_ch.send(msg)
+            success, result = await self.client_ch.recv()
+            if success:
+                return result
+            else:
+                raise result
+        except CancelledError:
+            self.shutdown()
+            raise
+
+    async def run(self, func, *args, **kwargs):
+        return await self.apply(func, args, kwargs)
 
 # Pool of workers for carrying out jobs on behalf of curio tasks.
 #
-# A tricky situation arises when task cancellations/timeouts occur.
-# The apply() method used by curio tasks is able to abort and return
-# control without computing a result.  However, the background worker
-# might continue to run until its task is complete.  When this happens
-# the shutdown() method is triggered on the worker and it is removed
-# from further service--to be replaced by a fresh worker.  For process
-# workers, this results in a process termination.  For threads, the
-# thread will continue to run until it completes, at which point it
-# will terminate.
-
+# This pool works a bit differently than a normal thread/process
+# pool due to some of the different ways that threads get used in Curio.
+# Instead of submitting work to the pool, you use the reserve() method
+# to obtain a worker:
+#
+#     worker = await pool.reserve()
+#
+# Once you have a worker, it is yours for as long as you want to have
+# it.  To submit work to it, use the apply() method:
+#
+#     await worker.apply(callable, args, kwargs)
+#
+# When you're done with it, release it back to the pool.
+#
+#     await worker.release()
+#
+# Some rationale for this design:  Sometimes when you're working with
+# threads, you want to perform multiple steps and you need to make sure
+# you're performing each step on the same thread for some reason. This
+# is especially true if you're trying to manage work cancellation.
+# For example, work started in a thread might need to be cleaned up
+# on the same thread.  By reserving/releasing workers, we get more
+# control over the whole process of how workers get managed.
 
 class WorkerPool(object):
 
     def __init__(self, workercls, nworkers):
         self.nworkers = sync.Semaphore(nworkers)
         self.workercls = workercls
-        self.workers = [workercls() for n in range(nworkers)]
+        self.workers = []
 
     def shutdown(self):
         for worker in self.workers:
             worker.shutdown()
-        self.workers = None
+        self.workers = []
 
-    async def apply(self, func, args=(), kwargs={}):
-        async with self.nworkers:
-            worker = self.workers.pop()
-            try:
-                return await worker.apply(func, args, kwargs)
-            except CancelledError:
-                # If a worker is timed out or cancelled, we shut it
-                # down and replace it with a fresh worker.
-                worker.shutdown()
-                worker = self.workercls()
-                raise
-            finally:
-                if self.workers is not None:
-                    self.workers.append(worker)
+    async def reserve(self):
+        await self.nworkers.acquire()
+        if not self.workers:
+            return self.workercls(self)
+        else:
+            return self.workers.pop()
+
+    async def release(self, worker):
+        if not worker.terminated:
+            self.workers.append(worker)
+        await self.nworkers.release()
 
 # Pool definitions should anyone want to use them directly
 ProcessPool = lambda nworkers: WorkerPool(ProcessWorker, nworkers)
 ThreadPool = lambda nworkers: WorkerPool(ThreadWorker, nworkers)
 
+async def reserve_thread_worker():
+    '''
+    Reserve a thread pool worker
+    '''
+    kernel = await _get_kernel()
+    if not kernel._thread_pool:
+        kernel._thread_pool = WorkerPool(ThreadWorker, MAX_WORKER_THREADS)
+    return await kernel._thread_pool.reserve()
 
 # Support for blocking in threads.  
 #
@@ -363,7 +424,7 @@ ThreadPool = lambda nworkers: WorkerPool(ThreadWorker, nworkers)
 _pending = Counter()
 _barrier = defaultdict(sync.Semaphore)
 
-async def block_in_thread(callable, *args, **kwargs):
+async def block_in_thread(callable, *args, call_on_cancel=None, **kwargs):
     '''
     Run callable(*args, **kwargs) in a thread with the expectation
     that the operation is going to block for an indeterminate amount
@@ -383,7 +444,7 @@ async def block_in_thread(callable, *args, **kwargs):
     _pending[call_key] += 1
     async with _barrier[call_key]:
         try:
-            return await run_in_thread(callable, *args, **kwargs)
+            return await run_in_thread(callable, *args, call_on_cancel=call_on_cancel, **kwargs)
         finally:
             _pending[call_key] -= 1
             if not _pending[call_key]:

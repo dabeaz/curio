@@ -55,13 +55,13 @@ import signal
 import time
 import socket
 import threading
-import queue
 import telnetlib
 import argparse
 import logging
 
 # --- Curio
 from .task import Task
+from . import queue
 
 # ---
 log = logging.getLogger(__name__)
@@ -117,7 +117,7 @@ class Monitor(object):
     def __init__(self, kern, host=MONITOR_HOST, port=MONITOR_PORT):
         self.kernel = kern
         self.address = (host, port)
-        self.monitor_queue = queue.Queue()
+        self.monitor_queue = queue.EpicQueue()
 
         log.info('Starting Curio monitor at %s:%d', host, port)
 
@@ -139,9 +139,8 @@ class Monitor(object):
         '''
         Asynchronous task loop for carrying out task cancellation.
         '''
-        from .sync import abide
         while True:
-            task = await abide(self.monitor_queue.get)
+            task = await self.monitor_queue.get()
             await task.cancel()
 
     def server(self):

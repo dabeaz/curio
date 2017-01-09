@@ -1292,14 +1292,17 @@ synchronization primitives if you use the :func:`abide` function.
 
 .. asyncfunction:: abide(op, *args, **kwargs)
 
-   Makes curio abide by the execution requirements of a given
-   function, coroutine, or context manager.  If *op* is coroutine
-   function, it is called with the given arguments and returned.  If *op* is an
-   asynchronous context manager, it is returned unmodified.  If *op* is
-   a synchronous function, ``run_in_thread(op, *args, **kwargs)`` is
-   returned.  If *op* is a synchronous context manager, it is wrapped by
-   an asynchronous context manager that executes the ``__enter__()`` and
-   ``__exit__()`` methods in a backing thread.
+   Execute an operation in a manner that safely works with async code.
+   If ``op`` is a coroutine function, then ``op(*args, **kwargs)`` is
+   returned.  If ``op`` is a synchronous function, then
+   ``block_in_thread(op, *args, **kwargs)`` is returned.  In both
+   cases, you would use ``await`` to obtain the result.  If ``op`` is
+   an asynchronous context manager, it is returned unmodified.  If
+   ``op`` is a synchronous context manager, it is wrapped in a manner
+   that carries out its execution in a backing thread.  For this
+   latter case, a special keyword argument ``reserve=True`` may be
+   given that instructs Curio to use the same backing thread for the
+   entire duraction of the context manager.
 
 The main use of this function is in code that wants to safely
 synchronize curio with threads and processes. For example, here is how
@@ -1325,34 +1328,56 @@ lock::
     threading.Thread(target=parent, args=(lock,)).start()
     curio.run(child(lock))
 
-Here is how you would implement a producer/consumer problem between
-threads and curio using a standard thread queue::
+If you wanted to trigger or wait for a thread-event, you might do this::
 
     import curio
     import threading
-    import queue
+
+    evt = threading.Event()
+
+    async def worker():
+        await abide(evt.wait)
+        print('Working')
+        ...
+
+    def main():
+        ...
+        evt.set()
+        ...
+
+For condition variables and reentrant locks, you should use ``reserve=True`` keyword
+argument to make sure the same thread is used throughout the block. For
+example::
+
+    import curio
+    import threading
+    import collections
 
     # A thread
-    def producer(queue):
+    def producer(cond, items):
         for n in range(10):
-            queue.put(n)
-        queue.join()
+            with cond:
+                 items.append(n)
+                 cond.notify()
         print('Producer done')
-	queue.put(None)
 
     # A curio task
-    async def consumer(queue):
+    async def consumer(cond, items):
         while True:
-            item = await curio.abide(queue.get)
-	    if item is None:
-	        break
-            print('Consumer got', item)
-            await curio.abide(queue.task_done)
+            async with abide(cond, reserve=True) as c:
+	        while not items:
+                    await c.wait()
+                item = items.popleft()
+                if item is None:
+                    break
+                print('Consumer got:', item)
         print('Consumer done')
 
-    q = queue.Queue()
-    threading.Thread(target=producer, args=(q,)).start()
-    curio.run(consumer(q))
+    cond = threading.Condition()
+    items = collections.deque()
+    
+    threading.Thread(target=producer, args=(cond, items)).start()
+    curio.run(consumer(cond, items))
 
 A notable feature of :func:`abide()` is that it also accepts Curio's
 own synchronization primitives.  Thus, you can write code that
@@ -1387,15 +1412,15 @@ take them into account.  Second, if you are using ``async with
 abide(lock)`` with a thread-lock and a cancellation request is
 received while waiting for the ``lock.__enter__()`` method to execute,
 a background thread continues to run waiting for the eventual lock
-acquisition.  Once acquired, it will be immediately released again.
-Without this, task cancellation would surely cause a deadlock of
-threads waiting to use the same lock.
+acquisition.  Once acquired, curio arranges for it to be immediately
+released again.
 
 The ``abide()`` function can be used to synchronize with a thread
 reentrant lock (e.g., ``threading.RLock``).  However, reentrancy is
 not supported.  Each lock acquisition using ``abide()`` involves a
-backing thread.  Repeated acquisitions would violate the constraint
-that reentrant locks have on only acquired by a single thread.
+different backing thread.  Repeated acquisitions would violate the
+constraint that reentrant locks have on only being acquired by a
+single thread.
 
 All things considered, it's probably best to try and avoid code that
 synchronizes Curio tasks with threads.  However, if you must, Curio abides.
