@@ -131,7 +131,7 @@ class _AIterRunner(object):
         self.aiter = aiter
 
     def __iter__(self):
-        return _AIterRunner(await(self.aiter.__aiter__()))
+        return _AIterRunner(self.aiter.__aiter__())
 
     def __next__(self):
         try:

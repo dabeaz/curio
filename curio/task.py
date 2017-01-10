@@ -228,7 +228,7 @@ class wait(object):
     def __exit__(self, *args):
         return thread.await(self.__aexit__(*args))
 
-    async def __aiter__(self):
+    def __aiter__(self):
         return self
 
     async def __anext__(self):

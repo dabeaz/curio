@@ -432,7 +432,7 @@ class StreamBase(object):
         self._file = None
         self._fileno = -1
 
-    async def __aiter__(self):
+    def __aiter__(self):
         return self
 
     async def __anext__(self):
