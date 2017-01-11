@@ -820,7 +820,7 @@ class TestAbide:
     def test_abide_sync_rlock(self, kernel):
         results = []
         async def waiter(lck, evt):
-            async with abide(lck, reserve=True):
+            async with abide(lck, reserve_thread=True):
                 results.append('acquired')
             results.append('released')
             await abide(evt.set)
