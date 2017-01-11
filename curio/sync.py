@@ -326,7 +326,7 @@ def abide(op, *args, **kwargs):
     methods execute in a background thread.  Cancellation is handled
     gracefully. 
 
-    The reserve flag, if given exposes the background thread for further
+    The reserve_thread flag, if given exposes the background thread for further
     use.  This may be required for certain kinds of synchronization
     primitives such as condition variables:
 

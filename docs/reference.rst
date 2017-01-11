@@ -1300,7 +1300,7 @@ synchronization primitives if you use the :func:`abide` function.
    an asynchronous context manager, it is returned unmodified.  If
    ``op`` is a synchronous context manager, it is wrapped in a manner
    that carries out its execution in a backing thread.  For this
-   latter case, a special keyword argument ``reserve=True`` may be
+   latter case, a special keyword argument ``reserve_thread=True`` may be
    given that instructs Curio to use the same backing thread for the
    entire duraction of the context manager.
 
@@ -1345,9 +1345,9 @@ If you wanted to trigger or wait for a thread-event, you might do this::
         evt.set()
         ...
 
-For condition variables and reentrant locks, you should use ``reserve=True`` keyword
-argument to make sure the same thread is used throughout the block. For
-example::
+For condition variables and reentrant locks, you should use
+``reserve_thread=True`` keyword argument to make sure the same thread is used
+throughout the block. For example::
 
     import curio
     import threading
@@ -1364,7 +1364,7 @@ example::
     # A curio task
     async def consumer(cond, items):
         while True:
-            async with abide(cond, reserve=True) as c:
+            async with abide(cond, reserve_thread=True) as c:
 	        while not items:
                     await c.wait()
                 item = items.popleft()
