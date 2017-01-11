@@ -1477,10 +1477,10 @@ Not really--it's all smoke and mirrors with background threads (if you must know
 this approach to files is not unique to Curio though).
 
 One caution with ``run_in_thread()`` is that it should probably only
-be used on short-running operations where there is an expectation of
-it completing more-or-less right away.  Technically, you could use it
-to execute blocking operations that might wait for long time periods.
-For example, waiting on a thread-queue::
+be used on operations where there is an expectation of it completing
+in the near future. Technically, you could use it to execute blocking
+operations that might wait for long time periods.  For example,
+waiting on a thread-queue::
 
     import queue
     from curio import run_in_thread
@@ -1499,8 +1499,8 @@ possibility that you would exhaust all of the available threads in
 Curio's internal thread pool.  At that point, all further
 ``run_in_thread()`` operations will block and your code will likely
 deadlock.  Don't do that.  Reserve the ``run_in_thread()`` function
-for operations that you know are basically going to complete right now
-(or a short time from now).
+for operations that you know are basically going to run to completion 
+at that moment.
 
 For blocking operations involving a high degree of concurrency and
 usage of shared resources such as thread locks and queues, prefer to

@@ -390,11 +390,14 @@ calculations and blocking operations.  Use the following functions to do that:
    The same as ``run_in_thread()``, but guarantees that only
    one background thread is used for each unique callable
    regardless of how many tasks simultaneously try to
-   carry out the same operation.  Use this function if there is
+   carry out the same operation at once.  Only use this function if there is
    an expectation that the provided callable is going to 
    block for an undetermined amount of time and that there 
    might be a large amount of contention from multiple tasks.
-   The primary uses are operations on foreign locks and queues.
+   The primary use is on waiting operations involving foreign
+   locks and queues.  For example, if you launched a hundred
+   Curio tasks and they all decided to block on a shared thread
+   queue, using this would be much more efficient than ``run_in_thread()``.
 
 .. asyncfunction:: run_in_executor(exc, callable, *args, **kwargs)
 
