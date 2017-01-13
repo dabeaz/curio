@@ -120,10 +120,10 @@ class AsyncFile(object):
         raise SyncIOError('Use asynchronous iteration')
 
     def __enter__(self):
-        return thread.await(self.__aenter__())
+        return thread.AWAIT(self.__aenter__())
 
     def __exit__(self, *args):
-        return thread.await(self.__aexit__(*args))
+        return thread.AWAIT(self.__aexit__(*args))
 
     def __aiter__(self):
         return self

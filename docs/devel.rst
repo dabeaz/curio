@@ -1735,7 +1735,7 @@ Just to be clear, this code involves asynchronous tasks and threads
 sharing the same synchronization primitive and all executing
 concurrently.  No problem.
 
-It gets better.  You can use ``await()`` in an asynchronous thread. For example,
+It gets better.  You can use ``AWAIT()`` in an asynchronous thread. For example,
 consider this code::
 
     from curio.thread import await, AsyncThread
@@ -1744,7 +1744,7 @@ consider this code::
     # A synchronous function
     def consumer(q):
         while True:
-            item = await(q.get())   # <- !!!!
+            item = AWAIT(q.get())   # <- !!!!
             if not item:
                 break
             print('Got:', item)
@@ -1770,15 +1770,15 @@ consider this code::
 
 Good Guido, what madness is this?  The code creates a Curio ``Queue``
 object that is used from both a task and an asynchronous thread.
-Since queue operations require the use of ``await()``, it's used in
+Since queue operations require the use of ``AWAIT()``, it's used in
 both places.  In the ``producer()`` coroutine, you use ``await
 q.put(n)`` to put an item on the queue.  In the ``consumer()``
-function, you use ``await(q.get())`` to get an item.  There's a bit of
+function, you use ``AWAIT(q.get())`` to get an item.  There's a bit of
 asymmetry there, but ``consumer()`` is just a normal synchronous
 function.  You can't use the ``await`` keyword in such a function, but
 Curio provides a function that takes its place. All is well. Maybe.
 
-A curious thing about the Curio ``await()`` is that it does nothing
+A curious thing about the Curio ``AWAIT()`` is that it does nothing
 if you give it something other than a coroutine.  So, you could
 still use that ``consumer()`` function with a normal thread.
 Just pop into the REPL and try this::
@@ -1797,7 +1797,7 @@ Just pop into the REPL and try this::
     >>> 
 
 Just to be clear about what's happening here,  ``consumer()`` is a normal synchronous
-function.  It uses the ``await()`` function on a queue.  We just gave
+function.  It uses the ``AWAIT()`` function on a queue.  We just gave
 it a normal thread queue and launched it into a normal thread at the
 interactive prompt.  It still works. Curio is not running at all.
 
@@ -1814,12 +1814,12 @@ fine in a thread.  For example::
             while True:
                 try:
                     with curio.timeout_after(0.5):
-                        item = await(q.get())
+                        item = AWAIT(q.get())
                 except curio.TaskTimeout:
                     print('Ho, hum...')
 		    continue
                 print('Got:', item)
-                await(q.task_done())
+                AWAIT(q.task_done())
         except curio.CancelledError:
             print('Consumer done')
             raise
@@ -1844,7 +1844,7 @@ fine in a thread.  For example::
         curio.run(main())
 
 Here the ``t.cancel()`` cancels the async-thread.  As with normal Curio
-tasks, the cancellation is reported on blocking operations involving ``await()``.
+tasks, the cancellation is reported on blocking operations involving ``AWAIT()``.
 The ``timeout_after()`` feature also works fine.  You don't use it as an
 asynchronous context manager in a synchronous function, but it has the same
 overall effect.  Don't try this with a normal thread.
@@ -1863,7 +1863,7 @@ One way to use it is to apply it to a function directly like this::
             for data in client.makefile('rb'):
                 n = int(data)
                 time.sleep(n)
-                await(client.sendall(b'Bark!\n'))
+                AWAIT(client.sendall(b'Bark!\n'))
         print('Connection closed')
 
     run(tcp_server('', 25000, sleeping_dog))
@@ -1883,7 +1883,7 @@ for launching an asynchronous thread::
     # A synchronous function
     def consumer(q):
         while True:
-            item = await(q.get())   # <- !!!!
+            item = AWAIT(q.get())   # <- !!!!
             if not item:
                 break
             print('Got:', item)

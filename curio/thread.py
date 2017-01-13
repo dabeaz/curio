@@ -2,7 +2,7 @@
 #
 # Not your parent's threading
 
-__all__ = [ 'await', 'async_thread', 'async_context', 'async_iter', 'AsyncThread' ] 
+__all__ = [ 'AWAIT', 'async_thread', 'async_context', 'async_iter', 'AsyncThread' ] 
 
 import threading
 from concurrent.futures import Future
@@ -76,7 +76,7 @@ class AsyncThread(object):
         self._thread = threading.Thread(target=self._func_runner)
         self._thread.start()
 
-    def await(self, coro):
+    def AWAIT(self, coro):
         self._request.set_result(coro)
         self._done_evt.wait()
         self._done_evt.clear()
@@ -97,7 +97,7 @@ class AsyncThread(object):
         await self._task.cancel()
 
 
-def await(coro):
+def AWAIT(coro):
     '''
     Await for a coroutine in an asynchronous thread.  If coro is
     not a proper coroutine, this function acts a no-op, returning coro.
@@ -106,7 +106,7 @@ def await(coro):
         return coro
 
     if hasattr(_locals, 'thread'):
-        return _locals.thread.await(coro)
+        return _locals.thread.AWAIT(coro)
     else:
         raise errors.AsyncOnlyError('Must be used as async')
 
@@ -115,10 +115,10 @@ class _AContextRunner(object):
         self.acontext = acontext
 
     def __enter__(self):
-        return await(self.acontext.__aenter__())
+        return AWAIT(self.acontext.__aenter__())
 
     def __exit__(self, ty, val, tb):
-        return await(self.acontext.__aexit__(ty, val, tb))
+        return AWAIT(self.acontext.__aexit__(ty, val, tb))
 
 def async_context(acontext):
     '''
@@ -135,7 +135,7 @@ class _AIterRunner(object):
 
     def __next__(self):
         try:
-            return await(self.aiter.__anext__())
+            return AWAIT(self.aiter.__anext__())
 
         except StopAsyncIteration as e:
             raise StopIteration from None

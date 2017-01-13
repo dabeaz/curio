@@ -306,10 +306,10 @@ class Socket(object):
             self._socket.__exit__(*args)
 
     def __enter__(self):
-        return thread.await(self.__aenter__())
+        return thread.AWAIT(self.__aenter__())
 
     def __exit__(self, *args):
-        return thread.await(self.__aexit__(*args))
+        return thread.AWAIT(self.__aexit__(*args))
 
 MAX_READ = 65536
 
@@ -449,19 +449,19 @@ class StreamBase(object):
         await self.close()
 
     def __iter__(self):
-        return thread.await(self.__aiter__())
+        return thread.AWAIT(self.__aiter__())
 
     def __next__(self):
         try:
-            return thread.await(self.__anext__())
+            return thread.AWAIT(self.__anext__())
         except StopAsyncIteration:
             raise StopIteration
 
     def __enter__(self):
-        return thread.await(self.__aenter__())
+        return thread.AWAIT(self.__aenter__())
 
     def __exit__(self, *args):
-        return thread.await(self.__exit__(*args))
+        return thread.AWAIT(self.__exit__(*args))
 
 
 class FileStream(StreamBase):

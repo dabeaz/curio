@@ -2,10 +2,10 @@
 
 import pytest
 from curio import *
-from curio.thread import await, AsyncThread, async_thread
+from curio.thread import AWAIT, AsyncThread, async_thread
 
 def simple_func(x, y):
-    await(sleep(0.5))     # Execute a blocking operation
+    AWAIT(sleep(0.5))     # Execute a blocking operation
     return x + y
 
 async def simple_coro(x, y):
@@ -51,7 +51,7 @@ def test_cancel_result(kernel):
 
 def test_thread_good_result(kernel):
     def main():
-        result = await(simple_coro(2, 3))
+        result = AWAIT(simple_coro(2, 3))
         assert result == 5
 
     kernel.run(async_thread(main)())
@@ -59,14 +59,14 @@ def test_thread_good_result(kernel):
 def test_thread_bad_result(kernel):
     def main():
         with pytest.raises(TypeError):
-            result = await(simple_coro(2, '3'))
+            result = AWAIT(simple_coro(2, '3'))
 
     kernel.run(async_thread(main)())
 
 def test_thread_cancel_result(kernel):
     def func():
         with pytest.raises(TaskCancelled):
-            result = await(simple_coro(2, 3))
+            result = AWAIT(simple_coro(2, 3))
 
     async def main():
         t = await spawn(async_thread(func)())
@@ -98,7 +98,7 @@ def test_thread_timeout(kernel):
     def func():
         with pytest.raises(TaskTimeout):
             with timeout_after(1):
-                await(sleep(2))
+                AWAIT(sleep(2))
 
     kernel.run(async_thread(func)())
 
@@ -106,16 +106,16 @@ def test_thread_timeout(kernel):
 def test_thread_disable_cancellation(kernel):
     def func():
         with disable_cancellation():
-            await(sleep(1))
+            AWAIT(sleep(1))
             assert True
 
             with enable_cancellation():
-                await(sleep(2))
+                AWAIT(sleep(2))
 
-            assert isinstance(await(check_cancellation()), TaskTimeout)
+            assert isinstance(AWAIT(check_cancellation()), TaskTimeout)
 
         with pytest.raises(TaskTimeout):
-            await(sleep(2))
+            AWAIT(sleep(2))
 
     async def main():
         t = await spawn(async_thread(func)())

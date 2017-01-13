@@ -223,10 +223,10 @@ class wait(object):
         await self.cancel_remaining()
 
     def __enter__(self):
-        return thread.await(self.__aenter__())
+        return thread.AWAIT(self.__aenter__())
 
     def __exit__(self, *args):
-        return thread.await(self.__aexit__(*args))
+        return thread.AWAIT(self.__aexit__(*args))
 
     def __aiter__(self):
         return self
@@ -238,11 +238,11 @@ class wait(object):
         return next
 
     def __iter__(self):
-        return thread.await(self.__aiter__())
+        return thread.AWAIT(self.__aiter__())
 
     def __next__(self):
         try:
-            return thread.await(self.__anext__())
+            return thread.AWAIT(self.__anext__())
         except StopAsyncIteration:
             raise StopIteration
 
@@ -321,10 +321,10 @@ class _CancellationManager(object):
             return False
 
     def __enter__(self):
-        return thread.await(self.__aenter__())
+        return thread.AWAIT(self.__aenter__())
 
     def __exit__(self, *args):
-        return thread.await(self.__aexit__(*args))
+        return thread.AWAIT(self.__aexit__(*args))
 
 
 def enable_cancellation(coro=None):
@@ -458,10 +458,10 @@ class _TimeoutAfter(object):
             self._deadlines.pop()
 
     def __enter__(self):
-        return thread.await(self.__aenter__())
+        return thread.AWAIT(self.__aenter__())
 
     def __exit__(self, *args):
-        return thread.await(self.__aexit__(*args))
+        return thread.AWAIT(self.__aexit__(*args))
 
 async def _timeout_after_func(clock, absolute, coro, ignore=False, timeout_result=None):
     task = await current_task()
