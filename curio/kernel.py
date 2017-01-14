@@ -694,6 +694,10 @@ class Kernel(object):
         for trap in Traps:
             traps[trap] = locals()[trap.name]
 
+        # Initialize the loopback task (if not already initialized)
+        if self._kernel_task_id is None:
+            _init_loopback_task()
+
         # If a coroutine was given, add it as the first task
         maintask = _new_task(coro) if coro else None
 
@@ -701,10 +705,6 @@ class Kernel(object):
         if maintask is None and shutdown:
             _shutdown()
             return
-
-        # Initialize the loopback task (if not already initialized)
-        if self._kernel_task_id is None:
-            _init_loopback_task()
 
         # ------------------------------------------------------------
         # Main Kernel Loop
