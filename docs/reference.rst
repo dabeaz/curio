@@ -393,11 +393,11 @@ calculations and blocking operations.  Use the following functions to do that:
    carry out the same operation at once.  Only use this function if there is
    an expectation that the provided callable is going to 
    block for an undetermined amount of time and that there 
-   might be a large amount of contention from multiple tasks.
-   The primary use is on waiting operations involving foreign
-   locks and queues.  For example, if you launched a hundred
-   Curio tasks and they all decided to block on a shared thread
-   queue, using this would be much more efficient than ``run_in_thread()``.
+   might be a large amount of contention from multiple tasks on the same
+   resource.  The primary use is on waiting operations involving
+   foreign locks and queues.  For example, if you launched a hundred
+   Curio tasks and they all decided to block on a shared thread queue,
+   using this would be much more efficient than ``run_in_thread()``.
 
 .. asyncfunction:: run_in_executor(exc, callable, *args, **kwargs)
 
@@ -1404,9 +1404,9 @@ example could be rewritten as follows and the child would still work::
 
     curio.run(main())
 
-A special circle of hell is reserved for code that combines the use of
+A special circle of hell awaits code that combines the use of
 the ``abide()`` function with task cancellation.  Although
-cancellation is supported, there are a few things to keep in mind
+cancellation is mostly supported, there are a few things to keep in mind
 about it.  First, if you are using ``abide(func, arg1, arg2, ...)`` to
 run a synchronous function, that function will fully run to completion
 in a separate thread regardless of the cancellation.  So, if there are
@@ -1415,8 +1415,8 @@ take them into account.  Second, if you are using ``async with
 abide(lock)`` with a thread-lock and a cancellation request is
 received while waiting for the ``lock.__enter__()`` method to execute,
 a background thread continues to run waiting for the eventual lock
-acquisition.  Once acquired, curio arranges for it to be immediately
-released again.
+acquisition.  Once acquired, curio releases it again.  However, fully
+figuring out what's happening might be mind-bending.
 
 The ``abide()`` function can be used to synchronize with a thread
 reentrant lock (e.g., ``threading.RLock``).  However, reentrancy is
@@ -1426,7 +1426,201 @@ constraint that reentrant locks have on only being acquired by a
 single thread.
 
 All things considered, it's probably best to try and avoid code that
-synchronizes Curio tasks with threads.  However, if you must, Curio abides.
+synchronizes Curio tasks with threads.  However, if you must, Curio
+abides.
+
+Asynchronous Threads
+--------------------
+
+If you need to perform a lot of synchronous operations, but still
+interact with Curio, you might consider launching an asynchronous
+thread. An asynchronous thread flips the whole world around--instead
+of executing synchronous operations using ``run_in_thread()``, you
+kick everything out to a thread and perform the asynchronous
+operations using a magic ``AWAIT()`` function. 
+
+.. class:: AsyncThread(target, args=(), kwargs={}, daemon=True)
+
+   Creates an asynchronous thread.  The arguments are the same as
+   for the ``threading.Thread`` class.  ``target`` is a synchronous
+   callable.  ``args`` and ``kwargs`` are its arguments. ``daemon``
+   specifies if the thread runs in daemonic mode.
+
+.. asyncmethod:: AsyncThread.start()
+
+   Starts the asynchronous thread.
+
+.. asyncmethod:: join()
+
+   Waits for the thread to terminate, returning the callables final result.
+   The final result is returned in the same manner as the usual ``Task.join()``
+   method used on Curio tasks.
+
+.. asyncmethod:: cancel()
+
+   Cancels the asynchronous thread.  The behavior is the same as cancellation
+   performed on Curio tasks.  An asynchronous thread can only be cancelled
+   when it performs blocking operations on asynchronous objects (e.g.,
+   using ``AWAIT()``.
+
+Within a thread, the following function can be used to execute a coroutine.
+
+.. function:: AWAIT(coro)
+
+   Execute a coroutine on behalf of an asynchronous thread.  The requested
+   coroutine executes in Curio's main execution thread.  The caller is
+   blocked until it completes.  If used outside of an asynchronous thread,
+   an ``AsyncOnlyError`` exception is raised.  If ``coro`` is not a 
+   coroutine, it is returned unmodified.   The reason ``AWAIT`` is all-caps
+   is to make it more easily heard when there are all of these coders yelling
+   at you to just use pure async code instead of launching a thread. Also, 
+   ``await`` is likely to be a reserved keyword in Python 3.7.
+
+Here is a simple example of an asynchronous thread that reads data off a
+Curio queue::
+
+    from curio import run, Queue, sleep, CancelledError
+    from curio.thread import AsyncThread, AWAIT
+
+    def consumer(queue):
+        try:
+            while True:
+                item = AWAIT(queue.get())
+                print('Got:', item)
+                AWAIT(queue.task_done())
+
+        except CancelledError:
+            print('Consumer goodbye!')
+            raise
+
+    async def main():
+        q = Queue()
+        t = AsyncThread(target=consumer, args=(q,))
+        await t.start()
+
+        for i in range(10):
+            await q.put(i)
+            await sleep(1)
+
+        await q.join()
+        await t.cancel()
+
+    run(main())
+
+Asynchronous threads can also be created using the following decorator.
+
+.. function:: async_thread(callable)
+
+   A decorator that adapts a synchronous callable into an asynchronous
+   function that runs an asynchronous thread.
+
+Using this decorator, you can write a function like this::
+
+    @async_thread
+    def consumer(queue):
+        try:
+            while True:
+                item = AWAIT(queue.get())
+                print('Got:', item)
+                AWAIT(queue.task_done())
+
+        except CancelledError:
+            print('Consumer goodbye!')
+            raise
+
+Now, whenever the code executes (e.g., ``await consumer(q)``), a
+thread will automatically be created.   The decorator might also
+be useful in combination with ``spawn()`` like this::
+
+    def consumer(queue):
+        try:
+            while True:
+                item = AWAIT(queue.get())
+                print('Got:', item)
+                AWAIT(queue.task_done())
+
+        except CancelledError:
+            print('Consumer goodbye!')
+            raise
+
+    async def main():
+        q = Queue()
+        t = await spawn(async_thread(consumer)(q))
+        ...
+
+Asynchronous threads can use all of Curio's features including
+coroutines, asynchronous context managers, asynchronous iterators,
+timeouts and more.  For coroutines, use the ``AWAIT()`` function.  For
+context managers and iterators, use the synchronous counterpart.  For
+example, you could write this::
+
+    from curio.thread import async_thread, AWAIT
+    from curio import run, tcp_server
+
+    @async_thread
+    def echo_client(client, addr):
+        print('Connection from:', addr)
+        with client:
+            f = client.as_stream()
+            for line in f:
+                AWAIT(client.sendall(line))
+        print('Client goodbye')
+
+    run(tcp_server('', 25000, echo_client))
+
+In this code, the ``with client`` and ``for line in f`` statements are
+actually executing asynchronous code behind the scenes.
+
+Asynchronous threads can perform any combination of blocking operations
+including those that might involve normal thread-related primitives such
+as locks and queues.  These operations will block the thread itself, but
+will not block the Curio kernel loop.  In a sense, this is the whole
+point--if you run things in an async threads, the rest of Curio is
+protected.   Asynchronous threads can be cancelled in the same manner
+as normal Curio tasks.  However, the same rules apply--an asynchronous
+thread can only be cancelled on blocking operations involving ``AWAIT()``.
+
+A final curious thing about async threads is that the ``AWAIT()``
+function is no-op if you don't give it a coroutine.  This means that
+code, in many cases, can be made to be compatible with regular Python
+threads.  For example, this code actually runs::
+
+    from curio.thread import AWAIT
+    from curio import CancelledError
+    from threading import Thread
+    from queue import Queue
+    from time import sleep
+
+    def consumer(queue):
+        try:
+            while True:
+                item = AWAIT(queue.get())
+                print('Got:', item)
+                AWAIT(queue.task_done())
+
+        except CancelledError:
+            print('Consumer goodbye!')
+            raise
+ 
+    def main():
+        q = Queue()
+        t = Thread(target=consumer, args=(q,), daemon=True)
+        t.start()
+
+        for i in range(10):
+            q.put(i)
+            sleep(1)
+        q.join()
+
+    main()
+
+In this code, ``consumer()`` is simply launched in a regular thread
+with a regular thread queue.  The ``AWAIT()`` operations do
+nothing--the queue operations aren't coroutines and their results
+return unmodified.  Certain Curio features such as cancellation aren't
+supported by normal threads so that would be ignored.  However, it's
+interesting that you can write a kind of hybrid code that works in
+both a threaded and asynchronous world.
 
 Signals
 -------
@@ -1797,27 +1991,3 @@ This method first tries to receive data.  If none is available, the
 can be performed. When it awakes, the receive operation is
 retried. Just to emphasize, the :func:`_read_wait` doesn't actually
 perform any I/O. It's just scheduling a task for it.
-
-Here's an example of code that implements a mutex lock::
-
-    from collections import deque
-
-    class Lock(object):
-        def __init__(self):
-            self._acquired = False
-            self._waiting = deque()
-
-        async def acquire(self):
-            if self._acquired:
-                await _wait_on_queue(self._waiting, 'LOCK_ACQUIRE')
-
-        async def release(self):
-             if self._waiting:
-                 await _reschedule_tasks(self._waiting, n=1)
-             else:
-                 self._acquired = False
-
-In this code you can see the low-level calls related to managing a
-wait queue. This code is not significantly different than the actual
-implementation of a lock in curio.  If you wanted to make your own
-task synchronization objects, the code would look similar.

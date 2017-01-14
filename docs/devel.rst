@@ -1691,7 +1691,7 @@ The code sitting behind the ``with lock:`` part executes in a Curio
 backing task.  The body of statement runs in the thread. 
 
 It gets more wild.  You can have both Curio tasks and asynchronous threads
-sharing synchronization primitives.  For example, this code works fine::
+sharing synchronization primitives.  For example, this code also works fine::
 
     import time
     import curio
@@ -1735,8 +1735,8 @@ Just to be clear, this code involves asynchronous tasks and threads
 sharing the same synchronization primitive and all executing
 concurrently.  No problem.
 
-It gets better.  You can use ``AWAIT()`` in an asynchronous thread. For example,
-consider this code::
+It gets better.  You can use ``await`` in an asynchronous thread if
+you use the ``AWAIT()`` function. For example, consider this code::
 
     from curio.thread import await, AsyncThread
     import curio
@@ -1770,13 +1770,23 @@ consider this code::
 
 Good Guido, what madness is this?  The code creates a Curio ``Queue``
 object that is used from both a task and an asynchronous thread.
-Since queue operations require the use of ``AWAIT()``, it's used in
+Since queue operations normally require the use of ``await``, it's used in
 both places.  In the ``producer()`` coroutine, you use ``await
 q.put(n)`` to put an item on the queue.  In the ``consumer()``
 function, you use ``AWAIT(q.get())`` to get an item.  There's a bit of
 asymmetry there, but ``consumer()`` is just a normal synchronous
 function.  You can't use the ``await`` keyword in such a function, but
 Curio provides a function that takes its place. All is well. Maybe.
+
+And on a related note, why is it ``AWAIT()`` in all-caps like that?
+Mostly it's because of all of those coders who continuously and loudly
+rant about how you should never program with threads.  Forget that.
+Clearly they have never seen async threads before.  It's AWAIT!
+AWAIT! AWAIT!  It's shouted so it can be more clearly heard above all
+of that ranting.  To be honest, it's also pretty magical--so maybe
+it's not such a bad thing for it to jump out of the code at you. Boo!
+And there's the tiny detail of ``await`` being a reserved
+keyword. Let's continue.
 
 A curious thing about the Curio ``AWAIT()`` is that it does nothing
 if you give it something other than a coroutine.  So, you could
