@@ -365,14 +365,16 @@ mainstream programming languages used to write systems software.  For
 example, languages such as Pascal, C/C++, and Java don't support
 coroutines. Thus, it's not a technique that most programmers would
 even think to consider.  Even in Python, proper support for coroutines
-has taken a long time to emerge.  Over the years, various projects
-have explored coroutines in various forms, usually involving sneaky
-hacks surrounding generator functions and C extensions.  The addition
-of the ``yield from`` construct in Python 3.3 greatly simplified the
-problem of writing coroutine libraries.  The emergence of
-``async/await`` in Python 3.5 takes a huge stride in making coroutines
-more of a first-class object in the Python world.  This is really the
-starting point for Curio.
+has taken a long time to emerge.  Projects such as Stackless Python
+explored the idea of coroutines, but it was probably too far ahead of its
+time to be properly understood. Later on, various projects have
+explored coroutines in various forms, usually involving sneaky hacks
+surrounding generator functions and C extensions.  The addition of the
+``yield from`` construct in Python 3.3 greatly simplified the problem
+of writing coroutine libraries.  The emergence of ``async/await`` in
+Python 3.5 takes a huge stride in making coroutines more of a
+first-class object in the Python world.  This is really the starting
+point for Curio.
 
 Layered Architecture
 --------------------
@@ -463,7 +465,7 @@ Now, a couple of important details about what's happening:
   and retry the I/O operation later (the retry is why it's enclosed in a ``while`` loop).
 
 * Curio does not actually perform any I/O. It is only responsible for waiting.
-  The ``_read_wait()`` call sleeps until the associated socket can be read.
+  The ``_read_wait()`` call suspends until the associated socket can be read.
 
 * Incoming I/O is not handled as an "event" nor are there any
   associated callback functions.  If an incoming connection is received, the coroutine
@@ -571,8 +573,9 @@ scheduling problem--not I/O.
 The Curio Task Model
 --------------------
 
-When a coroutine runs inside Curio, it becomes a "Task."  This 
-section describes the overall task model and operations on tasks.
+When a coroutine runs inside Curio, it becomes a "Task."  A major portion
+of Curio concerns the management and coordination of tasks.  This 
+section describes the overall task model and operations involving tasks.
 
 Creating Tasks
 ^^^^^^^^^^^^^^
@@ -748,6 +751,33 @@ Since cancellation doesn't propagate except explicitly as shown, one
 way to shield a coroutine from cancellation is to launch it as a
 separate task using ``spawn()``. Unless it's directly cancelled, a
 task always runs to completion.
+
+Daemon Tasks
+^^^^^^^^^^^^
+
+Normally Curio runs tasks until all tasks have completed.  As an
+option, you can launch a so-called "daemon" task.  For example::
+
+    async def spinner():
+        while True:
+            print('Spinning')
+            await sleep(5)
+
+    async def main():
+        await spawn(spinner(), daemon=True)
+        await sleep(20)
+        print('Main. Goodbye')
+
+
+    run(main())     # Runs until main() returns
+    
+A daemon task runs in the background, potentially forever.  The
+``Kernel.run()`` method will execute tasks until all non-daemon tasks
+are finished.  If you call the kernel ``run()`` method again with a
+new coroutine, the daemon tasks will still be there.  If you shut down
+the kernel, the daemon tasks are cancelled.  Note: the high-level
+``run()`` function performs a shutdown so it would shut down all
+of the daemon tasks on your behalf.
 
 Timeouts
 ^^^^^^^^
@@ -1545,8 +1575,105 @@ example::
                 item = await run_in_thread(q.get)
                 ...
 
-Thread-Task Coordination
-^^^^^^^^^^^^^^^^^^^^^^^^
+Thread-Task Synchronization
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Acknowledging the reality that some work still might have to be
+performed by threads, even in code that uses asynchronous I/O, you may
+faced with the problem of coordinating Curio tasks and external
+threads in some way.
+
+One problem concerns task-thread coordination on thread locks and
+events.  Generally, it's not safe for coroutines to wait on a foreign
+thread lock.  Doing so can block the whole underlying kernel and
+everything will come to a grinding halt.  To wait on a foreign lock,
+use the ``abide()`` function.  For example::
+
+    import threading
+    from curio import abide
+    
+    lock = threading.Lock()
+    
+    # Curio task
+    async def coro():
+        async with abide(lock):
+            # Critical section
+            ...
+
+    # Synchronous code (in a thread)
+    def func():
+        with lock:
+            # Critical section
+            ...
+        
+``abide()`` adapts a foreign lock to an asynchronous context-manager
+and guides its execution using a backing thread.  You can use it with
+any foreign ``Lock`` or ``Semaphore`` object (e.g., it also works with
+locks defined in the ``multiprocessing`` module).  ``abide()`` tries
+to be efficient with how it utilizes threads.  For example, if you
+spawn up 10000 Curio tasks and have them all wait on the same lock,
+only one backing thread gets used.
+
+``abide()`` can work with reentrant locks and condition variables, but there
+are some issues concerning the backing thread used to execute the various
+locking operations.  In this case, the same thread needs to be used 
+for all operations.  To indicate this, use the ``reserve_thread`` keyword
+argument::
+
+    import threading
+    
+    cond = threading.Condition()
+    
+    # Curio task
+    async def coro():
+        async with abide(cond, reserve_thread=True) as c:
+            # c is a wrapped version of cond() with async methods
+            ...
+            # Executes on the same thread as used to acquire cond
+            await c.wait()    
+
+    # Synchronous code (in a thread)
+    def func():
+        with cond:
+            ...
+            cond.notify()
+            ...
+
+As of this writing, Curio can synchronize with an ``RLock``, but 
+reentrancy is not supported--that is nested ``abide()`` calls on
+the same lock won't work correctly.  This limitation may be lifted
+in a future version.
+
+``abide()`` also works with operations involving events.
+For example, here is how you wait for an event::
+
+    import threading
+
+    evt = threading.Event()     # Thread event
+
+    async def waiter():
+        await abide(evt.wait)
+        print('Awake!')
+
+A curious aspect of ``abide()`` is that it also works with Curio's own
+synchronization primitives.   So, this code also works fine::
+
+    import curio
+    
+    lock = curio.Lock()
+    
+    # Curio task
+    async def coro():
+        async with abide(lock):
+            # Critical section
+            ...
+
+If the provided lock already works asynchronously, ``abide()`` turns
+into an identity function.  That is, it doesn't really do anything.
+For lack of a better description, this gives you the ability to have a
+kind of "duck-synchronization" in your program.  If a lock looks like
+a lock, ``abide()`` will probably work with it regardless of where it
+came from.
 
 Asynchronous Threads
 ^^^^^^^^^^^^^^^^^^^^
