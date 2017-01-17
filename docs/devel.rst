@@ -1607,12 +1607,30 @@ use the ``abide()`` function.  For example::
             ...
         
 ``abide()`` adapts a foreign lock to an asynchronous context-manager
-and guides its execution using a backing thread.  You can use it with
-any foreign ``Lock`` or ``Semaphore`` object (e.g., it also works with
-locks defined in the ``multiprocessing`` module).  ``abide()`` tries
-to be efficient with how it utilizes threads.  For example, if you
-spawn up 10000 Curio tasks and have them all wait on the same lock,
-only one backing thread gets used.
+and guides its execution using a backing thread.  Under the covers,
+``abide()`` is using an asynchronous context manager that is roughly
+equivalent to this::
+
+    class AbideManager(object):
+        def __init__(self, manager):
+            self.manager = manager
+
+        async def __aenter__(self):
+            curio.block_in_thread(self.manager.__enter__)
+            return self
+
+        async def __aexit__(self, *args):
+            curio.run_in_thread(self.manager.__exit__, *args)
+
+The exact details vary due to some tricky corner cases, but the overall
+gist is that threads are used to run it and it won't block the
+Curio kernel.
+
+You can use ``abide()`` with any foreign ``Lock`` or ``Semaphore`` object
+(e.g., it also works with locks defined in the ``multiprocessing``
+module).  ``abide()`` tries to be efficient with how it utilizes
+threads.  For example, if you spawn up 10000 Curio tasks and have them
+all wait on the same lock, only one backing thread gets used.
 
 ``abide()`` can work with reentrant locks and condition variables, but there
 are some issues concerning the backing thread used to execute the various
@@ -1639,10 +1657,10 @@ argument::
             cond.notify()
             ...
 
-As of this writing, Curio can synchronize with an ``RLock``, but 
-reentrancy is not supported--that is nested ``abide()`` calls on
-the same lock won't work correctly.  This limitation may be lifted
-in a future version.
+As of this writing, Curio can synchronize with an ``RLock``, but full
+reentrancy is not supported--that is nested ``abide()`` calls on the
+same lock won't work correctly.  This limitation may be lifted in a
+future version.
 
 ``abide()`` also works with operations involving events.
 For example, here is how you wait for an event::
@@ -1674,6 +1692,12 @@ For lack of a better description, this gives you the ability to have a
 kind of "duck-synchronization" in your program.  If a lock looks like
 a lock, ``abide()`` will probably work with it regardless of where it
 came from.
+
+Finally, a caution: having Curio synchronize with foreign locks is not
+the fastest thing.  There are backing threads and a fair bit of
+communication across the async-synchronous boundary.  If you're doing
+a bunch of fine-grained locking where performance is critical, don't
+use ``abide()``.  In fact, try to do almost anything else.
 
 Asynchronous Threads
 ^^^^^^^^^^^^^^^^^^^^
