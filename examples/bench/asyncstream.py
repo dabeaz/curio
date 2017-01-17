@@ -2,9 +2,7 @@
 
 import asyncio
 
-
 async def echo_client(reader, writer):
-    print('Here!')
     addr = writer.get_extra_info('peername')
     print('Connection from', addr)
     while True:

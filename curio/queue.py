@@ -12,7 +12,7 @@ import queue as thread_queue
 
 from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function
 from .kernel import KSyncQueue
-from .errors import CurioError
+from .errors import CurioError, CancelledError
 from .meta import awaitable
 from . import workers
 from .task import spawn
@@ -54,11 +54,15 @@ class Queue(object):
         return self.maxsize and len(self._queue) == self.maxsize
 
     async def get(self):
-        if self._get_waiting or self.empty():
+        must_wait = bool(self._get_waiting)
+        while must_wait or self.empty():
+            must_wait = False
             if self._get_reschedule_func is None:
                 self._get_reschedule_func = await _ksync_reschedule_function(self._get_waiting)
             await _wait_on_ksync(self._get_waiting, 'QUEUE_GET')
+
         result = self._get()
+
         if self._put_waiting:
             await _reschedule_tasks(self._put_waiting, n=1)
         return result
@@ -80,7 +84,7 @@ class Queue(object):
 
     @awaitable(put)
     async def put(self, item):
-        if self.full():
+        while self.full():
             await _wait_on_ksync(self._put_waiting, 'QUEUE_PUT')
         self._put(item)
         self._task_count += 1
@@ -137,63 +141,61 @@ class EpicQueue(object):
     '''
     The name says it all.
     '''
+
     def __init__(self, queue=None, maxsize=0):
         self._tqueue = queue if queue else thread_queue.Queue(maxsize=maxsize)
-        self._get_sema = sync.Semaphore(1)
-        self._put_sema = sync.Semaphore(1)
-        self._join_sema = sync.Semaphore(1)
-        self._all_tasks_done = threading.Condition()
-        self._unfinished_tasks = 0
+        self._cqueue = Queue()
+        self._num_getting = sync.Semaphore(0)
+        self._get_task = None
 
-    def put(self, item):
-        with self._all_tasks_done:
-            self._unfinished_tasks += 1
-
-        self._tqueue.put(item)
-
-    @awaitable(put)
-    async def put(self, item):
-        async with self._put_sema:
-            async with sync.abide(self._all_tasks_done):
-                self._unfinished_tasks += 1
-            await workers.run_in_thread(self._tqueue.put, item)
+    # A daemon task that pulls items from the thread queue and queues
+    # them on the async side.  The purpose of having this task is to
+    # shield the process of pulling items over to async from cancellation.
+    # Without care, cancellation would cause items to be lost
+    async def _get_helper(self):
+        while True:
+            await self._num_getting.acquire()
+            item = await workers.run_in_thread(self._tqueue.get)
+            await self._cqueue.put(item)
 
     def get(self):
         return self._tqueue.get()
 
     @awaitable(get)
     async def get(self):
-        async with self._get_sema:
-            return await workers.run_in_thread(self._tqueue.get)
-    
-    def _sync_task_done(self):
-        with self._all_tasks_done:
-            self._unfinished_tasks -= 1
-            if self._unfinished_tasks == 0:
-                self._all_tasks_done.notify_all()
+        if not self._get_task:
+            self._get_task = await spawn(self._get_helper(), daemon=True)
 
-    @awaitable(_sync_task_done)
-    async def task_done(self):
-        await workers.run_in_thread(self._sync_task_done)
-
-    async def _join_worker(self):
-        w = workers.ThreadWorker()
+        if self._cqueue.empty() or self._num_getting.locked():
+            await self._num_getting.release()
         try:
-            await w.apply(self._join_sync)
-            await self._joining.set()
-        finally:
-            self._joining = None
-            self._join_task = None
-            w.shutdown()
+            item = await self._cqueue.get()
+            return item
+        except CancelledError:
+            if not self._num_getting.locked():
+                await self._num_getting.acquire()
+            raise
 
-    def _join_sync(self):
-        with self._all_tasks_done:
-            while self._unfinished_tasks:
-                self._all_tasks_done.wait()
+    def put(self, item):
+        self._tqueue.put(item)
 
-    @awaitable(_join_sync)
+    @awaitable(put)
+    async def put(self, item):
+        await workers.block_in_thread(self._tqueue.put, item)
+    
+    def task_done(self):
+        self._tqueue.task_done()
+
+    @awaitable(task_done)
+    async def task_done(self):
+        await workers.run_in_thread(self._tqueue.task_done)
+
+    def join(self):
+        self._tqueue.join()
+
+    @awaitable(join)
     async def join(self):
-        await workers.run_in_thread(self._join_sync)
+        await workers.block_in_thread(self._tqueue.join)
 
     def __getattr__(self, name):
         return getattr(self._tqueue, name)
