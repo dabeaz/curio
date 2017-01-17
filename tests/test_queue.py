@@ -321,3 +321,160 @@ def test_lifo_queue(kernel):
 
     kernel.run(producer())
     assert results == list(reversed(items))
+
+def test_epic_queue_sync_async(kernel):
+    from curio.queue import EpicQueue
+    import time
+    import threading
+
+    result = [ ]
+    async def consumer(q):
+        while True:
+            item = await q.get()
+            if item is None:
+                break
+            result.append(item)
+            await q.task_done()
+
+    def producer(q):
+        for i in range(10):
+            q.put(i)
+            time.sleep(0.1)
+        q.join()
+        assert True
+
+    async def main():
+        q = EpicQueue()
+
+        t1 = await spawn(consumer(q))
+        t2 = threading.Thread(target=producer, args=(q,))
+        t2.start()
+        await run_in_thread(t2.join)
+        await q.put(None)
+        await t1.join()
+        assert result == [0,1,2,3,4,5,6,7,8,9]
+
+    run(main())
+
+def test_epic_queue_async_sync(kernel):
+    from curio.queue import EpicQueue
+    import threading
+
+    result = []
+    def consumer(q):
+        while True:
+            item = q.get()
+            if item is None:
+                break
+            result.append(item)
+            q.task_done()
+
+    async def producer(q):
+        for i in range(10):
+            await q.put(i)
+            await sleep(0.1)
+        await q.join()
+
+    async def main():
+        q = EpicQueue()
+
+        t1 = threading.Thread(target=consumer, args=(q,))
+        t1.start()
+        t2 = await spawn(producer(q))
+        await t2.join()
+        await q.put(None)
+        await run_in_thread(t1.join)
+        assert result == [0,1,2,3,4,5,6,7,8,9]
+
+    run(main())
+
+def test_epic_queue_cancel(kernel):
+    from curio.queue import EpicQueue
+    import time
+    import threading
+
+    result = [] 
+
+    async def consumer(q):
+        while True:
+            try:
+                item = await timeout_after(0.1, q.get())
+            except TaskTimeout:
+                continue
+            if item is None:
+                break
+            result.append(item)
+            await q.task_done()
+
+    def producer(q):
+        for i in range(10):
+            q.put(i)
+            time.sleep(0.2)
+        q.join()
+
+    async def main():
+        q = EpicQueue(maxsize=2)
+        t1 = await spawn(consumer(q))
+        t2 = threading.Thread(target=producer, args=(q,))
+        t2.start()
+        await run_in_thread(t2.join)
+        await q.put(None)
+        await t1.join()
+        assert result == [0,1,2,3,4,5,6,7,8,9]
+
+    run(main())
+
+def test_epic_queue_multiple_consumer(kernel):
+    from curio.queue import EpicQueue
+    import time
+    import threading
+
+    result = []
+
+    async def consumer(q):
+        while True:
+            item = await q.get()
+            if item is None:
+                break
+            result.append(item)
+            await q.task_done()
+
+    def producer(q):
+        for i in range(1000):
+            q.put(i)
+        q.join()
+
+    async def main():
+        q = EpicQueue(maxsize=10)
+        t1 = await spawn(consumer(q))
+        t2 = await spawn(consumer(q))
+        t3 = await spawn(consumer(q))
+        t4 = threading.Thread(target=producer, args=(q,))
+        t4.start()
+        await run_in_thread(t4.join)
+        await q.put(None)
+        await q.put(None)
+        await q.put(None)
+        await t1.join()
+        await t2.join()
+        await t3.join()
+        assert list(range(1000)) == result
+
+    run(main())
+
+
+
+    
+
+
+
+    
+
+
+
+    
+
+    
+    
+
+
