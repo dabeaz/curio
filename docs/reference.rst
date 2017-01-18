@@ -1286,6 +1286,53 @@ This will output
     second
     first
 
+.. class: UniversalQueue(maxsize=0)
+
+   A queue that can be safely used from both Curio tasks and threads.  
+   The same programming API is used for both worlds, but ``await`` is
+   required for asynchronous operations.  When the queue is no longer
+   in use, the ``shutdown()`` method should be called to terminate
+   an internal helper-task.
+
+Here is an example a producer-consumer problem with a ``UniversalQueue``::
+
+    from curio import run, UniversalQueue, spawn, run_in_thread
+
+    import time
+    import threading
+
+    # An async task
+    async def consumer(q):
+        print('Consumer starting')
+        while True:
+            item = await q.get()
+            if item is None:
+                break
+            print('Got:', item)
+            await q.task_done()
+        print('Consumer done')
+
+    # A threaded producer
+    def producer(q):
+        for i in range(10):
+            q.put(i)
+            time.sleep(1)
+        q.join()
+        print('Producer done')
+
+    async def main():
+        q = UniversalQueue()
+        t1 = await spawn(consumer(q))
+        t2 = threading.Thread(target=producer, args=(q,))
+        t2.start()
+        await run_in_thread(t2.join)
+        await q.put(None)
+        await t1.join()
+        await q.shutdown()
+
+    run(main())
+
+In this code, the ``consumer()`` is a Curio task and ``producer()`` is a thread.
 
 Synchronizing with Threads and Processes
 ----------------------------------------

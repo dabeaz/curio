@@ -2,7 +2,8 @@
 
 from collections import deque
 from curio import *
-
+import time
+import threading
 
 def test_queue_simple(kernel):
     results = []
@@ -322,11 +323,7 @@ def test_lifo_queue(kernel):
     kernel.run(producer())
     assert results == list(reversed(items))
 
-def test_epic_queue_sync_async(kernel):
-    from curio.queue import EpicQueue
-    import time
-    import threading
-
+def test_univ_queue_sync_async(kernel):
     result = [ ]
     async def consumer(q):
         while True:
@@ -344,7 +341,7 @@ def test_epic_queue_sync_async(kernel):
         assert True
 
     async def main():
-        q = EpicQueue()
+        q = UniversalQueue()
 
         t1 = await spawn(consumer(q))
         t2 = threading.Thread(target=producer, args=(q,))
@@ -353,13 +350,12 @@ def test_epic_queue_sync_async(kernel):
         await q.put(None)
         await t1.join()
         assert result == [0,1,2,3,4,5,6,7,8,9]
+        await q.shutdown()
+        assert q._get_task == None
 
     run(main())
 
-def test_epic_queue_async_sync(kernel):
-    from curio.queue import EpicQueue
-    import threading
-
+def test_univ_queue_async_sync(kernel):
     result = []
     def consumer(q):
         while True:
@@ -376,7 +372,7 @@ def test_epic_queue_async_sync(kernel):
         await q.join()
 
     async def main():
-        q = EpicQueue()
+        q = UniversalQueue()
 
         t1 = threading.Thread(target=consumer, args=(q,))
         t1.start()
@@ -385,14 +381,12 @@ def test_epic_queue_async_sync(kernel):
         await q.put(None)
         await run_in_thread(t1.join)
         assert result == [0,1,2,3,4,5,6,7,8,9]
+        await q.shutdown()
+        assert q._get_task == None
 
     run(main())
 
-def test_epic_queue_cancel(kernel):
-    from curio.queue import EpicQueue
-    import time
-    import threading
-
+def test_univ_queue_cancel(kernel):
     result = [] 
 
     async def consumer(q):
@@ -413,7 +407,7 @@ def test_epic_queue_cancel(kernel):
         q.join()
 
     async def main():
-        q = EpicQueue(maxsize=2)
+        q = UniversalQueue(maxsize=2)
         t1 = await spawn(consumer(q))
         t2 = threading.Thread(target=producer, args=(q,))
         t2.start()
@@ -421,14 +415,12 @@ def test_epic_queue_cancel(kernel):
         await q.put(None)
         await t1.join()
         assert result == [0,1,2,3,4,5,6,7,8,9]
+        await q.shutdown()
+        assert q._get_task == None
 
     run(main())
 
-def test_epic_queue_multiple_consumer(kernel):
-    from curio.queue import EpicQueue
-    import time
-    import threading
-
+def test_univ_queue_multiple_consumer(kernel):
     result = []
 
     async def consumer(q):
@@ -445,7 +437,7 @@ def test_epic_queue_multiple_consumer(kernel):
         q.join()
 
     async def main():
-        q = EpicQueue(maxsize=10)
+        q = UniversalQueue(maxsize=10)
         t1 = await spawn(consumer(q))
         t2 = await spawn(consumer(q))
         t3 = await spawn(consumer(q))
@@ -459,6 +451,8 @@ def test_epic_queue_multiple_consumer(kernel):
         await t2.join()
         await t3.join()
         assert list(range(1000)) == result
+        await q.shutdown()
+        assert q._get_task == None
 
     run(main())
 

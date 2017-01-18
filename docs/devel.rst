@@ -1502,29 +1502,29 @@ standard files on the file system.  For example, if you use the Curio
             data = await f.read()
         ...
 
-In this code, it might appear as if asynchronous I/O is being performed on files.
-Not really--it's all smoke and mirrors with background threads (if you must know,
-this approach to files is not unique to Curio though).
+In this code, it might appear as if asynchronous I/O is being
+performed on files.  Not really--it's all smoke and mirrors with
+background threads (if you must know, this approach to files is not
+unique to Curio though).
 
 One caution with ``run_in_thread()`` is that it should probably only
 be used on operations where there is an expectation of it completing
 in the near future. Technically, you could use it to execute blocking
 operations that might wait for long time periods.  For example,
-waiting on a thread-queue::
+waiting on a thread-event::
 
-    import queue
+    import threading
     from curio import run_in_thread
 
-    q = queue.Queue()     # A thread-queue (not Curio)
+    evt = threading.Event()     # A thread-event (not Curio)
     
     async def worker():
-        while True:
-            item = await run_in_thread(q.get)   # Danger
-            ...
+        await run_in_thread(evt.wait)    # Danger
+        ...
 
 Yes, this "works", but it also consumes a worker thread and makes it
-unavailable for other use as long as it waits for an item on the
-queue.  If you launched a large number of worker tasks, there is a
+unavailable for other use as long as it waits for the event.
+If you launched a large number of worker tasks, there is a
 possibility that you would exhaust all of the available threads in
 Curio's internal thread pool.  At that point, all further
 ``run_in_thread()`` operations will block and your code will likely
@@ -1533,29 +1533,28 @@ for operations that you know are basically going to run to completion
 at that moment.
 
 For blocking operations involving a high degree of concurrency and
-usage of shared resources such as thread locks and queues, prefer to
+usage of shared resources such as thread locks and events, prefer to
 use ``block_in_thread()`` instead.  For example::
 
-    import queue
+    import threading
     from curio import block_in_thread
 
-    q = queue.Queue()     # A thread-queue (not Curio)
+    evt = threading.Event()     # A thread-event (not Curio)
     
     async def worker():
-        while True:
-            item = await block_in_thread(q.get)   # Better
-            ...
+        await block_in_thread(evt.wait)   # Better
+        ...
 
 ``block_in_thread()`` still uses a background thread, but only one
 background thread is used regardless of how many tasks try to execute
 the same callable.  For example, if you launched 1000 worker tasks and
-they all called ``block_in_thread(q.get)`` on the same queue, they are
-serviced by a single thread.  If you used ``run_in_thread(q.get)``
+they all called ``block_in_thread(evt.wait)`` on the same event, they are
+serviced by a single thread.  If you used ``run_in_thread(evt.wait)``
 instead, each request would use its own thread and you'd exhaust the
 thread pool.  It is important to note that this throttling is 
 based on each unique callable.  If two different workers used 
-``block_in_thread()`` on two different queues, then they each get
-their own background thread because the ``q.get()`` operation 
+``block_in_thread()`` on two different events, then they each get
+their own background thread because the ``evt.wait()`` operation 
 would represent a different callable.
 
 Behind the scenes, ``block_in_thread()`` coordinates and throttles
@@ -1563,17 +1562,14 @@ tasks using a semaphore.  You can use a similar technique more
 generally for throttling the use of threads (or any resource).  For
 example::
 
-    import queue
     from curio import run_in_thread, Semaphore
 
-    q = queue.Queue()     # A thread-queue (not Curio)
     throttle = Semaphore(5)   # Allow 5 workers to use threads at once
-    
+
     async def worker():
-        while True:
-            async with throttle:
-                item = await run_in_thread(q.get)
-                ...
+        async with throttle:
+            await run_in_thread(some_callable)
+        ...
 
 Thread-Task Synchronization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1698,6 +1694,126 @@ the fastest thing.  There are backing threads and a fair bit of
 communication across the async-synchronous boundary.  If you're doing
 a bunch of fine-grained locking where performance is critical, don't
 use ``abide()``.  In fact, try to do almost anything else.
+
+Thread-Task Queuing
+^^^^^^^^^^^^^^^^^^^
+
+If you must bridge the world of asynchronous tasks and threads,
+perhaps the most sane way to do it is to use a queue.  Curio provides
+a modestly named ``UniversalQueue`` class that does just that.  Basically,
+an ``UniversalQueue`` is a queue that fully supports queuing operations
+from any combination of threads or tasks.  For example, you
+can have async worker tasks reading data written by a producer thread::
+
+    from curio import run, UniversalQueue, spawn, run_in_thread
+
+    import time
+    import threading
+
+    # An async task
+    async def consumer(q):
+        print('Consumer starting')
+        while True:
+            item = await q.get()
+            if item is None:
+                break
+            print('Got:', item)
+            await q.task_done()
+        print('Consumer done')
+
+    # A threaded producer
+    def producer(q):
+        for i in range(10):
+            q.put(i)
+            time.sleep(1)
+        q.join()
+        print('Producer done')
+
+    async def main():
+        q = UniversalQueue()
+
+        t1 = await spawn(consumer(q))
+        t2 = threading.Thread(target=producer, args=(q,))
+        t2.start()
+        await run_in_thread(t2.join)
+        await q.put(None)
+        await t1.join()
+
+    run(main())
+
+Or you can flip it around and have a threaded consumer read
+data from async tasks::
+
+    from curio import run, UniversalQueue, spawn, run_in_thread, sleep
+
+    import threading
+
+    def consumer(q):
+        print('Consumer starting')
+        while True:
+            item = q.get()
+            if item is None:
+                break
+            print('Got:', item)
+            q.task_done()
+        print('Consumer done')
+
+    async def producer(q):
+        for i in range(10):
+            await q.put(i)
+            await sleep(1)
+        await q.join()
+        print('Producer done')
+
+    async def main():
+        q = UniversalQueue()
+
+        t1 = threading.Thread(target=consumer, args=(q,))
+        t1.start()
+        t2 = await spawn(producer(q))
+
+        await t2.join()
+        await q.put(None)
+        await run_in_thread(t1.join)
+
+    run(main())
+
+The programming API is the same in both worlds.  For synchronous code, you use
+the ``get()`` and put()`` methods.  For asynchronous code, you use the same methods,
+but preface them with an await.
+
+The underlying implementation is efficient for a large number of waiting
+asynchronous tasks.  There is no difference between a single task
+waiting for data and ten thousand tasks waiting for data.  Obviously the
+situation is a bit different for threads (you probably wouldn't want to
+have 10000 threads waiting on a queue, but if you did, an ``UniversalQueue``
+would still work).   
+
+One notable feature of ``UniversalQueue`` is that it is cancellation and
+timeout safe on the async side.  For example, you can write code like
+this::
+
+    # An async task
+    async def consumer(q):
+        print('Consumer starting')
+        while True:
+            try:
+                item = await timeout_after(5, q.get())
+	    except TaskTimeout:
+                print('Timeout!')
+		continue
+            if item is None:
+                break
+            print('Got:', item)
+            await q.task_done()
+        print('Consumer done')
+
+In the event of a timeout, the ``q.get()`` operation will abort, but
+no queue data is lost.   Should an item be made available, the next ``q.get()``
+operation will return it.   This is different than performing get
+operations on a standard thread-queue.  For example, if you you used
+``run_in_thread(q.get)`` to get an item on a standard thread queue,
+a timeout or cancellation actually causes a queue item to be lost.
 
 Asynchronous Threads
 ^^^^^^^^^^^^^^^^^^^^
@@ -2067,6 +2183,66 @@ can call C extensions that release the GIL.  You can have these
 threads interact with existing libraries.  If you're organized, you
 can write synchronous functions that work with Curio and with normal
 threaded code at the same time.  It's a brave new world.
+
+Interacting with Synchronous Code
+---------------------------------
+
+Asynchronous functions can call functions written in a synchronous
+manner.  For example, calling out to standard library modules.
+However, this communication is one-way.  That is, an asynchronous
+function can call a synchronous function, but the reverse is not true.
+For example, this fails::
+
+    async def spam():
+        print('Asynchronous spam')
+
+    def yow():
+        print('Synchronous yow')
+        spam()          # Fails
+        await spam()    # Fails
+
+    async def main():
+        yow()           # Works
+
+    run(main())
+
+The reason that it doesn't work is that asynchronous functions 
+require the use of the Curio kernel and once you call a synchronous
+function, it's no longer in control of what's happening. 
+
+It's probably best to think of synchronous code as a whole different
+universe.  If for some reason, you need to make synchronous code
+communicate with asynchronous code, you need to devise some sort
+of different strategy for dealing with it.
+
+Curio provides a few different techniques for interacting with
+asynchronous code from beyond the abyss.  The first is to use
+a ``Queue`` and to take an approach similar to how you might
+interact with a thread.   For example, you can write code like this::
+
+    from curio import run, spawn, Queue
+
+    q = Queue()
+
+    async def worker():
+        while True:
+            item = await q.get()
+            print('Got:', item)
+
+    def yow():
+        print('Synchronous yow')
+        q.put('yow')      # Works
+
+    async def main():
+        await spawn(worker())
+        yow()           
+
+    run(main())
+
+Curio queues allow the `q.put()` method to be used from synchronous
+code.  Thus, if you're in that world, you can at least queue up a
+bunch of data.  It won't be processed until you return to the world of
+Curio tasks, but at least it will be there.
 
 Programming Considerations and APIs
 -----------------------------------

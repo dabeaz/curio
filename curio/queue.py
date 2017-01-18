@@ -18,7 +18,7 @@ from . import workers
 from .task import spawn
 from . import sync
 
-__all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'EpicQueue']
+__all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'UniversalQueue']
 
 
 class Full(CurioError):
@@ -137,15 +137,21 @@ class LifoQueue(Queue):
         return self._queue.pop()
 
 
-class EpicQueue(object):
+class UniversalQueue(object):
     '''
-    The name says it all.
+    A queue that's compatible with both Curio tasks and external threads.
+    Can be used to send data in both directions.
     '''
 
     def __init__(self, queue=None, maxsize=0):
         self._tqueue = queue if queue else thread_queue.Queue(maxsize=maxsize)
         self._cqueue = Queue()
         self._num_getting = sync.Semaphore(0)
+        self._get_task = None
+
+    async def shutdown(self):
+        if self._get_task:
+            await self._get_task.cancel()
         self._get_task = None
 
     # A daemon task that pulls items from the thread queue and queues
@@ -199,6 +205,3 @@ class EpicQueue(object):
 
     def __getattr__(self, name):
         return getattr(self._tqueue, name)
-
-    # Footnote: all of the code in this class is experimental.
-    # It's probably an epically bad idea.  YOLO.
