@@ -2198,8 +2198,8 @@ For example, this fails::
 
     def yow():
         print('Synchronous yow')
-        spam()          # Fails
-        await spam()    # Fails
+        spam()          # Fails  (doesn't run)
+        await spam()    # Fails  (syntax error)
 
     async def main():
         yow()           # Works
@@ -2218,7 +2218,7 @@ of different strategy for dealing with it.
 Curio provides a few different techniques for interacting with
 asynchronous code from beyond the abyss.  The first is to use
 a ``Queue`` and to take an approach similar to how you might
-interact with a thread.   For example, you can write code like this::
+communicate between threads.   For example, you can write code like this::
 
     from curio import run, spawn, Queue
 
@@ -2231,7 +2231,7 @@ interact with a thread.   For example, you can write code like this::
 
     def yow():
         print('Synchronous yow')
-        q.put('yow')      # Works
+        q.put('yow')      # Works (note: there is no await)
 
     async def main():
         await spawn(worker())
@@ -2242,7 +2242,29 @@ interact with a thread.   For example, you can write code like this::
 Curio queues allow the `q.put()` method to be used from synchronous
 code.  Thus, if you're in that world, you can at least queue up a
 bunch of data.  It won't be processed until you return to the world of
-Curio tasks, but at least it will be there.
+Curio tasks, but at least it will be there when Curio regains control.
+
+Another approach is to take advantage of the "lazy" nature of
+coroutines.  Coroutines don't actually execute until they are awaited.
+Thus, synchronous functions could potentially defer asynchronous
+operations until execution returns back to the world of async.
+For example, you could do this::
+
+    async def spam():
+        print('Asynchronous spam')
+
+    def yow(deferred):
+        print('Synchronous yow')
+	deferred.append(spam())      # Creates a coroutine, but doesn't execute it
+        print('Goodbye yow')
+
+    async def main():
+        deferred = []
+        yow(deferred)
+	for coro in deferred:
+            await coro               # spam() runs here
+
+    run(main())
 
 Programming Considerations and APIs
 -----------------------------------
