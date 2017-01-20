@@ -717,45 +717,6 @@ class Kernel(object):
                 timeout = sleeping[0][0] - time_monotonic()
             else:
                 timeout = None
-            events = selector_select(timeout)
-
-            # Reschedule tasks with completed I/O
-            for key, mask in events:
-                rtask, wtask = key.data
-                intfd = isinstance(key.fileobj, int)
-                if mask & EVENT_READ:
-                    # Discussion: If the associated fileobj is
-                    # *not* a bare integer file descriptor, we
-                    # keep a record of the last I/O event in
-                    # _last_io and leave the task registered on
-                    # the event loop.  If it performs the same I/O
-                    # operation again, it will get a speed boost
-                    # from not having to re-register its
-                    # event. However, it's not safe to use this
-                    # optimization with bare integer fds.  These
-                    # fds often get reused and there is a
-                    # possibility that a fd will get closed and
-                    # reopened on a different resource without it
-                    # being detected by the kernel.  For that case,
-                    # its critical that we not leave the fd on the
-                    # event loop.
-                    rtask._last_io = None if intfd else (key.fileobj, EVENT_READ)
-                    _reschedule_task(rtask)
-                    mask &= ~EVENT_READ
-                    rtask = None
-                if mask & EVENT_WRITE:
-                    wtask._last_io = None if intfd else (key.fileobj, EVENT_WRITE)
-                    _reschedule_task(wtask)
-                    mask &= ~EVENT_WRITE
-                    wtask = None
-
-                # Unregister the task if fileobj is not an integer fd (see
-                # note above).
-                if intfd:
-                    if mask:
-                        selector_modify(key.fileobj, mask, (rtask, wtask))
-                    else:
-                        selector_unregister(key.fileobj)
 
             # Process sleeping tasks (if any)
             if sleeping:
@@ -896,6 +857,47 @@ class Kernel(object):
                     if current._last_io:
                         _unregister_event(*current._last_io)
                         current._last_io = None
+
+            events = selector_select(timeout)
+
+            # Reschedule tasks with completed I/O
+            for key, mask in events:
+                rtask, wtask = key.data
+                intfd = isinstance(key.fileobj, int)
+                if mask & EVENT_READ:
+                    # Discussion: If the associated fileobj is
+                    # *not* a bare integer file descriptor, we
+                    # keep a record of the last I/O event in
+                    # _last_io and leave the task registered on
+                    # the event loop.  If it performs the same I/O
+                    # operation again, it will get a speed boost
+                    # from not having to re-register its
+                    # event. However, it's not safe to use this
+                    # optimization with bare integer fds.  These
+                    # fds often get reused and there is a
+                    # possibility that a fd will get closed and
+                    # reopened on a different resource without it
+                    # being detected by the kernel.  For that case,
+                    # its critical that we not leave the fd on the
+                    # event loop.
+                    rtask._last_io = None if intfd else (key.fileobj, EVENT_READ)
+                    _reschedule_task(rtask)
+                    mask &= ~EVENT_READ
+                    rtask = None
+                if mask & EVENT_WRITE:
+                    wtask._last_io = None if intfd else (key.fileobj, EVENT_WRITE)
+                    _reschedule_task(wtask)
+                    mask &= ~EVENT_WRITE
+                    wtask = None
+
+                # Unregister the task if fileobj is not an integer fd (see
+                # note above).
+                if intfd:
+                    if mask:
+                        selector_modify(key.fileobj, mask, (rtask, wtask))
+                    else:
+                        selector_unregister(key.fileobj)
+
 
         # If kernel shutdown has been requested, issue a cancellation request to all remaining tasks
         if shutdown:
