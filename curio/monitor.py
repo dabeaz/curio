@@ -117,7 +117,7 @@ class Monitor(object):
     def __init__(self, kern, host=MONITOR_HOST, port=MONITOR_PORT):
         self.kernel = kern
         self.address = (host, port)
-        self.monitor_queue = queue.EpicQueue()
+        self.monitor_queue = queue.UniversalQueue()
 
         log.info('Starting Curio monitor at %s:%d', host, port)
 
