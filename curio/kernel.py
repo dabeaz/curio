@@ -670,9 +670,17 @@ class Kernel(object):
             
             now = time_monotonic()
             if previous and previous >= 0 and previous < now:
+                # Perhaps create a TaskTimeout pending exception here.
                 _set_timeout(previous)
             else:
                 current.timeout = previous
+                # But there's one other evil corner case.  It's possible that 
+                # a timeout could be reset while a TaskTimeout exception 
+                # is pending.  If that happens, it means that the task has
+                # left the timeout block.   We should probably take away the
+                # pending exception.
+                if isinstance(current.cancel_pending, TaskTimeout):
+                    current.cancel_pending = None
 
         # Return the running kernel
         @nonblocking
@@ -909,7 +917,6 @@ class Kernel(object):
         else:
             return None
 
-
 def run(coro, *, log_errors=True, with_monitor=False, selector=None,
         warn_if_task_blocks_for=None, **extra):
     '''
@@ -924,13 +931,14 @@ def run(coro, *, log_errors=True, with_monitor=False, selector=None,
     new tasks to run in curio. Instead, create a Kernel instance and
     use its run() method instead.
     '''
+
     kernel = Kernel(selector=selector, with_monitor=with_monitor,
                     log_errors=log_errors,
                     warn_if_task_blocks_for=warn_if_task_blocks_for,
                     **extra)
+
     with kernel:
-        result = kernel.run(coro)
-    return result
+        return kernel.run(coro)
 
 __all__ = ['Kernel', 'run', 'BlockingTaskWarning']
 
