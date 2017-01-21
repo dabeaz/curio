@@ -353,7 +353,7 @@ def test_univ_queue_sync_async(kernel):
         await q.shutdown()
         assert q._get_task == None
 
-    run(main())
+    kernel.run(main())
 
 def test_univ_queue_async_sync(kernel):
     result = []
@@ -384,7 +384,7 @@ def test_univ_queue_async_sync(kernel):
         await q.shutdown()
         assert q._get_task == None
 
-    run(main())
+    kernel.run(main())
 
 def test_univ_queue_cancel(kernel):
     result = [] 
@@ -418,7 +418,7 @@ def test_univ_queue_cancel(kernel):
         await q.shutdown()
         assert q._get_task == None
 
-    run(main())
+    kernel.run(main())
 
 def test_univ_queue_multiple_consumer(kernel):
     result = []
@@ -454,7 +454,7 @@ def test_univ_queue_multiple_consumer(kernel):
         await q.shutdown()
         assert q._get_task == None
 
-    run(main())
+    kernel.run(main())
 
 
 
