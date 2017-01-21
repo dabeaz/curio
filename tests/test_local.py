@@ -131,7 +131,9 @@ def test_within_thread():
 
         local.parent = parent_data
 
-        tasks = [await spawn(child(data)) for data in range(8)]
+        tasks = []
+        for data in range(8):
+            tasks.append(await spawn(child(data)))
         for t in tasks:
             await t.join()
 
