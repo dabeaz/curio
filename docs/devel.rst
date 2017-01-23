@@ -1778,8 +1778,47 @@ data from async tasks::
 
     run(main())
 
+Or, if you're feeling particularly diabolical, you can even use a ``UniversalQueue`` to communicate between
+tasks running in two different Curio kernels::
+
+    from curio import run, UniversalQueue, sleep
+
+    import threading
+
+    # An async task
+    async def consumer(q):
+        print('Consumer starting')
+        while True:
+            item = await q.get()
+            if item is None:
+                break
+            print('Got:', item)
+            await q.task_done()
+        print('Consumer done')
+
+    # An async task
+    async def producer(q):
+        for i in range(10):
+            await q.put(i)
+            await sleep(1)
+        await q.join()
+        print('Producer done')
+
+    def main():
+        q = UniversalQueue()
+
+        t1 = threading.Thread(target=run, args=(consumer(q),))
+        t1.start()
+        t2 = threading.Thread(target=run, args=(producer(q),))
+        t2.start()
+        t2.join()
+        q.put(None)
+        t1.join()
+
+    main()
+
 The programming API is the same in both worlds.  For synchronous code, you use
-the ``get()`` and put()`` methods.  For asynchronous code, you use the same methods,
+the ``get()`` and ``put()`` methods.  For asynchronous code, you use the same methods,
 but preface them with an await.
 
 The underlying implementation is efficient for a large number of waiting
@@ -1809,11 +1848,12 @@ this::
         print('Consumer done')
 
 In the event of a timeout, the ``q.get()`` operation will abort, but
-no queue data is lost.   Should an item be made available, the next ``q.get()``
-operation will return it.   This is different than performing get
-operations on a standard thread-queue.  For example, if you you used
-``run_in_thread(q.get)`` to get an item on a standard thread queue,
-a timeout or cancellation actually causes a queue item to be lost.
+no queue data is lost.  Should an item be made available, the next
+``q.get()`` operation will return it.  This is different than
+performing get operations on a standard thread-queue.  For example, if
+you you used ``run_in_thread(q.get)`` to get an item on a standard
+thread queue, a timeout or cancellation actually causes a queue item
+to be lost.
 
 Asynchronous Threads
 ^^^^^^^^^^^^^^^^^^^^
@@ -2200,6 +2240,7 @@ For example, this fails::
         print('Synchronous yow')
         spam()          # Fails  (doesn't run)
         await spam()    # Fails  (syntax error)
+        run(spam()      # Fails  (RuntimeError, only one kernel per thread)
 
     async def main():
         yow()           # Works
