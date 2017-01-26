@@ -9,13 +9,14 @@ from collections import deque
 from heapq import heappush, heappop
 import threading
 import queue as thread_queue
+import weakref
 
 from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function
 from .kernel import KSyncQueue
-from .errors import CurioError, CancelledError
+from .errors import CurioError, CancelledError, TaskTimeout
 from .meta import awaitable
 from . import workers
-from .task import spawn, disable_cancellation, check_cancellation
+from .task import spawn, timeout_after
 from . import sync
 
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'UniversalQueue']
@@ -143,6 +144,8 @@ class UniversalQueue(object):
     Can be used to send data in both directions.
     '''
 
+    _sentinel = object()
+
     def __init__(self, queue=None, maxsize=0):
         self._tqueue = queue if queue else thread_queue.Queue(maxsize=maxsize)
         self._local = threading.local()
@@ -159,15 +162,31 @@ class UniversalQueue(object):
     # shield the process of pulling items over to async from cancellation.
     # Without care, cancellation would cause items to be lost
     async def _get_helper(self):
+        tqueue = self._tqueue
+        cqueue = self._local.cqueue
+        num_getting = self._local.num_getting
+
+        # Discussion: We break all internel references to ourself and create
+        # a weak reference instead.  This allows the queue to be garbage
+        # collected when it's no longer in use.  We'll periodically check
+        # to see if it went away.  If so, there's no point in having the
+        # helper task stick around. 
+        self = weakref.ref(self)
         try:
             while True:
-                await self._local.num_getting.acquire()
-                item = await workers.run_in_thread(self._tqueue.get, call_on_cancel=lambda fut: self._tqueue.put(fut.result))
-                await self._local.cqueue.put(item)
+                try:
+                    await timeout_after(0.1, num_getting.acquire())
+                except TaskTimeout:
+                    # If the queue is no longer around, we're done
+                    if not self():
+                        return
+                    continue
+                item = await workers.run_in_thread(tqueue.get, call_on_cancel=lambda fut: tqueue.put(fut.result))
+                await cqueue.put(item)
         except CancelledError:
-            while not self._local.cqueue.empty():
-                item = await self._local.cqueue.get()
-                await workers.run_in_thread(self._tqueue.put, item)
+            while not cqueue.empty():
+                item = await cqueue.get()
+                await workers.run_in_thread(tqueue.put, item)
             raise
 
     def get(self):
