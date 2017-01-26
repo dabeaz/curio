@@ -2,6 +2,7 @@
 
 import pytest
 from curio import *
+from threading import Thread
 
 # Like run, but unwraps exceptions so pytest can see them properly.
 # Lets us use assert from inside async functions.
@@ -103,7 +104,7 @@ def test_inheritance():
 
 def test_nested_curio():
     # You should never do this. But that doesn't mean it should crash.
-
+    # Well, actually it probably should crash.
     local = Local()
 
     async def inner():
@@ -113,7 +114,42 @@ def test_nested_curio():
 
     async def outer():
         local.a = "outer"
-        run_with_real_exceptions(inner())
-        assert local.a == "outer"
+        with pytest.raises(RuntimeError):
+            run_with_real_exceptions(inner())
 
     run_with_real_exceptions(outer())
+
+def test_within_thread():
+    local = Local()
+
+    async def parent(parent_data):
+        async def child(data):
+            local.data = data
+            await sleep(0)
+            assert local.parent == parent_data # inherited
+            assert local.data == data
+
+        local.parent = parent_data
+
+        tasks = []
+        for data in range(8):
+            tasks.append(await spawn(child(data)))
+        for t in tasks:
+            await t.join()
+
+    exceptions = []
+    def run_capturing_exceptions(*args, **kwargs):
+        try:
+            run_with_real_exceptions(*args, **kwargs)
+        except Exception as e:
+            nonlocal exceptions
+            exceptions.append(e)
+
+    threads = [Thread(target=run_capturing_exceptions, args=(parent(data),))
+               for data in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+        if exceptions:
+            raise exceptions.pop()

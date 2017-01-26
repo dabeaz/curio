@@ -60,7 +60,6 @@ from contextlib import contextmanager
 # The thread-local storage slot that points to the task-local storage dict for
 # whatever task is currently running.
 _current_task_local_storage = threading.local()
-_current_task_local_storage.value = None
 
 
 @contextmanager
@@ -68,7 +67,11 @@ def _enable_tasklocal_for(task):
     # Using a full save/restore pattern here is a little paranoid, but
     # safe. Even if someone does something silly like calling curio.run() from
     # inside a curio coroutine.
-    old = _current_task_local_storage.value
+    try:
+        old = _current_task_local_storage.value
+    except AttributeError:
+        old = None
+
     try:
         _current_task_local_storage.value = task.task_local_storage
         yield

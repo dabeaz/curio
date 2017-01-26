@@ -351,9 +351,8 @@ def test_univ_queue_sync_async(kernel):
         await t1.join()
         assert result == [0,1,2,3,4,5,6,7,8,9]
         await q.shutdown()
-        assert q._get_task == None
 
-    run(main())
+    kernel.run(main())
 
 def test_univ_queue_async_sync(kernel):
     result = []
@@ -382,9 +381,8 @@ def test_univ_queue_async_sync(kernel):
         await run_in_thread(t1.join)
         assert result == [0,1,2,3,4,5,6,7,8,9]
         await q.shutdown()
-        assert q._get_task == None
 
-    run(main())
+    kernel.run(main())
 
 def test_univ_queue_cancel(kernel):
     result = [] 
@@ -416,9 +414,8 @@ def test_univ_queue_cancel(kernel):
         await t1.join()
         assert result == [0,1,2,3,4,5,6,7,8,9]
         await q.shutdown()
-        assert q._get_task == None
 
-    run(main())
+    kernel.run(main())
 
 def test_univ_queue_multiple_consumer(kernel):
     result = []
@@ -452,9 +449,53 @@ def test_univ_queue_multiple_consumer(kernel):
         await t3.join()
         assert list(range(1000)) == result
         await q.shutdown()
-        assert q._get_task == None
 
-    run(main())
+    kernel.run(main())
+
+
+def test_univ_queue_multiple_kernels(kernel):
+    result = []
+
+    async def consumer(q):
+        while True:
+            item = await q.get()
+            if item is None:
+                break
+            result.append(item)
+            await q.task_done()
+
+    def producer(q):
+        for i in range(1000):
+            q.put(i)
+        q.join()
+
+    async def main():
+        q = UniversalQueue(maxsize=10)
+
+        t1 = threading.Thread(target=run, args=(consumer(q),))
+        t1.start()
+
+        t2 = threading.Thread(target=run, args=(consumer(q),))
+        t2.start()
+
+        t3 = threading.Thread(target=run, args=(consumer(q),))
+        t3.start()
+        t4 = threading.Thread(target=producer, args=(q,))
+        t4.start()
+
+        await run_in_thread(t4.join)
+        await q.put(None)
+        await q.put(None)
+        await q.put(None)
+        
+        t1.join()
+        t2.join()
+        t3.join()
+
+        assert list(range(1000)) == sorted(result)
+        await q.shutdown()
+
+    kernel.run(main())
 
 
 

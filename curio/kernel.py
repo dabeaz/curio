@@ -12,6 +12,7 @@ import signal
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
 import warnings
+import threading
 from abc import ABC, abstractmethod
 
 # Logger where uncaught exceptions from crashed tasks are logged
@@ -129,6 +130,8 @@ class KSyncEvent(KernelSyncBase):
 
 
 class Kernel(object):
+
+    _local = threading.local()
 
     def __init__(self, *, selector=None, with_monitor=False, log_errors=True,
                  warn_if_task_blocks_for=None):
@@ -255,13 +258,22 @@ class Kernel(object):
 
     # Main Kernel Loop
     # ----------
+            
     def run(self, coro=None, *, shutdown=False):
+        if getattr(self._local, 'running', False):
+            raise RuntimeError('Only one Curio kernel per thread is allowed')
+        self._local.running = True
+        try:
+            self._run(coro, shutdown=shutdown)
+        finally:
+            self._local.running = False
+        
+    def _run(self, coro=None, *, shutdown=False):
         '''
         Run the kernel until no more non-daemonic tasks remain.  If
         shutdown is True, the kernel cleans up after itself after all
         tasks complete.
         '''
-
         assert self._selector is not None, 'Kernel has been shut down'
 
         # Motto:  "What happens in the kernel stays in the kernel"
@@ -409,7 +421,7 @@ class Kernel(object):
 
                 if tocancel:
                     _new_task(_shutdown_tasks(tocancel))
-                    self.run()
+                    self._run()
 
                 self._kernel_task_id = None
 
@@ -670,9 +682,17 @@ class Kernel(object):
             
             now = time_monotonic()
             if previous and previous >= 0 and previous < now:
+                # Perhaps create a TaskTimeout pending exception here.
                 _set_timeout(previous)
             else:
                 current.timeout = previous
+                # But there's one other evil corner case.  It's possible that 
+                # a timeout could be reset while a TaskTimeout exception 
+                # is pending.  If that happens, it means that the task has
+                # left the timeout block.   We should probably take away the
+                # pending exception.
+                if isinstance(current.cancel_pending, TaskTimeout):
+                    current.cancel_pending = None
 
         # Return the running kernel
         @nonblocking
@@ -911,7 +931,6 @@ class Kernel(object):
         else:
             return None
 
-
 def run(coro, *, log_errors=True, with_monitor=False, selector=None,
         warn_if_task_blocks_for=None, **extra):
     '''
@@ -926,13 +945,14 @@ def run(coro, *, log_errors=True, with_monitor=False, selector=None,
     new tasks to run in curio. Instead, create a Kernel instance and
     use its run() method instead.
     '''
+
     kernel = Kernel(selector=selector, with_monitor=with_monitor,
                     log_errors=log_errors,
                     warn_if_task_blocks_for=warn_if_task_blocks_for,
                     **extra)
+
     with kernel:
-        result = kernel.run(coro)
-    return result
+        return kernel.run(coro)
 
 __all__ = ['Kernel', 'run', 'BlockingTaskWarning']
 
