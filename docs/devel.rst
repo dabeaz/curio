@@ -74,7 +74,7 @@ Coroutines
 ----------
 
 First things, first.  Curio is solely focused on solving one specific
-problem--and that's the scheduling of coroutines.   This section covers
+problem--and that's the execution and scheduling of coroutines.   This section covers
 some basics.
 
 Defining a Coroutine
@@ -91,7 +91,7 @@ drive a coroutine manually if you want::
 
     >>> g = greeting('Dave')
     >>> g
-    <coroutine object greeting at ...>
+    <coroutine object greeting at 0x10978ee60>
     >>> g.send(None)
     Traceback (most recent call last):
       File "<stdin>", line 1, in <module>
@@ -161,7 +161,7 @@ a very special kind of coroutine::
 
 This coroutine is different than the rest--it doesn't use the
 ``async`` syntax and it makes direct use of the ``yield`` statement
-(which is not normally allowed in ``async`` functions).  The ``@coroutine``
+The ``@coroutine``
 decorator is there so that it can be called with ``await``.
 Now, let's write a coroutine that uses this::
 
@@ -244,7 +244,7 @@ concurrent clients using Python's ``threading`` module::
         with sock:
             while True:
                 client, addr = sock.accept()
-                Thread(target=echo_client, args=(client, addr), daemon=True).start()
+                Thread(target=echo_client, args=(client, addr)).start()
     
     def echo_client(client, addr):
         print('Connection from', addr)
@@ -366,15 +366,15 @@ example, languages such as Pascal, C/C++, and Java don't support
 coroutines. Thus, it's not a technique that most programmers would
 even think to consider.  Even in Python, proper support for coroutines
 has taken a long time to emerge.  Projects such as Stackless Python
-explored the idea of coroutines, but it was probably too far ahead of its
-time to be properly understood. Later on, various projects have
-explored coroutines in various forms, usually involving sneaky hacks
-surrounding generator functions and C extensions.  The addition of the
-``yield from`` construct in Python 3.3 greatly simplified the problem
-of writing coroutine libraries.  The emergence of ``async/await`` in
-Python 3.5 takes a huge stride in making coroutines more of a
-first-class object in the Python world.  This is really the starting
-point for Curio.
+supported concepts related to coroutines more than 15 years ago, but
+it was probably too far ahead of its time to be properly
+appreciated. Later on, various projects have explored coroutines in
+various forms, usually involving sneaky hacks surrounding generator
+functions and C extensions.  The addition of the ``yield from``
+construct in Python 3.3 greatly simplified the problem of writing
+coroutine libraries.  The emergence of ``async/await`` in Python 3.5
+takes a huge stride in making coroutines more of a first-class object
+in the Python world.  This is really the starting point for Curio.
 
 Layered Architecture
 --------------------
@@ -560,9 +560,9 @@ code starts to look much more normal. For example::
                    break
                await sock.sendall(data)
 
-This is exactly what's happening in the
-``curio.socket`` module.  It provides a coroutine wrapper around a
-normal socket and let's you write normal-looking socket code.
+This is exactly what's happening with sockets in Curio.  It provides a
+coroutine wrapper around a normal socket and let's you write
+normal-looking socket code.
 
 It's important to emphasize that a proxy doesn't change how you
 interact with an object.  You use the same method names as you did
@@ -698,7 +698,7 @@ When a task is cancelled, the current operation fails with a
             print('Rudely cancelled')
             raise
 
-A cancellation should not be ignored.  In fact, the ``task.cancel()``
+A cancellation can be caught, but should not be ignored.  In fact, the ``task.cancel()``
 method blocks until the task actually terminates.  If ignored, the
 cancelling task would simply hang forever waiting.  That's probably
 not what you want.  In most cases, code that catches cancellation
@@ -884,14 +884,15 @@ If you run this program, you will get the following output::
     Coro1 Start
     Parent Timeout        (appears after 5 seconds)
 
-To understand this output, there are some important rules in play.
-First, the actual timeout period in effect is always the smallest of
-all of the applied timeout values. In this code, the outer ``main()``
-coroutine applies a 5 second timeout to the ``child()`` coroutine.
-Even though the ``child()`` coroutine attempts to apply a 50 second
-timeout to ``coro1()``, the 5 second expiration of the outer timeout is
-kept in force.  This is why ``coro1()`` is cancelled when it sleeps
-for 10 seconds.
+To understand this output and why the ``'Coro1 Timeout'`` message
+doesn't appear, there are some important rules in play.  First, the
+actual timeout period in effect is always the smallest of all of the
+applied timeout values. In this code, the outer ``main()`` coroutine
+applies a 5 second timeout to the ``child()`` coroutine.  Even though
+the ``child()`` coroutine attempts to apply a 50 second timeout to
+``coro1()``, the 5 second expiration of the outer timeout is kept in
+force.  This is why ``coro1()`` is cancelled when it sleeps for 10
+seconds.
 
 The second rule of timeouts is that only the outer-most timeout that
 expires receives a ``TaskTimeout`` exception.  In this case, the
@@ -961,7 +962,7 @@ program will look like this::
     Sleeping
     ... forever...
 
-Bottom line:  Don't catch ``TaskTimeout`` exceptions unless your code
+Bottom line:  Don't catch free-floating ``TaskTimeout`` exceptions unless your code
 immediately re-raises them.
 
 Optional Timeouts
@@ -1301,10 +1302,10 @@ recover in some sane way.  For example::
              print('Only sent %d bytes' % e.bytes_sent)
 
 Finally, be extremely careful writing library code that involves infinite
-loops.  In particular, don't rely solely on the delivery of a
-cancellation exception to terminate the loop for you.  Instead, put an
-explicit ``check_cancellation()`` check in the loop someplace like
-this::
+loops.  You will need to make sure that the code can terminate
+through cancellation in some manner.   This either means making
+sure than cancellation is enabled (the default) or explicitly checking
+for it in the loop using ``check_cancellation()``.   For example::
 
     async def run_forever():
         while True:
@@ -1313,9 +1314,9 @@ this::
             if await check_cancellation():
                 break
 
-The reason you'd do this is that's entirely possible that someone has
-disabled cancellation exceptions somewhere.  If so, you'll never be
-able to get out of the loop unless you check.
+Just to emphasize, you normally don't need to check for cancellation
+by default though--you'd only need this if it were disabled prior to
+calling ``run_forever()``.
 
 Waiting for Multiple Tasks and Concurrency
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1571,6 +1572,94 @@ example::
             await run_in_thread(some_callable)
         ...
 
+Threads and Cancellation
+------------------------
+
+Both the ``run_in_thread()`` and ``block_in_thread()`` functions allow
+the pending operation to be cancelled.  However, if the operation in
+question has already started execution, it will fully run to
+completion behind the scenes.  Sadly, threads do not provide any
+mechanism for cancellation.  Thus, there is no way to make them stop
+running once they've started.
+
+If work submitted to a thread is cancelled, Curio sets the thread aside
+and removes it from Curio's internal thread pool.  The thread will
+continue to run to completion, but at least it won't block progress
+of future operations submitted to ``run_in_thread()``.  Once the work
+completes, the thread will self-terminate.  Be aware that there is still
+a chance you could make Curio consume a lot of background threads
+if you submitted a large number of long-running tasks and had them
+all cancelled. Here's an example::
+
+    from curio import ignore_after, run_in_thread, run
+    import time
+
+    async def main():
+        for i in range(1000):
+            await ignore_after(0.01, run_in_thread(time.sleep, 100))
+   
+    run(main())
+
+In this code, Curio would spin up 1000 background worker threads--all
+of which end up as "zombies" just waiting to finish their work (which is
+now abandoned because of the timeout).  Try not to do this.
+
+The ``run_in_thread()`` and ``block_in_thread()`` functions optionally
+allow a cancellation callback function to be registered.  This function
+will be triggered in the event of cancellation and gives a thread an
+opportunity to perform some kind of cleanup action.  For example::
+
+    import time
+
+    def add(x, y):
+        time.sleep(10)
+        return x + y
+
+    def on_cancel(future):
+        print('Where did everyone go?')
+        print('Result was:', future.result())
+
+    async def main():
+        await ignore_after(1, run_in_thread(add, 2, 3, call_on_cancel=on_cancel))
+        print('Yawn!')
+        await sleep(20)
+        print('Goodbye')
+
+    run(main())
+
+If you run this code, you'll get output like this::
+
+    Yawn!
+    Where did everyone go?
+    Result was: 5
+    Goodbye
+
+The function given to ``call_on_cancel`` is a synchronous function
+that receives the underlying ``Future`` instance that was being used
+to execute the background work.  This function executes in the same
+thread that was performing the work itself.
+
+The ``call_on_cancel`` functionality is critical for certain kinds of
+operations where the cancellation of a thread would cause unintended
+mayhem.  For example, if you tried to acquire a thread lock using
+``run_in_thread()``, you should probably do this::
+
+    import threading
+
+    lock = threading.Lock()
+
+    async def coro():
+        await run_in_thread(lock.acquire, 
+                            call_on_cancel=lambda fut: lock.release())
+        ...
+        await run_in_thread(lock.release)
+
+If you don't do this and the operation got cancelled, the thread would
+run to completion, the lock would be acquired, and then nobody would
+be around to release it again.  The ``call_on_cancel`` argument is a
+safety net that ensures that the lock gets released in the event
+that Curio is no longer paying attention.
+
 Thread-Task Synchronization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -1653,6 +1742,11 @@ argument::
             cond.notify()
             ...
 
+When the ``reserve_thread()`` option is used, a background thread is
+reserved for the entire execution of the ``with``-block. Be aware
+that a high degree of concurrency could cause a lot of threads
+to be used.
+
 As of this writing, Curio can synchronize with an ``RLock``, but full
 reentrancy is not supported--that is nested ``abide()`` calls on the
 same lock won't work correctly.  This limitation may be lifted in a
@@ -1701,7 +1795,7 @@ Thread-Task Queuing
 If you must bridge the world of asynchronous tasks and threads,
 perhaps the most sane way to do it is to use a queue.  Curio provides
 a modestly named ``UniversalQueue`` class that does just that.  Basically,
-an ``UniversalQueue`` is a queue that fully supports queuing operations
+a ``UniversalQueue`` is a queue that fully supports queuing operations
 from any combination of threads or tasks.  For example, you
 can have async worker tasks reading data written by a producer thread::
 
@@ -1778,8 +1872,47 @@ data from async tasks::
 
     run(main())
 
+Or, if you're feeling particularly diabolical, you can even use a ``UniversalQueue`` to communicate between
+tasks running in two different Curio kernels::
+
+    from curio import run, UniversalQueue, sleep
+
+    import threading
+
+    # An async task
+    async def consumer(q):
+        print('Consumer starting')
+        while True:
+            item = await q.get()
+            if item is None:
+                break
+            print('Got:', item)
+            await q.task_done()
+        print('Consumer done')
+
+    # An async task
+    async def producer(q):
+        for i in range(10):
+            await q.put(i)
+            await sleep(1)
+        await q.join()
+        print('Producer done')
+
+    def main():
+        q = UniversalQueue()
+
+        t1 = threading.Thread(target=run, args=(consumer(q),))
+        t1.start()
+        t2 = threading.Thread(target=run, args=(producer(q),))
+        t2.start()
+        t2.join()
+        q.put(None)
+        t1.join()
+
+    main()
+
 The programming API is the same in both worlds.  For synchronous code, you use
-the ``get()`` and put()`` methods.  For asynchronous code, you use the same methods,
+the ``get()`` and ``put()`` methods.  For asynchronous code, you use the same methods,
 but preface them with an await.
 
 The underlying implementation is efficient for a large number of waiting
@@ -1809,11 +1942,12 @@ this::
         print('Consumer done')
 
 In the event of a timeout, the ``q.get()`` operation will abort, but
-no queue data is lost.   Should an item be made available, the next ``q.get()``
-operation will return it.   This is different than performing get
-operations on a standard thread-queue.  For example, if you you used
-``run_in_thread(q.get)`` to get an item on a standard thread queue,
-a timeout or cancellation actually causes a queue item to be lost.
+no queue data is lost.  Should an item be made available, the next
+``q.get()`` operation will return it.  This is different than
+performing get operations on a standard thread-queue.  For example, if
+you you used ``run_in_thread(q.get)`` to get an item on a standard
+thread queue, a timeout or cancellation actually causes a queue item
+to be lost.
 
 Asynchronous Threads
 ^^^^^^^^^^^^^^^^^^^^
@@ -1824,7 +1958,7 @@ program, you're probably going to want a few locks. And once you have
 a few locks, you'll probably want some semaphores. Those semaphores
 are going to be lonely without a few events and condition variables to
 keep them company.  All these things will live together in a messy
-apartment along with a pet queue. It will be chaos. However, it all
+apartment along with a pet queue. It will be chaos. It all
 sounds a bit better if you put in an internet-connected coffee pot and
 call the apartment a coworking space.  But, I digress.
 
@@ -1864,7 +1998,7 @@ Let's start with a little thread code::
         main()
         print('Took %s seconds' % (time.time() - start))
 
-There are three workers.  They operate on different time intervals,
+In this code, there are three workers.  They operate on different time intervals,
 but they all execute concurrently.  However, there is a semaphore
 thrown into the mix to throttle them so that only two workers can run
 at once. The output might vary a bit due to thread scheduling, but
@@ -2200,6 +2334,7 @@ For example, this fails::
         print('Synchronous yow')
         spam()          # Fails  (doesn't run)
         await spam()    # Fails  (syntax error)
+        run(spam()      # Fails  (RuntimeError, only one kernel per thread)
 
     async def main():
         yow()           # Works
@@ -2556,8 +2691,8 @@ If you're wondering how in the world this actually works, let's
 just say it involves frame hacks.   Your list of enemies and
 the difficulty of your next code review continues to grow.
 
-Considerations Function Wrapping and Inheritance
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Considerations for Function Wrapping and Inheritance
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Suppose that you have a simple async function like this::
 

@@ -104,7 +104,7 @@ def test_inheritance():
 
 def test_nested_curio():
     # You should never do this. But that doesn't mean it should crash.
-
+    # Well, actually it probably should crash.
     local = Local()
 
     async def inner():
@@ -114,8 +114,8 @@ def test_nested_curio():
 
     async def outer():
         local.a = "outer"
-        run_with_real_exceptions(inner())
-        assert local.a == "outer"
+        with pytest.raises(RuntimeError):
+            run_with_real_exceptions(inner())
 
     run_with_real_exceptions(outer())
 

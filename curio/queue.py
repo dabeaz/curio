@@ -9,13 +9,14 @@ from collections import deque
 from heapq import heappush, heappop
 import threading
 import queue as thread_queue
+import weakref
 
 from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function
 from .kernel import KSyncQueue
-from .errors import CurioError, CancelledError
+from .errors import CurioError, CancelledError, TaskTimeout
 from .meta import awaitable
 from . import workers
-from .task import spawn
+from .task import spawn, timeout_after
 from . import sync
 
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'UniversalQueue']
@@ -143,43 +144,69 @@ class UniversalQueue(object):
     Can be used to send data in both directions.
     '''
 
+    _sentinel = object()
+
     def __init__(self, queue=None, maxsize=0):
         self._tqueue = queue if queue else thread_queue.Queue(maxsize=maxsize)
-        self._cqueue = Queue()
-        self._num_getting = sync.Semaphore(0)
-        self._get_task = None
+        self._local = threading.local()
 
     async def shutdown(self):
-        if self._get_task:
-            await self._get_task.cancel()
-        self._get_task = None
+        if hasattr(self._local, 'get_task'):
+            await self._local.get_task.cancel()
+            del self._local.get_task
+            del self._local.cqueue
+            del self._local.num_getting
 
     # A daemon task that pulls items from the thread queue and queues
     # them on the async side.  The purpose of having this task is to
     # shield the process of pulling items over to async from cancellation.
     # Without care, cancellation would cause items to be lost
     async def _get_helper(self):
-        while True:
-            await self._num_getting.acquire()
-            item = await workers.run_in_thread(self._tqueue.get)
-            await self._cqueue.put(item)
+        tqueue = self._tqueue
+        cqueue = self._local.cqueue
+        num_getting = self._local.num_getting
+
+        # Discussion: We break all internel references to ourself and create
+        # a weak reference instead.  This allows the queue to be garbage
+        # collected when it's no longer in use.  We'll periodically check
+        # to see if it went away.  If so, there's no point in having the
+        # helper task stick around. 
+        self = weakref.ref(self)
+        try:
+            while True:
+                try:
+                    await timeout_after(0.1, num_getting.acquire())
+                except TaskTimeout:
+                    # If the queue is no longer around, we're done
+                    if not self():
+                        return
+                    continue
+                item = await workers.run_in_thread(tqueue.get, call_on_cancel=lambda fut: tqueue.put(fut.result))
+                await cqueue.put(item)
+        except CancelledError:
+            while not cqueue.empty():
+                item = await cqueue.get()
+                await workers.run_in_thread(tqueue.put, item)
+            raise
 
     def get(self):
         return self._tqueue.get()
 
     @awaitable(get)
     async def get(self):
-        if not self._get_task:
-            self._get_task = await spawn(self._get_helper(), daemon=True)
+        if not hasattr(self._local, 'get_task'):
+            self._local.cqueue = Queue()
+            self._local.num_getting = sync.Semaphore(0)
+            self._local.get_task = await spawn(self._get_helper(), daemon=True)
 
-        if self._cqueue.empty() or self._num_getting.locked():
-            await self._num_getting.release()
+        if self._local.cqueue.empty() or self._local.num_getting.locked():
+            await self._local.num_getting.release()
         try:
-            item = await self._cqueue.get()
+            item = await self._local.cqueue.get()
             return item
         except CancelledError:
-            if not self._num_getting.locked():
-                await self._num_getting.acquire()
+            if not self._local.num_getting.locked():
+                await self._local.num_getting.acquire()
             raise
 
     def put(self, item):
