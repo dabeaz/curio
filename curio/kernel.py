@@ -43,6 +43,15 @@ def blocking(trap_func):
 class BlockingTaskWarning(RuntimeWarning):
     pass
 
+
+# How many times selector_select can throw OSError before we give up
+# and raise the exception
+SELECT_PATIENCE = 0
+
+if sys.platform == 'win32':
+
+    SELECTOR_PATIENCE += 1
+
 # KernelSyncBase is an abstract base class used to support synchronization
 # primitives such as Events, Locks, Semaphores, etc.  There are different
 # kinds of synchronization and policies that one might implement. This
@@ -729,6 +738,7 @@ class Kernel(object):
         # ------------------------------------------------------------
         # Main Kernel Loop
         # ------------------------------------------------------------
+        selector_errors = 0
         while njobs > 0:
 
             # Wait for an I/O event (or timeout)
@@ -742,12 +752,21 @@ class Kernel(object):
             try:
                 events = selector_select(timeout)
             except OSError as e:
-                # If there is nothing to select, windows throws an
-                # OSError, so just set events to an empty list.
-                log.error('Exception %r from selector_select ignored ' % e,
-                          exc_info=True)
+                log.error(
+                    'OSError exception number {} from selector_select ignored ' % selector_errors)
+                log.error(
+                    'OSError timeout value was {} ' % timeout)
+
+                if selector_errors > SELECT_PATIENCE:
+                    raise e
                 
+                selector_errors += 1
+
+                # set events to empty list
                 events = []
+
+                # FIXME: should make this thing sleep for *timeout* not sure how to do that
+                # (although suspect if we are here, timeout == 0)
 
             # Reschedule tasks with completed I/O
             for key, mask in events:
