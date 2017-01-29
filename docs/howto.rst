@@ -66,7 +66,7 @@ How do you perform a blocking operation?
 ----------------------------------------
 
 If you need to perform a blocking operation that runs outside of curio,
-use ``run_in_thread()``.  For example::
+use ``run_in_thread()`` to have it run in a backing thread.  For example::
 
     import time
     import curio
@@ -76,8 +76,9 @@ use ``run_in_thread()``.  For example::
 How do you perform a CPU intensive operation?
 ---------------------------------------------
 
-If you need to run a CPU-intensive operation, you can either run it
-in a thread (see above) or have it run in a separate process. For example::
+If you need to run a CPU-intensive operation, you can either run it in
+a thread (see above) or have it run in a separate process. For
+example::
 
     import curio
 
@@ -89,6 +90,10 @@ in a thread (see above) or have it run in a separate process. For example::
 
     ...
     result = await curio.run_in_process(fib, 40)
+
+Note: Since the operation in question runs in a separate interpreter,
+it should not involve any shared state.  Make sure you pass all
+required information in the function's input arguments.
 
 How do you apply a timeout?
 ---------------------------
@@ -126,54 +131,21 @@ This is a cumulative timeout applied to the entire block.   After the
 specified number of seconds has elapsed, a ``TaskTimeout`` exception
 will be raised in the current operation blocking in curio.
 
-How do you shield a coroutine from cancellation?
-------------------------------------------------
+How do you shield operations from timeouts or cancellation?
+-----------------------------------------------------------
 
-The easiest way to shield a coroutine from cancellation is to spawn
-it as a separate task.  For example::
-
-     async def func():
-         ...
-         child = await spawn(coro(args))
-         result = await child.join()
-         ...
-
-Cancellation only applies to the immediate task on which it is
-performed.  So, if the outer coroutine ``func()`` is cancelled, the
-inner task created by ``spawn()`` will continue to run to completion.
-
-How do you make cancellation apply to child tasks?
---------------------------------------------------
-
-If you want to make a parent coroutine cancel all of its children
-when it's cancelled, it needs to keep track of the children and
-cancel them explicitly. For example::
+To protect a block of statements from being aborted due to a timeout or
+cancellation, use ``disable_cancellation()`` as a context manager like this::
 
      async def func():
          ...
-         child = await spawn(coro(args))
-         try:
-              ...
-              ...
-              await child.join()
-         except CancelledError:
-              await child.cancel()
+         async with disable_cancellation():
+             await coro1()
+             await coro2()
+             ...
 
-How does a coroutine get its enclosing Task instance?
------------------------------------------------------
+         await blocking_op()      # Cancellation delivered here
 
-Use the ``current_task()`` function like this::
-
-     from curio import current_task
-     ...
-     async def func():
-         ...
-         myself = await current_task()
-         ...
-
-Once you have a reference to the ``Task``, it can be passed
-around and use in other operations.  For example, a different
-task could use it to cancel.
 
 How can tasks communicate?
 --------------------------
@@ -205,15 +177,14 @@ tasks is to use a queue.  For example::
     if __name__ == '__main__':
         curio.run(main())
 
+
 How can a task and a thread communicate?
 ----------------------------------------
 
 The most straightforward way to communicate between curio tasks and
-threads is to use a thread-safe queue from the built-in ``queue``
-module in combination with the curio ``abide()`` function::
+threads is to use curio's ``UniversalQueue`` class::
 
     import curio
-    import queue
     import threading
 
     # A thread - standard python
@@ -226,40 +197,29 @@ module in combination with the curio ``abide()`` function::
     # A task - Curio
     async def consumer(queue):
         while True:
-            item = await curio.abide(queue.get)
+            item = await queue.get()
             print('Consumer got', item)
-            await curio.abide(queue.task_done)
+            await queue.task_done()
 
     async def main():
-        q = queue.Queue()     # Thread-safe queue
+        q = curio.UniversalQueue()
         prod_task = threading.Thread(target=producer, args=(q,)).start()
         cons_task = await curio.spawn(consumer(q))
-        prod_task.join()
+        await run_in_thread(prod_task.join)
         await cons_task.cancel()
 
     if __name__ == '__main__':
         curio.run(main())
 
-``abide()`` is a special function that allows curio to adapt to
-foreign functions and synchronization primitives typically associated
-with threads and processes.  In this example, the ``queue.get()`` and
-``queue.task_done()`` functions will be executed in a separate thread
-to avoid blocking other running tasks.  It is important to note that
-``curio.abide(queue.get)`` is not a typo.  ``abide()`` will call the
-supplied function on your behalf.  If you try to use
-``curio.abide(queue.get())``, you'll not only block the whole kernel
-loop, you'll also get an error when it finally wakes up.
-
-There's one other interesting feature of ``abide()``. If you use it on
-a coroutine that's native to curio, it will still work. Thus, the
-``consumer()`` function above would actually work if the supplied queue
-is either a ``Queue`` from the built-in ``queue`` module or an async
-compatible ``Queue`` provided by curio.  It's magic.
+A ``UniversalQueue`` can be used by any combination of threads or
+curio tasks.  The same API is used in both cases.  However,
+when working with coroutines, queue operations must be
+prefaced by an ``await`` keyword.
 
 How can coroutines and threads share a common lock?
 ---------------------------------------------------
 
-A lock can be shared as the lock in question is one from the
+A lock can be shared if the lock in question is one from the
 ``threading`` module and you use the curio ``abide()`` function.  For
 example::
 
@@ -325,3 +285,19 @@ In this example, the ``p.stdin`` and ``p.stdout`` streams are
 replaced by curio-compatible file streams.  You use the same
 I/O operations as before, but make sure you preface them
 with ``await``. 
+
+How does a coroutine get its enclosing Task instance?
+-----------------------------------------------------
+
+Use the ``current_task()`` function like this::
+
+     from curio import current_task
+     ...
+     async def func():
+         ...
+         myself = await current_task()
+         ...
+
+Once you have a reference to the ``Task``, it can be passed
+around and use in other operations.  For example, a different
+task could use it to cancel.
