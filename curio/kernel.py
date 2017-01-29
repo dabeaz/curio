@@ -730,6 +730,7 @@ class Kernel(object):
         # Main Kernel Loop
         # ------------------------------------------------------------
         while njobs > 0:
+
             # Wait for an I/O event (or timeout)
             if ready:
                 timeout = 0
@@ -737,7 +738,16 @@ class Kernel(object):
                 timeout = sleeping[0][0] - time_monotonic()
             else:
                 timeout = None
-            events = selector_select(timeout)
+
+            try:
+                events = selector_select(timeout)
+            except OSError as e:
+                # If there is nothing to select, windows throws an
+                # OSError, so just set events to an empty list.
+                log.error('Exception %r from selector_select ignored ' % e,
+                          exc_info=True)
+                
+                events = []
 
             # Reschedule tasks with completed I/O
             for key, mask in events:
@@ -916,6 +926,7 @@ class Kernel(object):
                     if current._last_io:
                         _unregister_event(*current._last_io)
                         current._last_io = None
+
 
         # If kernel shutdown has been requested, issue a cancellation request to all remaining tasks
         if shutdown:
