@@ -14,6 +14,7 @@ __all__ = [
 from . import socket
 from . import ssl as curiossl
 from .task import spawn
+from .io import Socket
 
 async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
     # Applies SSL to a client connection. Returns an SSL socket.
@@ -36,6 +37,8 @@ async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
             extra_args = {}
 
         sock = sslcontext.wrap_socket(sock, **extra_args)
+        if not isinstance(sock, Socket):
+            sock = Socket(sock)
         await sock.do_handshake()
     return sock
 
