@@ -87,7 +87,9 @@ async def _run_server(sock, client_connected_task, ssl=None):
         while True:
             client, addr = await sock.accept()
             if ssl:
-                client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
+                client = ssl.wrap_socket(client._socket, server_side=True, do_handshake_on_connect=False)
+                if not isinstance(client, Socket):
+                    client = Socket(client)
             await spawn(run_client(client, addr))
             del client
 
