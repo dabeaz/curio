@@ -140,5 +140,11 @@ So set SelectPatience to 0 or 1 according to your OS and you will miss
 at most one bark in the night.  And on windows the selector always
 barks once.
 
+Upstream
+========
 
+
+
+Downstream
+==========
 
