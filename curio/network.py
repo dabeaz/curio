@@ -94,8 +94,8 @@ async def _run_server(sock, client_connected_task, ssl=None):
 async def tcp_server(host, port, client_connected_task, *,
                      family=socket.AF_INET, backlog=100, ssl=None, reuse_address=True):
 
-    if ssl and not isinstance(ssl, curiossl.CurioSSLContext):
-        raise ValueError('ssl argument must be a curio.ssl.SSLContext instance')
+    if ssl and not hasattr(ssl, 'wrap_socket'):
+        raise ValueError('ssl argument must have a wrap_socket method')
 
     sock = socket.socket(family, socket.SOCK_STREAM)
     try:
@@ -110,8 +110,8 @@ async def tcp_server(host, port, client_connected_task, *,
         raise
 
 async def unix_server(path, client_connected_task, *, backlog=100, ssl=None):
-    if ssl and not isinstance(ssl, curiossl.CurioSSLContext):
-        raise ValueError('ssl argument must be a curio.ssl.SSLContext instance')
+    if ssl and not hasattr(ssl, 'wrap_socket'):
+        raise ValueError('ssl argument must have a wrap_socket method')
 
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
