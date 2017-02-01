@@ -14,6 +14,7 @@ __all__ = [
 from . import socket
 from . import ssl as curiossl
 from .task import spawn
+from .io import Socket
 
 async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
     # Applies SSL to a client connection. Returns an SSL socket.
@@ -36,6 +37,8 @@ async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
             extra_args = {}
 
         sock = sslcontext.wrap_socket(sock, **extra_args)
+        if not isinstance(sock, Socket):
+            sock = Socket(sock)
         await sock.do_handshake()
     return sock
 
@@ -84,15 +87,17 @@ async def _run_server(sock, client_connected_task, ssl=None):
         while True:
             client, addr = await sock.accept()
             if ssl:
-                client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
+                client = ssl.wrap_socket(client._socket, server_side=True, do_handshake_on_connect=False)
+                if not isinstance(client, Socket):
+                    client = Socket(client)
             await spawn(run_client(client, addr))
             del client
 
 async def tcp_server(host, port, client_connected_task, *,
                      family=socket.AF_INET, backlog=100, ssl=None, reuse_address=True):
 
-    if ssl and not isinstance(ssl, curiossl.CurioSSLContext):
-        raise ValueError('ssl argument must be a curio.ssl.SSLContext instance')
+    if ssl and not hasattr(ssl, 'wrap_socket'):
+        raise ValueError('ssl argument must have a wrap_socket method')
 
     sock = socket.socket(family, socket.SOCK_STREAM)
     try:
@@ -107,8 +112,8 @@ async def tcp_server(host, port, client_connected_task, *,
         raise
 
 async def unix_server(path, client_connected_task, *, backlog=100, ssl=None):
-    if ssl and not isinstance(ssl, curiossl.CurioSSLContext):
-        raise ValueError('ssl argument must be a curio.ssl.SSLContext instance')
+    if ssl and not hasattr(ssl, 'wrap_socket'):
+        raise ValueError('ssl argument must have a wrap_socket method')
 
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
