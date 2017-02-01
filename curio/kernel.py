@@ -756,7 +756,7 @@ class Kernel(object):
                     'OSError exception number {} from selector_select ignored '.format(
                         selector_errors))
 
-                if selector_errors > SELECT_PATIENCE:
+                if selector_errors >= SELECT_PATIENCE:
                     raise e
                 
                 selector_errors += 1
