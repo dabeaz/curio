@@ -754,19 +754,23 @@ class Kernel(object):
             except OSError as e:
                 log.error(
                     'OSError exception number {} from selector_select ignored ' % selector_errors)
-                log.error(
-                    'OSError timeout value was {} ' % timeout)
 
                 if selector_errors > SELECT_PATIENCE:
                     raise e
                 
                 selector_errors += 1
 
+                # pretty sure timeout will be zero if we are ever here
+                if timeout != 0.0:
+                    log.error(
+                        'OSError timeout value was {} ' % timeout)
+
+                    # perhaps time.sleep(timeout) here, but may as well just let the
+                    # loop run on.
+
                 # set events to empty list
                 events = []
 
-                # FIXME: should make this thing sleep for *timeout* not sure how to do that
-                # (although suspect if we are here, timeout == 0)
 
             # Reschedule tasks with completed I/O
             for key, mask in events:

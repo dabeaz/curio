@@ -25,7 +25,7 @@ If you probe around in the *selector* it has *_readers* and *_writers* objects.
 These are the sockets and files that the process is managing and the
 seletor returns a list of events that are ready to be handled.
 
-(At least that's what I thing is going on).
+(At least that's what I think is going on).
 
 OSError
 =======
@@ -47,8 +47,15 @@ In short, Windows dispatches the call to a *provider*.  The code
 supports the concept that different file objects can belong to
 different providers.
 
+It inspects the first file it finds to determine the provider.
+
 So, if there are no file objects around it cannot determine what
 provider to call, so it just throws up its hands and throws an *OSError*.
+
+Aside: this means that all files in the selector need to support the
+same provider.  Are there actual cases of different providers?
+Guessing it is generally best to just leave it to the operating system
+at this point.
 
 
 CallBackLater
@@ -140,11 +147,50 @@ So set SelectPatience to 0 or 1 according to your OS and you will miss
 at most one bark in the night.  And on windows the selector always
 barks once.
 
+Timeout in the kernel run loop
+==============================
+
+The call to the selector includes a timeout as follows:
+*selector_select(timeout)*
+
+The idea is that the kernel has nothing to do for *timeout* seconds so
+it might as well wait on I/O unti then.
+
 Upstream
 ========
 
+Should this be fixed upstream?
 
+The code in *curio* to handle the OSError could be used in the
+upstream in the same way.
+
+This may make a lot of things start working.
+
+Or, Murphy's Law says it will break all sorts of wonderful code that
+is catching the OSError and doing something exotic critical to the
+running of the process.
+
+It might be good to have an easy way to at least test the change.
+
+Windows Ubuntu Bash
+-------------------
+
+Still working on finding a machine with a Ubuntu bash and python 3.5+.
+
+Hope to have one to test soon.
 
 Downstream
 ==========
+
+Having a curio that works reliably across platforms opens up a lot
+more options.
+
+
+User interface
+==============
+
+This thread is generating some interesting ideas on using *tkinter* or
+*qt* with curio.  Or anything else with its own eventloop:
+
+https://github.com/dabeaz/curio/issues/111
 
