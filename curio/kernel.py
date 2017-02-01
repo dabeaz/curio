@@ -753,7 +753,8 @@ class Kernel(object):
                 events = selector_select(timeout)
             except OSError as e:
                 log.error(
-                    'OSError exception number {} from selector_select ignored ' % selector_errors)
+                    'OSError exception number {} from selector_select ignored '.format(
+                        selector_errors))
 
                 if selector_errors > SELECT_PATIENCE:
                     raise e
@@ -763,7 +764,7 @@ class Kernel(object):
                 # pretty sure timeout will be zero if we are ever here
                 if timeout != 0.0:
                     log.error(
-                        'OSError timeout value was {} ' % timeout)
+                        'OSError timeout value was {} '.format(timeout))
 
                     # perhaps time.sleep(timeout) here, but may as well just let the
                     # loop run on.
