@@ -50,7 +50,7 @@ SELECT_PATIENCE = 0
 
 if sys.platform == 'win32':
 
-    SELECTOR_PATIENCE += 1
+    SELECT_PATIENCE += 1
 
 # KernelSyncBase is an abstract base class used to support synchronization
 # primitives such as Events, Locks, Semaphores, etc.  There are different
