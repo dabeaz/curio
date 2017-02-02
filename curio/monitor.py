@@ -150,10 +150,6 @@ class Monitor(object):
         '''
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        except AttributeError:
-            pass
 
         # set the timeout to prevent the server loop from
         # blocking indefinitaly on sock.accept()
