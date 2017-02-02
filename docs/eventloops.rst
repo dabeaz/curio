@@ -20,6 +20,11 @@ working on them too.
 Widgets as co-routines
 ======================
 
+Imagine widgets that just build and return something with an *async
+run* method.
+
+Build the widgets you need, then let *curio* fire the *run* coroutines
+up and away you go.
 
 GUI events
 ==========
@@ -64,12 +69,26 @@ Polling
 Current solutions for *tkinter* involve periodically checking if it
 has any events waiting.
 
-The problem with this is too often and it wastes resources, not often enough
+The problem with this is too often and it wastes resources, not often
+enough and the user interface becomes sluggish.  
+
+Now somewhere in the *tkinter.mainloop*, if we are lucky, it is
+runnint *select* waiting on activity on file descriptors that are used to pass
+events along.
+
+If we can find these descriptors, then we can wrap them up and let
+curio do the waiting for input.
+
+Then there will be no polls.
+
+Why not have the mainloop just use queues?
+==========================================
+
+So events can be passed between the *tkinter* thread and curio tasks
+by putting them into a *curio.queue*.
+
+With this solution, you can just check the queue sizes, say once each
+time round the mainloop and process them if they are not empty.
 
 
-Communication between tasks and event loops
-===========================================
 
-
-Polling
-=======
