@@ -17,15 +17,15 @@ systems (OS X, Linux, etc.).  It is a work in progress and it may
 change at any time.  Although curio can be installed via pip, the
 version uploaded on PyPI is only updated occasionally.  You'll
 probably get better results using the version cloned from github.
-Of course, your mileage might vary.
+You'll also want to make sure you're using Python 3.6. Of course, your
+mileage might vary.
 
 News
 ----
-The version 0.4 release of curio cleans up a lot of APIs and makes a
-wide variety of performance improvements. If you were using version
-0.1, a lot of stuff is probably going to break.  Sorry about that.
-However, curio is still in its infancy. APIs might change |---| hopefully
-for the better though.
+The version 0.5 "release" of curio has a lot of improvements and cleaned
+up APIs.  However, it's mainly just a snapshot that represents the state
+of Curio before it starts utilizing more features of Python 3.6. For the
+best results, you should use Python 3.6 and Curio from github. 
 
 Quick install
 -------------
