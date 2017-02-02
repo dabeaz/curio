@@ -39,9 +39,22 @@ async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
         else:
             extra_args = {}
 
-        sock = sslcontext.wrap_socket(sock, **extra_args)
-        if not isinstance(sock, Socket):
-            sock = Socket(sock)
+        # if the context is Curio's own, it expects a Curio socket and
+        # returns one. If context is from an external source, including
+        # the stdlib's ssl.SSLContext, it expects a non-Curio socket and
+        # returns a non-Curio socket, which then needs wrapping in a Curio
+        # socket.
+        #
+        # Perhaps the CurioSSLContext is no longer needed. In which case,
+        # this code can be simplified to just the else case below.
+        #
+        if isinstance(sslcontext, curiossl.CurioSSLContext):
+            sock = sslcontext.wrap_socket(sock, **extra_args)
+        else:
+            # do_handshake_on_connect should not be specified for
+            # non-blocking sockets
+            extra_args['do_handshake_on_connect'] = sock._socket.gettimeout() != 0.0
+            sock = Socket(sslcontext.wrap_socket(sock._socket, **extra_args))
         await sock.do_handshake()
     return sock
 
@@ -97,7 +110,7 @@ async def _run_server(sock, client_connected_task, ssl=None):
             del client
 
 async def tcp_server(host, port, client_connected_task, *,
-                     family=socket.AF_INET, backlog=100, ssl=None, 
+                     family=socket.AF_INET, backlog=100, ssl=None,
                      reuse_address=True, reuse_port=False):
 
     if ssl and not hasattr(ssl, 'wrap_socket'):
@@ -113,7 +126,7 @@ async def tcp_server(host, port, client_connected_task, *,
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, True)
             except (AttributeError, OSError) as e:
                 log.warning('reuse_port=True option failed', exc_info=True)
-        
+
         sock.bind((host, port))
         sock.listen(backlog)
         await _run_server(sock, client_connected_task, ssl)
