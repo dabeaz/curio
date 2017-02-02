@@ -86,14 +86,12 @@ The following functions are defined to help manage the execution of tasks.
 
 .. asyncfunction:: spawn(coro, daemon=False)
 
-   Create a new task that runs the coroutine *coro*.  Does not
-   return to the caller until the new task has been scheduled and
-   executed for at least one cycle.  Returns a :class:`Task`
-   instance as a result.  The *daemon* option, if supplied, specifies that the
-   new task will run indefinitely in the background.  Curio only runs
-   as long as there are non-daemonic tasks to execute.  Note: a
-   daemonic task will still be cancelled if the underlying kernel is
-   shut down.
+   Create a new task that runs the coroutine *coro*.  Returns a
+   :class:`Task` instance as a result.  The *daemon* option, if
+   supplied, specifies that the new task will run indefinitely in the
+   background.  Curio only runs as long as there are non-daemonic
+   tasks to execute.  Note: a daemonic task will still be cancelled if
+   the underlying kernel is shut down.
 
 .. asyncfunction:: current_task()
 
