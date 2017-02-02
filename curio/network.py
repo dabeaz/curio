@@ -15,6 +15,9 @@ from . import socket
 from . import ssl as curiossl
 from .task import spawn
 from .io import Socket
+import logging
+
+log = logging.getLogger(__name__)
 
 async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
     # Applies SSL to a client connection. Returns an SSL socket.
@@ -94,7 +97,8 @@ async def _run_server(sock, client_connected_task, ssl=None):
             del client
 
 async def tcp_server(host, port, client_connected_task, *,
-                     family=socket.AF_INET, backlog=100, ssl=None, reuse_address=True):
+                     family=socket.AF_INET, backlog=100, ssl=None, 
+                     reuse_address=True, reuse_port=False):
 
     if ssl and not hasattr(ssl, 'wrap_socket'):
         raise ValueError('ssl argument must have a wrap_socket method')
@@ -104,6 +108,12 @@ async def tcp_server(host, port, client_connected_task, *,
         if reuse_address:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
 
+        if reuse_port:
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, True)
+            except (AttributeError, OSError) as e:
+                log.warning('reuse_port=True option failed', exc_info=True)
+        
         sock.bind((host, port))
         sock.listen(backlog)
         await _run_server(sock, client_connected_task, ssl)

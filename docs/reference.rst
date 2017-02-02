@@ -772,7 +772,7 @@ making network connections and writing servers.
 
    Creates a connection to a Unix domain socket with optional SSL applied.
 
-.. asyncfunction:: tcp_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True)
+.. asyncfunction:: tcp_server(host, port, client_connected_task, *, family=AF_INET, backlog=100, ssl=None, reuse_address=True, reuse_port=False)
 
    Creates a server for receiving TCP connections on
    a given host and port.  *client_connected_task* is a coroutine that
@@ -781,7 +781,9 @@ making network connections and writing servers.
    :data:`socket.AF_INET6`.  *backlog* is the argument to the
    :py:meth:`socket.socket.listen` method.  *ssl* specifies an
    :class:`curio.ssl.SSLContext` instance to use. *reuse_address*
-   specifies whether to reuse a previously used port.
+   specifies whether to reuse a previously used port. *reuse_port*
+   specifies whether to use the ``SO_REUSEPORT`` socket option
+   prior to binding. 
 
 .. asyncfunction:: unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
