@@ -22,7 +22,7 @@ mileage might vary.
 
 News
 ----
-The version 0.5 "release" of curio has a lot of improvements and cleaned
+The version 0.6 "release" of curio has a lot of improvements and cleaned
 up APIs.  However, it's mainly just a snapshot that represents the state
 of Curio before it starts utilizing more features of Python 3.6. For the
 best results, you should use Python 3.6 and Curio from github. 
