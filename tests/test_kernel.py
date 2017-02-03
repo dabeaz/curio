@@ -15,6 +15,30 @@ def test_hello(kernel):
     assert results == ['hello']
 
 
+def test_return(kernel):
+
+    async def hello():
+        return 'hello'
+
+    result = kernel.run(hello())
+    assert result == 'hello'
+
+
+def test_raise(kernel):
+
+    class Error(Exception):
+        pass
+
+    async def boom():
+        raise Error
+
+    try:
+        kernel.run(boom())
+        assert False, 'boom() did not raise'
+    except TaskError as exc:
+        assert isinstance(exc.__cause__, Error)
+
+
 def test_sleep(kernel):
     results = []
     async def main():

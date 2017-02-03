@@ -1,5 +1,13 @@
 CHANGES
 -------
+
+Version 0.6 : February 3, 2017
+------------------------------
+02/03/2017 Fixed a few regressions in SSL sockets and the Kernel.run() method.
+
+Version 0.5 : February 2, 2017
+------------------------------
+
 01/08/2017 Some refinements to the abide() function.   You can now have it
            reserve a dedicated thread.  This allows it to work with things
            like Condition variables.   For example::

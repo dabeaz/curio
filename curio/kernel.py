@@ -273,7 +273,7 @@ class Kernel(object):
             raise RuntimeError('Only one Curio kernel per thread is allowed')
         self._local.running = True
         try:
-            self._run(coro, shutdown=shutdown)
+            return self._run(coro, shutdown=shutdown)
         finally:
             self._local.running = False
         

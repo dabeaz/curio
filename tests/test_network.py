@@ -1,8 +1,11 @@
 # test_network.py
+from os.path import dirname, join
+import ssl
 
 from curio import *
+from curio import network
+from curio import ssl as curiossl
 from curio.socket import *
-
 
 def test_tcp_echo(kernel):
     results = []
@@ -53,3 +56,53 @@ def test_tcp_echo(kernel):
         'client close',
         'handler done'
     ]
+
+def test_ssl_wrapping(kernel):
+
+    async def client(host, port, context):
+        sock = await network.open_connection(host, port, ssl=context, server_hostname=host)
+        await sock.sendall(b'Hello, world!')
+        resp = await sock.recv(4096)
+        return resp
+
+    async def handler(client_sock, addr):
+        data = await client_sock.recv(1000)
+        assert data == b'Hello, world!'
+        await client_sock.send(b'Back atcha: ' + data)
+
+    def server(host, port, context):
+        sock = socket(AF_INET, SOCK_STREAM)
+        try:
+            sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
+            sock.bind((host, port))
+            sock.listen(5)
+            return network._run_server(sock, handler, context)
+        except Exception:
+            sock._socket.close()
+            raise
+
+    async def main():
+        # It might be desirable to move these out of the examples
+        # directory, as this test are now relying on them being around
+        file_path = join(dirname(dirname(__file__)), 'examples')
+        cert_file = join(file_path, 'ssl_test.crt')
+        key_file = join(file_path, 'ssl_test_rsa')
+
+        server_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        server_context.load_cert_chain(certfile=cert_file, keyfile=key_file)
+
+        stdlib_client_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        curio_client_context = curiossl.create_default_context(ssl.Purpose.SERVER_AUTH)
+
+        server_coro = server('localhost', 10000, server_context)
+        server_task = await spawn(server_coro)
+
+        for test_context in (curio_client_context, stdlib_client_context):
+            test_context.check_hostname = False
+            test_context.verify_mode = ssl.CERT_NONE
+            resp = await client('localhost', 10000, test_context)
+            assert resp == b'Back atcha: Hello, world!'
+
+        await server_task.cancel()
+
+    kernel.run(main())
