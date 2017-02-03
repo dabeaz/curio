@@ -90,5 +90,50 @@ by putting them into a *curio.queue*.
 With this solution, you can just check the queue sizes, say once each
 time round the mainloop and process them if they are not empty.
 
+The good news with this solution is code called in the tkinter
+mainloop just has to check a queue size periodically.  This should be
+a fairly cheap operation, but might involve communication with another
+thread depending on how *curio* is handling the queue.
 
+The down side is that we do not have access to all the curio magic in
+any of the callbacks made to the widgets.
+
+
+Current solutions
+=================
+
+Polling the *tkinter* thread periodically to see if there is anything
+it needs to do is working reasonably well.
+
+There is room for improvement by making the nap times between polls
+adaptive, in other words poll more regularly if we are always finding
+events to process, less regularly if not.
+
+A better solution would be to find the relevant file descriptors and
+let *curio* handle these.
+
+Pausing a kernel
+----------------
+
+Other *curio* users working with multiple event loops are wanting to
+pause the *curio* event loop periodically.
+
+It would be good to have a simple example explaining where and how
+this is useful.
+
+One other thought, is that one interesting case of their being
+multiple eventloops is when we have multiple *curio* applications
+which are communicating with each other.
+
+In this case, if they use a *curio.Channel* there is no polling.
+
+This case is different to the case where we are dealing with a
+non-curio event loop.
+
+
+async def tkmainloop
+--------------------
+
+If *tkinter* provided an async version of its mainloop then that would
+just be another co-routine for curio to manage.
 
