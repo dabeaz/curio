@@ -1,8 +1,75 @@
 CHANGES
 -------
 
-Version 0.6 : February 3, 2017
-------------------------------
+Version 0.6 : In progress
+-------------------------
+02/06/2017 New aside() function for launching a Curio task in an
+           independent process.  For example:
+
+           async def child(name, n):
+               print('Hello from', name)
+               for i in range(n):
+                   print('name says', i)
+                   await sleep(1)
+
+           async def main():
+               t = await aside(child, 'Spam', 10)   # Runs in subprocess
+	       await t.join()
+
+           run(main())
+
+           In a nutshell, aside(coro, *args, **kwargs) creates a clean
+	   Python interpreter and invokes curio.run(coro(*args,
+	   **kwargs)) on the supplied coroutine.  The return value of
+	   aside() is a Task object.  Joining with it returns the
+	   child exit code (normally 0).  Cancelling it causes a
+	   TaskCancelled exception to be raised in the child.
+
+           aside() does not involve a process fork or pipe. There
+           is no underlying communication between the child and parent
+           process.  If you want communication, use a Channel object 
+           or set up some other kind of networking.
+      
+02/06/2017 Some improvements to message passing and launching tasks in
+           subprocesses.  A new Channel object makes it easy
+           to establish message passing between two different interpreters.
+           For example, here is a producer program:
+
+           # producer.py
+           from curio import Channel, run
+
+           async def producer(ch):
+               while True:
+                   c = await ch.accept(authkey=b'peekaboo')
+                   for i in range(10):
+                       await c.send(i)
+                   await c.send(None)   # Sentinel
+
+           if __name__ == '__main__':
+               ch = Channel(('localhost', 30000))
+               run(producer(ch))
+
+           Here is a consumer program::
+
+           # consumer.py
+           from curio import Channel, run
+
+           async def consumer(ch):
+               c = await ch.connect(authkey=b'peekaboo')
+               while True:
+                   msg = await c.recv()
+                   if msg is None:
+                      break
+                   print('Got:', msg)
+
+           if __name__ == '__main__':
+              ch = Channel(('localhost', 30000))
+              run(consumer(ch))
+
+           A Channel is a lot like a socket except that it sends discrete
+           messages.   Any pickable Python compatible object can be
+           passed.
+
 02/03/2017 Fixed a few regressions in SSL sockets and the Kernel.run() method.
 
 Version 0.5 : February 2, 2017

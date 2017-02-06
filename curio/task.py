@@ -59,7 +59,7 @@ class Task(object):
         return 'Task(id=%r, %r, state=%r)' % (self.id, self.coro, self.state)
 
     def __str__(self):
-        return self.coro.__qualname__
+        return getattr(self.coro, '__qualname__', str(self.coro))
 
     def __del__(self):
         self.coro.close()
