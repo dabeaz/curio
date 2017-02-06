@@ -1573,7 +1573,7 @@ example::
         ...
 
 Threads and Cancellation
-------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 Both the ``run_in_thread()`` and ``block_in_thread()`` functions allow
 the pending operation to be cancelled.  However, if the operation in
@@ -2317,6 +2317,212 @@ can call C extensions that release the GIL.  You can have these
 threads interact with existing libraries.  If you're organized, you
 can write synchronous functions that work with Curio and with normal
 threaded code at the same time.  It's a brave new world.
+
+Programming with Processes
+--------------------------
+
+A pitfall of asynchronous I/O is that it does not play nice with
+CPU-intensive operations.  Just as a synchronous blocking operation
+can stall the kernel, a long-running calculation can do the same.
+Although calculations can be moved over to threads, that does not work
+as well as you might expect.  Python's global interpreter lock (GIL)
+prevents more than one thread from executing in parallel.  Moreover,
+CPU intensive operations can starve I/O handling.  There's a lot that
+can be said about this, but go view Dave's talk at
+https://www.youtube.com/watch?v=5jbG7UKT1l4 and the associated slides
+at
+http://www.slideshare.net/dabeaz/in-search-of-the-perfect-global-interpreter-lock.
+The bottom line: threads are not what's you're looking for if
+CPU-intensive procecessing is your goal.
+
+Curio provides several mechanisms for working with CPU-intensive work.
+This section will describe some approaches you might take.
+
+Launching Subprocesses
+^^^^^^^^^^^^^^^^^^^^^^
+
+If CPU intensive work can be neatly packaged up into an independent program
+or script, you can have curio run it using the ``curio.subprocess`` module.
+This is an asynchronous implementation of the Python standard library module
+by the same name. You use it the same way::
+
+    from curio.subprocess import check_output, CalledProcessError
+
+    async def coro():
+        try:
+            out = await check_output(['prog', 'arg1', 'arg2'])
+        except CalledProcessError as e:
+            print('Failed!')
+
+This runs an external command, collects its output, and returns it to you
+as a string.  Curio also provides an asynchronous version of the ``Popen``
+class and the ``subprocess.run()`` function.  Again, the behavior is meant
+to mimic that of the standard library module.
+
+Running CPU intensive functions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you have a simple function that performs CPU-intensive work, you can try
+running it using the ``run_in_process()`` function.  For example::
+
+    from curio import run_in_process
+
+    def fib(n):
+        if n <= 2:
+            return 1
+        else:
+            return fib(n-1) + fib(n-2)
+
+    async def coro():
+        r = await run_in_process(fib, 40)
+
+This runs the specified function in a completely separate Python
+interpreter and returns the result.  It is critical to emphasize that
+this only works if the supplied function is completely isolated.  It
+should not depend on global state or have any side-effects.
+Everything the function needs to execute should be passed in as
+argument.
+
+The ``run_in_process()`` function works with all of Curio's usual
+features including cancellation and timeouts.  If cancelled, the
+subprocess being used to execute the work is sent a ``SIGTERM`` signal
+with the expectation that it will die immediately.
+
+Message Passing and Channels
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+One issue with ``run_in_process()`` is that it doesn't really give
+you much control over what's happening in a child process. For
+example, you don't have too much control over subtle details such as
+signal handling, files, network connections, cancellation, and other
+things.  Also, if there is any kind of persistent state, it will be
+difficult to manage.
+
+For more complicated kinds of things, you might want to turn to
+explicit message passing instead.  For this, Curio provides a
+``Channel`` object.  A channel is kind of like a socket except that it
+allows picklable Python objects to be sent and received.  It also
+provides a bit of authentication.  Here is an example of a simple
+producer program using channels::
+
+    # producer.py
+    from curio import Channel, run
+
+    async def producer(ch):
+        while True:
+            c = await ch.accept(authkey=b'peekaboo')
+            for i in range(10):
+                await c.send(i)
+            await c.send(None)   # Sentinel
+
+    if __name__ == '__main__':
+        ch = Channel(('localhost', 30000))
+        run(producer(ch))
+
+Here is a consumer program::
+
+    # consumer.py
+    from curio import Channel, run
+
+    async def consumer(ch):
+        c = await ch.connect(authkey=b'peekaboo')
+        while True:
+            msg = await c.recv()
+            if msg is None:
+                break
+            print('Got:', msg)
+
+    if __name__ == '__main__':
+        ch = Channel(('localhost', 30000))
+        run(consumer(ch))
+
+Each of these programs create a corresponding ``Channel`` object.  One
+of the programs must act as a server and accept incoming connections
+using ``Channel.accept()``.  The other program uses
+``Channel.connect()`` to make a connection.  As an option, an
+authorization key may be provided.  Both methods return a
+``Connection`` instance that allows Python objects to be sent and
+received.  Any Python object compatible with ``pickle`` is allowed.
+
+Beyond this, how you use a channel is largely up to you.  Each program
+runs independently.  The programs could live on the same machine. They
+could run on separate machines.  The main thing is that they send
+messages back and forth.
+
+One notable thing about channels is that they are compatible with
+Python's ``multiprocessing`` module.  For example, you could rewrite
+the ``consumer.py`` program like this::
+
+    # consumer.py
+    from multiprocessing.connection import Client
+
+    def consumer(address):
+        c = Client(address, authkey=b'peekaboo')
+        while True:
+            msg = c.recv()
+            if msg is None:
+                break
+            print('Got:', msg)
+
+    if __name__ == '__main__':
+        consumer(('localhost', 30000))
+
+This code doesn't involve Curio in any way.  However, it speaks the
+same messaging protocol.  So, it should work just fine.
+
+Spawning Tasks in a Subprocess
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As final option, Curio provides a mechanism for spawning tasks in a 
+subprocess.   To do this, use the aptly name ``aside()`` function. For
+example::
+
+
+    from curio import Channel, run, aside
+
+    async def producer(ch):
+        c = await ch.accept(authkey=b'peekaboo')
+        for i in range(10):
+            await c.send(i)
+
+    async def consumer(ch):
+        c = await ch.connect(authkey=b'peekaboo')
+        while True:
+            msg = await c.recv()
+            print('Got:', msg)
+
+    async def main():
+        ch = Channel(('localhost', 30000))
+        cons = await aside(consumer, ch)    # Launch consumer in separate process
+        await producer(ch)
+        await cons.cancel()                 # Cancel consumer process
+
+    if __name__ == '__main__':
+        run(main())
+
+``aside()`` does nothing more than launch a new Python subprocess and invoke
+``curio.run()`` on the suppplied coroutine.  Any additional arguments 
+supplied to ``aside()`` are given as arguments to the coroutine.
+
+``aside()`` does not involve a pipe or a process fork.  The newly
+created process shares no state with the caller.  There is no I/O
+channel between processes.   If you want I/O, you should create a
+``Channel`` object and pass it as an argument (or use some other
+communication mechanism such as sockets).  
+
+A notable thing about ``aside()`` is that it still creates
+a proper ``Task`` in the caller.  You can join with that task or cancel
+it.   If you cancel the task, a ``TaskCancelled`` exception is propagated
+to the subprocess (e.g., the ``consumer()`` coroutine above gets a
+proper cancellation exception when the ``main()`` coroutine invokes
+``cons.cancel()``).    
+
+Tasks launched using ``aside()`` do not return a result.  As noted,
+``aside()`` does not create a pipe or any kind of I/O channel for
+communicating a result.  If you need a result, it should be
+communicated via a channel.  Should you call ``join()``, the return
+value is the exit code of the subprocess.  Normally it is 0.  A
+non-zero exit code indicates an error of some kind.
 
 Interacting with Synchronous Code
 ---------------------------------

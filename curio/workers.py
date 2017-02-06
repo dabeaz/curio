@@ -4,7 +4,7 @@
 # running functions in threads, processes, and executors from the
 # concurrent.futures module.
 
-__all__ = ['run_in_executor', 'run_in_thread', 'run_in_process', 'block_in_thread' ]
+__all__ = ['run_in_executor', 'run_in_thread', 'run_in_process', 'block_in_thread']
 
 import multiprocessing
 import threading
@@ -16,7 +16,7 @@ from .errors import CancelledError, TaskTimeout
 from .traps import _future_wait, _get_kernel
 from . import sync
 from .task import spawn
-from .channel import Channel
+from .channel import Connection
 
 
 # Code to embed a traceback in a remote exception.  This is borrowed
@@ -265,7 +265,7 @@ class ProcessWorker(object):
             target=self.run_server, args=(server_ch, ), daemon=True)
         self.process.start()
         server_ch.close()
-        self.client_ch = Channel.from_Connection(client_ch)
+        self.client_ch = Connection.from_Connection(client_ch)
 
     def shutdown(self):
         self.terminated = True
