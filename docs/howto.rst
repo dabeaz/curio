@@ -114,7 +114,7 @@ which returns ``None`` instead.  For example::
 
     result = await ignore_after(5, coro(args))
     if result is None:
-        print('Timeout out')
+        print('Timed out')
 
 How can a timeout be applied to a block of statements?
 ------------------------------------------------------
@@ -122,10 +122,14 @@ How can a timeout be applied to a block of statements?
 Use the ``timeout_after()`` or ``ignore_after()`` functions as a context
 manager.  For example::
 
-    async with timeout_after(5):
-         statement1
-         statement2
-         ...
+    try:
+        async with timeout_after(5):
+            statement1
+            statement2
+            ...
+    except TaskTimeout:
+        print('Timed out')
+
 
 This is a cumulative timeout applied to the entire block.   After the 
 specified number of seconds has elapsed, a ``TaskTimeout`` exception
@@ -134,8 +138,9 @@ will be raised in the current operation blocking in curio.
 How do you shield operations from timeouts or cancellation?
 -----------------------------------------------------------
 
-To protect a block of statements from being aborted due to a timeout or
-cancellation, use ``disable_cancellation()`` as a context manager like this::
+To protect a block of statements from being aborted due to a timeout
+or cancellation, use ``disable_cancellation()`` as a context manager
+like this::
 
      async def func():
          ...
@@ -145,7 +150,6 @@ cancellation, use ``disable_cancellation()`` as a context manager like this::
              ...
 
          await blocking_op()      # Cancellation delivered here
-
 
 How can tasks communicate?
 --------------------------
@@ -267,6 +271,7 @@ It's fast and no backing threads are used.
 
 How can you communicate with a subprocess over a pipe?
 ------------------------------------------------------
+
 Use the ``curio.subprocess`` module just like you would use the
 normal ``subprocess`` module. For example::
 
@@ -285,6 +290,48 @@ In this example, the ``p.stdin`` and ``p.stdout`` streams are
 replaced by curio-compatible file streams.  You use the same
 I/O operations as before, but make sure you preface them
 with ``await``. 
+
+How can two different Python interpreters send messages to each other?
+----------------------------------------------------------------------
+
+Use a Curio ``Channel`` instance to set up a communication channel.
+For example, you could make a producer program like this::
+
+    # producer.py
+    from curio import Channel, run
+
+    async def producer(ch):
+        c = await ch.accept(authkey=b'peekaboo')
+        for i in range(10):
+            await c.send(i)          # Send some data
+        await c.send(None)
+
+    if __name__ == '__main__':
+       ch = Channel(('localhost', 30000))
+       run(producer(ch))
+
+Now, make a consumer program::
+
+    # consumer.py
+    from curio import Channel, run
+
+    async def consumer(ch):
+        c = await ch.connect(authkey=b'peekaboo')
+        while True:
+            msg = await c.recv()
+            if msg:
+                break
+            print('Got:', msg)
+        
+    if __name__ == '__main__':
+        ch = Channel(('localhost', 30000))
+        run(consumer(ch))
+
+Run each program separately and you should see messages received
+by the consumer program.
+
+Channels allow arbitrary Python objects to be sent and received
+as messages as long as they are compatible with ``pickle``. 
 
 How does a coroutine get its enclosing Task instance?
 -----------------------------------------------------

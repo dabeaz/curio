@@ -619,7 +619,7 @@ async def aside(corofunc, *args, **kwargs):
             await p.wait()
             raise
 
-    if corofunc.__module__ == '__main__':
+    if sys._getframe(1).f_globals['__name__'] == '__main__':
         filename = sys.modules['__main__'].__file__
     else:
         filename = ''
