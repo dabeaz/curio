@@ -5,7 +5,7 @@
 __all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
            'wait', 'clock', 'enable_cancellation', 'disable_cancellation',
-           'check_cancellation', 'set_cancellation', 'schedule', ]
+           'check_cancellation', 'set_cancellation', 'schedule', 'aside']
 
 from time import monotonic
 from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError, CancelledError
@@ -59,7 +59,7 @@ class Task(object):
         return 'Task(id=%r, %r, state=%r)' % (self.id, self.coro, self.state)
 
     def __str__(self):
-        return self.coro.__qualname__
+        return getattr(self.coro, '__qualname__', str(self.coro))
 
     def __del__(self):
         self.coro.close()
@@ -577,3 +577,51 @@ def ignore_after(seconds, coro=None, *, timeout_result=None):
 
 from . import queue
 from . import thread
+
+# Highly experimental.  Launches a curio task in a completely isolated
+# subprocess.  As for the name, well, yeah. "async", "await", "abide",
+# "aside", etc. Work with me here!
+
+async def aside(corofunc, *args, **kwargs):
+    '''
+    Spawn a new task, but run it aside in a newly created process.
+    Returns a Task instance corresponding to a small supervisor task
+    in the caller.  The return value of task.join() is the exit code of
+    the subprocess.  Cancelling the task causes a SIGTERM signal to be
+    sent to the child.  This will be raised as a CancelledError in 
+    the child (which is given an opportunity to clean up if it wants).
+
+    The newly created task shares no state with the caller. It is not
+    a process fork.  It is launched in a completely fresh Python
+    interpreter.
+
+    This function also establishes no I/O communication mechanism to
+    the newly created task.  It's not a pipe.  If you need
+    communication, use sockets or create a Channel object.
+
+    Arguments to the called coroutine are pickled and transmitted via
+    a command line arguments.  You should probably only pass small
+    data structures or metadata.  If you need to pass bulk data,
+    set up an I/O channel separately.  
+    '''
+    import base64
+    import pickle
+    import sys
+    from . import subprocess
+
+    async def _aside_supervisor():
+        p = subprocess.Popen([sys.executable, '-m', 'curio.side', filename,
+                              base64.b64encode(pickle.dumps((corofunc, args, kwargs)))])
+        try:
+            return await p.wait()
+        except CancelledError as e:
+            p.terminate()
+            await p.wait()
+            raise
+
+    if corofunc.__module__ == '__main__':
+        filename = sys.modules['__main__'].__file__
+    else:
+        filename = ''
+
+    return await spawn(_aside_supervisor())

@@ -792,6 +792,123 @@ making network connections and writing servers.
    :class:`curio.ssl.SSLContext` to use if setting up an SSL
    connection.
 
+Message Passing and Channels
+----------------------------
+
+.. module:: curio.channel
+
+Curio provides a :class:`Channel` class that can be used to perform message
+passing between interpreters running in separate processes.
+
+.. class:: Channel(address, family=socket.AF_INET)
+
+   Represents a communications endpoint for message passing.  
+   *address* is the address and *family* is the protocol
+   family.
+
+The following methods are used to establish a connection on a :class:`Channel` instance.
+
+.. asyncmethod:: Channel.accept(*, authkey=None)
+
+   Wait for an incoming connection.  *authkey* is an optional authentication
+   key that can be used to authenticate the client.  Authentication involves
+   computing an HMAC-based cryptographic digest. The key itself is not 
+   transmitted.  Returns an :class:`Connection` instance.
+
+.. asyncmethod:: Channel.connect(*, authkey=None)
+
+   Make an outgoing connection. *authkey* is an optional authentication key.
+   This method repeatedly attempts to make a connection if the other
+   endpoint is not responding.  Returns a :class:`Connection` instance.
+
+.. method:: Channel.bind()
+
+   Performs the address binding step of the ``accept()`` method and returns.
+   Can use this if you want the host operating system to assign a port
+   number for you.  For example, you can supply an initial address
+   of ``('localhost', socket.INADDR_ANY)`` and call ``bind()``. Afterwards,
+   the ``address`` attribute of the ``Channel`` instance contains
+   the assigned address.
+
+.. asyncmethod:: Channel.close()
+
+   Close the channel.
+
+The ``connect()`` and ``accept()`` methods of :class:`Channel` instances return a
+:class:`Connection` instance.
+
+.. class:: Connection(reader, writer)
+
+   Represents a connection on which message passing of Python objects is
+   supported.  *reader* and *writer* are Curio I/O streams on which reading 
+   and writing are to take place.
+
+Instances of :class:`Connection` support the following methods:
+
+.. asyncmethod:: close()
+
+   Close the connection by closing both the reader and writer streams.
+
+.. asyncmethod:: recv()
+
+   Receive a Python object. The received object is unserialized using the ``pickle`` module.
+
+.. asyncmethod:: recv_bytes(maxlength=None)
+
+   Receive a raw message of bytes.  *maxlength* specifies a maximum message size.
+   By default messages may be of arbitrary size.
+
+.. asyncmethod:: send(obj)
+
+   Send a Python object.  The object must be compatible with the ``pickle`` module.
+
+.. asyncmethod:: send_bytes(buf, offset=0, size=None)
+   
+   Send a buffer of bytes as a single message.  *offset* and *size* specify
+   an optional byte offset and size into the underlying memory buffer. 
+
+.. asyncmethod:: authenticate_server(authkey)
+
+   Authenticate the connection for a server.
+
+.. asyncmethod:: authenticate_client(authkey)
+
+   Authenticate the connection for a client.
+
+A :class:`Connection` instance may also be used as a context manager.
+
+Here is an example of a producer program using channels::
+
+    # producer.py
+    from curio import Channel, run
+
+    async def producer(ch):
+        c = await ch.accept(authkey=b'peekaboo')
+        for i in range(10):
+            await c.send(i)
+        await c.send(None)   # Sentinel
+
+    if __name__ == '__main__':
+        ch = Channel(('localhost', 30000))
+        run(producer(ch))
+
+Here is an example of a correspoinding consumer program using a channel::
+
+    # consumer.py
+    from curio import Channel, run
+
+    async def consumer(ch):
+        c = await ch.connect(authkey=b'peekaboo')
+        while True:
+            msg = await c.recv()
+            if msg is None:
+                break
+            print('Got:', msg)
+
+    if __name__ == '__main__':
+        ch = Channel(('localhost', 30000))
+        run(consumer(ch))
+
 subprocess wrapper module
 -------------------------
 .. module:: curio.subprocess

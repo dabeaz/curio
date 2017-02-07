@@ -32,8 +32,10 @@ class TestEvent:
 
         async def main():
             evt = Event()
-            await spawn(event_waiter(evt))
-            await spawn(event_setter(evt, 1))
+            t1 = await spawn(event_waiter(evt))
+            t2 = await spawn(event_setter(evt, 1))
+            await t1.join()
+            await t2.join()
 
         kernel.run(main())
         assert results == [
@@ -61,8 +63,10 @@ class TestEvent:
 
         async def main():
             evt = Event()
-            await spawn(event_waiter(evt, 1))
-            await spawn(event_setter(evt))
+            t1 = await spawn(event_waiter(evt, 1))
+            t2 = await spawn(event_setter(evt))
+            await t1.join()
+            await t2.join()
 
         kernel.run(main())
         assert results == [
@@ -115,6 +119,7 @@ class TestEvent:
             results.append('sleep')
             await sleep(seconds)
             results.append('sleep_done')
+            await task.join()
 
         kernel.run(event_run(1))
 
@@ -152,6 +157,7 @@ class TestEvent:
             await sleep(1.0)
             results.append('event_set')
             await evt.set()
+            await task.join()
 
         kernel.run(event_run())
         assert results == [
@@ -189,8 +195,10 @@ class TestSyncEvent:
 
         async def main():
             evt = Event()
-            await spawn(event_waiter(evt))
-            await spawn(event_setter(evt, 1))
+            t1 = await spawn(event_waiter(evt))
+            t2 = await spawn(event_setter(evt, 1))
+            await t1.join()
+            await t2.join()
 
         kernel.run(main())
         assert results == [
@@ -222,8 +230,10 @@ class TestSyncEvent:
 
         async def main():
             evt = Event()
-            await spawn(event_waiter(evt, 1))
-            await spawn(event_setter(evt))
+            t1 = await spawn(event_waiter(evt, 1))
+            t2 = await spawn(event_setter(evt))
+            await t1.join()
+            await t2.join()
 
         kernel.run(main())
         assert results == [
@@ -248,9 +258,12 @@ class TestLock:
 
         async def main():
             lck = Lock()
-            await spawn(worker(lck, 'work1'))
-            await spawn(worker(lck, 'work2'))
-            await spawn(worker(lck, 'work3'))
+            t1 = await spawn(worker(lck, 'work1'))
+            t2 = await spawn(worker(lck, 'work2'))
+            t3 = await spawn(worker(lck, 'work3'))
+            await t1.join()
+            await t2.join()
+            await t3.join()
 
         kernel.run(main())
         assert results == [
@@ -355,9 +368,12 @@ class TestRLock:
 
         async def main():
             lck = RLock()
-            await spawn(worker(lck, 'work1'))
-            await spawn(worker(lck, 'work2'))
-            await spawn(worker_simple(lck))
+            t1 = await spawn(worker(lck, 'work1'))
+            t2 = await spawn(worker(lck, 'work2'))
+            t3 = await spawn(worker_simple(lck))
+            await t1.join()
+            await t2.join()
+            await t3.join()
 
         kernel.run(main())
         assert results == [
@@ -395,9 +411,12 @@ class TestSemaphore:
 
         async def main():
             sema = Semaphore()
-            await spawn(worker(sema, 'work1'))
-            await spawn(worker(sema, 'work2'))
-            await spawn(worker(sema, 'work3'))
+            t1 = await spawn(worker(sema, 'work1'))
+            t2 = await spawn(worker(sema, 'work2'))
+            t3 = await spawn(worker(sema, 'work3'))
+            await t1.join()
+            await t2.join()
+            await t3.join()
 
         kernel.run(main())
 
@@ -428,9 +447,12 @@ class TestSemaphore:
 
         async def main():
             sema = Semaphore(2)
-            await spawn(worker(sema, 'work1', 0.25))
-            await spawn(worker(sema, 'work2', 0.30))
-            await spawn(worker(sema, 'work3', 0.35))
+            t1 = await spawn(worker(sema, 'work1', 0.25))
+            t2 = await spawn(worker(sema, 'work2', 0.30))
+            t3 = await spawn(worker(sema, 'work3', 0.35))
+            await t1.join()
+            await t2.join()
+            await t3.join()
 
         kernel.run(main())
         assert results == [
@@ -557,9 +579,12 @@ class TestCondition:
         async def main():
             cond = Condition()
             q = deque()
-            await spawn(consumer(cond, q, 'cons1'))
-            await spawn(consumer(cond, q, 'cons2'))
-            await spawn(producer(cond, q, 4, 2))
+            t1 = await spawn(consumer(cond, q, 'cons1'))
+            t2 = await spawn(consumer(cond, q, 'cons2'))
+            t3 = await spawn(producer(cond, q, 4, 2))
+            await t1.join()
+            await t2.join()
+            await t3.join()
 
         kernel.run(main())
 
@@ -651,15 +676,18 @@ class TestCondition:
 
         async def worker_notify(seconds):
             cond = Condition()
-            await spawn(worker(cond))
-            await spawn(worker(cond))
-            await spawn(worker(cond))
+            t1 = await spawn(worker(cond))
+            t2 = await spawn(worker(cond))
+            t3 = await spawn(worker(cond))
             results.append('sleep')
             await sleep(seconds)
             async with cond:
                 results.append('notify')
                 await cond.notify_all()
             results.append('done')
+            await t1.join()
+            await t2.join()
+            await t3.join()
 
         kernel.run(worker_notify(1))
 
@@ -695,9 +723,12 @@ class TestCondition:
         async def main():
             cond = Condition()
             q = deque()
-            await spawn(consumer(cond, q, 'cons1'))
-            await spawn(consumer(cond, q, 'cons2'))
-            await spawn(producer(cond, q, 4))
+            t1 = await spawn(consumer(cond, q, 'cons1'))
+            t2 = await spawn(consumer(cond, q, 'cons2'))
+            t3 = await spawn(producer(cond, q, 4))
+            await t1.join()
+            await t2.join()
+            await t3.join()
 
         kernel.run(main())
         assert results == [
@@ -735,8 +766,10 @@ class TestAbide:
         async def main():
             lck = Lock()
             evt = Event()
-            await spawn(tester(lck, evt))
-            await spawn(waiter(lck, evt))
+            t1 = await spawn(tester(lck, evt))
+            t2 = await spawn(waiter(lck, evt))
+            await t1.join()
+            await t2.join()
 
         kernel.run(main())
         assert results == [
@@ -766,9 +799,11 @@ class TestAbide:
         async def main():
             lck = threading.Lock()
             evt = threading.Event()
-            await spawn(run_in_thread(tester, lck, evt))
+            t1 = await spawn(run_in_thread(tester, lck, evt))
             await sleep(0.01)
-            await spawn(waiter(lck, evt))
+            t2 = await spawn(waiter(lck, evt))
+            await t1.join()
+            await t2.join()
 
         kernel.run(main())
         assert results == [
@@ -805,9 +840,11 @@ class TestAbide:
         async def main():
             lck = threading.Lock()
             evt = threading.Event()
-            await spawn(run_in_thread(tester, lck, evt))
+            t1 = await spawn(run_in_thread(tester, lck, evt))
             await sleep(0.01)
-            await spawn(waiter(lck, evt))
+            t2 = await spawn(waiter(lck, evt))
+            await t1.join()
+            await t2.join()
 
         kernel.run(main())
         assert results == [
@@ -837,9 +874,11 @@ class TestAbide:
         async def main():
             lck = threading.RLock()
             evt = threading.Event()
-            await spawn(run_in_thread(tester, lck, evt))
+            t1 = await spawn(run_in_thread(tester, lck, evt))
             await sleep(0.01)
-            await spawn(waiter(lck, evt))
+            t2 = await spawn(waiter(lck, evt))
+            await t1.join()
+            await t2.join()
 
         kernel.run(main())
         assert results == [

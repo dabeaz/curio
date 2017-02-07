@@ -4,17 +4,20 @@
 # Python objects on a stream.  Compatible with the Connection class in the
 # multiprocessing module, but rewritten for a purely asynchronous runtime.
 
-__all__ = ['Channel', 'Listener', 'Client']
+__all__ = ['Channel']
 
 import os
 import pickle
 import struct
 import hmac
+import time
 
 from . import socket
-from .errors import CurioError
+from .errors import CurioError, TaskTimeout
 from .io import StreamBase, FileStream
 from . import thread
+from .task import timeout_after, sleep
+from .meta import awaitable
 
 # Authentication parameters (copied from multiprocessing)
 
@@ -26,15 +29,15 @@ WELCOME = mpc.WELCOME                       # b'#WELCOME#'
 FAILURE = mpc.FAILURE                       # b'#FAILURE#'
 
 
-class ChannelError(CurioError):
+class ConnectionError(CurioError):
     pass
 
 
-class AuthenticationError(ChannelError):
+class AuthenticationError(ConnectionError):
     pass
 
 
-class Channel(object):
+class Connection(object):
     '''
     A communication channel for sending size-prefixed messages of bytes
     or pickled Python objects.  Must be passed a pair of reader/writer
@@ -56,8 +59,8 @@ class Channel(object):
         multiprocessing.  For example:
 
               p1, p2 = multiprocessing.Pipe()
-              p1 = Channel.from_Connection(p1)
-              p2 = Channel.from_Connection(p2)
+              p1 = Connection.from_Connection(p1)
+              p2 = Connection.from_Connection(p2)
 
         '''
         assert isinstance(conn, mpc._ConnectionBase)
@@ -81,7 +84,8 @@ class Channel(object):
 
     async def close(self):
         await self._reader.close()
-        await self._writer.close()
+        if self._reader != self._writer:
+            await self._writer.close()
 
     async def send_bytes(self, buf, offset=0, size=None):
         '''
@@ -172,6 +176,77 @@ class Channel(object):
         await self._answer_challenge(authkey)
         await self._deliver_challenge(authkey)
 
+class Channel(object):
+    def __init__(self, address, family=socket.AF_INET):
+        self.address = address
+        self.family = family
+        self.sock = None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, ty, val, tb):
+        await self.close()
+        
+    def __getstate__(self):
+        return (self.address, self.family)
+
+    def __setstate__(self, state):
+        self.address, self.family = state
+        self.sock = None
+
+    def bind(self):
+        self.sock = socket.socket(self.family, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+        self.sock.bind(self.address)
+        self.sock.listen(5)
+        self.address = self.sock.getsockname()
+        
+    async def accept(self, *, authkey=None):
+        if self.sock is None:
+            self.bind()
+
+        while True:
+            client, addr = await self.sock.accept()
+            client_stream = client.as_stream()
+            c = Connection(client_stream, client_stream)
+            try:
+                async with timeout_after(1):
+                    if authkey:
+                        await c.authenticate_server(authkey)
+                break
+            except (TaskTimeout, AuthenticationError):
+                await c.close()
+                del c
+                del client_stream
+                
+        return c
+
+    async def connect(self, *, authkey=None):
+        while True:
+            try:
+                sock = socket.socket(self.family, socket.SOCK_STREAM)        
+                await sock.connect(self.address)
+                sock_stream = sock.as_stream()
+                c = Connection(sock_stream, sock_stream)
+                try:
+                    async with timeout_after(1):
+                        if authkey:
+                            await c.authenticate_client(authkey)
+                    return c
+                except TaskTimeout:
+                    await c.close()
+                    del c
+                    del sock_stream
+
+            except OSError as e:
+                await sock.close()
+                await sleep(1)
+
+    async def close(self):
+        if self.sock:
+            await self.sock.close()
+        self.sock = None
 
 class Listener(object):
 
@@ -186,7 +261,7 @@ class Listener(object):
     async def accept(self):
         client, addr = await self._sock.accept()
         fileno = client.detach()
-        ch = Channel(FileStream(open(fileno, 'rb', buffering=0)),
+        ch = Connection(FileStream(open(fileno, 'rb', buffering=0)),
                      FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
         if self._authkey:
             await ch.authenticate_server(self._authkey)
@@ -199,13 +274,19 @@ async def Client(address, family=socket.AF_INET, authkey=None):
     sock = socket.socket(family, socket.SOCK_STREAM)
     await sock.connect(address)
     fileno = sock.detach()
-    ch = Channel(FileStream(open(fileno, 'rb', buffering=0)),
+    ch = Connection(FileStream(open(fileno, 'rb', buffering=0)),
                  FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
     if authkey:
         await ch.authenticate_client(authkey)
     return ch
 
 
+
+    
+
+
+
+    
 
 
 

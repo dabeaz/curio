@@ -1,6 +1,6 @@
 # curio/__init__.py
 
-__version__ = '0.4'
+__version__ = '0.6'
 
 from .errors import *
 from .task import *
@@ -12,6 +12,7 @@ from .workers import *
 from .network import *
 from .file import *
 from .local import *
+from .channel import *
 
 __all__ = [*errors.__all__,
            *task.__all__,
@@ -23,4 +24,5 @@ __all__ = [*errors.__all__,
            *network.__all__,
            *file.__all__,
            *local.__all__,
+           *channel.__all__,
            ]

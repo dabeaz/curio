@@ -10,6 +10,7 @@ __all__ = ['run', 'Popen', 'CompletedProcess', 'CalledProcessError',
 
 import subprocess
 import os
+import sys
 
 from subprocess import (
     CompletedProcess,
