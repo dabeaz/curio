@@ -1426,19 +1426,24 @@ class Kernel(object):
         # ------------------------------------------------------------
         while True:
             # If no main task is known, we yield in order to receive it
-            if not main_task and njobs == 0:
+            if njobs == 0:
                 coro, poll_timeout = yield (main_value, main_exc)
                 main_value = main_exc = None
                 main_task = _new_task(coro) if coro else None
                 del coro
 
             # Wait for an I/O event (or timeout)
-            if ready or not main_task:
-                timeout = poll_timeout
+            if ready:
+                timeout = 0
             elif sleeping:
                 timeout = sleeping[0][0] - time_monotonic()
+                if timeout > poll_timeout:
+                    timeout = poll_timeout
             else:
-                timeout = None
+                if njobs == 0:
+                    timeout = poll_timeout
+                else:
+                    timeout = None
 
             try:
                 events = selector_select(timeout)
