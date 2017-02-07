@@ -1437,7 +1437,7 @@ class Kernel(object):
                 timeout = 0
             elif sleeping:
                 timeout = sleeping[0][0] - time_monotonic()
-                if timeout > poll_timeout:
+                if poll_timeout is not None and timeout > poll_timeout:
                     timeout = poll_timeout
             else:
                 if njobs == 0:
