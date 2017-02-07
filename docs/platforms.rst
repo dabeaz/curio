@@ -11,7 +11,7 @@ Here are some of the known areas of weirdness,
 Windows
 =======
 
-If *sys.platform == 'win32' then it mostly works at this point.
+If *sys.platform == 'win32'* then it mostly works at this point.
 
 There are a few rough edges.
 
@@ -47,7 +47,7 @@ Windows 10 and Window 7
 Ubuntu bash on Windows 10
 =========================
 
-This says *sys.platform == 'linux'.
+This says *sys.platform == 'linux'*.
 
 And it is pretty much just that.
 
