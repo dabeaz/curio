@@ -2524,6 +2524,44 @@ communicated via a channel.  Should you call ``join()``, the return
 value is the exit code of the subprocess.  Normally it is 0.  A
 non-zero exit code indicates an error of some kind.
 
+Working with Files
+------------------
+
+Let's talk about files for a moment. By files, I mean files on the
+file system--as in the thousands of things sitting in the ``Desktop``
+folder on your laptop.
+
+Files present a special problem for asynchronous I/O.  Yes, you can
+use Python's built-in ``open()`` function to open a file and yes you
+can obtain a low-level integer file descriptor for it.  You might even
+be able to wrap it with a Curo ``FileStream()`` instance.  However,
+under the covers, it's hard to say if it is going to operate in an
+async-friendly manner.  Support for asynchronous file I/O has always
+been a bit dicey in most operating systems. Often it is nonexistent
+unless you resort to very specialized APIs such as the POSIX ``aio_*``
+functions. And even then, it might not exist.  
+
+The bottom line is that interacting with traditional files might cause
+Curio to block, leading to various performance problems under heavy
+load (i.e., accessing a file could block the entire kernel until
+the request I/O operation finished).
+
+If you're going to write code that operates with traditional
+files, you should probably use Curio's ``aopen()`` function. For
+example::
+
+    async def coro():
+        async with aopen('somefile.txt') as f:
+            data = await f.read()    # Get data
+            ...
+
+``aopen()`` returns a file-like object where all of the traditional
+file methods have been replaced by async-compatible equivalents.
+The underlying implementation is guaranteed not to block the
+Curio kernel loop.   How this is accomplished may vary by
+operating system.  At the moment, Curio uses background
+threads to avoid blocking.
+
 Interacting with Synchronous Code
 ---------------------------------
 
