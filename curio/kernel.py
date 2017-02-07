@@ -946,7 +946,7 @@ class Kernel(object):
     # See discussion at https://github.com/dabeaz/curio/issues/172
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    def run_coro(self, coro=None, *, shutdown=False):
+    def run_coro(self, coro=None, *, shutdown=False, timeout=0):
         if getattr(self._local, 'running', False):
             raise RuntimeError('Only one Curio kernel per thread is allowed')
         self._local.running = True
@@ -956,7 +956,7 @@ class Kernel(object):
                 self._runner.send(None)
 
             # Submit the given coroutine (if any)
-            ret_val, ret_exc = self._runner.send(coro)
+            ret_val, ret_exc = self._runner.send((coro, timeout))
 
             # If shutdown has been requested, run the shutdown process
             if shutdown:
@@ -975,7 +975,7 @@ class Kernel(object):
                     tocancel.sort(key=lambda t: t.id)
                     if self._kernel_task_id:
                         tocancel.append(self._tasks[self._kernel_task_id])
-                    self._runner.send(_shutdown_tasks(tocancel))
+                    self._runner.send((_shutdown_tasks(tocancel), timeout))
                     self._kernel_task_id = None
 
                 self._runner.close()
@@ -1427,14 +1427,14 @@ class Kernel(object):
         while True:
             # If no main task is known, we yield in order to receive it
             if not main_task and njobs == 0:
-                coro = yield (main_value, main_exc)
+                coro, poll_timeout = yield (main_value, main_exc)
                 main_value = main_exc = None
                 main_task = _new_task(coro) if coro else None
                 del coro
 
             # Wait for an I/O event (or timeout)
             if ready or not main_task:
-                timeout = 0
+                timeout = poll_timeout
             elif sleeping:
                 timeout = sleeping[0][0] - time_monotonic()
             else:
