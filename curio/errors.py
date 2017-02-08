@@ -5,7 +5,7 @@
 __all__ = [
     'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError', 'SyncIOError',
     'TaskExit', 'KernelExit', 'TimeoutCancellationError', 'UncaughtTimeoutError',
-    'TaskCancelled', 'AsyncOnlyError',
+    'TaskCancelled', 'AsyncOnlyError', 'ResultUnavailable',
 ]
 
 
@@ -49,4 +49,7 @@ class AsyncOnlyError(CurioError):
     pass
 
 class KernelExit(BaseException):
+    pass
+
+class ResultUnavailable(CurioError):
     pass

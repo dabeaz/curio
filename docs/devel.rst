@@ -75,7 +75,8 @@ Coroutines
 
 First things, first.  Curio is solely focused on solving one specific
 problem--and that's the concurrent execution and scheduling of
-coroutines.  This section covers some coroutine basics.
+coroutines.  This section covers some coroutine basics and takes
+you into the heart of why they're used for concurrency.
 
 Defining a Coroutine
 ^^^^^^^^^^^^^^^^^^^^
@@ -170,21 +171,20 @@ worry about it as a programmer.
 Now, what does all of this have to do with coroutines?  Let's define
 a very special kind of coroutine::
 
-   >>> from types import coroutine
-   >>> @coroutine
-   ... def sleep(seconds):
-   ...     yield ('sleep', seconds)
+   from types import coroutine
+   @coroutine
+   def sleep(seconds):
+       yield ('sleep', seconds)
 
 This coroutine is different than the rest--it doesn't use the
-``async`` syntax and it makes direct use of the ``yield`` statement
-The ``@coroutine``
-decorator is there so that it can be called with ``await``.
-Now, let's write a coroutine that uses this::
+``async`` syntax and it makes direct use of the ``yield`` statement.
+The ``@coroutine`` decorator is there so that it can be called with
+``await``.  Now, let's write a coroutine that uses this::
 
-   >>> async def sleepy(seconds):
-   ...     print('Yawn. Getting sleepy.')
-   ...     await sleep(seconds)
-   ...     print('Awake at last!')
+   async def sleepy(seconds):
+       print('Yawn. Getting sleepy.')
+       await sleep(seconds)
+       print('Awake at last!')
 
 Let's manually drive it using the same technique as before::
  
@@ -202,10 +202,10 @@ Focus carefully. Focus on a special place.  Focus on the
 breath. Breathe in.... Breathe out...... Focus.
 
 Basically the code has executed a trap!  The ``yield`` statement
-has caused the coroutine to suspend.  The returned tuple is
+caused the coroutine to suspend.  The returned tuple is
 a request (in this case, a request to sleep for 10 seconds). It
 is now up the driver of the code to satisfy that request.  But
-who's driving this whole show?  Wait, that's YOU!
+who's driving this show?  Wait, that's YOU!
 So, start counting... "T-minus 10, T-minus 9, 
 T-minus 8, ... T-minus 1."   Time's up!  Put the coroutine
 back to work::
@@ -250,12 +250,12 @@ just work.  Somehow.
 Coroutines and Multitasking
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-So, let's continue to focus on the fact that a defining feature of
+Let's continue to focus on the fact that a defining feature of
 coroutines is that they can suspend their execution.  When a coroutine
 suspends, there's no reason why the ``run()`` function needs to wait
 around doing nothing.  In fact, it could switch to a different coroutine
-and run it instead.   This is a form of multitasking.  Consider
-the following code::
+and run it instead.   This is a form of multitasking.  Let's write
+a slightly different varient of the ``run()`` function::
 
     from collections import deque
     from types import coroutine
@@ -326,8 +326,10 @@ make this more useful, you'd need to expand the ``run()`` loop to
 understand more operations such as requests to sleep and for I/O.
 Let's add sleeping::
 
+    import time
     from collections import deque
     from types import coroutine
+    from bisect import insort
 
     @coroutine
     def switch():
@@ -349,14 +351,8 @@ Let's add sleeping::
                     tasks.append(coro)
                 elif request == 'sleep':
                     seconds = args[0]
-                    now = time.time()
-                    expires = now + seconds
-                    for n, (exp, _) in enumerate(sleeping):
-                        if expires < exp:
-                            sleeping.insert(n, (expires, coro))
-                            break
-                    else:
-                        sleeping.append((expires, coro))
+                    deadline = time.time() + seconds
+                    insort(sleeping, (deadline, coro))
                 else:
                     print('Unknown request:', request)
             except StopIteration as e:
@@ -364,17 +360,18 @@ Let's add sleeping::
 
             while not tasks and sleeping:
                 now = time.time()
-                expires, coro = sleeping.pop(0)
-                duration = expires - now
-                if duration >= 0:
+                duration = sleeping[0][0] - now
+                if duration > 0:
                     time.sleep(duration)
+                _, coro = sleeping.pop(0)
                 tasks.append(coro)
 
 Things are starting to get a bit more serious now.  For sleeping, the
 coroutine is set aside in a holding list that's sorted by sleep
-expiration time.  The bottom part of the ``run()`` function now
-sleeps if there's nothing else to do. On the conclusion of sleeping,
-the task is put back on the task queue.
+expiration time (aside: the ``bisect.insort()`` function is a useful way
+to construct a sorted list).  The bottom part of the ``run()``
+function now sleeps if there's nothing else to do. On the conclusion
+of sleeping, the task is put back on the task queue.
 
 Here are some modified tasks that sleep::
 
@@ -422,8 +419,8 @@ Coroutines versus Threads
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Code written using coroutines looks very similar to code written using
-threads.  For example, you could take the code in the previous section
-and write it to use threads like this::
+threads.  This is by design. For example, you could take the code in
+the previous section and write it to use threads like this::
 
     import time
     import threading
@@ -444,10 +441,10 @@ and write it to use threads like this::
     threading.Thread(target=countdown, args=(10,)).start()
     threading.Thread(target=countup, args=(15,)).start()
 
-It would run in essentially the same way.  Of course, nobody really
-cares about code that counts up and down.  What they really want to do
-is write network servers.  So, here's a more realistic example
-involving sockets::
+Not only does it look almost identical, it runs in essentially the
+same way.  Of course, nobody really cares about code that counts up
+and down.  What they really want to do is write network servers.  So,
+here's a more realistic thread-programming example involving sockets::
 
     # echoserv.py
     
@@ -478,7 +475,7 @@ involving sockets::
     if __name__ == '__main__':
         echo_server(('',25000))
 
-Now, here is that same code written using coroutines and Curio::
+Now, here is that same code written with coroutines and Curio::
 
     # echoserv.py
     
@@ -510,30 +507,40 @@ Now, here is that same code written using coroutines and Curio::
         run(echo_server(('',25000)))
 
 Both versions of code involve the same statements and have the same
-overall control flow.  The key difference is that threads support
-preemption whereas coroutines do not. This means that in the threaded
-code, the operating system can switch threads on any statement. With
-coroutines, task switching can only occur on statements that involve
-``await``.
+overall control flow.  The key difference is that the code involving
+coroutines is executed entirely in a single thread by the ``run()``
+function which is scheduling and switching the coroutines on its own
+without any assistance from the operating system.   The code using threads
+spawns actual system threads (e.g., POSIX threads) that are scheduled
+by the operating system.
 
-Both approaches have advantages and disadvantages.  One potential
-advantage of the coroutine approach is that you explicitly know where
-task switching might occur. Thus, if you're writing code that involves
-tricky task synchronization or coordination, it might be easier to
-reason about about its behavior.  One disadvantage of coroutines is
-that any kind of long-running calculation or blocking operation can't
-be preempted.  So, a coroutine might hog the CPU for an extended
-period and force other coroutines to wait.  Another downside is that
-code must be written to explicitly take advantage of coroutines (e.g.,
-explicit use of ``async`` and ``await``).  Threads, on the other hand,
-can work with any existing Python code.
+The coroutine approach has certain advantages and disadvantages.  One
+potential advantage of the coroutine approach is that task switching
+can only occur on statements involving the ``await`` keyword.  Thus, it
+might be easier to reason about the behavior (in contrast, threads are
+fully preemptive and might switch on any statement).  Coroutines are
+also far more resource efficient--you can creates hundreds of
+thousands of coroutines without much concern.  A hundred thousand
+threads? Good luck.
+
+Sadly, a big disadvantage of coroutines is that any kind of
+long-running calculation or blocking operation can't be preempted.
+So, a coroutine might hog the CPU for an extended period and force
+other coroutines to wait.  If you love staring at the so-called
+"beachball of death" on your laptop, coroutines are for you.  The
+other downside is that code must be written to explicitly take
+advantage of coroutines (e.g., explicit use of ``async`` and
+``await``).  As a general rule, you can't just plug someone's
+non-coroutine network package into your coroutine code and expect it
+to work.  Threads, on the other hand, already work with most existing
+Python code.   So, there are always going to be tradeoffs. 
 
 Coroutines versus Callbacks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For I/O handling, libraries and frameworks will sometimes make use of
-callback functions.  For example, here is an echo server written in
-the callback style using Python's ``asyncio`` module::
+For asynchronous I/O handling, libraries and frameworks will sometimes
+make use of callback functions.  For example, here is an echo server
+written in the callback style using Python's ``asyncio`` module::
 
     import asyncio
 
@@ -584,11 +591,11 @@ mainstream programming languages used to write systems software.  For
 example, languages such as Pascal, C/C++, and Java don't support
 coroutines. Thus, it's not a technique that most programmers would
 even think to consider.  Even in Python, proper support for coroutines
-has taken a long time to emerge.  Projects such as Stackless Python
+took a long time to emerge.  Projects such as Stackless Python
 supported concepts related to coroutines more than 15 years ago, but
 it was probably too far ahead of its time to be properly
 appreciated. Later on, various projects have explored coroutines in
-various forms, usually involving sneaky hacks surrounding generator
+different forms, usually involving sneaky hacks surrounding generator
 functions and C extensions.  The addition of the ``yield from``
 construct in Python 3.3 greatly simplified the problem of writing
 coroutine libraries.  The emergence of ``async/await`` in Python 3.5
@@ -625,12 +632,12 @@ platform-specific library details. For example, a network program
 written using Python's ``socket`` module will work virtually
 everywhere.  This is layering and abstraction in action.
 
-The Curio Scheduler
+Curio in a Nutshell
 ^^^^^^^^^^^^^^^^^^^
 
 Curio primarily operates as a coroutine scheduling layer that sits
 between an application and the Python standard library.  This layer
-doesn't actually carry out any useful functionality---it is only
+doesn't actually carry out any useful functionality---it is mainly
 concerned with task scheduling.  Just to emphasize, the scheduler
 doesn't perform any kind of I/O.  There are no internal protocols,
 streams, buffering, or anything you'd commonly associate with the
@@ -657,7 +664,7 @@ out manually::
     >>> 
 
 To handle the exception, the calling process has to wait for an incoming connection.
-Curio provides a special system call for this called ``_read_wait()``.   Here's a
+Curio provides a special "trap" call for this called ``_read_wait()``.   Here's a
 coroutine that uses it::
 
     >>> from curio import run
@@ -688,7 +695,8 @@ Now, a couple of important details about what's happening:
 
 * Incoming I/O is not handled as an "event" nor are there any
   associated callback functions.  If an incoming connection is received, the coroutine
-  wakes up.  That's it.  There is no "event loop."
+  is scheduled to run again. That's it.  There is no "event loop."  There are no
+  callback functions.
 
 With the newly established connection, write a coroutine that receives some data::
 
@@ -716,7 +724,7 @@ Curio knows how to wait for:
 * I/O operations (read, write).
 * Completion of a ``Future`` from the ``concurrent.futures`` standard library.
 * Arrival of a Unix signal.
-* Removal of a coroutine from a wait queue.
+* Release from a wait queue.
 * Termination of a coroutine.
 
 Everything else is built up from those low-level primitives.
@@ -781,13 +789,26 @@ code starts to look much more normal. For example::
 
 This is exactly what's happening with sockets in Curio.  It provides a
 coroutine wrapper around a normal socket and let's you write
-normal-looking socket code.
+normal-looking socket code.   It doesn't the behavior or semantics of
+how sockets work.
 
 It's important to emphasize that a proxy doesn't change how you
 interact with an object.  You use the same method names as you did
 before coroutines and you should assume that they have the same
 underlying behavior. Curio is really only concerned with the
 scheduling problem--not I/O.
+
+Supported Functionality
+^^^^^^^^^^^^^^^^^^^^^^^
+
+For the most part, Curio tries to provide the same I/O functionality
+that one would typically use in a synchronous program involving
+threads.  This includes sockets, subprocesses, files, synchronization
+primitives, queues, and various odds-and-ends such as TLS/SSL.  You
+should consult the reference manual or the howto guide for more
+details and specific programming recipes.   The rest of this document
+focuses more on the higher-level task model and other programming
+considerations related to using Curio.
 
 The Curio Task Model
 --------------------
@@ -906,7 +927,8 @@ Curio allows any task to be cancelled.  Here's an example::
 Cancellation only occurs on blocking operations involving the
 ``await`` keyword (e.g., the ``curio.sleep()`` call in the child).
 When a task is cancelled, the current operation fails with a
-``CancelledError`` exception. This exception can be caught::
+``TaskCancelled`` exception. This exception can be caught, but if
+doing so, you usually use its base class ``CancelledError``::
 
     async def child(n):
         print('Sleeping')
@@ -917,11 +939,12 @@ When a task is cancelled, the current operation fails with a
             print('Rudely cancelled')
             raise
 
-A cancellation can be caught, but should not be ignored.  In fact, the ``task.cancel()``
-method blocks until the task actually terminates.  If ignored, the
-cancelling task would simply hang forever waiting.  That's probably
-not what you want.  In most cases, code that catches cancellation
-should perform some cleanup and then re-raise the exception as shown above.
+A cancellation can be caught, but should not be ignored.  In fact, the
+``task.cancel()`` method blocks until the task actually terminates.
+If ignored, the cancelling task would simply hang forever waiting.
+That's probably not what you want.  In most cases, code that catches
+cancellation should perform some cleanup and then re-raise the
+exception as shown above.
 
 Cancellation does not propagate to child tasks.
 For example, consider this code::
@@ -1001,9 +1024,11 @@ of the daemon tasks on your behalf.
 Timeouts
 ^^^^^^^^
 
-Curio allows every blocking operation to be aborted with a timeout.  However, 
-instead of instrumenting every possible API call with a ``timeout`` argument,
-it is applied through ``timeout_after(seconds [, coro])``.  For example::
+Curio allows every blocking operation to be aborted with a timeout.
+However, instead of instrumenting every possible API call with a
+``timeout`` argument, it is applied through ``timeout_after(seconds [,
+coro])``.  The specified timeout serves as a completion deadline for
+the supplied coroutine. For example::
 
     from curio import *
 
@@ -1026,9 +1051,9 @@ progress.  ``TaskTimeout`` is a subclass of ``CancelledError`` so code
 that catches the latter exception can be used to catch both kinds of
 cancellation.  It is critical to emphasize that timeouts can only
 occur on operations that block in Curio.  If the code runs away to go
-compute gigantic fibonacci numbers for the next ten minutes, a timeout
-won't be raised--remember that coroutines can't be preempted except on
-blocking operations.
+mine bitcoins for the next ten hours, a timeout won't be
+raised--remember that coroutines can't be preempted except on blocking
+operations.
 
 The ``timeout_after()`` function can also be used as a context
 manager.  This allows it to be applied to an entire block of
@@ -1072,7 +1097,7 @@ Nested Timeouts
 ^^^^^^^^^^^^^^^
 
 Timeouts can be nested, but the semantics are a bit hair-raising and
-tricky.  To illustrate, consider this bit of code::
+surprising at first. To illustrate, consider this bit of code::
 
     async def coro1():
         print('Coro1 Start')
@@ -1098,7 +1123,11 @@ tricky.  To illustrate, consider this bit of code::
         except TaskTimeout:
             print('Parent Timeout')
 
-If you run this program, you will get the following output::
+In this code, an outer coroutine ``main()`` applies a 5-second timeout
+to an inner coroutine ``child()``.  Internally, ``child()`` applies a
+50-second timeout to another coroutine ``coro1()``.  If you run this
+program, the outer timeout fires, but the inner one remains silent.
+You'll get this output::
 
     Coro1 Start
     Parent Timeout        (appears after 5 seconds)
