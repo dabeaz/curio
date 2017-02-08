@@ -18,7 +18,7 @@ class Task(object):
     related to execution state and debugging.
     '''
     __slots__ = (
-        'id', 'parentid', 'daemon', 'coro', '_send', '_throw', 'cycles', 'state',
+        'id', 'parentid', 'coro', 'daemon', 'name', '_send', '_throw', 'cycles', 'state',
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
         'next_exc', 'joining', 'cancelled', 'terminated', 'cancel_pending',
         '_last_io', '_deadlines', 'task_local_storage', 'allow_cancel', 
@@ -33,6 +33,7 @@ class Task(object):
         self.id = taskid
         self.parentid = None       # Parent task id (if any)
         self.coro = coro           # Underlying generator/coroutine
+        self.name = getattr(coro, '__qualname__', str(coro))
         self.daemon = daemon       # Daemonic flag
         self.cycles = 0            # Execution cycles completed
         self.state = 'INITIAL'     # Execution state
@@ -56,10 +57,10 @@ class Task(object):
         self._deadlines = []       # Timeout deadlines
 
     def __repr__(self):
-        return 'Task(id=%r, %r, state=%r)' % (self.id, self.coro, self.state)
+        return 'Task(id=%r, name=%r, %r, state=%r)' % (self.id, self.name, self.coro, self.state)
 
     def __str__(self):
-        return getattr(self.coro, '__qualname__', str(self.coro))
+        return self.name
 
     def __del__(self):
         self.coro.close()
