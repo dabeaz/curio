@@ -74,8 +74,8 @@ Coroutines
 ----------
 
 First things, first.  Curio is solely focused on solving one specific
-problem--and that's the execution and scheduling of coroutines.   This section covers
-some basics.
+problem--and that's the concurrent execution and scheduling of
+coroutines.  This section covers some coroutine basics.
 
 Defining a Coroutine
 ^^^^^^^^^^^^^^^^^^^^
@@ -138,18 +138,34 @@ Blocking Calls (i.e., "System Calls")
 
 When a program runs, it executes statements one after the other until
 the services of the operating system are needed (e.g., sleeping,
-reading a file, receiving a network packet, etc.).  For example::
+reading a file, receiving a network packet, etc.).  For example, 
+consider this function::
 
      import time
-     time.sleep(10)
 
-Under the covers, this operation ultimately involves making a "system
-call."  System calls are different than normal functions in that they
-involve making a request to the operating system kernel by executing a
-"trap."  A trap is like a software-generated interrupt.  When it
-occurs, the running process is suspended and the operating system
-takes over to handle the request. Control doesn't return until the
-operating system completes the request and reschedules the process.
+     def sleepy(seconds):
+         print('Yawn. Getting sleepy.')
+         time.sleep(seconds)
+         print('Awake at last!')
+
+If you call this function, you'll see a message and the program will
+go to sleep for awhile.  While it's sleeping, nothing is happening
+at all.  If you look at the CPU usage, it will show 0%. 
+Under the covers, the program has made a "system call" to the 
+operating system which has suspended the program.  At some point
+the timer will expire and the operating system will reschedule the
+program to run again.   Just to emphasize, the ``time.sleep()``
+call suspends the Python interpreter entirely.  At some point, Python
+will resume, but that's outside of its control.
+
+The mechanism for making a system call is different than that of a
+normal function in that it involves executing a special machine
+instruction known as a "trap."  A trap is basically a
+software-generated interrupt.  When it occurs, the running process is
+suspended and control is passed to the operating system kernel so that
+it can handle the request.  There are all sorts of other magical
+things that happen on trap-handling, but you're really not supposed to
+worry about it as a programmer.
 
 Now, what does all of this have to do with coroutines?  Let's define
 a very special kind of coroutine::
@@ -165,14 +181,14 @@ The ``@coroutine``
 decorator is there so that it can be called with ``await``.
 Now, let's write a coroutine that uses this::
 
-   >>> async def main():
+   >>> async def sleepy(seconds):
    ...     print('Yawn. Getting sleepy.')
-   ...     await sleep(10)
+   ...     await sleep(seconds)
    ...     print('Awake at last!')
 
 Let's manually drive it using the same technique as before::
  
-    >>> c = main()
+    >>> c = sleepy(10)
     >>> request = c.send(None)
     Yawn. Getting sleepy.
     >>> request
@@ -181,14 +197,18 @@ Let's manually drive it using the same technique as before::
 The output from the first ``print()`` function appears, but the
 coroutine is now suspended. The return value of the ``send()`` call is
 the tuple produced by the ``yield`` statement in the ``sleep()``
-coroutine.  This is exactly the same concept as a trap.  The coroutine
-has suspended itself and made a request (in this case, a request to
-sleep for 10 seconds).  It is now up to the driver of the code to
-satisfy that request.  As far as the coroutine is concerned, the
-details of how this is done don't matter.  It's just assumed that the
-coroutine will be resumed after 10 seconds have elapsed.  To do that,
-you call ``send()`` again on the coroutine (with a return result if
-any).  For example::
+coroutine.  Now, step back and think about what has happened here.
+Focus carefully. Focus on a special place.  Focus on the
+breath. Breathe in.... Breathe out...... Focus.
+
+Basically the code has executed a trap!  The ``yield`` statement
+has caused the coroutine to suspend.  The returned tuple is
+a request (in this case, a request to sleep for 10 seconds). It
+is now up the driver of the code to satisfy that request.  But
+who's driving this whole show?  Wait, that's YOU!
+So, start counting... "T-minus 10, T-minus 9, 
+T-minus 8, ... T-minus 1."   Time's up!  Put the coroutine
+back to work::
 
     >>> c.send(None)
     Awake at last!
@@ -196,39 +216,238 @@ any).  For example::
       File "<stdin>", line 1, in <module>
     StopIteration
 
+Congratulations!  You just passed your first test on the way to
+getting a job as an operating system.
+
+Here's some minimal code that executes what you just did::
+
+    import time
+    def run(coro):
+        while True:
+             try:
+                 request, *args = coro.send(None)
+                 if request == 'sleep':
+                     time.sleep(*args)
+                 else:
+                     print('Unknown request:', request)
+             except StopIteration as e:
+                 return e.value
+
 All of this might seem very low-level, but this is precisely what
 Curio is doing. Coroutines execute statements under the supervision of
 a small kernel.  When a coroutine executes a system call (e.g., a
 special coroutine that makes use of ``yield``), the kernel receives
 that request and acts upon it.  The coroutine resumes once the request
-has completed.
+has completed.  
 
-Keep in mind that all of this machinery is hidden from view.  Your
-application doesn't actually see the Curio kernel or use code that
-directly involves the ``yield`` statement. Those are low-level
-implementation details--like machine code.  Your code will simply make
-a high-level call such as ``await sleep(10)`` and it will just work.
+Keep in mind that all of this machinery is hidden from view.  The
+coroutine doesn't actually know anything about the ``run()`` function
+or use code that directly involves the ``yield`` statement. Those are
+low-level implementation details--like machine code.  The coroutine
+simply makes a high-level call such as ``await sleep(10)`` and it will
+just work.  Somehow.
 
 Coroutines and Multitasking
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As noted, system calls almost always involve waiting or blocking.  For
-example, waiting for time to elapse, waiting to receive a network
-packet, etc.  While waiting, it might be possible to switch to another
-coroutine that's able to run--this is multitasking.  If there are
-multiple coroutines, the kernel can cycle between them by running each
-one until it executes a system call, then switching to the next ready
-coroutine at that point.  Your operating system does exactly the same
-thing when processes execute actual system calls.  The ability to 
-switch between coroutines is why they are useful for concurrent
-programming.
+So, let's continue to focus on the fact that a defining feature of
+coroutines is that they can suspend their execution.  When a coroutine
+suspends, there's no reason why the ``run()`` function needs to wait
+around doing nothing.  In fact, it could switch to a different coroutine
+and run it instead.   This is a form of multitasking.  Consider
+the following code::
+
+    from collections import deque
+    from types import coroutine
+
+    @coroutine
+    def switch():
+        yield ('switch',)
+ 
+    tasks = deque()
+
+    def run():
+        while tasks:
+            coro = tasks.popleft()
+            try:
+                request, *args = coro.send(None)
+                if request == 'switch':
+                    tasks.append(coro)
+                else:
+                    print('Unknown request:', request)
+            except StopIteration as e:
+                print('Task done:', coro)
+
+In this code, the ``run()`` function implements a simple round-robin
+scheduler and a single request for switching tasks as provided by
+the ``switch()`` coroutine.  Here are some sample coroutine
+functions to run::
+
+    async def countdown(n):
+        while n > 0:
+            print('T-minus', n)
+            await switch()
+            n -= 1
+
+    async def countup(stop):
+        n = 1
+        while n <= stop:
+            print('Up we go', n)
+            await switch()
+            n += 1
+
+    tasks.append(countdown(10))
+    tasks.append(countup(15))
+    run()
+
+When you run this code, you'll see the ``countdown()`` and ``countup()`` coroutines
+rapidly alternating like this::
+
+    T-minus 10
+    Up we go 1
+    T-minus 9
+    Up we go 2
+    T-minus 8
+    Up we go 3
+    ...
+    T-minus 1
+    Up we go 10
+    Task done: <coroutine object countdown at 0x102a3ee08>
+    Up we go 11
+    Up we go 12
+    Up we go 13
+    Up we go 14
+    Up we go 15
+    Task done: <coroutine object countup at 0x102a3ef10>
+
+Excellent. We're running more than one coroutine concurrently. The
+only catch is that the ``switch()`` function isn't so interesting.  To
+make this more useful, you'd need to expand the ``run()`` loop to
+understand more operations such as requests to sleep and for I/O.
+Let's add sleeping::
+
+    from collections import deque
+    from types import coroutine
+
+    @coroutine
+    def switch():
+        yield ('switch',)
+
+    @coroutine
+    def sleep(seconds):
+        yield ('sleep', seconds)
+
+    tasks = deque()
+    sleeping = [ ]
+
+    def run():
+        while tasks:
+            coro = tasks.popleft()
+            try:
+                request, *args = coro.send(None)
+                if request == 'switch':
+                    tasks.append(coro)
+                elif request == 'sleep':
+                    seconds = args[0]
+                    now = time.time()
+                    expires = now + seconds
+                    for n, (exp, _) in enumerate(sleeping):
+                        if expires < exp:
+                            sleeping.insert(n, (expires, coro))
+                            break
+                    else:
+                        sleeping.append((expires, coro))
+                else:
+                    print('Unknown request:', request)
+            except StopIteration as e:
+                print('Task done:', coro)
+
+            while not tasks and sleeping:
+                now = time.time()
+                expires, coro = sleeping.pop(0)
+                duration = expires - now
+                if duration >= 0:
+                    time.sleep(duration)
+                tasks.append(coro)
+
+Things are starting to get a bit more serious now.  For sleeping, the
+coroutine is set aside in a holding list that's sorted by sleep
+expiration time.  The bottom part of the ``run()`` function now
+sleeps if there's nothing else to do. On the conclusion of sleeping,
+the task is put back on the task queue.
+
+Here are some modified tasks that sleep::
+
+    async def countdown(n):
+        while n > 0:
+            print('T-minus', n)
+            await sleep(2)
+            n -= 1
+
+    async def countup(stop):
+        n = 1
+        while n <= stop:
+            print('Up we go', n)
+            await sleep(1)
+            n += 1
+
+    tasks.append(countdown(10))
+    tasks.append(countup(15))
+    run()
+
+If you run this program, you should see output like this::
+
+    T-minus 10
+    Up we go 1
+    Up we go 2
+    T-minus 9
+    Up we go 3
+    Up we go 4
+    T-minus 8
+    Up we go 5
+    Up we go 6
+    ...
+
+You're now well on your way to writing your own little operating
+system--and Curio.  This is essentially the whole idea.  Curio is
+basically a small coroutine scheduler.  In addition to sleeping, it
+allows coroutines to switch on other kinds of blocking operations
+involving I/O, waiting on synchronization primitives, Unix signals,
+and so forth.  Your operating system does exactly the same thing when
+processes execute actual system calls.  The ability to switch between
+coroutines is why they are useful for concurrent programming.  This
+is really the big idea in a nutshell.
 
 Coroutines versus Threads
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Code written using coroutines looks very similar to code written using
-threads.  To see this, here is a simple echo server that handles
-concurrent clients using Python's ``threading`` module::
+threads.  For example, you could take the code in the previous section
+and write it to use threads like this::
+
+    import time
+    import threading
+
+    def countdown(n):
+        while n > 0:
+            print('T-minus', n)
+            time.sleep(2)
+            n -= 1
+
+    def countup(stop):
+        n = 1
+        while n <= stop:
+            print('Up we go', n)
+            time.sleep(1)
+            n += 1
+
+    threading.Thread(target=countdown, args=(10,)).start()
+    threading.Thread(target=countup, args=(15,)).start()
+
+It would run in essentially the same way.  Of course, nobody really
+cares about code that counts up and down.  What they really want to do
+is write network servers.  So, here's a more realistic example
+involving sockets::
 
     # echoserv.py
     
@@ -259,7 +478,7 @@ concurrent clients using Python's ``threading`` module::
     if __name__ == '__main__':
         echo_server(('',25000))
 
-Now, here is the same code written using coroutines and Curio::
+Now, here is that same code written using coroutines and Curio::
 
     # echoserv.py
     
