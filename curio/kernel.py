@@ -753,6 +753,13 @@ class Kernel(object):
         if self._kernel_task_id is None:
             _init_loopback_task()
 
+        # If there are tasks on the ready queue already, must cancel 
+        # any prior pending I/O before re-entering the kernel loop
+        for task in self._ready:
+            if task._last_io:
+                _unregister_event(*task._last_io)
+                task._last_io = None
+
         # Return values for the send() method
         main_value = None
         main_exc = None
@@ -936,6 +943,7 @@ class Kernel(object):
 
                 except:  # (SystemExit, KeyboardInterrupt):
                     _cleanup_task(current)
+                    current.state = 'TERMINATED'
                     raise
 
                 finally:
