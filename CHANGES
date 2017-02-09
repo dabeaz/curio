@@ -3,6 +3,25 @@ CHANGES
 
 Version 0.6 : In progress
 -------------------------
+02/08/2017 New Kernel.run() method implementation.  It should be backwards
+           compatible, but there are two new ways of using it:
+
+               kernel = Kernel()
+               ...
+               # Run a coroutine with a timeout/deadline applied to it
+               try:
+                   result = kernel.run(coro, timeout=secs)
+               except TaskTimeout:
+                   print('Timed out')
+
+               # Run all daemonic tasks through a single scheduling cycle
+               # with no blocking
+               kernel.run()
+
+               # Run all daemonic tasks through a cycle, but specify a
+               # timeout on internal blocking
+               kernel.run(timeout=secs)
+                
 02/06/2017 New aside() function for launching a Curio task in an
            independent process.  For example:
 

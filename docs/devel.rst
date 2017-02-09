@@ -902,7 +902,43 @@ that was raised inside the task.  The ``TaskError`` solves this
 issue--if you get that exception, it means that the task being joined
 exited with an exception.  If you get other exceptions, they are
 related to some aspect of the ``join()`` operation itself (i.e.,
-cancellation), not the underlying task.
+cancellation), not the underlying Task.
+
+Task Exit
+^^^^^^^^^
+
+Normally, a task exits when it returns.  If you're deeply buried into
+the guts of a bunch of code and you want to force a task exit, raise
+a ``TaskExit`` exception.  For example::
+
+    from curio import *
+
+    async def coro1():
+        print('About to die')
+        raise TaskExit()
+
+    async def coro2():
+        try:
+            await coro1()
+        except Exception as e:
+            print('Something went wrong')
+
+    async def coro3():
+        await coro2()
+
+    try:
+        run(coro3())
+    except TaskExit:
+        print('Task exited')
+
+Like the ``SystemExit`` built-in exception, ``TaskExit`` is a subclass
+of ``BaseException`` and won't be caught by exception handlers that
+look for ``Exception``.  
+
+If you want all tasks to die, raise a ``SystemExit`` or ``KernelExit``
+exception instead.  If this is raised in a task, the entire Curio
+kernel stops. In most situations, the leads to an orderly shutdown of
+all remaining tasks--each task being given a cancellation request.
 
 Task Cancellation
 ^^^^^^^^^^^^^^^^^
@@ -2725,7 +2761,6 @@ As final option, Curio provides a mechanism for spawning tasks in a
 subprocess.   To do this, use the aptly name ``aside()`` function. For
 example::
 
-
     from curio import Channel, run, aside
 
     async def producer(ch):
@@ -2748,29 +2783,84 @@ example::
     if __name__ == '__main__':
         run(main())
 
-``aside()`` does nothing more than launch a new Python subprocess and invoke
-``curio.run()`` on the suppplied coroutine.  Any additional arguments 
-supplied to ``aside()`` are given as arguments to the coroutine.
+``aside()`` does nothing more than launch a new Python subprocess and
+invoke ``curio.run()`` on the suppplied coroutine.  Any additional
+arguments supplied to ``aside()`` are given as arguments to the
+coroutine.
 
 ``aside()`` does not involve a pipe or a process fork.  The newly
 created process shares no state with the caller.  There is no I/O
-channel between processes.   If you want I/O, you should create a
-``Channel`` object and pass it as an argument (or use some other
-communication mechanism such as sockets).  
+channel between processes.  There is no shared signal handling.  If
+you want I/O, you should create a ``Channel`` object and pass it as an
+argument as shown (or use some other communication mechanism such as
+sockets).
 
-A notable thing about ``aside()`` is that it still creates
-a proper ``Task`` in the caller.  You can join with that task or cancel
-it.   If you cancel the task, a ``TaskCancelled`` exception is propagated
-to the subprocess (e.g., the ``consumer()`` coroutine above gets a
-proper cancellation exception when the ``main()`` coroutine invokes
-``cons.cancel()``).    
+A notable thing about ``aside()`` is that it still creates a proper
+``Task`` in the caller.  You can join with that task or cancel it.  It
+will be cancelled on kernel shutdown if you make it daemonic.  If you
+cancel the task, a ``TaskCancelled`` exception is propagated to the
+subprocess (e.g., the ``consumer()`` coroutine above gets a proper
+cancellation exception when the ``main()`` coroutine invokes
+``cons.cancel()``).
 
-Tasks launched using ``aside()`` do not return a result.  As noted,
-``aside()`` does not create a pipe or any kind of I/O channel for
-communicating a result.  If you need a result, it should be
+Tasks launched using ``aside()`` do not return a normal result.  As
+noted, ``aside()`` does not create a pipe or any kind of I/O channel
+for communicating a result.  If you need a result, it should be
 communicated via a channel.  Should you call ``join()``, the return
 value is the exit code of the subprocess.  Normally it is 0.  A
 non-zero exit code indicates an error of some kind.
+
+``aside()`` can be particularly useful if you want to programs that
+perform sharding or other kinds of distributed computing tricks. For
+example, here is an example of a sharded echo server::
+
+    from curio import *
+    import signal
+    import os
+
+    async def echo_client(sock, address):
+        print(os.getpid(), 'Connection from', address)
+        async with sock:
+            try:
+                while True:
+                    data = await sock.recv(100000)
+                    if not data:
+                        break
+                    await sock.sendall(data)
+            except CancelledError:
+                await sock.sendall(b'Server is going away\n')
+                raise
+
+    async def main(nservers):
+        for n in range(nservers):
+            await aside(tcp_server, '', 25000, echo_client, reuse_port=True)
+        await SignalSet(signal.SIGTERM, signal.SIGINT).wait()
+        print("Goodbye cruel world!")
+        raise SystemExit(0)
+
+    if __name__ == '__main__':
+        run(main(10))
+
+In this code, ``aside()`` is used to spin up 10 separate processes,
+each of which is running the Curio ``tcp_server()`` coroutine.  The
+``reuse_port`` option is used to make them all bind to the same port.
+The the main program then waits for a termination signal to arrive,
+followed by a request to exit. That's it--you now have ten running Python
+processes in parallel.  On exit, every task in every process will be
+properly cancelled and each connected client will get the "Server is
+going away" message.   It's magic.
+
+Let's step aside for a moment and talk a bit more about some of this
+magic.  When working with subprocesses, it is common to spend a lot of
+time worrying about things like shutdown, signal handling, and other
+horrors.  Yes, those things are an issue, but if you use ``aside()``
+to launch tasks, you should just manage those tasks in the usual Curio
+way.  For example, if you want to explicitly cancel one of them, use
+its ``cancel()`` method.  Or if you want to quit altogether, raise
+``SystemExit`` as shown.  Under the covers, Curio is tracking the
+associated subprocesses and will manage their lifetime appropriately.
+As long as you let Curio do its thing and you shut things down
+cleanly, it should all work.
 
 Working with Files
 ------------------
