@@ -179,6 +179,9 @@ class Channel(object):
         self.family = family
         self.sock = None
 
+    def __repr__(self):
+        return 'Channel(%r, %r)' % (self.address, self.family)
+
     async def __aenter__(self):
         return self
 
