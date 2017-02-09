@@ -5,12 +5,10 @@
 # and run() functions.
 
 __all__ = ['run', 'Popen', 'CompletedProcess', 'CalledProcessError',
-           'TimeoutExpired', 'SubprocessError', 'check_output',
-           'PIPE', 'STDOUT', 'DEVNULL']
+           'SubprocessError', 'check_output', 'PIPE', 'STDOUT', 'DEVNULL']
 
 import subprocess
 import os
-import sys
 
 from subprocess import (
     CompletedProcess,
@@ -101,9 +99,6 @@ class Popen(object):
                 err.stderr = b''
             raise
 
-    def __enter__(self):
-        raise RuntimeError('Use async with')
-
     async def __aenter__(self):
         return self
 
@@ -125,7 +120,7 @@ class Popen(object):
 
     def __exit__(self, *args):
         return thread.AWAIT(self.__aexit__(*args))
-        
+
 
 async def run(args, *, stdin=None, input=None, stdout=None, stderr=None, shell=False, check=False):
     '''

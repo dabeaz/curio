@@ -6,14 +6,12 @@
 
 __all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide']
 
-import threading
 from inspect import iscoroutinefunction
 
-from .traps import _wait_on_ksync, _reschedule_tasks, _future_wait, _ksync_reschedule_function
+from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function
 from .kernel import KSyncQueue, KSyncEvent
 from . import workers
-from .errors import CancelledError, TaskTimeout
-from .task import spawn, current_task
+from .task import current_task
 from .meta import awaitable
 from . import thread
 
@@ -284,7 +282,7 @@ class _contextadapt_basic(object):
         self._manager = manager
 
     async def __aenter__(self):
-        return await workers.block_in_thread(self._manager.__enter__, 
+        return await workers.block_in_thread(self._manager.__enter__,
                                              call_on_cancel=lambda fut: self._manager.__exit__(None, None, None))
 
     async def __aexit__(self, *args):
@@ -296,7 +294,7 @@ class _contextadapt_reserve(object):
 
     async def __aenter__(self):
         self._worker = await workers.reserve_thread_worker()
-        self._result = await self._worker.apply(self._manager.__enter__, 
+        self._result = await self._worker.apply(self._manager.__enter__,
                                                 call_on_cancel=lambda fut: self._manager.__exit__(None, None, None))
         return self
 
@@ -322,9 +320,9 @@ def abide(op, *args, **kwargs):
     variable from the threading library.
 
     sync should be an object supporting the synchronous context-management
-    protocol.  It is adapted so that the __enter__() and __exit__() 
+    protocol.  It is adapted so that the __enter__() and __exit__()
     methods execute in a background thread.  Cancellation is handled
-    gracefully. 
+    gracefully.
 
     The reserve_thread flag, if given exposes the background thread for further
     use.  This may be required for certain kinds of synchronization
@@ -355,11 +353,11 @@ def abide(op, *args, **kwargs):
 
     In this case, the operation is executed using block_in_thread().
     '''
-    
+
     # If op is already a coroutine function, return it unmodified
     if iscoroutinefunction(op):
         return op(*args, **kwargs)
-        
+
     # If the object is already an asynchronous context manager, return it unmodified
     if hasattr(op, '__aexit__'):
         return op
@@ -373,4 +371,3 @@ def abide(op, *args, **kwargs):
         raise TypeError('Must supply a callable')
 
     return workers.block_in_thread(op, *args, **kwargs)
-

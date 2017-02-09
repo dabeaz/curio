@@ -12,10 +12,9 @@ import traceback
 import signal
 from collections import Counter, defaultdict
 
-from .errors import CancelledError, TaskTimeout
+from .errors import CancelledError
 from .traps import _future_wait, _get_kernel
 from . import sync
-from .task import spawn
 from .channel import Connection
 
 
@@ -294,7 +293,7 @@ class ProcessWorker(object):
         if self.process is None or not self.process.is_alive():
             self._launch()
 
-        msg = (func, args, kwargs)        
+        msg = (func, args, kwargs)
         try:
             await self.client_ch.send(msg)
             success, result = await self.client_ch.recv()
@@ -359,6 +358,7 @@ class WorkerPool(object):
             self.workers.append(worker)
         await self.nworkers.release()
 
+
 # Pool definitions should anyone want to use them directly
 ProcessPool = lambda nworkers: WorkerPool(ProcessWorker, nworkers)
 ThreadPool = lambda nworkers: WorkerPool(ThreadWorker, nworkers)
@@ -372,7 +372,7 @@ async def reserve_thread_worker():
         kernel._thread_pool = WorkerPool(ThreadWorker, MAX_WORKER_THREADS)
     return await kernel._thread_pool.reserve()
 
-# Support for blocking in threads.  
+# Support for blocking in threads.
 #
 # Discussion:
 #
@@ -382,7 +382,7 @@ async def reserve_thread_worker():
 # to wait on a threading Event like this:
 #
 #    evt = threading.Event()     # Foreign Event...
-# 
+#
 #    async def worker():
 #        await run_in_thread(evt.wait)
 #        print('Alive!')
@@ -399,7 +399,7 @@ async def reserve_thread_worker():
 # There's a pretty good chance that your code is permanently deadlocked.
 # There are dark clouds.
 #
-# This problem can be solved by wrapping run_in_thread() with a 
+# This problem can be solved by wrapping run_in_thread() with a
 # semaphore. Like this:
 #
 #    _barrier = curio.Semaphore()
@@ -417,7 +417,7 @@ async def reserve_thread_worker():
 #        await block_in_thread(evt.wait)
 #        print('Alive!')
 #
-# Unlike run_in_thread(), spawning up 1000 workers creates a 
+# Unlike run_in_thread(), spawning up 1000 workers creates a
 # situation where only 1 worker is actually blocked in a thread.
 # The other 999 workers are blocked on a semaphore waiting for service.
 
@@ -432,7 +432,7 @@ async def block_in_thread(callable, *args, call_on_cancel=None, **kwargs):
     regardless of how many curio tasks are actually waiting on the same
     callable (e.g., if 1000 Curio tasks all decide to call
     block_on_thread on the same callable, they'll all be handled by
-    a single thread). Primary use of this function is on foreign locks, 
+    a single thread). Primary use of this function is on foreign locks,
     queues, and other synchronization primitives where you have
     to use a thread, but you just don't have any idea when the operation
     will complete.
@@ -450,5 +450,3 @@ async def block_in_thread(callable, *args, call_on_cancel=None, **kwargs):
             if not _pending[call_key]:
                 del _pending[call_key]
                 del _barrier[call_key]
-
-from . import queue    

@@ -170,7 +170,7 @@ class UniversalQueue(object):
         # a weak reference instead.  This allows the queue to be garbage
         # collected when it's no longer in use.  We'll periodically check
         # to see if it went away.  If so, there's no point in having the
-        # helper task stick around. 
+        # helper task stick around.
         self = weakref.ref(self)
         try:
             while True:
@@ -181,7 +181,8 @@ class UniversalQueue(object):
                     if not self():
                         return
                     continue
-                item = await workers.run_in_thread(tqueue.get, call_on_cancel=lambda fut: tqueue.put(fut.result))
+                item = await workers.run_in_thread(tqueue.get,
+                                                   call_on_cancel=lambda fut: tqueue.put(fut.result))
                 await cqueue.put(item)
         except CancelledError:
             while not cqueue.empty():
@@ -215,7 +216,7 @@ class UniversalQueue(object):
     @awaitable(put)
     async def put(self, item):
         await workers.block_in_thread(self._tqueue.put, item)
-    
+
     def task_done(self):
         self._tqueue.task_done()
 

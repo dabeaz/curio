@@ -311,6 +311,7 @@ class Socket(object):
     def __exit__(self, *args):
         return thread.AWAIT(self.__aexit__(*args))
 
+
 MAX_READ = 65536
 
 
@@ -530,8 +531,6 @@ class FileStream(StreamBase):
         except errors.CancelledError as e:
             e.bytes_written = nwritten
             raise
-
-
 
     async def flush(self):
         while True:

@@ -7,8 +7,7 @@ __all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
            'wait', 'clock', 'enable_cancellation', 'disable_cancellation',
            'check_cancellation', 'set_cancellation', 'schedule', 'aside']
 
-from time import monotonic
-from .errors import TaskTimeout, TaskError, TimeoutCancellationError, UncaughtTimeoutError, CancelledError
+from .errors import *
 from .traps import *
 
 
@@ -21,7 +20,7 @@ class Task(object):
         'id', 'parentid', 'coro', 'daemon', 'name', '_send', '_throw', 'cycles', 'state',
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
         'next_exc', 'joining', 'cancelled', 'terminated', 'cancel_pending',
-        '_last_io', '_deadlines', 'task_local_storage', 'allow_cancel', 
+        '_last_io', '_deadlines', 'task_local_storage', 'allow_cancel',
         '__weakref__',
     )
     _lastid = 1
@@ -259,7 +258,7 @@ class wait(object):
     async def _init(self):
         async def wait_runner(task):
             try:
-                result = await task.join()
+                await task.join()
             except Exception:
                 pass
             await self._queue.put(task)
@@ -316,12 +315,12 @@ class _CancellationManager(object):
         # 2. If cancellation is not allowed in the outer block,
         #    the CancelledError is transformed back into a pending
         #    exception.  The outer block can certainly check for
-        #    this if it wants, but it can also just defer the 
+        #    this if it wants, but it can also just defer the
         #    cancellation to a point where cancellation is allowed again.
         #
         if isinstance(val, CancelledError):
             if not self.allow_cancel:
-                raise RuntimeError('%s must not be raised in a disable_cancellation block' % 
+                raise RuntimeError('%s must not be raised in a disable_cancellation block' %
                                    ty.__name__)
             if not self.task.allow_cancel:
                 self.cancel_pending = self.task.cancel_pending = val
@@ -364,7 +363,7 @@ async def check_cancellation(exc_type=None):
 
     If exc_type is specified, the function checks the type of the specified
     exception against the given type.  If there is a match, the exception
-    is returned and cleared. 
+    is returned and cleared.
     '''
     task = await current_task()
 
@@ -585,6 +584,7 @@ def ignore_after(seconds, coro=None, *, timeout_result=None):
     else:
         return _timeout_after_func(seconds, False, coro, ignore=True, timeout_result=timeout_result)
 
+
 from . import queue
 from . import thread
 
@@ -598,7 +598,7 @@ async def aside(corofunc, *args, **kwargs):
     Returns a Task instance corresponding to a small supervisor task
     in the caller.  The return value of task.join() is the exit code of
     the subprocess.  Cancelling the task causes a SIGTERM signal to be
-    sent to the child.  This will be raised as a CancelledError in 
+    sent to the child.  This will be raised as a CancelledError in
     the child (which is given an opportunity to clean up if it wants).
 
     The newly created task shares no state with the caller. It is not
@@ -612,7 +612,7 @@ async def aside(corofunc, *args, **kwargs):
     Arguments to the called coroutine are pickled and transmitted via
     a command line arguments.  You should probably only pass small
     data structures or metadata.  If you need to pass bulk data,
-    set up an I/O channel separately.  
+    set up an I/O channel separately.
     '''
     import base64
     import pickle

@@ -2,7 +2,7 @@
 #
 # Not your parent's threading
 
-__all__ = [ 'AWAIT', 'async_thread', 'async_context', 'async_iter', 'AsyncThread' ] 
+__all__ = [ 'AWAIT', 'async_thread', 'async_context', 'async_iter', 'AsyncThread' ]
 
 import threading
 from concurrent.futures import Future
@@ -53,7 +53,7 @@ class AsyncThread(object):
             except BaseException as e:
                 self._result_value = None
                 self._result_exc = e
-                
+
             # Hand it back to the thread
             self._done_evt.set()
 
@@ -67,7 +67,7 @@ class AsyncThread(object):
         except BaseException as e:
             self._result_value = None
             self._result_exc = e
-            
+
         self._request.set_result(None)
         self._terminate_evt.set()
 
@@ -158,5 +158,4 @@ def async_thread(func):
             await t.cancel()
             raise
     return runner
-
 

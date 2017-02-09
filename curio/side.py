@@ -3,13 +3,12 @@
 # Main program that runs to handle the aside() functionality.
 
 import base64
-import inspect
 import pickle
 import sys
 import types
 
 from . import task
-from .errors import CancelledError, TaskError
+from .errors import CancelledError
 
 # Signal handling task in the child process
 async def _aside_term(task):
@@ -25,7 +24,7 @@ async def _aside_child(coro, args, kwargs):
     await task.spawn(_aside_term(self_task), daemon=True)
     await coro(*args, **kwargs)
     return 0
-    
+
 if __name__ == '__main__':
     from .kernel import run
     filename = sys.argv[1]
@@ -39,6 +38,3 @@ if __name__ == '__main__':
         run(_aside_child(corofunc, args, kwargs))
     except CancelledError as e:
         raise SystemExit(1)
-
-
-

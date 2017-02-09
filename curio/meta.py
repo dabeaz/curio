@@ -154,7 +154,6 @@ class AsyncABCMeta(ABCMeta):
                 raise TypeError('Must use async def %s%s' % (name, inspect.signature(val)))
         super().__init__(name, bases, methods)
 
-
 class AsyncABC(metaclass=AsyncABCMeta):
     pass
 

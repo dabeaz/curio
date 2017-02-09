@@ -10,14 +10,12 @@ import os
 import pickle
 import struct
 import hmac
-import time
 
 from . import socket
 from .errors import CurioError, TaskTimeout
 from .io import StreamBase, FileStream
 from . import thread
 from .task import timeout_after, sleep
-from .meta import awaitable
 
 # Authentication parameters (copied from multiprocessing)
 
@@ -80,7 +78,6 @@ class Connection(object):
 
     def __exit__(self, *args):
         return thread.AWAIT(self.__aexit__(*args))
-
 
     async def close(self):
         await self._reader.close()
@@ -187,7 +184,7 @@ class Channel(object):
 
     async def __aexit__(self, ty, val, tb):
         await self.close()
-        
+
     def __getstate__(self):
         return (self.address, self.family)
 
@@ -201,7 +198,7 @@ class Channel(object):
         self.sock.bind(self.address)
         self.sock.listen(5)
         self.address = self.sock.getsockname()
-        
+
     async def accept(self, *, authkey=None):
         if self.sock is None:
             self.bind()
@@ -219,13 +216,12 @@ class Channel(object):
                 await c.close()
                 del c
                 del client_stream
-                
         return c
 
     async def connect(self, *, authkey=None):
         while True:
             try:
-                sock = socket.socket(self.family, socket.SOCK_STREAM)        
+                sock = socket.socket(self.family, socket.SOCK_STREAM)
                 await sock.connect(self.address)
                 sock_stream = sock.as_stream()
                 c = Connection(sock_stream, sock_stream)
@@ -262,7 +258,7 @@ class Listener(object):
         client, addr = await self._sock.accept()
         fileno = client.detach()
         ch = Connection(FileStream(open(fileno, 'rb', buffering=0)),
-                     FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
+                        FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
         if self._authkey:
             await ch.authenticate_server(self._authkey)
         return ch
@@ -275,19 +271,7 @@ async def Client(address, family=socket.AF_INET, authkey=None):
     await sock.connect(address)
     fileno = sock.detach()
     ch = Connection(FileStream(open(fileno, 'rb', buffering=0)),
-                 FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
+                    FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
     if authkey:
         await ch.authenticate_client(authkey)
     return ch
-
-
-
-    
-
-
-
-    
-
-
-
-    

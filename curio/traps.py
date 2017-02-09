@@ -12,7 +12,7 @@
 
 __all__ = [
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn', '_join_task',
-    '_cancel_task', 
+    '_cancel_task',
     '_wait_on_ksync', '_reschedule_tasks', '_ksync_reschedule_function',
     '_sigwatch', '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
     '_set_timeout', '_unset_timeout', '_clock',
@@ -41,6 +41,7 @@ class Traps(IntEnum):
     _trap_sigunwatch = 14
     _trap_spawn = 15
     _trap_ksync_reschedule_tasks = 16
+
 
 globals().update((trap.name, trap) for trap in Traps)
 

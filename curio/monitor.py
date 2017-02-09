@@ -47,7 +47,6 @@
 # Since this loop runs on curio, it can safely make cancellation requests
 # and perform other kernel-related actions.
 
-import sys
 import os
 import traceback
 import linecache
@@ -170,8 +169,8 @@ class Monitor(object):
                             while not self._closing.is_set():
                                 index = buffer.find(b'\n')
                                 if index >= 0:
-                                    line = buffer[:index+1].decode('latin-1')
-                                    del buffer[:index+1]
+                                    line = buffer[:index + 1].decode('latin-1')
+                                    del buffer[:index + 1]
                                     yield line
                                 try:
                                     chunk = client.recv(1000)
@@ -180,7 +179,7 @@ class Monitor(object):
                                     buffer.extend(chunk)
                                 except socket.timeout:
                                     pass
-                                     
+
                         sout = client.makefile('w', encoding='latin-1')
                         self.interactive_loop(sout, readlines())
                 except socket.timeout:

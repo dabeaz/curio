@@ -58,7 +58,8 @@ async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
         await sock.do_handshake()
     return sock
 
-async def open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None, alpn_protocols=None):
+async def open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None,
+                          alpn_protocols=None):
     '''
     Create a TCP connection to a given Internet host and port with optional SSL applied to it.
     '''
@@ -77,7 +78,8 @@ async def open_connection(host, port, *, ssl=None, source_addr=None, server_host
         sock._socket.close()
         raise
 
-async def open_unix_connection(path, *, ssl=None, server_hostname=None, alpn_protocols=None):
+async def open_unix_connection(path, *, ssl=None, server_hostname=None,
+                               alpn_protocols=None):
     if server_hostname and not ssl:
         raise ValueError('server_hostname is only applicable with SSL')
 
