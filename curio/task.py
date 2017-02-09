@@ -621,7 +621,8 @@ async def aside(corofunc, *args, **kwargs):
 
     async def _aside_supervisor():
         p = subprocess.Popen([sys.executable, '-m', 'curio.side', filename,
-                              base64.b64encode(pickle.dumps((corofunc, args, kwargs)))])
+                              base64.b64encode(pickle.dumps((corofunc, args, kwargs)))],
+                             start_new_session=True)
         try:
             return await p.wait()
         except CancelledError as e:

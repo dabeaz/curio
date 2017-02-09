@@ -6,6 +6,7 @@ import base64
 import pickle
 import sys
 import types
+import signal
 
 from . import task
 from .errors import CancelledError
@@ -13,10 +14,8 @@ from .errors import CancelledError
 # Signal handling task in the child process
 async def _aside_term(task):
     from . import signal as curio_signal
-    import signal as std_signal
-
-    await curio_signal.SignalSet(std_signal.SIGTERM).wait()
-    await task.cancel()
+    await curio_signal.SignalSet(signal.SIGTERM).wait()
+    raise SystemExit(1)
 
 # Task that runs the requested coroutine
 async def _aside_child(coro, args, kwargs):
@@ -25,9 +24,9 @@ async def _aside_child(coro, args, kwargs):
     await coro(*args, **kwargs)
     return 0
 
-if __name__ == '__main__':
+def main(argv):
     from .kernel import run
-    filename = sys.argv[1]
+    filename = argv[1]
     if filename:
         mod = types.ModuleType('curio.aside')
         code = open(filename).read()
@@ -38,3 +37,6 @@ if __name__ == '__main__':
         run(_aside_child(corofunc, args, kwargs))
     except CancelledError as e:
         raise SystemExit(1)
+
+if __name__ == '__main__':
+    main(sys.argv)

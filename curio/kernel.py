@@ -129,6 +129,7 @@ class KSyncEvent(KernelSyncBase):
 
 class Kernel(object):
 
+    # Thread-local storage used to ensure one kernel per thread
     _local = threading.local()
 
     def __init__(self, *, selector=None, with_monitor=False, log_errors=True,
@@ -137,8 +138,14 @@ class Kernel(object):
             selector = DefaultSelector()
 
         self._selector = selector
-        self._ready = deque()             # Tasks ready to run
-        self._tasks = {}                 # Task table
+
+        # Ready queue and task table
+        self._ready = deque()
+        self._tasks = {}                  
+
+        # Coroutine runner and internal state
+        self._runner = None
+        self._crashed = False
 
         # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
         self._signal_sets = None
@@ -258,16 +265,33 @@ class Kernel(object):
     # ----------
 
     def run(self, coro=None, *, shutdown=False, timeout=0):
+        if coro and self._crashed:
+            raise RuntimeError("Can't submit further tasks to a crashed kernel.")
+
         if getattr(self._local, 'running', False):
             raise RuntimeError('Only one Curio kernel per thread is allowed')
         self._local.running = True
+
         try:
-            if not hasattr(self, '_runner'):
+            if not self._runner:
                 self._runner = self._run_coro()
                 self._runner.send(None)
 
             # Submit the given coroutine (if any)
-            ret_val, ret_exc = self._runner.send((coro, timeout))
+            try:
+                if coro or not shutdown:
+                    ret_val, ret_exc = self._runner.send((coro, timeout))
+                else:
+                    ret_val = ret_exc = None
+            except BaseException as e:
+                # If the underlying runner coroutine died for some reason,
+                # then something bad happened.  Maybe a KeyboardInterrupt
+                # an internal programming program.  We'll remove it and
+                # mark the kernel as crashed.   It's still possible that someone
+                # will attempt a kernel shutdown later.
+                self._runner = None
+                self._crashed = True
+                raise
 
             # If shutdown has been requested, run the shutdown process
             if shutdown:
@@ -287,9 +311,10 @@ class Kernel(object):
                     tocancel.sort(key=lambda t: t.id)
                     if self._kernel_task_id:
                         tocancel.append(self._tasks[self._kernel_task_id])
-                    self._runner.send((_shutdown_tasks(tocancel), timeout))
+                    for task in tocancel:
+                        task.daemon = True
+                    self._runner.send((_shutdown_tasks(tocancel), None))
                     self._kernel_task_id = None
-
                 self._runner.close()
                 del self._runner
                 self._shutdown_resources()
@@ -298,6 +323,7 @@ class Kernel(object):
                 raise ret_exc
             else:
                 return ret_val
+
         finally:
             self._local.running = False
 
