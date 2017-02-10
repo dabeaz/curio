@@ -14,6 +14,7 @@ from collections import deque, defaultdict
 import warnings
 import threading
 from abc import ABC, abstractmethod
+import weakref
 
 # Logger where uncaught exceptions from crashed tasks are logged
 log = logging.getLogger(__name__)
@@ -272,6 +273,8 @@ class Kernel(object):
             raise RuntimeError('Only one Curio kernel per thread is allowed')
         self._local.running = True
 
+        if hasattr(sys, 'get_asyncgen_hooks'):
+            asyncgen_hooks = sys.get_asyncgen_hooks()
         try:
             if not self._runner:
                 self._runner = self._run_coro()
@@ -326,6 +329,8 @@ class Kernel(object):
 
         finally:
             self._local.running = False
+            if hasattr(sys, 'set_asyncgen_hooks'):
+                sys.set_asyncgen_hooks(*asyncgen_hooks)
 
     # Discussion:  This is the main kernel execution loop.   To better
     # support pause/resume functionality, it is also implemented as
@@ -436,11 +441,40 @@ class Kernel(object):
             task.state = 'READY'
             task.cancel_func = None
 
+        async def _finalize_asyncgens(asyncgens, value, exc):
+            print('Finalizing: asyncgens')
+            for agen in asyncgens:
+                print('Finalizing:', agen)
+                await agen.aclose()
+            if exc:
+                raise exc
+            else:
+                return value
+            
         # Cleanup task.  This is called after the underlying coroutine has
         # terminated.  value and exc give the return value or exception of
         # the coroutine.  This wakes any tasks waiting to join.
         def _cleanup_task(task, value=None, exc=None):
             nonlocal main_task, main_value, main_exc, njobs
+
+            # if the task has pending async generators and is being 
+            # cleaned up, we're going to swap out the task coroutine
+            # for a finalizer that walks through each pending generator
+            # and runs its .aclose() coroutine.  The task goes back on
+            # the ready queue and continues to be scheduled.  The
+            # helper task above will return the result or reraise
+            # any pending exception in the original task that died.
+            if task._asyncgen is not None and len(task._asyncgen) > 0:
+                task.coro = _finalize_asyncgens(list(task._asyncgen), value, exc)
+                task._send = task.coro.send
+                task._throw = task.coro.throw
+                task.next_value = None
+                task.next_exc = None
+                task.timeout = None
+                task._asyncgen = None
+                _reschedule_task(task)
+                return
+
             task.next_value = value
             task.next_exc = exc
             task.timeout = None
@@ -765,6 +799,19 @@ class Kernel(object):
         main_exc = None
         main_task = None
 
+        # Some support for async-generators
+        def _init_async_gen(agen):
+            print('Initialize:', agen)
+            if current._asyncgen is None:
+                current._asyncgen = weakref.WeakSet()
+            current._asyncgen.add(agen)
+
+        def _finalize_async_gen(agen):
+            print('Finalize: NOT IMPLEMENTED', agen)
+
+        if hasattr(sys, 'set_asyncgen_hooks'):
+            sys.set_asyncgen_hooks(_init_async_gen, _finalize_async_gen)
+            
         # ------------------------------------------------------------
         # Main Kernel Loop
         # ------------------------------------------------------------

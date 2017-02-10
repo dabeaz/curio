@@ -21,6 +21,7 @@ class Task(object):
         'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
         'next_exc', 'joining', 'cancelled', 'terminated', 'cancel_pending',
         '_last_io', '_deadlines', 'task_local_storage', 'allow_cancel',
+        '_asyncgen',
         '__weakref__',
     )
     _lastid = 1
@@ -55,6 +56,8 @@ class Task(object):
         self._throw = coro.throw
         self._deadlines = []       # Timeout deadlines
 
+        self._asyncgen = None      # Active async generators
+
     def __repr__(self):
         return 'Task(id=%r, name=%r, %r, state=%r)' % (self.id, self.name, self.coro, self.state)
 
@@ -63,6 +66,9 @@ class Task(object):
 
     def __del__(self):
         self.coro.close()
+
+    def _finalize_agen(self, agen):
+        print("Task %r -> Finalize %r" % (self, agen))
 
     @property
     def result(self):
