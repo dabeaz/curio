@@ -264,7 +264,7 @@ class Kernel(object):
     # Main Kernel Loop
     # ----------
 
-    def run(self, coro=None, *, shutdown=False, timeout=0):
+    def run(self, coro=None, *, shutdown=False, timeout=None):
         if coro and self._crashed:
             raise RuntimeError("Can't submit further tasks to a crashed kernel.")
 
