@@ -134,6 +134,98 @@ the ``await`` in calls is important though--if you don't do that, the
 called coroutine won't run and you'll be fighting the aforementioned
 swarm of stinging bats trying to figure out what's wrong.
 
+The Coroutine Menagerie
+^^^^^^^^^^^^^^^^^^^^^^^
+
+For the most part, coroutines are centered on `async` function definitions.
+However, there are a few additional language features that are "async aware."
+For example, you can define an asynchronous context manager::
+
+    from curio import run
+
+    class AsyncManager(object):
+        async def __aenter__(self):
+            print('Entering')
+
+        async def __aexit__(self, ty, val, tb):
+            print('Exiting')
+
+    async def main():
+        m = AsyncManager()
+        async with m:
+            print('Hey there!')
+
+    >>> run(main())
+    Entering
+    Hey there!
+    Exiting
+    >>>
+
+You can also define an asynchronous iterator::
+
+    from curio import run
+
+    class AsyncCountdown(object):
+        def __init__(self, start):
+            self.start = start
+
+        async def __aiter__(self):
+            return AsyncCountdownIter(self.start)
+
+    class AsyncCountdownIter(object):
+        def __init__(self, n):
+            self.n = n
+
+        async def __anext__(self):
+            self.n -= 1
+            if self.n <= 0:
+                raise StopAsyncIteration
+            return self.n
+
+    async def main():
+        async for n in AsyncCountdown(5):
+            print('T-minus', n)
+
+    >>> run(main())
+    T-minus 5
+    T-minus 4
+    T-minus 3
+    T-minus 2
+    T-minus 1
+    >>> 
+
+Last, but not least, you can define an asynchronous generator::
+
+    from curio import run, finalize
+
+    async def countdown(n):
+        while n > 0:
+            yield n
+            n -= 1
+
+    async def main():
+        async with finalize(countdown(5)) as c:
+            async for n in c:
+                print('T-minus', n)
+
+    run(main())
+
+An asynchronous generator feeds values to an async-for loop.  The
+``finalize()`` context manager in this example is related to a tricky
+Python design limitation related to async iterators and garbage
+collection.  ``finalize()`` is a part of Curio.
+
+In all of these cases, the essential feature enhancement is that
+you can call other async-functions in the implementation.  That is,
+since certain method such as ``__aenter__()``, ``__aiter__()``, and
+``__anext__()`` are all async, they can use the ``await`` statement
+to call other coroutines as normal functions.
+
+Try not to worry too much about the low-level details of all of this.
+Stay focused on the high-level--the world of "async" programming is
+mainly going to involve combinations of async functions, async context
+managers, and async iterators.  They are all meant to work together.
+
 Blocking Calls (i.e., "System Calls")
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
