@@ -13,6 +13,7 @@ from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
 import warnings
 import threading
+import inspect
 from abc import ABC, abstractmethod
 
 # Logger where uncaught exceptions from crashed tasks are logged
@@ -123,28 +124,31 @@ class KSyncEvent(KernelSyncBase):
         return [self._tasks.pop() for _ in range(ntasks)]
 
 # ----------------------------------------------------------------------
-# Asynchronous Generator Management.
+# Asynchronous Finalization Support
 #
-# Due to finalization issues (See PEP 533), asynchronous generators
-# may not be used in any form unless wrapped by the following 
-# context manager.
+# Finalization of certain kinds of objects can be problematic in
+# an asynchronous environment.  For example, you can't just rely
+# on garbage collection to properly clean up.   This context
+# manager is used to handle finalization of certain kinds of 
+# objects.  For example, asynchronous generators. 
 # ----------------------------------------------------------------------
 
 
-class async_generator(object):
+class finalize(object):
 
-    _async_generators = set()
+    _finalized = set()
 
-    def __init__(self, agen):
-        self.agen = agen
+    def __init__(self, aobj):
+        self.aobj = aobj
 
     async def __aenter__(self):
-        self._async_generators.add(self.agen)
-        return self.agen
+        self._finalized.add(self.aobj)
+        return self.aobj
 
     async def __aexit__(self, ty, val, tb):
-        await self.agen.aclose()
-        self._async_generators.discard(self.agen)
+        if inspect.isasyncgen(self.aobj):
+            await self.aobj.aclose()
+        self._finalized.discard(self.aobj)
 
         
 # ----------------------------------------------------------------------
@@ -796,9 +800,9 @@ class Kernel(object):
 
         # Some support for async-generators
         def _init_async_gen(agen):
-            if not agen in async_generator._async_generators:
+            if not agen in finalize._finalized:
                 raise RuntimeError("Async generators can only be consumed when wrapped by\n"
-                                   "async with async_generator(agen) as agen:\n"
+                                   "async with finalize(agen) as agen:\n"
                                    "    async for n in agen:\n"
                                    "         ...\n"
                                    "See PEP 533 for further discussion.")
@@ -1046,6 +1050,6 @@ def run(coro, *, log_errors=True, with_monitor=False, selector=None,
         return kernel.run(coro, timeout=timeout)
 
 
-__all__ = ['Kernel', 'run', 'BlockingTaskWarning', 'async_generator']
+__all__ = ['Kernel', 'run', 'BlockingTaskWarning', 'finalize']
 
 from .monitor import Monitor

@@ -4,7 +4,7 @@ CHANGES
 Version 0.6 : In progress
 -------------------------
 02/11/2017 Added a guard for proper use of asynchronous generators.
-           Must be wrapped by async_generator().  For example:
+           Must be wrapped by finalize().  For example:
 
            async def some_generator():
                ...
@@ -12,7 +12,7 @@ Version 0.6 : In progress
 
            async def coro():
                ...
-               async with async_generator(some_generator()) as agen:
+               async with finalize(some_generator()) as agen:
                    async for item in agen:
                        ...
 
