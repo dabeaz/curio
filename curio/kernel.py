@@ -14,7 +14,6 @@ from collections import deque, defaultdict
 import warnings
 import threading
 from abc import ABC, abstractmethod
-import weakref
 
 # Logger where uncaught exceptions from crashed tasks are logged
 log = logging.getLogger(__name__)
@@ -123,6 +122,31 @@ class KSyncEvent(KernelSyncBase):
     def pop(self, ntasks=1):
         return [self._tasks.pop() for _ in range(ntasks)]
 
+# ----------------------------------------------------------------------
+# Asynchronous Generator Management.
+#
+# Due to finalization issues (See PEP 533), asynchronous generators
+# may not be used in any form unless wrapped by the following 
+# context manager.
+# ----------------------------------------------------------------------
+
+
+class async_generator(object):
+
+    _async_generators = set()
+
+    def __init__(self, agen):
+        self.agen = agen
+
+    async def __aenter__(self):
+        self._async_generators.add(self.agen)
+        return self.agen
+
+    async def __aexit__(self, ty, val, tb):
+        await self.agen.aclose()
+        self._async_generators.discard(self.agen)
+
+        
 # ----------------------------------------------------------------------
 # Underlying kernel that drives everything
 # ----------------------------------------------------------------------
@@ -440,41 +464,12 @@ class Kernel(object):
             task.next_exc = exc
             task.state = 'READY'
             task.cancel_func = None
-
-        async def _finalize_asyncgens(asyncgens, value, exc):
-            print('Finalizing: asyncgens')
-            for agen in asyncgens:
-                print('Finalizing:', agen)
-                await agen.aclose()
-            if exc:
-                raise exc
-            else:
-                return value
             
         # Cleanup task.  This is called after the underlying coroutine has
         # terminated.  value and exc give the return value or exception of
         # the coroutine.  This wakes any tasks waiting to join.
         def _cleanup_task(task, value=None, exc=None):
             nonlocal main_task, main_value, main_exc, njobs
-
-            # if the task has pending async generators and is being 
-            # cleaned up, we're going to swap out the task coroutine
-            # for a finalizer that walks through each pending generator
-            # and runs its .aclose() coroutine.  The task goes back on
-            # the ready queue and continues to be scheduled.  The
-            # helper task above will return the result or reraise
-            # any pending exception in the original task that died.
-            if task._asyncgen is not None and len(task._asyncgen) > 0:
-                task.coro = _finalize_asyncgens(list(task._asyncgen), value, exc)
-                task._send = task.coro.send
-                task._throw = task.coro.throw
-                task.next_value = None
-                task.next_exc = None
-                task.timeout = None
-                task._asyncgen = None
-                _reschedule_task(task)
-                return
-
             task.next_value = value
             task.next_exc = exc
             task.timeout = None
@@ -801,16 +796,15 @@ class Kernel(object):
 
         # Some support for async-generators
         def _init_async_gen(agen):
-            print('Initialize:', agen)
-            if current._asyncgen is None:
-                current._asyncgen = weakref.WeakSet()
-            current._asyncgen.add(agen)
-
-        def _finalize_async_gen(agen):
-            print('Finalize: NOT IMPLEMENTED', agen)
+            if not agen in async_generator._async_generators:
+                raise RuntimeError("Async generators can only be consumed when wrapped by\n"
+                                   "async with async_generator(agen) as agen:\n"
+                                   "    async for n in agen:\n"
+                                   "         ...\n"
+                                   "See PEP 533 for further discussion.")
 
         if hasattr(sys, 'set_asyncgen_hooks'):
-            sys.set_asyncgen_hooks(_init_async_gen, _finalize_async_gen)
+            sys.set_asyncgen_hooks(_init_async_gen)
             
         # ------------------------------------------------------------
         # Main Kernel Loop
@@ -1052,6 +1046,6 @@ def run(coro, *, log_errors=True, with_monitor=False, selector=None,
         return kernel.run(coro, timeout=timeout)
 
 
-__all__ = ['Kernel', 'run', 'BlockingTaskWarning']
+__all__ = ['Kernel', 'run', 'BlockingTaskWarning', 'async_generator']
 
 from .monitor import Monitor

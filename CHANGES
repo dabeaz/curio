@@ -3,6 +3,22 @@ CHANGES
 
 Version 0.6 : In progress
 -------------------------
+02/11/2017 Added a guard for proper use of asynchronous generators.
+           Must be wrapped by async_generator().  For example:
+
+           async def some_generator():
+               ...
+               yield
+
+           async def coro():
+               ...
+               async with async_generator(some_generator()) as agen:
+                   async for item in agen:
+                       ...
+
+           Failure to do this results in a RuntimeError if any 
+           asynchronous generators is iterated.
+
 02/08/2017 New Kernel.run() method implementation.  It should be backwards
            compatible, but there are two new ways of using it:
 
