@@ -13,7 +13,6 @@ from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
 import warnings
 import threading
-import inspect
 from abc import ABC, abstractmethod
 
 # Logger where uncaught exceptions from crashed tasks are logged
@@ -146,7 +145,7 @@ class finalize(object):
         return self.aobj
 
     async def __aexit__(self, ty, val, tb):
-        if inspect.isasyncgen(self.aobj):
+        if hasattr(self.aobj, 'aclose'):
             await self.aobj.aclose()
         self._finalized.discard(self.aobj)
 
