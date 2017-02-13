@@ -137,9 +137,10 @@ swarm of stinging bats trying to figure out what's wrong.
 The Coroutine Menagerie
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-For the most part, coroutines are centered on `async` function definitions.
-However, there are a few additional language features that are "async aware."
-For example, you can define an asynchronous context manager::
+For the most part, coroutines are centered on `async` function
+definitions.  However, there are a few additional language features
+that are "async aware."  For example, you can define an asynchronous
+context manager::
 
     from curio import run
 
@@ -210,21 +211,29 @@ Last, but not least, you can define an asynchronous generator::
 
     run(main())
 
-An asynchronous generator feeds values to an async-for loop.  The
-``finalize()`` context manager in this example is related to a tricky
-Python design limitation related to async iterators and garbage
-collection.  ``finalize()`` is a part of Curio.
-
+An asynchronous generator feeds values to an async-for loop.  
 In all of these cases, the essential feature enhancement is that
 you can call other async-functions in the implementation.  That is,
 since certain method such as ``__aenter__()``, ``__aiter__()``, and
 ``__anext__()`` are all async, they can use the ``await`` statement
 to call other coroutines as normal functions.
 
+Alas, not every part of Python works perfectly within the async
+universe.  One such area is garbage collection.  There is no mechanism
+for executing asynchronous operations when cleaning up an object.
+For most objects, this isn't something you'll worry about. However, it
+can rear its ugly head in certain cases.  One such case is in the
+finalization of asynchronous generator functions (especially if
+iteration is stopped early or cancelled).  The ``finalize()``
+context manager in the above example is related to this.  ``finalize()``
+is a part of Curio.
+
 Try not to worry too much about the low-level details of all of this.
 Stay focused on the high-level--the world of "async" programming is
 mainly going to involve combinations of async functions, async context
 managers, and async iterators.  They are all meant to work together.
+These are also core features of the Python language itself--they are
+not part of a specific library module or runtime environment.
 
 Blocking Calls (i.e., "System Calls")
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
