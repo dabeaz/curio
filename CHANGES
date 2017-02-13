@@ -3,6 +3,17 @@ CHANGES
 
 Version 0.6 : In progress
 -------------------------
+02/13/2017 Added a withfd=True option to UniversalQueue.  For example:
+
+              q = UniversalQueue(withfd=True)
+
+           If added, the queue internally sets up an I/O loopback
+           where putting items on the queue write bytes to an I/O
+           channel.  The queue then spouts a fileno() method and
+           becomes pollable in other event loops.  This is potentially
+           useful strategy for integrating Curio with GUIs and other
+           kinds of foreign event loops.  
+
 02/11/2017 Added a guard for proper use of asynchronous generators.
            Must be wrapped by finalize().  For example:
 

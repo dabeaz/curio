@@ -1403,13 +1403,15 @@ This will output
     second
     first
 
-.. class: UniversalQueue(maxsize=0)
+.. class: UniversalQueue(maxsize=0, withfd=False)
 
    A queue that can be safely used from both Curio tasks and threads.  
    The same programming API is used for both worlds, but ``await`` is
    required for asynchronous operations.  When the queue is no longer
    in use, the ``shutdown()`` method should be called to terminate
-   an internal helper-task.
+   an internal helper-task.   The ``withfd`` option specifies whether
+   or not the queue should optionally set up an I/O loopback that
+   allows it to be polled by a foreign event loop.
 
 Here is an example a producer-consumer problem with a ``UniversalQueue``::
 
@@ -1450,6 +1452,12 @@ Here is an example a producer-consumer problem with a ``UniversalQueue``::
     run(main())
 
 In this code, the ``consumer()`` is a Curio task and ``producer()`` is a thread.
+
+If the ``withfd=True`` option is given to a ``UniveralQueue``, it additionally
+has a ``fileno()`` method that can be passed to various functions that might
+poll for I/O events.  When enabled, putting something in the queue will also
+write a byte of I/O.  This might be useful if trying to pass data from Curio
+to a foreign event loop.
 
 Synchronizing with Threads and Processes
 ----------------------------------------

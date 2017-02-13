@@ -137,7 +137,7 @@ swarm of stinging bats trying to figure out what's wrong.
 The Coroutine Menagerie
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-For the most part, coroutines are centered on `async` function
+For the most part, coroutines are centered on ``async`` function
 definitions.  However, there are a few additional language features
 that are "async aware."  For example, you can define an asynchronous
 context manager::
@@ -195,7 +195,8 @@ You can also define an asynchronous iterator::
     T-minus 1
     >>> 
 
-Last, but not least, you can define an asynchronous generator::
+Last, but not least, you can define an asynchronous generator as an
+alternative implementation of an asynchronous iterator::
 
     from curio import run, finalize
 
@@ -2982,12 +2983,14 @@ functions. And even then, it might not exist.
 
 The bottom line is that interacting with traditional files might cause
 Curio to block, leading to various performance problems under heavy
-load (i.e., accessing a file could block the entire kernel until
-the request I/O operation finished).
+load.  As an example, consider everything that has to happen simply to
+open a file--for example, traversing through a directory hierarchy,
+loading file metadata, etc.  It could involve disk seeks on a physical
+device. It might involve network access. It will undoubtedly introduce
+a delay in your async code.
 
-If you're going to write code that operates with traditional
-files, you should probably use Curio's ``aopen()`` function. For
-example::
+If you're going to write code that operates with traditional files,
+prefer to use Curio's ``aopen()`` function instead. For example::
 
     async def coro():
         async with aopen('somefile.txt') as f:
@@ -3030,43 +3033,62 @@ function, it's no longer in control of what's happening.
 
 It's probably best to think of synchronous code as a whole different
 universe.  If for some reason, you need to make synchronous code
-communicate with asynchronous code, you need to devise some sort
-of different strategy for dealing with it.
+communicate with asynchronous code, you need to devise some sort of
+different strategy for dealing with it. Curio provides a few different
+techniques that synchronous code can use to interact with asynchronous
+code from beyond the abyss.
 
-Curio provides a few different techniques for interacting with
-asynchronous code from beyond the abyss.  The first is to use
+Synchronous/Asynchronous Queuing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+One approach for bridging asynchronous and synchronous code is to use
 a ``Queue`` and to take an approach similar to how you might
-communicate between threads.   For example, you can write code like this::
+communicate between threads.  For example, you can write code like
+this::
 
     from curio import run, spawn, Queue
 
     q = Queue()
 
     async def worker():
-        while True:
-            item = await q.get()
-            print('Got:', item)
+        item = await q.get()
+        print('Got:', item)
 
     def yow():
         print('Synchronous yow')
         q.put('yow')      # Works (note: there is no await)
+        print('Goodbye yow')
 
     async def main():
         await spawn(worker())
-        yow()           
-
+        yow()
+        await sleep(1)          # <- worker awakened here
+        print('Main goodbye')
+	
     run(main())
 
-Curio queues allow the `q.put()` method to be used from synchronous
-code.  Thus, if you're in that world, you can at least queue up a
-bunch of data.  It won't be processed until you return to the world of
-Curio tasks, but at least it will be there when Curio regains control.
+Running this code produces the following output::
 
-Another approach is to take advantage of the "lazy" nature of
-coroutines.  Coroutines don't actually execute until they are awaited.
-Thus, synchronous functions could potentially defer asynchronous
-operations until execution returns back to the world of async.
-For example, you could do this::
+    Synchronous yow
+    Goodbye yow
+    Got: yow
+    Main goodbye
+
+Curio queues allow the ``q.put()`` method to be used from synchronous
+code.  Thus, if you're in the synchronous realm, you can at least
+queue up a bunch of data.  It won't be processed until you return to
+the world of Curio tasks though.  So, in the above code, you won't
+see the item actually delivered until some kind of blocking operation
+is made.
+
+Lazy Coroutine Evalulation
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Another approach is to exploit the "lazy" nature of coroutines.
+Coroutines don't actually execute until they are awaited.  Thus,
+synchronous functions could potentially defer asynchronous operations
+until execution returns back to the world of async.  For example, you
+could do this::
 
     async def spam():
         print('Asynchronous spam')
@@ -3083,6 +3105,256 @@ For example, you could do this::
             await coro               # spam() runs here
 
     run(main())
+
+If you run the above code, the output will look like this::
+
+    Synchronous yow
+    Goodbye yow
+    Asynchronous spam
+
+Notice how how the asynchronous operation has been deferred until control
+returns back to the ``main()`` coroutine and the coroutine is properly awaited.
+
+Executing Coroutines on Behalf on Synchronous Code
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you are in synchronous code and need to execute a coroutine, you
+can certainly use the Curio ``run()`` function to do it.  However, if
+you're going to execute a large number of coroutines, you'll be better
+served by creating a ``Kernel`` object and repeatedly using its
+``run()`` method instead::
+
+    from curio import Kernel
+
+    async def coro(n):
+        print('Hello coro', n)
+
+    def main():
+        with Kernel() as kern:
+           for n in range(10):
+               kern.run(coro(n))
+
+    main()
+
+Kernels involve a fair-bit of internal state related to their operation. 
+Taking this approach will be a lot more efficient.  Also, if you happen to
+launch any background tasks, those tasks will persist and continue to
+execute when you make subsequent ``run()`` calls.
+
+Interfacing with Foreign Event Loops
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sometimes, you may want to interface Curio-based applications with a 
+foreign event loop.  This is a scenario that often arises when using
+a graphical user interface. 
+
+For this scenario, there are a few possible options.  One choice
+is to try and run everything in a single thread.   For this, you
+might need to inject callouts to run the foreign event loop on
+a periodic timer.   This is a somewhat involved example, but
+here is some code that integrates a Curio echo server with a tiny
+Tk-based GUI:: 
+
+    import tkinter as tk
+    from curio import *
+
+    class EchoApp(object):
+        def __init__(self):
+            # Pending coroutines
+            self.pending = []
+
+            # Main Tk window
+            self.root = tk.Tk()
+
+            # Number of clients connected label
+            self.clients_label = tk.Label(text='')
+            self.clients_label.pack()
+            self.nclients = 0
+            self.incr_clients(0)
+            self.client_tasks = set()
+
+            # Number of bytes received label
+            self.bytes_received = 0
+            self.bytes_label = tk.Label(text='')
+            self.bytes_label.pack()
+            self.update_bytes()
+
+            # Disconnect all button
+            self.disconnect_button = tk.Button(text='Disconnect all', 
+                                               command=lambda: self.pending.append(self.disconnect_all()))
+            self.disconnect_button.pack()
+
+        def incr_clients(self, delta=1):
+            self.nclients += delta
+            self.clients_label.configure(text='Number Clients %d' % self.nclients)            
+
+        def update_bytes(self):
+            self.bytes_label.configure(text='Bytes received %d' % self.bytes_received)
+            self.root.after(1000, self.update_bytes)
+
+        async def echo_client(self, sock, address):
+            self.incr_clients(1)
+            self.client_tasks.add(await current_task())
+            try:
+                async with sock:
+                    while True:
+                        data = await sock.recv(100000)
+                        if not data:
+                            break
+                        self.bytes_received += len(data)
+                        await sock.sendall(data)
+            finally:
+                self.incr_clients(-1)
+                self.client_tasks.remove(await current_task())
+
+        async def disconnect_all(self):
+            for task in list(self.client_tasks):
+                await task.cancel()
+
+        async def main(self):
+            serv = await spawn(tcp_server('', 25000, self.echo_client))
+            while True:
+                self.root.update()
+                for coro in self.pending:
+                    await coro
+                self.pending = []
+                await sleep(0.05)
+
+    if __name__ == '__main__':
+        app = EchoApp()
+        run(app.main())
+
+If you run this program, it will put up a small GUI window that looks like this:
+
+.. image:: _static/guiserv.png
+
+The GUI has two labels.  One of the labels shows the number of
+connected clients.  It is updated by the ``incr_clients()`` method.  The
+other label shows a byte total. It is updated on a periodic timer.
+The button ``Disconnect All`` disconnects all of the connected clients
+by cancelling them.
+
+Now, a few tricky aspects of this code.  First, control is managed by
+the ``main()`` coroutine which runs under Curio.  The various server
+tasks are spawned separately and the program enters a periodic update
+loop in which the GUI is updated on timer every 50 milliseconds.
+Since everything runs in the same thread, it's okay for coroutines to
+perform operations that might update the display (e.g., directly
+calling ``incr_clients()``).
+
+Executing coroutines is a bit tricky though.  Since the GUI runs
+outside of Curio, it's not able to run coroutines directly.  Thus, if
+it's going to invoke a coroutine in response to an event such as a
+button press, it has to handle it a bit differently.  In this case,
+the coroutine is placed onto a list (``self.pending``) and processed
+in the ``main()`` loop after pending GUI events have been updated.  
+It looks a bit weird, but it basically works.
+
+One issue with this approach is that might result in a sluggish or
+glitchy GUI. Yes, events are processed on a periodic interval, but if
+there's a lot action going on in the GUI, it might just feel "off" in
+some way. Dealing with that in a single thread is going to be tricky.
+You could invert the control flow by having the GUI call out to Curio
+on a periodic timer.  However, that's just going to change the problem
+into one of glitchy network performance.
+
+Another possibility is to run the GUI and Curio in separate threads
+and to have them communicate via queues.   Here's some code that
+does that::
+
+    import tkinter as tk
+    from curio import *
+    import threading
+
+    class EchoApp(object):
+        def __init__(self):
+            self.gui_ops = UniversalQueue(withfd=True)
+            self.coro_ops = UniversalQueue()
+
+            # Main Tk window
+            self.root = tk.Tk()
+
+            # Number of clients connected label
+            self.clients_label = tk.Label(text='')
+            self.clients_label.pack()
+            self.nclients = 0
+            self.incr_clients(0)
+            self.client_tasks = set()
+
+            # Number of bytes received label
+            self.bytes_received = 0
+            self.bytes_label = tk.Label(text='')
+            self.bytes_label.pack()
+            self.update_bytes()
+
+            # Disconnect all button
+            self.disconnect_button = tk.Button(text='Disconnect all', 
+                                               command=lambda: self.coro_ops.put(self.disconnect_all()))
+            self.disconnect_button.pack()
+
+            # Set up event handler for queued GUI updates
+            self.root.createfilehandler(self.gui_ops, tk.READABLE, self.process_gui_ops)
+
+        def incr_clients(self, delta=1):
+            self.nclients += delta
+            self.clients_label.configure(text='Number Clients %d' % self.nclients)            
+
+        def update_bytes(self):
+            self.bytes_label.configure(text='Bytes received %d' % self.bytes_received)
+            self.root.after(1000, self.update_bytes)
+
+        def process_gui_ops(self, file, mask):
+            while not self.gui_ops.empty():
+                func, args = self.gui_ops.get()
+                func(*args)
+
+        async def echo_client(self, sock, address):
+            await self.gui_ops.put((self.incr_clients, (1,)))
+            self.client_tasks.add(await current_task())
+            try:
+                async with sock:
+                    while True:
+                        data = await sock.recv(100000)
+                        if not data:
+                            break
+                        self.bytes_received += len(data)
+                        await sock.sendall(data)
+            finally:
+                self.client_tasks.remove(await current_task())
+                await self.gui_ops.put((self.incr_clients, (-1,)))
+
+        async def disconnect_all(self):
+            for task in list(self.client_tasks):
+                await task.cancel()
+
+        async def main(self):
+            serv = await spawn(tcp_server('', 25000, self.echo_client))
+            while True:
+                coro = await self.coro_ops.get()
+                await coro
+
+        def run_forever(self):
+            threading.Thread(target=run, args=(self.main(),)).start()
+            self.root.mainloop()
+
+    if __name__ == '__main__':
+        app = EchoApp()
+        app.run_forever()
+
+In this code, there are two queues in use.  The ``gui_ops`` queue is
+used to carry out updates on the GUI from Curio.  The
+``echo_client()`` coroutine puts various operations on this queue.
+The GUI listens to the queue by watching for I/O events.  This is a
+bit sneaky, but Curio's ``UniversalQueue`` has an option that delivers
+a byte on an I/O channel whenever an item is added to the queue. This,
+in turn, can be used to wake an external event loop.  In this code,
+the ``createfilehandler()`` call at the end of the ``__init__()`` sets
+this up.
+
+The ``coro_ops`` queue goes in the other direction. Whenever the GUI
+wants to execute a coroutine, it places it on this queue. The
+``main()`` coroutine receives and awaits these coroutines.
+
 
 Programming Considerations and APIs
 -----------------------------------

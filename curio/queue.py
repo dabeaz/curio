@@ -10,6 +10,7 @@ from heapq import heappush, heappop
 import threading
 import queue as thread_queue
 import weakref
+import socket as std_socket
 
 from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function
 from .kernel import KSyncQueue
@@ -18,6 +19,7 @@ from .meta import awaitable
 from . import workers
 from .task import spawn, timeout_after
 from . import sync
+
 
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'UniversalQueue']
 
@@ -146,9 +148,19 @@ class UniversalQueue(object):
 
     _sentinel = object()
 
-    def __init__(self, queue=None, maxsize=0):
+    def __init__(self, *, queue=None, maxsize=0, withfd=False):
         self._tqueue = queue if queue else thread_queue.Queue(maxsize=maxsize)
         self._local = threading.local()
+        if withfd:
+            self._put_sock, self._get_sock = std_socket.socketpair()
+        else:
+            self._put_sock = self._get_sock = None
+
+    def fileno(self):
+        if self._get_sock:
+            return self._get_sock.fileno()
+        else:
+            return None
 
     async def shutdown(self):
         if hasattr(self._local, 'get_task'):
@@ -156,6 +168,11 @@ class UniversalQueue(object):
             del self._local.get_task
             del self._local.cqueue
             del self._local.num_getting
+        if self._put_sock:
+            self._put_sock.close()
+        if self._get_sock:
+            self._get_sock.close()
+        self._put_sock = self._get_sock = None
 
     # A daemon task that pulls items from the thread queue and queues
     # them on the async side.  The purpose of having this task is to
@@ -164,6 +181,8 @@ class UniversalQueue(object):
     async def _get_helper(self):
         tqueue = self._tqueue
         cqueue = self._local.cqueue
+        get_sock = self._get_sock
+        put_sock = self._put_sock
         num_getting = self._local.num_getting
 
         # Discussion: We break all internel references to ourself and create
@@ -183,17 +202,25 @@ class UniversalQueue(object):
                     continue
                 item = await workers.run_in_thread(tqueue.get,
                                                    call_on_cancel=lambda fut: tqueue.put(fut.result))
+                if get_sock:
+                    get_sock.recv(1)
+
                 await cqueue.put(item)
         except CancelledError:
             while not cqueue.empty():
                 item = await cqueue.get()
-                await workers.run_in_thread(tqueue.put, item)
+                await workers.run_in_thread(lambda it: (tqueue.put(it) and
+                                                        put_sock and
+                                                        put_sock.send(b'\x01')), item)
             raise
 
-    def get(self):
-        return self._tqueue.get()
+    def get_sync(self):
+        item = self._tqueue.get()
+        if self._get_sock:
+            self._get_sock.recv(1)
+        return item
 
-    @awaitable(get)
+    @awaitable(get_sync)
     async def get(self):
         if not hasattr(self._local, 'get_task'):
             self._local.cqueue = Queue()
@@ -210,12 +237,14 @@ class UniversalQueue(object):
                 await self._local.num_getting.acquire()
             raise
 
-    def put(self, item):
+    def put_sync(self, item):
         self._tqueue.put(item)
+        if self._put_sock:
+            self._put_sock.send(b'\x01')
 
-    @awaitable(put)
+    @awaitable(put_sync)
     async def put(self, item):
-        await workers.block_in_thread(self._tqueue.put, item)
+        await workers.block_in_thread(self.put_sync, item)
 
     def task_done(self):
         self._tqueue.task_done()
