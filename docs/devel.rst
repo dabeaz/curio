@@ -198,7 +198,7 @@ You can also define an asynchronous iterator::
 Last, but not least, you can define an asynchronous generator as an
 alternative implementation of an asynchronous iterator::
 
-    from curio import run, finalize
+    from curio import run
 
     async def countdown(n):
         while n > 0:
@@ -206,9 +206,8 @@ alternative implementation of an asynchronous iterator::
             n -= 1
 
     async def main():
-        async with finalize(countdown(5)) as c:
-            async for n in c:
-                print('T-minus', n)
+        async for n in countdown(5):
+            print('T-minus', n)
 
     run(main())
 
@@ -218,16 +217,6 @@ you can call other async-functions in the implementation.  That is,
 since certain method such as ``__aenter__()``, ``__aiter__()``, and
 ``__anext__()`` are all async, they can use the ``await`` statement
 to call other coroutines as normal functions.
-
-Alas, not every part of Python works perfectly within the async
-universe.  One such area is garbage collection.  There is no mechanism
-for executing asynchronous operations when cleaning up an object.
-For most objects, this isn't something you'll worry about. However, it
-can rear its ugly head in certain cases.  One such case is in the
-finalization of asynchronous generator functions (especially if
-iteration is stopped early or cancelled).  The ``finalize()``
-context manager in the above example is related to this.  ``finalize()``
-is a part of Curio.
 
 Try not to worry too much about the low-level details of all of this.
 Stay focused on the high-level--the world of "async" programming is

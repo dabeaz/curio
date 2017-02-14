@@ -129,7 +129,8 @@ class KSyncEvent(KernelSyncBase):
 # an asynchronous environment.  For example, you can't just rely
 # on garbage collection to properly clean up.   This context
 # manager is used to handle finalization of certain kinds of 
-# objects.  For example, asynchronous generators. 
+# objects.  For example, asynchronous generators with asynchronous
+# finalization (e.g., finally blocks, etc.). 
 # ----------------------------------------------------------------------
 
 
@@ -149,6 +150,16 @@ class finalize(object):
             await self.aobj.aclose()
         self._finalized.discard(self.aobj)
 
+# Dictionary that tracks the "safe" status of async generators with 
+# respect to asynchronous finalization.  Normally this is automatically
+# determined by looking at the code of async generators.  It can
+# be overridden using the @safe_generator decorator below. 
+
+_safe_async_generators = { }      # { code_objects: bool }
+
+def safe_generator(func):
+    _safe_async_generators[func.__code__] = True
+    return func
         
 # ----------------------------------------------------------------------
 # Underlying kernel that drives everything
@@ -799,8 +810,14 @@ class Kernel(object):
 
         # Some support for async-generators
         def _init_async_gen(agen):
-            if not agen in finalize._finalized:
-                raise RuntimeError("Async generators can only be consumed when wrapped by\n"
+            from . import meta
+
+            if agen.ag_code not in _safe_async_generators:
+                _safe_async_generators[agen.ag_code] = meta._is_safe_generator(agen.ag_code)
+
+            if not _safe_async_generators[agen.ag_code] and not agen in finalize._finalized:
+                # Inspect the code of the generator to see if it might be safe 
+                raise RuntimeError("Async generator with async finalization must be wrapped by\n"
                                    "async with finalize(agen) as agen:\n"
                                    "    async for n in agen:\n"
                                    "         ...\n"
@@ -1049,6 +1066,6 @@ def run(coro, *, log_errors=True, with_monitor=False, selector=None,
         return kernel.run(coro, timeout=timeout)
 
 
-__all__ = ['Kernel', 'run', 'BlockingTaskWarning', 'finalize']
+__all__ = ['Kernel', 'run', 'BlockingTaskWarning']
 
 from .monitor import Monitor

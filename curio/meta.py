@@ -11,6 +11,7 @@ import sys
 import inspect
 from functools import wraps
 from abc import ABCMeta, abstractmethod
+import dis
 
 from .errors import SyncIOError
 
@@ -186,3 +187,52 @@ class AsyncInstanceType(AsyncABCMeta):
 
 class AsyncObject(metaclass=AsyncInstanceType):
     pass
+
+def _is_safe_generator(code):
+    '''
+    Examine the code of an async generator to see if it appears
+    unsafe with respect to async finalization.  A generator
+    is unsafe if it utilizes any of the following constructs:
+
+    1. Use of async-code in a finally block
+
+       try:
+           yield v
+       finally:
+           await coro()
+
+    2. Use of yield inside an async context manager
+
+       async with m:
+           ...
+           yield v
+           ...
+
+    3. Use of async-code in try-except
+
+       try:
+           yield v
+       except Exception:
+           await coro()
+    '''
+    def _is_unsafe_block(instr, end_offset=-1):
+        is_generator = False
+        in_final = False
+        is_unsafe = False
+        for op in instr:
+            if op.offset == end_offset:
+                in_final = True
+            if op.opname == 'YIELD_VALUE':
+                is_generator = True
+            if op.opname == 'END_FINALLY':
+                return (is_generator, is_unsafe)
+            if op.opname in {'SETUP_FINALLY', 'SETUP_EXCEPT', 'SETUP_ASYNC_WITH'}:
+                is_g, is_u = _is_unsafe_block(instr, op.argval)
+                is_generator |= is_g
+                is_unsafe |= is_u
+            if op.opname == 'YIELD_FROM' and is_generator and in_final:
+                is_unsafe = True
+        return (is_generator, is_unsafe)
+
+    return not _is_unsafe_block(dis.get_instructions(code))[1]
+        

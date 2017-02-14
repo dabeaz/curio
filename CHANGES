@@ -14,12 +14,16 @@ Version 0.6 : In progress
            useful strategy for integrating Curio with GUIs and other
            kinds of foreign event loops.  
 
-02/11/2017 Added a guard for proper use of asynchronous generators.
-           Must be wrapped by finalize().  For example:
+02/11/2017 Added a guard for proper use of asynchronous generators
+           involving asynchronous finalization.  Must be wrapped by finalize(). 
+	   For example:
 
            async def some_generator():
                ...
-               yield
+               try:
+                   yield val
+               finally:
+                   await action()
 
            async def coro():
                ...
@@ -27,8 +31,10 @@ Version 0.6 : In progress
                    async for item in agen:
                        ...
 
-           Failure to do this results in a RuntimeError if any 
-           asynchronous generators is iterated.
+           Failure to do this results in a RuntimeError if an
+           asynchronous generator is iterated.   This is not needed for
+           generators that don't perform finalization steps involving
+           async code.
 
 02/08/2017 New Kernel.run() method implementation.  It should be backwards
            compatible, but there are two new ways of using it:
