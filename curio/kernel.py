@@ -311,10 +311,10 @@ class Kernel(object):
             raise RuntimeError('Only one Curio kernel per thread is allowed')
         self._local.running = True
 
-        if hasattr(sys, 'get_asyncgen_hooks'):
-            asyncgen_hooks = sys.get_asyncgen_hooks()
         try:
             if not self._runner:
+                if hasattr(sys, 'get_asyncgen_hooks'):
+                    self._asyncgen_hooks = sys.get_asyncgen_hooks()
                 self._runner = self._run_coro()
                 self._runner.send(None)
 
@@ -332,6 +332,9 @@ class Kernel(object):
                 # will attempt a kernel shutdown later.
                 self._runner = None
                 self._crashed = True
+                if hasattr(sys, 'get_asyncgen_hooks'):
+                    sys.set_asyncgen_hooks(*self._asyncgen_hooks)
+                    self._asyncgen_hooks = None
                 raise
 
             # If shutdown has been requested, run the shutdown process
@@ -359,6 +362,8 @@ class Kernel(object):
                 self._runner.close()
                 del self._runner
                 self._shutdown_resources()
+                if hasattr(sys, 'set_asyncgen_hooks'):
+                    sys.set_asyncgen_hooks(*self._asyncgen_hooks)
 
             if ret_exc:
                 raise ret_exc
@@ -367,8 +372,6 @@ class Kernel(object):
 
         finally:
             self._local.running = False
-            if hasattr(sys, 'set_asyncgen_hooks'):
-                sys.set_asyncgen_hooks(*asyncgen_hooks)
 
     # Discussion:  This is the main kernel execution loop.   To better
     # support pause/resume functionality, it is also implemented as
@@ -1066,6 +1069,6 @@ def run(coro, *, log_errors=True, with_monitor=False, selector=None,
         return kernel.run(coro, timeout=timeout)
 
 
-__all__ = ['Kernel', 'run', 'BlockingTaskWarning']
+__all__ = ['Kernel', 'run', 'BlockingTaskWarning', 'finalize']
 
 from .monitor import Monitor
