@@ -27,6 +27,8 @@ up APIs.  However, it's mainly just a snapshot that represents the state
 of Curio before it starts utilizing more features of Python 3.6. For the
 best results, you should use Python 3.6 and Curio from github. 
 
+The verion 0.7 version (in progress) requires the use of Python 3.6.
+
 Quick install
 -------------
 
