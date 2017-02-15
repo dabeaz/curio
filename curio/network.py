@@ -8,7 +8,7 @@ __all__ = [
     'open_connection',
     'tcp_server',
     'open_unix_connection',
-    'unix_server'
+    'unix_server',
 ]
 
 from . import socket
@@ -96,7 +96,10 @@ async def open_unix_connection(path, *, ssl=None, server_hostname=None,
         sock._socket.close()
         raise
 
-async def _run_server(sock, client_connected_task, ssl=None):
+async def run_server(sock, client_connected_task, ssl=None):
+    if ssl and not hasattr(ssl, 'wrap_socket'):
+        raise ValueError('ssl argument must have a wrap_socket method')
+
     async def run_client(client, addr):
         async with client:
             await client_connected_task(client, addr)
@@ -111,12 +114,8 @@ async def _run_server(sock, client_connected_task, ssl=None):
             await spawn(run_client(client, addr))
             del client
 
-async def tcp_server(host, port, client_connected_task, *,
-                     family=socket.AF_INET, backlog=100, ssl=None,
-                     reuse_address=True, reuse_port=False):
-
-    if ssl and not hasattr(ssl, 'wrap_socket'):
-        raise ValueError('ssl argument must have a wrap_socket method')
+def tcp_socket(host, port, family=socket.AF_INET, backlog=100,
+               reuse_address=True, reuse_port=False):
 
     sock = socket.socket(family, socket.SOCK_STREAM)
     try:
@@ -131,20 +130,29 @@ async def tcp_server(host, port, client_connected_task, *,
 
         sock.bind((host, port))
         sock.listen(backlog)
-        await _run_server(sock, client_connected_task, ssl)
     except Exception:
         sock._socket.close()
         raise
 
-async def unix_server(path, client_connected_task, *, backlog=100, ssl=None):
-    if ssl and not hasattr(ssl, 'wrap_socket'):
-        raise ValueError('ssl argument must have a wrap_socket method')
+    return sock
 
+async def tcp_server(host, port, client_connected_task, *,
+                     family=socket.AF_INET, backlog=100, ssl=None,
+                     reuse_address=True, reuse_port=False):
+
+    sock = tcp_socket(host, port, family, backlog, reuse_address, reuse_port)
+    await run_server(sock, client_connected_task, ssl)
+
+def unix_socket(path, backlog=100):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         sock.bind(path)
         sock.listen(backlog)
-        await _run_server(sock, client_connected_task, ssl)
     except Exception:
         sock._socket.close()
         raise
+    return sock
+    
+async def unix_server(path, client_connected_task, *, backlog=100, ssl=None):
+    sock = unix_socket(path, backlog)
+    await run_server(sock, client_connected_task, ssl)

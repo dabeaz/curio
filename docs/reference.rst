@@ -792,6 +792,29 @@ making network connections and writing servers.
    :class:`curio.ssl.SSLContext` to use if setting up an SSL
    connection.
 
+.. asyncfunction:: run_server(sock, client_connected_task, ssl=None)
+
+   Runs a server on a given socket.  *sock* is a socket already 
+   configured to receive incoming connections.  *client_connected_task* and
+   *ssl* have the same meaning as for the ``tcp_server()`` and ``unix_server()``
+   functions.  If you need to perform some kind of special socket
+   setup, not possible with the normal ``tcp_server()`` function, you can
+   create the underlying socket yourself and then call this function
+   to run a server on it.
+
+.. function:: tcp_socket(host, port, family=AF_INET, backlog=100, reuse_address=True, reuse_port=False)
+
+   Creates and returns a TCP socket. Arguments are the same as for the
+   ``tcp_server()`` function.  The socket is suitable for use with other
+   async operations as well as the ``run_server()`` function.
+
+.. function:: unix_socket(path, backlog=100)
+
+   Creates and returns a Unix socket. Arguments are the same as for the
+   ``unix_server()`` function.  The socket is suitable for use with other
+   async operations as well as the ``run_server()`` function.
+
+
 Message Passing and Channels
 ----------------------------
 

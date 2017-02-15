@@ -76,7 +76,7 @@ def test_ssl_wrapping(kernel):
             sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
             sock.bind((host, port))
             sock.listen(5)
-            return network._run_server(sock, handler, context)
+            return network.run_server(sock, handler, context)
         except Exception:
             sock._socket.close()
             raise
