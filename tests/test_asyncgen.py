@@ -36,7 +36,6 @@ def test_simple_agen_final(kernel):
 
 # Test to make sure finally clause with async fails
 def test_agen_final_fail(kernel):
-    results = []
     async def countdown(n):
         try:
             while n > 0:
@@ -53,7 +52,6 @@ def test_agen_final_fail(kernel):
 
 # Make sure async-with in finally causes failure
 def test_agen_final_fail_with(kernel):
-    results = []
     async def countdown(n):
         try:
             while n > 0:
@@ -71,7 +69,6 @@ def test_agen_final_fail_with(kernel):
 
 # Make sure async-for in finally causes failure
 def test_agen_final_fail_iter(kernel):
-    results = []
     async def countdown(n):
         try:
             while n > 0:
@@ -89,7 +86,6 @@ def test_agen_final_fail_iter(kernel):
 
 # Make sure application of finalize() works
 def test_agen_final_finalize(kernel):
-    results = []
     async def countdown(n):
         try:
             while n > 0:
@@ -107,7 +103,6 @@ def test_agen_final_finalize(kernel):
 
 # Make sure async-with statement causes failure
 def test_agen_with_fail(kernel):
-    results = []
     lck = Lock()
 
     async def countdown(n):
@@ -124,8 +119,6 @@ def test_agen_with_fail(kernel):
 
 # Make sure async in try-except causes failure
 def test_agen_except_fail(kernel):
-    results = []
-
     async def countdown(n):
         while n > 0:
              try:
@@ -142,8 +135,6 @@ def test_agen_except_fail(kernel):
 
 # Make sure a try-except without asyncs works
 def test_agen_except_ok(kernel):
-    results = []
-
     async def countdown(n):
         while n > 0:
              try:
