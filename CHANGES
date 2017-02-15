@@ -1,8 +1,9 @@
 CHANGES
 -------
 
-Version 0.6 : In progress
--------------------------
+Version 0.6 : February 15, 2017
+-------------------------------
+
 02/13/2017 Added a withfd=True option to UniversalQueue.  For example:
 
               q = UniversalQueue(withfd=True)
