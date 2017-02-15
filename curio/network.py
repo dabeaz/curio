@@ -114,8 +114,8 @@ async def run_server(sock, client_connected_task, ssl=None):
             await spawn(run_client(client, addr))
             del client
 
-def tcp_socket(host, port, family=socket.AF_INET, backlog=100,
-               reuse_address=True, reuse_port=False):
+def tcp_server_socket(host, port, family=socket.AF_INET, backlog=100,
+                      reuse_address=True, reuse_port=False):
 
     sock = socket.socket(family, socket.SOCK_STREAM)
     try:
@@ -140,10 +140,10 @@ async def tcp_server(host, port, client_connected_task, *,
                      family=socket.AF_INET, backlog=100, ssl=None,
                      reuse_address=True, reuse_port=False):
 
-    sock = tcp_socket(host, port, family, backlog, reuse_address, reuse_port)
+    sock = tcp_server_socket(host, port, family, backlog, reuse_address, reuse_port)
     await run_server(sock, client_connected_task, ssl)
 
-def unix_socket(path, backlog=100):
+def unix_server_socket(path, backlog=100):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         sock.bind(path)
@@ -154,5 +154,5 @@ def unix_socket(path, backlog=100):
     return sock
     
 async def unix_server(path, client_connected_task, *, backlog=100, ssl=None):
-    sock = unix_socket(path, backlog)
+    sock = unix_server_socket(path, backlog)
     await run_server(sock, client_connected_task, ssl)

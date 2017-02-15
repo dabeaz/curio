@@ -802,13 +802,13 @@ making network connections and writing servers.
    create the underlying socket yourself and then call this function
    to run a server on it.
 
-.. function:: tcp_socket(host, port, family=AF_INET, backlog=100, reuse_address=True, reuse_port=False)
+.. function:: tcp_server_socket(host, port, family=AF_INET, backlog=100, reuse_address=True, reuse_port=False)
 
    Creates and returns a TCP socket. Arguments are the same as for the
    ``tcp_server()`` function.  The socket is suitable for use with other
    async operations as well as the ``run_server()`` function.
 
-.. function:: unix_socket(path, backlog=100)
+.. function:: unix_server_socket(path, backlog=100)
 
    Creates and returns a Unix socket. Arguments are the same as for the
    ``unix_server()`` function.  The socket is suitable for use with other
