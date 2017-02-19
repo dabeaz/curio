@@ -5,13 +5,50 @@ Curio is a modern library for performing reliable concurrent I/O using
 Python coroutines and the explicit async/await syntax introduced in
 Python 3.5.  Its programming model is based on cooperative
 multitasking and common system programming abstractions such as
-threads, sockets, files, subprocesses, locks, and queues.  Under the
-covers, it is based on a task queuing system.  If you've programmed
-with threads, curio will feel familiar.
+threads, sockets, files, subprocesses, locks, and queues.  However,
+under the covers it is based on task model provides for advanced
+handling of cancellation, threads, processes, and much more.
 
-This tutorial will take you through the basics of creating and 
-managing tasks in curio as well as some useful debugging features. 
-Various I/O related features come a bit later.
+This tutorial will take you through the basics of creating and
+managing tasks in curio as well as some useful debugging features.
+
+A Small Taste
+-------------
+
+Curio allows you to write concurrent I/O handling code that looks a
+lot like threads.  For example, here is a simple echo server::
+
+    from curio import run, spawn
+    from curio.socket import *
+    
+    async def echo_server(address):
+        sock = socket(AF_INET, SOCK_STREAM)
+        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        sock.bind(address)
+        sock.listen(5)
+        print('Server listening at', address)
+        async with sock:
+            while True:
+                client, addr = await sock.accept()
+                await spawn(echo_client(client, addr))
+    
+    async def echo_client(client, addr):
+        print('Connection from', addr)
+        async with client:
+             while True:
+                 data = await client.recv(1000)
+                 if not data:
+                     break
+                 await client.sendall(data)
+        print('Connection closed')
+
+    if __name__ == '__main__':
+        run(echo_server(('',25000)))
+
+This server can handle thousands of concurrent clients.   It does
+not use threads.   However, this example really doesn't do Curio
+justice.  In the rest of this tutorial, we'll start with the
+basics and work our way back to this. 
 
 Getting Started
 ---------------
