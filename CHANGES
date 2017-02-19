@@ -2,6 +2,7 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+02/19/2017 Added new curio.zmq module for supporting ZeroMQ.
 
 Version 0.6 : February 15, 2017
 -------------------------------

@@ -23,8 +23,8 @@ Contents:
    :maxdepth: 2
 
    tutorial
-   reference
    howto
+   reference
    devel
 
 Installation:
@@ -33,6 +33,9 @@ Installation:
 Curio requires Python 3.5 and Unix.  You can install it using ``pip``::
 
     bash % python3 -m pip install curio
+
+For best results, however, you'll want to grab the version on Github
+at https://github.com/dabeaz/curio.
 
 An Example
 ----------
@@ -91,9 +94,11 @@ of the code::
     if __name__ == '__main__':
         run(tcp_server('', 25000, echo_client))
 
-This is only a small sample of what's possible.  The `tutorial 
-<https://curio.readthedocs.io/en/latest/tutorial.html>`_ is a good starting point
-for more information.
+This is only a small sample of what's possible.  The `tutorial
+<https://curio.readthedocs.io/en/latest/tutorial.html>`_ is a good
+starting point for more information.  The `howto
+<https://curio.readthedocs.io/en/latest/howto.html>`_ has specific
+recipes for solving different kinds of problems.
 
 Additional Features
 -------------------
