@@ -942,7 +942,7 @@ that certain operations are replaced by async functions.
 
 .. class:: Context(*args, **kwargs)
 
-   An asynchronous subclass of :class:`zmq.Context`. It has the same arguments
+   An asynchronous subclass of ``zmq.Context``. It has the same arguments
    and methods as the synchronous class.   Create ZeroMQ sockets using the
    ``socket()`` method of this class.
 
