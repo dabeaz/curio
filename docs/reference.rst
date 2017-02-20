@@ -932,6 +932,86 @@ Here is an example of a correspoinding consumer program using a channel::
         ch = Channel(('localhost', 30000))
         run(consumer(ch))
 
+ZeroMQ wrapper module
+---------------------
+.. module:: curio.zmq
+
+The :mod:`curio.zmq` module provides an async wrapper around the third party
+pyzmq library for communicating via ZeroMQ.   You use it in the same way except
+that certain operations are replaced by async functions.
+
+.. class:: Context(*args, **kwargs)
+
+   An asynchronous subclass of :class:`zmq.Context`. It has the same arguments
+   and methods as the synchronous class.   Create ZeroMQ sockets using the
+   ``socket()`` method of this class.
+
+Sockets created by the :class:`curio.zmq.Context()` class have the following
+methods replaced by asynchronous versions:
+
+.. asyncmethod:: Socket.send(data, flags=0, copy=True, track=False)
+.. asyncmethod:: Socket.recv(flags=0, copy=True, track=False)
+.. asyncmethod:: Socket.send_multipart(msg_parts, flags=0, copy=True, track=False)
+.. asyncmethod:: Socket.recv_multipart(flags=0, copy=True, track=False)
+.. asyncmethod:: Socket.send_pyobj(obj, flags=0, protocol=pickle.DEFAULT_PROTOCOL)
+.. asyncmethod:: Socket.recv_pyobj(flags=0)
+.. asyncmethod:: Socket.send_json(obj, flags=0, **kwargs)
+.. asyncmethod:: Socket.recv_json(flags, **kwargs)
+.. asyncmethod:: Socket.send_string(u, flags=0, copy=True, encoding='utf-8')
+.. asyncmethod:: Socket.recv_string(flags=0, encoding='utf-8')
+
+To run a Curio application that uses ZeroMQ, a special selector must be given
+to the Kernel.  You can either do this::
+
+   from curio.zmq import ZMQSelector
+   from curio import run
+
+   async def main():
+       ...
+
+   run(main(), selector=ZMQSelector())
+
+Alternative, you can use the ``curio.zmq.run()`` function like this::
+
+   from curio.zmq import run
+
+   async def main():
+       ...
+
+   run(main())
+
+Here is an example of task that uses a ZMQ PUSH socket::
+
+    import curio.zmq as zmq
+
+    async def pusher(address):
+        ctx = zmq.Context()
+        sock = ctx.socket(zmq.PUSH)
+        sock.bind(address)
+        for n in range(100):
+            await sock.send(b'Message %d' % n)
+        await sock.send(b'exit')
+
+    if __name__ == '__main__':
+        zmq.run(pusher('tcp://*:9000'))
+
+Here is an example of a Curio task that receives messages::
+
+    import curio.zmq as zmq
+
+    async def puller(address):
+        ctx = zmq.Context()
+        sock = ctx.socket(zmq.PULL)
+        sock.connect(address)
+        while True:
+            msg = await sock.recv()
+            if msg == b'exit':
+                break
+            print('Got:', msg)
+
+    if __name__ == '__main__':
+        zmq.run(puller('tcp://localhost:9000'))
+
 subprocess wrapper module
 -------------------------
 .. module:: curio.subprocess
