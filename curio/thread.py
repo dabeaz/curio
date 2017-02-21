@@ -72,8 +72,8 @@ class AsyncThread(object):
         self._terminate_evt.set()
 
     async def start(self):
-        self._task = await spawn(self._coro_runner())
-        self._thread = threading.Thread(target=self._func_runner)
+        self._task = await spawn(self._coro_runner(), daemon=self.daemon)
+        self._thread = threading.Thread(target=self._func_runner, daemon=True)
         self._thread.start()
 
     def AWAIT(self, coro):
@@ -147,10 +147,13 @@ def async_iter(aiter):
     return _AIterRunner(aiter)
 
 
-def async_thread(func):
+def async_thread(func=None, *, daemon=False):
+    if func is None:
+        return lambda func: async_thread(func, daemon=daemon)
+
     @wraps(func)
     async def runner(*args, **kwargs):
-        t = AsyncThread(func, args=args, kwargs=kwargs)
+        t = AsyncThread(func, args=args, kwargs=kwargs, daemon=daemon)
         await t.start()
         try:
             return await t.join()
