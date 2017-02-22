@@ -7,7 +7,7 @@
 
 __all__ = ['blocking', 'cpubound', 'awaitable', 'sync_only', 'AsyncABC', 'AsyncObject']
 
-import sys
+from sys import _getframe
 import inspect
 from functools import wraps
 from abc import ABCMeta, abstractmethod
@@ -21,11 +21,11 @@ _CO_GENERATOR = 0x0020
 _CO_COROUTINE = 0x0080
 _CO_ITERABLE_COROUTINE = 0x0100
 _CO_ASYNC_GENERATOR = 0x0200
-
+_CO_FROM_COROUTINE = _CO_COROUTINE | _CO_ITERABLE_COROUTINE | _CO_ASYNC_GENERATOR
 
 def _from_coroutine(level=2):
-    f_code = sys._getframe(level).f_code
-    if f_code.co_flags & (_CO_COROUTINE | _CO_ITERABLE_COROUTINE | _CO_ASYNC_GENERATOR):
+    f_code = _getframe(level).f_code
+    if f_code.co_flags & CO_FROM_COROUTINE:
         return True
     else:
         # Comment:  It's possible that we could end up here if one calls a function
