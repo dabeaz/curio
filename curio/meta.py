@@ -25,7 +25,7 @@ _CO_FROM_COROUTINE = _CO_COROUTINE | _CO_ITERABLE_COROUTINE | _CO_ASYNC_GENERATO
 
 def _from_coroutine(level=2):
     f_code = _getframe(level).f_code
-    if f_code.co_flags & CO_FROM_COROUTINE:
+    if f_code.co_flags & _CO_FROM_COROUTINE:
         return True
     else:
         # Comment:  It's possible that we could end up here if one calls a function
