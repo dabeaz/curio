@@ -57,6 +57,46 @@ def test_tcp_echo(kernel):
         'handler done'
     ]
 
+def test_ssl_server(kernel):
+
+    async def client(host, port, context):
+        sock = await network.open_connection(host, port, ssl=context, server_hostname=host)
+        await sock.sendall(b'Hello, world!')
+        resp = await sock.recv(4096)
+        return resp
+
+    async def handler(client_sock, addr):
+        data = await client_sock.recv(1000)
+        assert data == b'Hello, world!'
+        await client_sock.send(b'Back atcha: ' + data)
+
+    async def main():
+        # It might be desirable to move these out of the examples
+        # directory, as this test are now relying on them being around
+        file_path = join(dirname(dirname(__file__)), 'examples')
+        cert_file = join(file_path, 'ssl_test.crt')
+        key_file = join(file_path, 'ssl_test_rsa')
+
+        server_context = curiossl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        server_context.load_cert_chain(certfile=cert_file, keyfile=key_file)
+
+        stdlib_client_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        curio_client_context = curiossl.create_default_context(ssl.Purpose.SERVER_AUTH)
+
+        server_task = await spawn(network.tcp_server('', 10000, handler, ssl=server_context))
+        await sleep(0.1)
+
+        for test_context in (curio_client_context, stdlib_client_context):
+            test_context.check_hostname = False
+            test_context.verify_mode = ssl.CERT_NONE
+            resp = await client('localhost', 10000, test_context)
+            assert resp == b'Back atcha: Hello, world!'
+
+        await server_task.cancel()
+
+    kernel.run(main())
+
+
 def test_ssl_wrapping(kernel):
 
     async def client(host, port, context):
@@ -80,7 +120,7 @@ def test_ssl_wrapping(kernel):
         except Exception:
             sock._socket.close()
             raise
-
+        
     async def main():
         # It might be desirable to move these out of the examples
         # directory, as this test are now relying on them being around
