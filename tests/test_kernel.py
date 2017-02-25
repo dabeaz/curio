@@ -798,6 +798,45 @@ def test_task_wait_cancel(kernel):
     ]
 
 
+def test_task_wait_add(kernel):
+    results = []
+
+    async def child(name, n):
+        results.append(name + ' start')
+        try:
+            await sleep(n)
+            results.append(name + ' end')
+        except CancelledError:
+            results.append(name + ' cancel')
+        return n
+
+    async def main():
+        task1 = await spawn(child('child1', 0.75))
+        task2 = await spawn(child('child2', 0.5))
+        w = wait([task1, task2])
+        async with w:
+            task = await w.next_done()
+            result = await task.join()
+            results.append(result)
+            await w.add_task(await spawn(child('child3', 0.1)))
+            task = await w.next_done()
+            result = await task.join()
+            results.append(result)
+
+    kernel.run(main())
+    assert results == [
+        'child1 start',
+        'child2 start',
+        'child2 end',
+        0.5,
+        'child3 start',
+        'child3 end',
+        0.1,
+        'child1 cancel',
+    ]
+
+
+
 def test_task_run_error(kernel):
     results = []
 

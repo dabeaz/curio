@@ -258,18 +258,25 @@ class wait(object):
         except StopAsyncIteration:
             raise StopIteration
 
-    async def _init(self):
-        async def wait_runner(task):
-            try:
-                await task.join()
-            except Exception:
-                pass
-            await self._queue.put(task)
+    async def _wait_runner(self, task):
+        try:
+            await task.join()
+        except Exception:
+            pass
+        await self._queue.put(task)
 
+    async def _init(self):
         self._tasks = []
         for task in self._initial_tasks:
-            await spawn(wait_runner(task))
+            await spawn(self._wait_runner(task))
             self._tasks.append(task)
+        self._initial_tasks = []
+
+    async def add_task(self, task):
+        if self._tasks is None:
+            await self._init()
+        await spawn(self._wait_runner(task))
+        self._tasks.append(task)
 
     async def next_done(self):
         if self._tasks is None:
