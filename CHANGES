@@ -2,6 +2,11 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+02/26/2017 Modifed the gather() function so that it also cancels all tasks
+           if it is cancelled by timeout or other means.  See issue #186.
+	   The resulting exception has a .results attribute set with
+	   the results of all tasks at the time of cancellation.
+
 02/19/2017 Added new curio.zmq module for supporting ZeroMQ.
 
 Version 0.6 : February 15, 2017

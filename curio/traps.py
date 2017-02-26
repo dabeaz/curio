@@ -21,7 +21,7 @@ __all__ = [
 from types import coroutine
 from selectors import EVENT_READ, EVENT_WRITE
 from enum import IntEnum
-
+from . import errors
 
 class Traps(IntEnum):
     _trap_io = 0
@@ -90,11 +90,11 @@ def _spawn(coro, daemon):
 
 
 @coroutine
-def _cancel_task(task):
+def _cancel_task(task, exc=errors.TaskCancelled, val=None):
     '''
     Cancel a task. Causes a CancelledError exception to raise in the task.
     '''
-    yield (_trap_cancel_task, task)
+    yield (_trap_cancel_task, task, exc, val)
 
 
 @coroutine

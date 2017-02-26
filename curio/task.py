@@ -170,12 +170,19 @@ async def spawn(coro, *, daemon=False, allow_cancel=True):
 
 async def gather(tasks, *, return_exceptions=False):
     '''
-    Wait for and gather results from a collection of tasks.
+    Wait for and gather results from a collection of tasks.  If
+    cancelled, all tasks are cancelled.   Partially computed
+    results are stored in the results attribute of the raised exception.
     '''
     results = []
     for task in tasks:
         try:
             results.append(await task.join())
+        except CancelledError as e:
+            for task in tasks:
+                await task.cancel(False)
+            e.results = await gather(tasks, return_exceptions=True)
+            raise
         except Exception as e:
             if return_exceptions:
                 results.append(e)
