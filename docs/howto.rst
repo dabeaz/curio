@@ -319,7 +319,7 @@ Now, make a consumer program::
         c = await ch.connect(authkey=b'peekaboo')
         while True:
             msg = await c.recv()
-            if msg:
+            if msg is None:
                 break
             print('Got:', msg)
         
