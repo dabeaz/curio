@@ -215,12 +215,14 @@ class Kernel(object):
             import asyncio
             self._asyncio_loop = asyncio_loop or asyncio.new_event_loop()
 
-            def _asyncio_thread():
-                asyncio.set_event_loop(self._asyncio_loop)
-                self._asyncio_loop.run_forever()
-                print("loop died")
+            def _asyncio_thread(loop):
+                def _suspended():
+                    asyncio.set_event_loop(loop)
+                    loop.run_forever()
 
-            self._asyncio_bridge = _asyncio_thread
+                return _suspended
+
+            self._asyncio_bridge = _asyncio_thread(self._asyncio_loop)
 
         # Optional settings
         self._warn_if_task_blocks_for = warn_if_task_blocks_for
@@ -315,7 +317,7 @@ class Kernel(object):
             self._process_pool = None
 
         if self._asyncio_loop:
-            self._asyncio_loop.stop()
+            self._asyncio_loop.call_soon_threadsafe(self._asyncio_loop.stop)
             self._asyncio_loop = None
 
         if self._monitor:
@@ -340,10 +342,8 @@ class Kernel(object):
                 self._runner.send(None)
 
             # Boot the asyncio worker thread, if applicable.
-            if self._asyncio_loop:
-                # asyncio must die when we die
-                # because it is terribad and won't stop running
-                self._local.asyncio_thread = threading.Thread(target=self._asyncio_bridge, daemon=True)
+            if self._asyncio_loop and not self._asyncio_loop.is_running():
+                self._local.asyncio_thread = threading.Thread(target=self._asyncio_bridge)
                 self._local.asyncio_thread.start()
 
             # Submit the given coroutine (if any)
