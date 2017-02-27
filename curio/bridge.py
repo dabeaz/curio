@@ -9,6 +9,8 @@ import asyncio
 from .traps import _get_kernel
 from .sync import Event, abide
 
+__all__ = ["acb"]
+
 
 async def acb(coro):
     '''
