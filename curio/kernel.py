@@ -1,7 +1,6 @@
 # curio/kernel.py
 #
 # Main execution kernel.
-import asyncio
 import socket
 import heapq
 import time
