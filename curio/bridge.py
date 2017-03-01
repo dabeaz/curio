@@ -38,40 +38,41 @@ async def acb(coro):
 
 class AsyncioLoop(object):
     '''
-    A curio wrapper around an asyncio event loop.   It allows asyncio coroutines
+    A curio interface to an asyncio event loop.   It allows asyncio coroutines
     to be submitted to asyncio and executed in a backrgound thread.   Only
-    one method is provided, run_until_complete().
+    one method is provided, run_asyncio().
     '''
     
     def __init__(self, event_loop=None):
-        self._loop = event_loop if event_loop else asyncio.new_event_loop()
+        self.loop = event_loop if event_loop else asyncio.new_event_loop()
         self._thread = None
         self._shutdown = Event()
         
-    def _asyncio_thread(self, loop):
-        asyncio.set_event_loop(loop)
-        loop.run_forever()
+    def _asyncio_thread(self):
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
 
     async def _asyncio_task(self):
-        # A curio supervisor task for the background asyncio.  This basically
-        # does nothing, except issue a request for loop shutdown on cancellation
+        # A curio supervisor task for the background asyncio loop.  It doesn't
+        # really do anything except sit around and wait for cancellation.
+        # When cancelled, it shuts the asyncio thread down.
         try:
             await self._shutdown.wait()
         finally:
-            self._loop.call_soon_threadsafe(self._loop.stop)
+            self.loop.call_soon_threadsafe(self.loop.stop)
             await workers.run_in_thread(self._thread.join)
             self._thread = None
 
-    async def run_until_complete(self, coro):
+    async def run_asyncio(self, coro):
         '''
         Run an asyncio compatible coroutine to completion, returning its result
         '''
         if self._thread is None:
-            self._thread = threading.Thread(target=self._asyncio_thread, args=(self._loop,))
+            self._thread = threading.Thread(target=self._asyncio_thread)
             self._thread.start()
             await task.spawn(self._asyncio_task(), daemon=True)
 
-        fut  = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        fut  = asyncio.run_coroutine_threadsafe(coro, self.loop)
         await _future_wait(fut)
         return fut.result()
 
@@ -83,10 +84,6 @@ class AsyncioLoop(object):
 
     async def __aexit__(self, ty, val, tb):
         await self.shutdown()
-
-    # Delegate all other "loop" methods to asyncio
-    def __getattr__(self, name):
-        return getattr(self._loop, name)
 
     
     
