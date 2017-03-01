@@ -1,7 +1,6 @@
 # curio/kernel.py
 #
 # Main execution kernel.
-
 import socket
 import heapq
 import time
@@ -172,7 +171,7 @@ class Kernel(object):
     _local = threading.local()
 
     def __init__(self, *, selector=None, with_monitor=False, log_errors=True,
-                 warn_if_task_blocks_for=None):
+                 warn_if_task_blocks_for=None, with_asyncio_bridge=False, asyncio_loop=None):
         if selector is None:
             selector = DefaultSelector()
 
@@ -204,6 +203,25 @@ class Kernel(object):
         # Optional process/thread pools (see workers.py)
         self._thread_pool = None
         self._process_pool = None
+
+        # Optional asyncio bridge
+        self._asyncio_bridge = None
+        self._asyncio_loop = None
+
+        if with_asyncio_bridge:
+            # Start the event loop in a separate thread.
+            # This will be managed by the kernel `run` loop later on.
+            import asyncio
+            self._asyncio_loop = asyncio_loop or asyncio.new_event_loop()
+
+            def _asyncio_thread(loop):
+                def _suspended():
+                    asyncio.set_event_loop(loop)
+                    loop.run_forever()
+
+                return _suspended
+
+            self._asyncio_bridge = _asyncio_thread(self._asyncio_loop)
 
         # Optional settings
         self._warn_if_task_blocks_for = warn_if_task_blocks_for
@@ -297,6 +315,10 @@ class Kernel(object):
             self._process_pool.shutdown()
             self._process_pool = None
 
+        if self._asyncio_loop:
+            self._asyncio_loop.call_soon_threadsafe(self._asyncio_loop.stop)
+            self._asyncio_loop = None
+
         if self._monitor:
             self._monitor.close()
 
@@ -317,6 +339,11 @@ class Kernel(object):
                     self._asyncgen_hooks = sys.get_asyncgen_hooks()
                 self._runner = self._run_coro()
                 self._runner.send(None)
+
+            # Boot the asyncio worker thread, if applicable.
+            if self._asyncio_loop and not self._asyncio_loop.is_running():
+                self._local.asyncio_thread = threading.Thread(target=self._asyncio_bridge)
+                self._local.asyncio_thread.start()
 
             # Submit the given coroutine (if any)
             try:
