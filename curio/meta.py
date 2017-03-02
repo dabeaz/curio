@@ -5,15 +5,17 @@
 #   \/   \/             If you use it, you might die. No seriously.
 #
 
-__all__ = ['blocking', 'cpubound', 'awaitable', 'sync_only', 'AsyncABC', 'AsyncObject']
+__all__ = ['blocking', 'cpubound', 'awaitable', 'asyncioable', 'sync_only', 'AsyncABC', 'AsyncObject']
 
 from sys import _getframe
 import inspect
-from functools import wraps
+from functools import wraps, partial
 from abc import ABCMeta, abstractmethod
 import dis
+import asyncio
 
 from .errors import SyncIOError
+from .kernel import Kernel
 
 # Some flags defined in Include/code.h
 _CO_NESTED = 0x0010
@@ -133,9 +135,38 @@ def awaitable(syncfunc):
                 return asyncfunc(*args, **kwargs)
             else:
                 return syncfunc(*args, **kwargs)
+        wrapper._syncfunc = syncfunc
+        wrapper._asyncfunc = asyncfunc
         return wrapper
     return decorate
 
+
+def asyncioable(awaitablefunc):
+    '''
+    Decorator that additionally allows an asyncio compatible call to work
+    on an already awaitable function. For example:
+     
+        @asyncioable
+        @awaitable(spam)                                
+        async def spam(sock, maxbytes):
+            return await sock.recv(maxbytes)
+
+    When used, use of an async function from within asyncio (running in a
+    different thread) will run the synchronous implementation from a thread.
+    '''
+    @wraps(awaitablefunc)
+    def wrapper(*args, **kwargs):
+        if _from_coroutine():
+            # Check if we're Curio or not
+            if getattr(Kernel._local, 'running', False):
+                return awaitablefunc._asyncfunc(*args, **kwargs)
+            else:
+                loop = asyncio.get_event_loop()
+                assert loop.is_running()
+                return loop.run_in_executor(None, partial(awaitablefunc._syncfunc, *args, **kwargs))
+        else:
+            return awaitablefunc._syncfunc(*args, **kwargs)
+    return wrapper
 
 class AsyncABCMeta(ABCMeta):
     '''

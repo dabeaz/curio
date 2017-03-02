@@ -11,11 +11,12 @@ import threading
 import queue as thread_queue
 import weakref
 import socket as std_socket
+import asyncio
 
 from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function
 from .kernel import KSyncQueue
 from .errors import CurioError, CancelledError, TaskTimeout
-from .meta import awaitable
+from .meta import awaitable, asyncioable
 from . import workers
 from .task import spawn, timeout_after
 from . import sync
@@ -220,6 +221,7 @@ class UniversalQueue(object):
             self._get_sock.recv(1)
         return item
 
+    @asyncioable
     @awaitable(get_sync)
     async def get(self):
         if not hasattr(self._local, 'get_task'):
@@ -242,6 +244,7 @@ class UniversalQueue(object):
         if self._put_sock:
             self._put_sock.send(b'\x01')
 
+    @asyncioable
     @awaitable(put_sync)
     async def put(self, item):
         await workers.block_in_thread(self.put_sync, item)
@@ -249,6 +252,7 @@ class UniversalQueue(object):
     def task_done(self):
         self._tqueue.task_done()
 
+    @asyncioable
     @awaitable(task_done)
     async def task_done(self):
         await workers.run_in_thread(self._tqueue.task_done)
@@ -256,6 +260,7 @@ class UniversalQueue(object):
     def join(self):
         self._tqueue.join()
 
+    @asyncioable
     @awaitable(join)
     async def join(self):
         await workers.block_in_thread(self._tqueue.join)
