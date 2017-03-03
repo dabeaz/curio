@@ -4,9 +4,9 @@
 
 __all__ = []
 
+# -- Standard Library
+
 from functools import wraps, partial
-from .workers import run_in_thread
-from .io import Socket
 
 try:
     import ssl as _ssl
@@ -20,6 +20,11 @@ except ImportError:
 
     class SSLWantWriteError(Exception):
         pass
+
+# -- Curio
+
+from .workers import run_in_thread
+from .io import Socket
 
 if _ssl:
     @wraps(_ssl.wrap_socket)

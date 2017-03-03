@@ -11,16 +11,21 @@
 # ----------------------------------------------------------------------
 
 __all__ = [
-    '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn', '_join_task',
-    '_cancel_task',
-    '_wait_on_ksync', '_reschedule_tasks', '_ksync_reschedule_function',
-    '_sigwatch', '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
+    '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
+    '_join_task', '_cancel_task', '_wait_on_ksync',
+    '_reschedule_tasks', '_ksync_reschedule_function', '_sigwatch',
+    '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
     '_set_timeout', '_unset_timeout', '_clock',
 ]
+
+# -- Standard library
 
 from types import coroutine
 from selectors import EVENT_READ, EVENT_WRITE
 from enum import IntEnum
+
+# -- Curio
+
 from . import errors
 
 class Traps(IntEnum):

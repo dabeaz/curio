@@ -41,7 +41,13 @@
 
 __all__ = ['aopen', 'anext']
 
+# -- Standard library
+
 from contextlib import contextmanager
+from functools import partial
+
+# -- Curio
+
 from .workers import run_in_thread
 from .errors import SyncIOError
 from . import thread
@@ -75,28 +81,28 @@ class AsyncFile(object):
         return self._fileobj
 
     async def read(self, *args, **kwargs):
-        return await run_in_thread(self._file.read, *args, **kwargs)
+        return await run_in_thread(partial(self._file.read, *args, **kwargs))
 
     async def read1(self, *args, **kwargs):
-        return await run_in_thread(self._file.read1, *args, **kwargs)
+        return await run_in_thread(partial(self._file.read1, *args, **kwargs))
 
     async def readinto(self, *args, **kwargs):
-        return await run_in_thread(self._file.readinto, *args, **kwargs)
+        return await run_in_thread(partial(self._file.readinto, *args, **kwargs))
 
     async def readinto1(self, *args, **kwargs):
-        return await run_in_thread(self._file.readinto1, *args, **kwargs)
+        return await run_in_thread(partial(self._file.readinto1, *args, **kwargs))
 
     async def readline(self, *args, **kwargs):
-        return await run_in_thread(self._file.readline, *args, **kwargs)
+        return await run_in_thread(partial(self._file.readline, *args, **kwargs))
 
     async def readlines(self, *args, **kwargs):
-        return await run_in_thread(self._file.readlines, *args, **kwargs)
+        return await run_in_thread(partial(self._file.readlines, *args, **kwargs))
 
     async def write(self, *args, **kwargs):
-        return await run_in_thread(self._file.write, *args, **kwargs)
+        return await run_in_thread(partial(self._file.write, *args, **kwargs))
 
     async def writelines(self, *args, **kwargs):
-        return await run_in_thread(self._file.writelines, *args, **kwargs)
+        return await run_in_thread(partial(self._file.writelines, *args, **kwargs))
 
     async def flush(self):
         return await run_in_thread(self._file.flush)
@@ -105,13 +111,13 @@ class AsyncFile(object):
         return await run_in_thread(self._file.close)
 
     async def seek(self, *args, **kwargs):
-        return await run_in_thread(self._file.seek, *args, **kwargs)
+        return await run_in_thread(partial(self._file.seek, *args, **kwargs))
 
     async def tell(self, *args, **kwargs):
-        return await run_in_thread(self._file.tell, *args, **kwargs)
+        return await run_in_thread(partial(self._file.tell, *args, **kwargs))
 
     async def truncate(self, *args, **kwargs):
-        return await run_in_thread(self._file.truncate, *args, **kwargs)
+        return await run_in_thread(partial(self._file.truncate, *args, **kwargs))
 
     def __iter__(self):
         raise SyncIOError('Use asynchronous iteration')
@@ -130,7 +136,7 @@ class AsyncFile(object):
 
     async def __aenter__(self):
         if self._fileobj is None:
-            self._fileobj = await run_in_thread(open, *self._open_args, **self._open_kwargs)
+            self._fileobj = await run_in_thread(partial(open, *self._open_args, **self._open_kwargs))
         return self
 
     async def __aexit__(self, *args):

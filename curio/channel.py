@@ -6,10 +6,15 @@
 
 __all__ = ['Channel']
 
+# -- Standard Library
+
 import os
 import pickle
 import struct
 import hmac
+import multiprocessing.connection as mpc
+
+# -- Curio
 
 from . import socket
 from .errors import CurioError, TaskTimeout
@@ -18,8 +23,6 @@ from . import thread
 from .task import timeout_after, sleep
 
 # Authentication parameters (copied from multiprocessing)
-
-import multiprocessing.connection as mpc
 
 AUTH_MESSAGE_LENGTH = mpc.MESSAGE_LENGTH    # 20
 CHALLENGE = mpc.CHALLENGE                   # b'#CHALLENGE#'

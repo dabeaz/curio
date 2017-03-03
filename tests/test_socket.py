@@ -16,7 +16,7 @@ def test_tcp_echo(kernel):
         results.append('accept wait')
         client, addr = await sock.accept()
         results.append('accept done')
-        await spawn(handler(client))
+        await spawn(handler, client)
         await sock.close()
 
     async def handler(client):
@@ -48,8 +48,8 @@ def test_tcp_echo(kernel):
         await sock.close()
 
     async def main():
-        await spawn(server(('', 25000)))
-        await spawn(client(('localhost', 25000)))
+        await spawn(server, ('', 25000))
+        await spawn(client, ('localhost', 25000))
 
     kernel.run(main())
 
@@ -80,7 +80,7 @@ def test_tcp_file_echo(kernel):
         results.append('accept wait')
         client, addr = await sock.accept()
         results.append('accept done')
-        await spawn(handler(client))
+        await spawn(handler, client)
         await sock.close()
 
     async def handler(client):
@@ -109,8 +109,8 @@ def test_tcp_file_echo(kernel):
         await sock.close()
 
     async def main():
-        await spawn(server(('', 25000)))
-        await spawn(client(('localhost', 25000)))
+        await spawn(server, ('', 25000))
+        await spawn(client, ('localhost', 25000))
 
     kernel.run(main())
 
@@ -152,8 +152,8 @@ def test_udp_echo(kernel):
         results.append('client close')
 
     async def main():
-        await spawn(server(('', 25000)))
-        await spawn(client(('localhost', 25000)))
+        await spawn(server, ('', 25000))
+        await spawn(client, ('localhost', 25000))
 
     kernel.run(main())
 
@@ -207,7 +207,7 @@ def test_accept_cancel(kernel):
         await sock.close()
 
     async def canceller():
-        task = await spawn(server(('', 25000)))
+        task = await spawn(server, ('', 25000))
         await sleep(0.5)
         await task.cancel()
 
@@ -239,7 +239,7 @@ def test_recv_timeout(kernel):
 
     async def canceller():
         accepting_event = Event()
-        task = await spawn(server(('', 25000), accepting_event))
+        task = await spawn(server, ('', 25000), accepting_event)
         await accepting_event.wait()
         sock = socket(AF_INET, SOCK_STREAM)
         results.append('client connect')
@@ -280,7 +280,7 @@ def test_recv_cancel(kernel):
 
     async def canceller():
         accepting_event = Event()
-        task = await spawn(server(('', 25000), accepting_event))
+        task = await spawn(server, ('', 25000), accepting_event)
         await accepting_event.wait()
         sock = socket(AF_INET, SOCK_STREAM)
         results.append('client connect')
@@ -316,7 +316,7 @@ def test_recvfrom_timeout(kernel):
         await sock.close()
 
     async def canceller():
-        await spawn(server(('', 25000)))
+        await spawn(server, ('', 25000))
         await sleep(1.0)
         results.append('client done')
 
@@ -344,7 +344,7 @@ def test_recvfrom_cancel(kernel):
         await sock.close()
 
     async def canceller():
-        task = await spawn(server(('', 25000)))
+        task = await spawn(server, ('', 25000))
         await sleep(1.0)
         await task.cancel()
         results.append('client done')
@@ -381,8 +381,8 @@ def test_buffer_into(kernel):
     s1, s2 = socketpair()
 
     async def main():
-        await spawn(sender(s1))
-        await spawn(receiver(s2))
+        await spawn(sender, s1)
+        await spawn(receiver, s2)
 
     kernel.run(main())
     s1._socket.close()
@@ -394,10 +394,10 @@ def test_buffer_into(kernel):
 def test_read_write_on_same_socket(kernel):
     async def main():
         s1, s2 = socketpair()
-        t1 = await spawn(s1.recv(1000))
+        t1 = await spawn(s1.recv, 1000)
         # Large enough send to trigger blocking on write:
         N = 10000000
-        t2 = await spawn(s1.sendall(b"x" * N))
+        t2 = await spawn(s1.sendall, b"x" * N)
         # Above is the actual test -- right now it triggers a crash.
         # Rest of this is just to clean up:
         # Let t1 finish:

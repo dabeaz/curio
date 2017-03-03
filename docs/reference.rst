@@ -361,16 +361,16 @@ Performing External Work
 Sometimes you need to perform work outside the kernel.  This includes CPU-intensive
 calculations and blocking operations.  Use the following functions to do that:
 
-.. asyncfunction:: run_in_process(callable, *args, **kwargs)
+.. asyncfunction:: run_in_process(callable, *args)
 
-   Run ``callable(*args, **kwargs)`` in a separate process and returns
+   Run ``callable(*args)`` in a separate process and returns
    the result.  If cancelled, the underlying
    worker process (if started) is immediately cancelled by a ``SIGTERM``
    signal.
 
-.. asyncfunction:: run_in_thread(callable, *args, **kwargs)
+.. asyncfunction:: run_in_thread(callable, *args)
 
-   Run ``callable(*args, **kwargs)`` in a separate thread and return
+   Run ``callable(*args)`` in a separate thread and return
    the result.  If the calling task is cancelled, the underlying
    worker thread (if started) is set aside and sent a termination
    request.  However, since there is no underlying mechanism to
@@ -383,7 +383,7 @@ calculations and blocking operations.  Use the following functions to do that:
    threads should have a timeout or some other mechanism that
    puts a bound on execution time.
 
-.. asyncfunction:: block_in_thread(callable, *args, **kwargs)
+.. asyncfunction:: block_in_thread(callable, *args)
 
    The same as ``run_in_thread()``, but guarantees that only
    one background thread is used for each unique callable
@@ -397,9 +397,9 @@ calculations and blocking operations.  Use the following functions to do that:
    Curio tasks and they all decided to block on a shared thread queue,
    using this would be much more efficient than ``run_in_thread()``.
 
-.. asyncfunction:: run_in_executor(exc, callable, *args, **kwargs)
+.. asyncfunction:: run_in_executor(exc, callable, *args)
 
-   Run ``callable(*args, **kwargs)`` callable in a user-supplied
+   Run ``callable(*args)`` callable in a user-supplied
    executor and returns the result. *exc* is an executor from the
    :py:mod:`concurrent.futures` module in the standard library.  This
    executor is expected to implement a

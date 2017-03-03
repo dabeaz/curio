@@ -66,8 +66,8 @@ def test_isolation():
         await event2.set()
 
     async def check_isolated():
-        for task in [await spawn(check_isolated_1()),
-                     await spawn(check_isolated_2())]:
+        for task in [await spawn(check_isolated_1),
+                     await spawn(check_isolated_2)]:
             await task.join()
 
     run_with_real_exceptions(check_isolated())
@@ -81,7 +81,7 @@ def test_inheritance():
     async def parent():
         local.a = "both"
         assert local.a == "both"
-        child_task = await spawn(child())
+        child_task = await spawn(child)
         # now let the child check that it got the value, and try to change it
         await event1.wait()
         # child modification shouldn't be visible here
@@ -133,7 +133,7 @@ def test_within_thread():
 
         tasks = []
         for data in range(8):
-            tasks.append(await spawn(child(data)))
+            tasks.append(await spawn(child, data))
         for t in tasks:
             await t.join()
 

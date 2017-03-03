@@ -35,8 +35,8 @@ def test_socket_blocking(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -77,8 +77,8 @@ def test_socketstream_blocking(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -119,8 +119,8 @@ def test_filestream_blocking(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -156,8 +156,8 @@ def test_readall(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -192,8 +192,8 @@ def test_readall_timeout(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -224,8 +224,8 @@ def test_read_exactly(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -263,8 +263,8 @@ def test_read_exactly_timeout(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -296,8 +296,8 @@ def test_readline(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -329,8 +329,8 @@ def test_readlines(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -367,8 +367,8 @@ def test_readlines_timeout(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -400,8 +400,8 @@ def test_writelines(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -439,8 +439,8 @@ def test_writelines_timeout(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -469,8 +469,8 @@ def test_write_timeout(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -496,8 +496,8 @@ def test_iterline(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -524,7 +524,7 @@ def test_double_recv(kernel):
 
     async def handler(client, addr):
         results.append('handler start')
-        await spawn(bad_handler(client))
+        await spawn(bad_handler, client)
         await client.send(b'OK')
         data = await client.recv(1000)
         results.append(data)
@@ -540,8 +540,8 @@ def test_double_recv(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(test_client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 

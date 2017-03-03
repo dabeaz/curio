@@ -1,6 +1,11 @@
 # curio/kernel.py
 #
 # Main execution kernel.
+
+__all__ = ['Kernel', 'run', 'BlockingTaskWarning', 'finalize']
+
+# -- Standard Library
+
 import socket
 import heapq
 import time
@@ -12,10 +17,13 @@ from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
 import warnings
 import threading
+import inspect
 from abc import ABC, abstractmethod
 
 # Logger where uncaught exceptions from crashed tasks are logged
 log = logging.getLogger(__name__)
+
+# -- Curio
 
 from .errors import *
 from .task import Task
@@ -325,7 +333,12 @@ class Kernel(object):
     # Main Kernel Loop
     # ----------
 
-    def run(self, coro=None, *, shutdown=False, timeout=None):
+    def run(self, corofunc=None, *args, shutdown=False, timeout=None):
+        if inspect.iscoroutine(corofunc):
+            coro = corofunc
+        else:
+            coro = corofunc(*args) if corofunc else None
+
         if coro and self._crashed:
             raise RuntimeError("Can't submit further tasks to a crashed kernel.")
 
@@ -1072,7 +1085,7 @@ class Kernel(object):
                         _unregister_event(*current._last_io)
                         current._last_io = None
 
-def run(coro, *, log_errors=True, with_monitor=False, selector=None,
+def run(corofunc, *args, log_errors=True, with_monitor=False, selector=None,
         warn_if_task_blocks_for=None, timeout=None, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
@@ -1093,9 +1106,9 @@ def run(coro, *, log_errors=True, with_monitor=False, selector=None,
                     **extra)
 
     with kernel:
-        return kernel.run(coro, timeout=timeout)
+        return kernel.run(corofunc, *args, timeout=timeout)
 
 
-__all__ = ['Kernel', 'run', 'BlockingTaskWarning', 'finalize']
+
 
 from .monitor import Monitor

@@ -69,7 +69,7 @@ def test_thread_cancel_result(kernel):
             result = AWAIT(simple_coro(2, 3))
 
     async def main():
-        t = await spawn(async_thread(func)())
+        t = await spawn(async_thread(func))
         await sleep(0.25)
         await t.cancel()
 
@@ -85,7 +85,7 @@ def test_thread_sync(kernel):
         lock = Lock()
         async with lock:
             results.append('main')
-            t = await spawn(async_thread(func)(lock))
+            t = await spawn(async_thread(func), lock)
             await sleep(0.5)
             results.append('main done')
         await t.join()
@@ -118,7 +118,7 @@ def test_thread_disable_cancellation(kernel):
             AWAIT(sleep(2))
 
     async def main():
-        t = await spawn(async_thread(func)())
+        t = await spawn(async_thread(func))
         await sleep(0.5)
         await t.cancel()
 

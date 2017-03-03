@@ -2,6 +2,39 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+03/03/2017 timeout_after() and related functions now accept
+           coroutine functions and arguments such as this:
+
+
+              async def coro(x, y):
+                  pass
+
+              async def main():
+                  try:
+                      await timeout_after(5, coro, 2, 3) 
+                  except TaskTimeout:
+                      pass
+            
+03/03/2017 spawn() and run() have been made consistent in their
+           calling conventions compared to worker related functions.
+           For example:
+
+              async def coro(x, y):
+                  pass
+
+              async def main():
+                  t = await spawn(coro, 2, 3)   # Instead of spawn(coro(2,3))
+
+           The old approach still works, but the new one will be preferred
+           going forward.
+
+03/03/2017 Support for keyword arguments on many task-related worker
+           functions (run_in_thread, run_in_process, block_in_thread, etc.)
+           has been rescinded.   If you need keyword arguments, use
+           functools.partial.   For example:
+
+              await run_in_thread(partial(foo, kw=some_value))
+
 03/03/2017 Functionality for using Queue.put() in a synchronous context
            has been withdrawn. This was always experimental and undocumented.
 	   There are better alternatives for doing this.  For example, use a

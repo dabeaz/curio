@@ -7,6 +7,8 @@
 __all__ = ['run', 'Popen', 'CompletedProcess', 'CalledProcessError',
            'SubprocessError', 'check_output', 'PIPE', 'STDOUT', 'DEVNULL']
 
+# -- Standard Library
+
 import subprocess
 import os
 
@@ -18,6 +20,8 @@ from subprocess import (
     STDOUT,
     DEVNULL,
 )
+
+# -- Curio
 
 from .task import spawn, sleep
 from .errors import CancelledError
@@ -75,8 +79,8 @@ class Popen(object):
         cancellation exception has stdout_completed and stderr_completed
         attributes attached containing the bytes read so far.
         '''
-        stdout_task = await spawn(self.stdout.readall()) if self.stdout else None
-        stderr_task = await spawn(self.stderr.readall()) if self.stderr else None
+        stdout_task = await spawn(self.stdout.readall) if self.stdout else None
+        stderr_task = await spawn(self.stderr.readall) if self.stderr else None
         try:
             if input:
                 await self.stdin.write(input)

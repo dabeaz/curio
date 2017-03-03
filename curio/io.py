@@ -27,10 +27,14 @@
 
 __all__ = ['Socket', 'FileStream', 'SocketStream']
 
+# -- Standard Library
+
 from socket import SOL_SOCKET, SO_ERROR
 from contextlib import contextmanager
 import io
 import os
+
+# -- Curio
 
 from .traps import _read_wait, _write_wait
 from . import errors

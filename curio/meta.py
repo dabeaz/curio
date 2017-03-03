@@ -5,7 +5,10 @@
 #   \/   \/             If you use it, you might die. No seriously.
 #
 
-__all__ = ['blocking', 'cpubound', 'awaitable', 'asyncioable', 'sync_only', 'AsyncABC', 'AsyncObject']
+__all__ = ['blocking', 'cpubound', 'awaitable', 'asyncioable', 'sync_only', 'AsyncABC', 
+           'AsyncObject']
+
+# -- Standard Library
 
 from sys import _getframe
 import inspect
@@ -13,6 +16,8 @@ from functools import wraps, partial
 from abc import ABCMeta, abstractmethod
 import dis
 import asyncio
+
+# -- Curio
 
 from .errors import SyncIOError
 from .kernel import Kernel

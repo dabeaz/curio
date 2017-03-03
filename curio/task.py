@@ -2,14 +2,20 @@
 #
 # Task class and task related functions.
 
-__all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
-           'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
-           'wait', 'clock', 'enable_cancellation', 'disable_cancellation',
-           'check_cancellation', 'set_cancellation', 'schedule', 'aside']
+# -- Standard library
+
+import inspect
+import warnings
+
+# -- Curio
 
 from .errors import *
 from .traps import *
 
+__all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
+           'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
+           'wait', 'clock', 'enable_cancellation', 'disable_cancellation',
+           'check_cancellation', 'set_cancellation', 'schedule', 'aside']
 
 class Task(object):
     '''
@@ -157,13 +163,17 @@ async def schedule():
     '''
     await sleep(0)
 
-async def spawn(coro, *, daemon=False, allow_cancel=True):
+async def spawn(corofunc, *args, daemon=False, allow_cancel=True):
     '''
-    Create a new task.  Use the daemon=True option if the task runs
-    forever as a background task.  If allow_cancel=False is
-    specified, the task disables the delivery of cancellation related
-    exceptions (including timeouts).
+    Create a new task, running corofunc(*args). Use the daemon=True
+    option if the task runs forever as a background task.  If
+    allow_cancel=False is specified, the task disables the delivery of
+    cancellation related exceptions (including timeouts).
     '''
+    if inspect.iscoroutine(corofunc):
+        coro = corofunc
+    else:
+        coro = corofunc(*args)
     task = await _spawn(coro, daemon)
     task.allow_cancel = allow_cancel
     return task
@@ -275,14 +285,14 @@ class wait(object):
     async def _init(self):
         self._tasks = []
         for task in self._initial_tasks:
-            await spawn(self._wait_runner(task))
+            await spawn(self._wait_runner, task)
             self._tasks.append(task)
         self._initial_tasks = []
 
     async def add_task(self, task):
         if self._tasks is None:
             await self._init()
-        await spawn(self._wait_runner(task))
+        await spawn(self._wait_runner, task)
         self._tasks.append(task)
 
     async def next_done(self):
@@ -524,7 +534,7 @@ async def _timeout_after_func(clock, absolute, coro, ignore=False, timeout_resul
         await _unset_timeout(prior)
 
 
-def timeout_at(clock, coro=None):
+def timeout_at(clock, coro=None, *args):
     '''
     Raise a TaskTimeout exception in the calling task after the clock
     reaches the specified value. Usage is the same as for timeout_after().
@@ -532,10 +542,12 @@ def timeout_at(clock, coro=None):
     if coro is None:
         return _TimeoutAfter(clock, True)
     else:
+        if not inspect.iscoroutine(coro):
+            coro = coro(*args)
         return _timeout_after_func(clock, True, coro)
 
 
-def timeout_after(seconds, coro=None):
+def timeout_after(seconds, coro=None, *args):
     '''
     Raise a TaskTimeout exception in the calling task after seconds
     have elapsed.  This function may be used in two ways. You can
@@ -554,10 +566,12 @@ def timeout_after(seconds, coro=None):
     if coro is None:
         return _TimeoutAfter(seconds, False)
     else:
+        if not inspect.iscoroutine(coro):
+            coro = coro(*args)
         return _timeout_after_func(seconds, False, coro)
 
 
-def ignore_at(clock, coro=None, *, timeout_result=None):
+def ignore_at(clock, coro=None, *args, timeout_result=None):
     '''
     Stop the enclosed task or block of code at an absolute
     clock value. Same usage as ignore_after().
@@ -565,10 +579,12 @@ def ignore_at(clock, coro=None, *, timeout_result=None):
     if coro is None:
         return _TimeoutAfter(clock, True, ignore=True, timeout_result=timeout_result)
     else:
+        if not inspect.iscoroutine(coro):
+            coro = coro(*args)
         return _timeout_after_func(clock, True, coro, ignore=True, timeout_result=timeout_result)
 
 
-def ignore_after(seconds, coro=None, *, timeout_result=None):
+def ignore_after(seconds, coro=None, *args, timeout_result=None):
     '''
     Stop the enclosed task or block of code after seconds have
     elapsed.  No exception is raised when time expires. Instead, None
@@ -599,6 +615,8 @@ def ignore_after(seconds, coro=None, *, timeout_result=None):
     if coro is None:
         return _TimeoutAfter(seconds, False, ignore=True, timeout_result=timeout_result)
     else:
+        if not inspect.iscoroutine(coro):
+            coro = coro(*args)
         return _timeout_after_func(seconds, False, coro, ignore=True, timeout_result=timeout_result)
 
 
@@ -609,7 +627,7 @@ from . import thread
 # subprocess.  As for the name, well, yeah. "async", "await", "abide",
 # "aside", etc. Work with me here!
 
-async def aside(corofunc, *args, **kwargs):
+async def aside(corofunc, *args):
     '''
     Spawn a new task, but run it aside in a newly created process.
     Returns a Task instance corresponding to a small supervisor task
@@ -638,7 +656,7 @@ async def aside(corofunc, *args, **kwargs):
 
     async def _aside_supervisor():
         p = subprocess.Popen([sys.executable, '-m', 'curio.side', filename,
-                              base64.b64encode(pickle.dumps((corofunc, args, kwargs)))],
+                              base64.b64encode(pickle.dumps((corofunc, args)))],
                              start_new_session=True)
         try:
             return await p.wait()
@@ -652,6 +670,6 @@ async def aside(corofunc, *args, **kwargs):
     else:
         filename = ''
 
-    return await spawn(_aside_supervisor())
+    return await spawn(_aside_supervisor)
 
 

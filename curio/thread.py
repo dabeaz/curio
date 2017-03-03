@@ -4,10 +4,14 @@
 
 __all__ = [ 'AWAIT', 'async_thread', 'async_context', 'async_iter', 'AsyncThread' ]
 
+# -- Standard Library
+
 import threading
 from concurrent.futures import Future
 from functools import wraps
 from inspect import iscoroutine
+
+# -- Curio
 
 from . import sync
 from .task import spawn, disable_cancellation
@@ -72,7 +76,7 @@ class AsyncThread(object):
         self._terminate_evt.set()
 
     async def start(self):
-        self._task = await spawn(self._coro_runner(), daemon=self.daemon)
+        self._task = await spawn(self._coro_runner, daemon=self.daemon)
         self._thread = threading.Thread(target=self._func_runner, daemon=True)
         self._thread.start()
 

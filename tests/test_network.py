@@ -1,6 +1,7 @@
 # test_network.py
 from os.path import dirname, join
 import ssl
+from functools import partial
 
 from curio import *
 from curio import network
@@ -38,8 +39,8 @@ def test_tcp_echo(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server('', 25000, handler))
-        await spawn(client(('localhost', 25000), serv))
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -83,7 +84,7 @@ def test_ssl_server(kernel):
         stdlib_client_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         curio_client_context = curiossl.create_default_context(ssl.Purpose.SERVER_AUTH)
 
-        server_task = await spawn(network.tcp_server('', 10000, handler, ssl=server_context))
+        server_task = await spawn(partial(network.tcp_server, '', 10000, handler, ssl=server_context))
         await sleep(0.1)
 
         for test_context in (curio_client_context, stdlib_client_context):
@@ -134,8 +135,7 @@ def test_ssl_wrapping(kernel):
         stdlib_client_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         curio_client_context = curiossl.create_default_context(ssl.Purpose.SERVER_AUTH)
 
-        server_coro = server('localhost', 10000, server_context)
-        server_task = await spawn(server_coro)
+        server_task = await spawn(server, 'localhost', 10000, server_context)
 
         for test_context in (curio_client_context, stdlib_client_context):
             test_context.check_hostname = False

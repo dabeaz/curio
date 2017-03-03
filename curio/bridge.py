@@ -4,16 +4,19 @@
 # The curio->asyncio bridge runs a separate asyncio event loop in a different thread,
 # which has coroutines submitted to it over the course of the kernel's lifetime.
 
+__all__ = ["acb"]
+
+# -- Standard library
+
 import asyncio
 import threading
 
+# -- Curio
+
 from .traps import _get_kernel, _future_wait
-from .sync import Event, abide
+from .sync import Event
 from . import task
 from . import workers
-
-__all__ = ["acb"]
-
 
 async def acb(coro):
     '''
@@ -34,7 +37,8 @@ async def acb(coro):
     loop = kernel._asyncio_loop
     fut = asyncio.run_coroutine_threadsafe(coro, loop)
 
-    return await abide(fut.result)
+    await _future_wait(fut)
+    return fut.result
 
 class AsyncioLoop(object):
     '''
@@ -63,16 +67,17 @@ class AsyncioLoop(object):
             await workers.run_in_thread(self._thread.join)
             self._thread = None
 
-    async def run_asyncio(self, coro):
+    async def run_asyncio(self, corofunc, *args):
         '''
-        Run an asyncio compatible coroutine to completion, returning its result
+        Run an asyncio compatible coroutine corofunc(*args) to completion, 
+        returning its result
         '''
         if self._thread is None:
             self._thread = threading.Thread(target=self._asyncio_thread)
             self._thread.start()
-            await task.spawn(self._asyncio_task(), daemon=True)
+            await task.spawn(self._asyncio_task, daemon=True)
 
-        fut  = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        fut  = asyncio.run_coroutine_threadsafe(corofunc(*args), self.loop)
         await _future_wait(fut)
         return fut.result()
 

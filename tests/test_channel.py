@@ -31,8 +31,8 @@ def test_connection_hello(kernel, conns):
             await c.send('client hello world')
 
     async def main(c1, c2):
-        await spawn(server(c1))
-        await spawn(client(c2))
+        await spawn(server, c1)
+        await spawn(client, c2)
 
     kernel.run(main(*conns))
     assert results == ['server hello world',
@@ -54,8 +54,8 @@ def test_connection_hello_bytes(kernel, conns):
             await c.send(b'client hello world')
 
     async def main(c1, c2):
-        await spawn(server(c1))
-        await spawn(client(c2))
+        await spawn(server, c1)
+        await spawn(client, c2)
 
     kernel.run(main(*conns))
     assert results == [b'server hello world',
@@ -78,8 +78,8 @@ def test_connection_large(kernel, conns):
             await c.send(len(msg))
 
     async def main(c1, c2):
-        await spawn(server(c1))
-        await spawn(client(c2))
+        await spawn(server, c1)
+        await spawn(client, c2)
 
     kernel.run(main(*conns))
     assert results == [data,
@@ -103,8 +103,8 @@ def test_connection_auth(kernel, conns):
             await c.send('client hello world')
 
     async def main(c1, c2):
-        await spawn(server(c1))
-        await spawn(client(c2))
+        await spawn(server, c1)
+        await spawn(client, c2)
 
     kernel.run(main(*conns))
 
@@ -159,8 +159,8 @@ def test_connection_send_partial_bytes(kernel, conns):
             await c.send(len(msg))
 
     async def main(c1, c2):
-        await spawn(server(c1))
-        await spawn(client(c2))
+        await spawn(server, c1)
+        await spawn(client, c2)
 
     kernel.run(main(*conns))
     assert results == [data[5:15], 10,
@@ -194,8 +194,8 @@ def test_connection_from_connection(kernel):
             await c.send('client hello world')
 
     async def main(c1, c2):
-        await spawn(server(c1))
-        await spawn(client(c2))
+        await spawn(server, c1)
+        await spawn(client, c2)
 
     kernel.run(main(c1, c2))
     assert results == ['server hello world',
@@ -214,7 +214,7 @@ def test_connection_recv_cancel(kernel, conns):
                 results.append('cancel')
 
     async def main(c):
-        task = await spawn(client(c))
+        task = await spawn(client, c)
         await sleep(1)
         await task.cancel()
         results.append('done cancel')
@@ -235,7 +235,7 @@ def test_connection_recv_timeout(kernel, conns):
             results.append('timeout')
 
     async def main(c):
-        task = await spawn(client(c))
+        task = await spawn(client, c)
         await task.join()
         results.append('done')
 
@@ -257,7 +257,7 @@ def test_connection_send_cancel(kernel, conns):
                 results.append('cancel')
 
     async def main(c):
-        task = await spawn(client(c))
+        task = await spawn(client, c)
         await sleep(1)
         await task.cancel()
         results.append('done cancel')
@@ -279,7 +279,7 @@ def test_connection_send_timeout(kernel, conns):
             results.append('timeout')
 
     async def main(c):
-        task = await spawn(client(c))
+        task = await spawn(client, c)
         await task.join()
         results.append('done')
 
@@ -312,8 +312,8 @@ def test_channel_hello(kernel, chs):
             await c.send('client hello world')
 
     async def main(ch1, ch2):
-        await spawn(server(ch1))
-        await spawn(client(ch2))
+        await spawn(server, ch1)
+        await spawn(client, ch2)
 
     kernel.run(main(*chs))
     assert results == ['server hello world',
@@ -337,8 +337,8 @@ def test_channel_hello_auth(kernel, chs):
             await c.send('client hello world')
 
     async def main(ch1, ch2):
-        await spawn(server(ch1))
-        await spawn(client(ch2))
+        await spawn(server, ch1)
+        await spawn(client, ch2)
 
     kernel.run(main(*chs))
     assert results == ['server hello world',
