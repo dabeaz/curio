@@ -5,7 +5,7 @@
 #   \/   \/             If you use it, you might die. No seriously.
 #
 
-__all__ = ['blocking', 'cpubound', 'awaitable', 'asyncioable', 'asyncioable2', 'sync_only', 'AsyncABC', 'AsyncObject']
+__all__ = ['blocking', 'cpubound', 'awaitable', 'asyncioable', 'sync_only', 'AsyncABC', 'AsyncObject']
 
 from sys import _getframe
 import inspect
@@ -142,11 +142,22 @@ def awaitable(syncfunc):
 
 def asyncioable(awaitablefunc):
     '''
-    Decorator that additionally allows an asyncio compatible call to work
-    on an already awaitable function. For example:
+    Decorator that additionally allows an asyncio compatible call to
+    be attached to an already awaitable function. For example:
 
-    When used, use of an async function from within asyncio (running in a
-    different thread) will run the synchronous implementation from a thread.
+      def spam():
+          print('Synchronous spam')
+
+      @awaitable(spam)
+      def spam():
+          print('Async spam (Curio)')
+
+      @asynioable(spam)
+      def spam():
+          print('Async spam (asyncio)')
+
+    This only works if Curio/Asyncio are running in different threads.
+    Main use is in the implementation of UniversalQueue.
     '''
     def decorate(asyncfunc):
         @wraps(asyncfunc)

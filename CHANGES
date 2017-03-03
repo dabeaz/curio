@@ -2,6 +2,11 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+03/03/2017 Functionality for using Queue.put() in a synchronous context
+           has been withdrawn. This was always experimental and undocumented.
+	   There are better alternatives for doing this.  For example, use a
+           UniversalQueue.
+
 02/26/2017 Modifed the gather() function so that it also cancels all tasks
            if it is cancelled by timeout or other means.  See issue #186.
 	   The resulting exception has a .results attribute set with

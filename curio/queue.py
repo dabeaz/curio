@@ -1,39 +1,35 @@
 # curio/queue.py
 #
-# Implementation of a queue object that can be used to communicate
-# between tasks.  This is only safe to use within curio. It is not
-# thread-safe.
+# A few different queue structures.
 
+# -- Standard library
 
 from collections import deque
 from heapq import heappush, heappop
 from concurrent.futures import Future
 import threading
-import queue as thread_queue
-import weakref
 import socket as std_socket
 import asyncio
 
-from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function, _future_wait
+# -- Curio
+
+from .traps import _wait_on_ksync, _reschedule_tasks, _future_wait
 from .kernel import KSyncQueue
-from .errors import CurioError, CancelledError, TaskTimeout
+from .errors import CurioError, CancelledError
 from .meta import awaitable, asyncioable
 from . import workers
-from .task import spawn, timeout_after
-from . import sync
-
 
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'UniversalQueue']
 
 
-class Full(CurioError):
-    pass
-
-
 class Queue(object):
+    '''
+    A queue for communicating between Curio tasks. It is
+    not safe for communicating between Curio and external
+    threads, processes, etc.
+    '''
     __slots__ = ('maxsize', '_queue', '_get_waiting',
-                 '_put_waiting', '_join_waiting', '_task_count',
-                 '_get_reschedule_func')
+                 '_put_waiting', '_join_waiting', '_task_count')
 
     def __init__(self, maxsize=0):
         self.maxsize = maxsize
@@ -41,8 +37,6 @@ class Queue(object):
         self._put_waiting = KSyncQueue()
         self._join_waiting = KSyncQueue()
         self._task_count = 0
-        self._get_reschedule_func = None
-
         self._queue = self._init_internal_queue()
 
     def __repr__(self):
@@ -62,8 +56,6 @@ class Queue(object):
         must_wait = bool(self._get_waiting)
         while must_wait or self.empty():
             must_wait = False
-            if self._get_reschedule_func is None:
-                self._get_reschedule_func = await _ksync_reschedule_function(self._get_waiting)
             await _wait_on_ksync(self._get_waiting, 'QUEUE_GET')
 
         result = self._get()
@@ -79,15 +71,6 @@ class Queue(object):
         if self._task_count > 0:
             await _wait_on_ksync(self._join_waiting, 'QUEUE_JOIN')
 
-    def put(self, item):
-        if self.full():
-            raise Full('queue full')
-        self._put(item)
-        self._task_count += 1
-        if self._get_waiting:
-            self._get_reschedule_func(1)
-
-    @awaitable(put)
     async def put(self, item):
         while self.full():
             await _wait_on_ksync(self._put_waiting, 'QUEUE_PUT')
@@ -142,10 +125,25 @@ class LifoQueue(Queue):
         return self._queue.pop()
 
 
+# UniversalQueue is one of the more interesting, and possibly,
+# diabolical features of Curio.  The goal is to provide a Queue that's
+# compatible with Curio, Threads, and asyncio using an identical API.
+# The underlying operation is based on a combination of non-blocking
+# queuing coupled with Futures.   Basically, each underlying operation 
+# such as get() and put() completes immediately or else a Future
+# is created for obtaining the result when it becomes available.
+# This works because all of these runtime environments have a mechanism
+# for waiting on a Future.   So, the general idea for each queuing 
+# operation is that you first try the operation.  If it works, you're
+# done.  If it doesn't work, you get a Future and you wait on it
+# using whatever mechanism the runtime environment uses to do that.
+
 class UniversalQueue(object):
     '''
-    A queue that's compatible with both Curio tasks and external threads.
+    A queue for communicating between Curio and external threads,
+    including foreign event loops running in different threads.
     '''
+
     def __init__(self, *, maxsize=0, withfd=False):
         self.maxsize = maxsize
 
@@ -158,12 +156,20 @@ class UniversalQueue(object):
         # A queue of Futures representing putters
         self._putters = deque()
 
-        # Internal synchronization
+        # Internal synchronization.  
+        # 
+        # This is one of the only thread locks that's used inside
+        # Curio and used from async code.  It's use here is avoid
+        # a race condition on a few attributes.  It is only held
+        # briefly, and never in a situation where a blocking operation
+        # would take place with the lock held.
         self._mutex = threading.Lock()
         self._all_tasks_done = threading.Condition(self._mutex)
         self._unfinished_tasks = 0
 
-        # Optional socket that allows for external event loop monitoring
+        # Optional socket for monitoring on an external event loop.
+        # The fileno() method below returns a socket that becomes
+        # readable once an item is available on the queue.
         if withfd:
             self._put_sock, self._get_sock = std_socket.socketpair()
             self._put_sock.setblocking(False)
@@ -175,9 +181,6 @@ class UniversalQueue(object):
         if self._put_sock:
             self._put_sock.close()
             self._get_sock.close()
-
-    async def shutdown(self):
-        pass
 
     def fileno(self):
         assert self._get_sock, "Queue not created with I/O polling enabled"
@@ -199,13 +202,6 @@ class UniversalQueue(object):
     def qsize(self):
         return len(self._queue)
 
-    # Discussion:  This method implements a special form of a nonblocking
-    # queue get() where it either returns an item from the queue right away,
-    # or it returns a Future that can be used to obtain the item later.
-    # Any runtime environment that has the means to wait on a Future
-    # (threads, curio, asyncio, etc.) can then block to complete the get.
-    # Future is from the concurrent.futures module.
-
     def _get_complete(self):
         if self._get_sock:
             try:
@@ -213,7 +209,7 @@ class UniversalQueue(object):
             except BlockingIOError:
                 pass
 
-        # If there was something waiting to put, wake it
+        # If there was something waiting to put (if queue bounded), wake it
         if self._putters:
             putter = self._putters.popleft()
             putter.set_result(None)
@@ -232,14 +228,14 @@ class UniversalQueue(object):
         return item, fut
 
     # Synchronous queue get.   
-    def get_sync(self):
+    def get(self):
         item, fut = self._get()
         if fut:
             item = fut.result()
         return item
 
-    # Asynchronous queue get. 
-    @awaitable(get_sync)
+    # Asynchronous queue get (Curio) 
+    @awaitable(get)
     async def get(self):
         item, fut = self._get()
         if fut:
@@ -247,10 +243,12 @@ class UniversalQueue(object):
                 await _future_wait(fut)
                 item = fut.result()
             except CancelledError as e:
+                fut.cancel()
                 fut.add_done_callback(lambda f: self._put(f.result(), True) if not f.cancelled() else None)
                 raise
         return item
 
+    # Asynchronous queue get (Asyncio)
     @asyncioable(get)
     async def get(self):
         item, fut = self._get()
@@ -259,10 +257,11 @@ class UniversalQueue(object):
             item = fut.result()
         return item
 
-    # A non-blocking queue put().  It either puts something on the queue
-    # or it returns a Future that must be waited on before retrying.
+    # Put something on the queue or return a Future that must
+    # be waited on before retrying.
     def _put(self, item, requeue=False):
         with self._mutex:
+            # Critical section never blocks.
             if self.maxsize > 0 and len(self._queue) >= self.maxsize:
                 fut = Future()
                 self._putters.append(fut)
@@ -283,14 +282,16 @@ class UniversalQueue(object):
                 getter.set_result(self._queue.popleft())
                 break
 
-    def put_sync(self, item):
+    # Synchronous put. For threads.
+    def put(self, item):
         while True:
             fut = self._put(item)
             if not fut:
                 break
             fut.result()
 
-    @awaitable(put_sync)
+    # Asynchronous put. For Curio
+    @awaitable(put)
     async def put(self, item):
         while True:
             fut = self._put(item)
@@ -298,6 +299,7 @@ class UniversalQueue(object):
                 break
             await _future_wait(fut)
 
+    # Asynchronous put. For Asyncio.
     @asyncioable(put)
     async def put(self, item):
         while True:
@@ -321,7 +323,7 @@ class UniversalQueue(object):
         with self._all_tasks_done:
             while self._unfinished_tasks:
                 self._all_tasks_done.wait()
-
+    
     @awaitable(join_sync)
     async def join(self):
         await workers.block_in_thread(self.join_sync)
