@@ -447,7 +447,7 @@ def test_univ_queue_multiple_consumer(kernel):
         await t1.join()
         await t2.join()
         await t3.join()
-        assert list(range(1000)) == result
+        assert set(range(1000)) == set(result)
         await q.shutdown()
 
     kernel.run(main())
