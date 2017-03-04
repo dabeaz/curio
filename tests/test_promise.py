@@ -12,9 +12,12 @@ def test_promise(kernel):
 
     async def main():
         promise = Promise()
+        assert not promise.is_set()
+
         producer_task = await curio.spawn(producer(promise))
 
         assert 42 == await consumer(promise)
+        assert promise.is_set()
 
     kernel.run(main())
 
@@ -29,5 +32,42 @@ def test_promise_exception(kernel):
 
         with pytest.raises(RuntimeError):
             await consumer(promise)
+
+    kernel.run(main())
+
+def test_promise_internals(kernel):
+    async def main():
+        promise = Promise()
+        assert not promise.is_set()
+        assert repr(promise).endswith('[unset]>')
+
+        await promise.set(42)
+
+        assert promise.is_set()
+        assert promise._data == 42
+        assert promise._exception is None
+        assert repr(promise).endswith('[42]>')
+
+        promise.clear()
+
+        assert not promise.is_set()
+        assert promise._data is None
+        assert promise._exception is None
+        assert repr(promise).endswith('[unset]>')
+
+        async with promise:
+            raise RuntimeError()
+
+        assert promise.is_set()
+        assert promise._data is None
+        assert isinstance(promise._exception, RuntimeError)
+        assert repr(promise).endswith('[RuntimeError()]>')
+
+        promise.clear()
+
+        assert not promise.is_set()
+        assert promise._data is None
+        assert promise._exception is None
+        assert repr(promise).endswith('[unset]>')
 
     kernel.run(main())

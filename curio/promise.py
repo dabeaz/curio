@@ -8,6 +8,22 @@ class Promise:
         self._data = None
         self._exception = None
 
+    def __repr__(self):
+        res = super().__repr__()
+        if self.is_set():
+            extra = repr(self._exception) if self._exception else repr(self._data)
+        else:
+            extra = 'unset'
+        return '<{} [{}]>'.format(res[1:-1], extra)
+
+    def is_set(self):
+        return self._event.is_set()
+
+    def clear(self):
+        self._data = None
+        self._exception = None
+        self._event.clear()
+
     async def set(self, data):
         self._data = data
         await self._event.set()
