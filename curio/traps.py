@@ -10,13 +10,13 @@
 # File, objects, etc.).
 # ----------------------------------------------------------------------
 
-__all__ = [
+__all__ = [ 
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
     '_join_task', '_cancel_task', '_wait_on_ksync',
-    '_reschedule_tasks', '_ksync_reschedule_function', '_sigwatch',
-    '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
-    '_set_timeout', '_unset_timeout', '_clock',
-]
+    '_reschedule_tasks', '_sigwatch', '_sigunwatch', '_sigwait',
+    '_get_kernel', '_get_current', '_set_timeout', '_unset_timeout',
+    '_clock',
+    ]
 
 # -- Standard library
 
@@ -34,18 +34,18 @@ class Traps(IntEnum):
     _trap_sleep = 2
     _trap_join_task = 3
     _trap_wait_ksync = 4
-    _trap_sigwait = 5
-    _trap_cancel_task = 6
-    _trap_get_kernel = 7
-    _trap_get_current = 8
-    _trap_set_timeout = 9
-    _trap_unset_timeout = 10
-    _trap_ksync_reschedule_function = 11
+    _trap_ksync_reschedule = 5
+    _trap_sigwait = 6
+    _trap_cancel_task = 7
+    _trap_get_kernel = 8
+    _trap_get_current = 9
+    _trap_set_timeout = 10
+    _trap_unset_timeout = 11
     _trap_clock = 12
     _trap_sigwatch = 13
     _trap_sigunwatch = 14
     _trap_spawn = 15
-    _trap_ksync_reschedule_tasks = 16
+
 
 
 globals().update((trap.name, trap) for trap in Traps)
@@ -123,7 +123,7 @@ def _reschedule_tasks(ksync, n=1):
     '''
     Reschedule one or more tasks waiting on a kernel sync primitive.
     '''
-    yield (_trap_ksync_reschedule_tasks, ksync, n)
+    yield (_trap_ksync_reschedule, ksync, n)
 
 
 @coroutine
@@ -181,17 +181,6 @@ def _unset_timeout(previous):
     Restore the previous timeout for the current task.
     '''
     yield (_trap_unset_timeout, previous)
-
-
-@coroutine
-def _ksync_reschedule_function(queue):
-    '''
-    Return a function that allows tasks to be rescheduled from a
-    kernel sync primitive without the use of await.  Can be used in
-    synchronous code as long as it runs in the same thread as the
-    Curio kernel.
-    '''
-    return (yield (_trap_ksync_reschedule_function, queue))
 
 
 @coroutine

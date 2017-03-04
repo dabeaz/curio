@@ -2,6 +2,11 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+03/04/2017 Support for using Event.set() from a synchronous context has
+           been withdrawn.   This was undocumented and experimental.
+	   There are other mechanisms for achieving this.  For example,
+	   communicating through a UniversalQueue.
+
 03/03/2017 timeout_after() and related functions now accept
            coroutine functions and arguments such as this:
 

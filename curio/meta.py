@@ -5,7 +5,7 @@
 #   \/   \/             If you use it, you might die. No seriously.
 #
 
-__all__ = ['blocking', 'cpubound', 'awaitable', 'asyncioable', 'sync_only', 'AsyncABC', 
+__all__ = ['iscoroutinefunction', 'finalize', 'blocking', 'cpubound', 'awaitable', 'asyncioable', 'sync_only', 'AsyncABC', 
            'AsyncObject']
 
 # -- Standard Library
@@ -50,6 +50,35 @@ def _from_coroutine(level=2):
             return _from_coroutine(level + 2)
         else:
             return False
+
+def iscoroutinefunction(func):
+    '''
+    Modified test for a coroutine function with awareness of functools.partial
+    '''
+    if isinstance(func, partial):
+        return iscoroutinefunction(func.func)
+    return inspect.iscoroutinefunction(func)
+
+class finalize(object):
+    '''
+    Context manager that safely finalizes an asynchronous generator.
+    This might be needed if an asynchronous generator uses async functions
+    in try-finally and other constructs.
+    '''
+
+    _finalized = set()
+
+    def __init__(self, aobj):
+        self.aobj = aobj
+
+    async def __aenter__(self):
+        self._finalized.add(self.aobj)
+        return self.aobj
+
+    async def __aexit__(self, ty, val, tb):
+        if hasattr(self.aobj, 'aclose'):
+            await self.aobj.aclose()
+        self._finalized.discard(self.aobj)
 
 
 def blocking(func):

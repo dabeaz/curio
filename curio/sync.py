@@ -17,27 +17,22 @@
 
 __all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide']
 
-# -- Standard Library
-
-from inspect import iscoroutinefunction
-
 # -- Curio
 
-from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function
+from .traps import _wait_on_ksync, _reschedule_tasks
 from .kernel import KSyncQueue, KSyncEvent
 from . import workers
 from .task import current_task
-from .meta import awaitable
+from .meta import awaitable, iscoroutinefunction
 from . import thread
 
 
 class Event(object):
-    __slots__ = ('_set', '_waiting', '_reschedule_func')
+    __slots__ = ('_set', '_waiting')
 
     def __init__(self):
         self._set = False
         self._waiting = KSyncEvent()
-        self._reschedule_func = None
 
     def __repr__(self):
         res = super().__repr__()
@@ -54,17 +49,8 @@ class Event(object):
         if self._set:
             return
 
-        if self._reschedule_func is None:
-            self._reschedule_func = await _ksync_reschedule_function(self._waiting)
-
         await _wait_on_ksync(self._waiting, 'EVENT_WAIT')
 
-    def set(self):
-        self._set = True
-        if self._reschedule_func and self._waiting:
-            self._reschedule_func(len(self._waiting))
-
-    @awaitable(set)
     async def set(self):
         self._set = True
         await _reschedule_tasks(self._waiting, len(self._waiting))

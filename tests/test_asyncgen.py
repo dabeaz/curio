@@ -2,6 +2,7 @@
 
 import pytest
 from curio import *
+from curio.meta import finalize
 
 # Test to make sure a simple async generator runs
 def test_simple_agen(kernel):

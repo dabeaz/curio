@@ -2,7 +2,7 @@
 #
 # Main execution kernel.
 
-__all__ = ['Kernel', 'run', 'BlockingTaskWarning', 'finalize']
+__all__ = ['Kernel', 'run', 'BlockingTaskWarning']
 
 # -- Standard Library
 
@@ -128,34 +128,6 @@ class KSyncEvent(KernelSyncBase):
 
     def pop(self, ntasks=1):
         return [self._tasks.pop() for _ in range(ntasks)]
-
-# ----------------------------------------------------------------------
-# Asynchronous Finalization Support
-#
-# Finalization of certain kinds of objects can be problematic in
-# an asynchronous environment.  For example, you can't just rely
-# on garbage collection to properly clean up.   This context
-# manager is used to handle finalization of certain kinds of 
-# objects.  For example, asynchronous generators with asynchronous
-# finalization (e.g., finally blocks, etc.). 
-# ----------------------------------------------------------------------
-
-
-class finalize(object):
-
-    _finalized = set()
-
-    def __init__(self, aobj):
-        self.aobj = aobj
-
-    async def __aenter__(self):
-        self._finalized.add(self.aobj)
-        return self.aobj
-
-    async def __aexit__(self, ty, val, tb):
-        if hasattr(self.aobj, 'aclose'):
-            await self.aobj.aclose()
-        self._finalized.discard(self.aobj)
 
 # Dictionary that tracks the "safe" status of async generators with 
 # respect to asynchronous finalization.  Normally this is automatically
@@ -336,8 +308,12 @@ class Kernel(object):
     def run(self, corofunc=None, *args, shutdown=False, timeout=None):
         if inspect.iscoroutine(corofunc):
             coro = corofunc
+        elif corofunc:
+            if not meta.iscoroutinefunction(corofunc):
+                raise TypeError('run() must be passed a coroutine or an async-function')
+            coro = corofunc(*args)
         else:
-            coro = corofunc(*args) if corofunc else None
+            coro = None
 
         if coro and self._crashed:
             raise RuntimeError("Can't submit further tasks to a crashed kernel.")
@@ -670,19 +646,10 @@ class Kernel(object):
 
         # Reschedule one or more tasks from a kernel sync
         @nonblocking
-        def _trap_ksync_reschedule_tasks(ksync, n):
+        def _trap_ksync_reschedule(ksync, n):
             tasks = ksync.pop(n)
             for task in tasks:
                 _reschedule_task(task)
-
-        # Trap that returns a function for rescheduling tasks from synchronous code
-        @nonblocking
-        def _trap_ksync_reschedule_function(ksync):
-            def _reschedule(n):
-                tasks = ksync.pop(n)
-                for task in tasks:
-                    _reschedule_task(task)
-            return _reschedule
 
         # Join with a task
         @blocking
@@ -858,10 +825,10 @@ class Kernel(object):
             if agen.ag_code not in _safe_async_generators:
                 _safe_async_generators[agen.ag_code] = meta._is_safe_generator(agen.ag_code)
 
-            if not _safe_async_generators[agen.ag_code] and not agen in finalize._finalized:
+            if not _safe_async_generators[agen.ag_code] and not agen in meta.finalize._finalized:
                 # Inspect the code of the generator to see if it might be safe 
                 raise RuntimeError("Async generator with async finalization must be wrapped by\n"
-                                   "async with finalize(agen) as agen:\n"
+                                   "async with curio.meta.finalize(agen) as agen:\n"
                                    "    async for n in agen:\n"
                                    "         ...\n"
                                    "See PEP 533 for further discussion.")
@@ -1085,6 +1052,7 @@ class Kernel(object):
                         _unregister_event(*current._last_io)
                         current._last_io = None
 
+
 def run(corofunc, *args, log_errors=True, with_monitor=False, selector=None,
         warn_if_task_blocks_for=None, timeout=None, **extra):
     '''
@@ -1112,3 +1080,4 @@ def run(corofunc, *args, log_errors=True, with_monitor=False, selector=None,
 
 
 from .monitor import Monitor
+from . import meta
