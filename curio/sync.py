@@ -3,10 +3,25 @@
 # Implementation of common task synchronization primitives such as
 # events, locks, semaphores, and condition variables. These primitives
 # are only safe to use in the curio framework--they are not thread safe.
+#
+# The general implementation strategy is based on task scheduling.
+# For example, if a task needs to wait on a lock, it goes to sleep.
+# When a task releases a lock, it wakes a sleeping task. 
+#
+# Internally, there are a few kernel-level sychronization primitives
+# used to coordinate tasks (KSyncQueue, and KSyncEvent).  KSyncQueue
+# is used for queue-based coordination.  KSyncEvent is used for
+# barrier synchronization.  The _wait_on_ksync() and _reschedule_tasks()
+# traps are used to coordinate synchronization with the underlying Kernel.
+
 
 __all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide']
 
+# -- Standard Library
+
 from inspect import iscoroutinefunction
+
+# -- Curio
 
 from .traps import _wait_on_ksync, _reschedule_tasks, _ksync_reschedule_function
 from .kernel import KSyncQueue, KSyncEvent
@@ -53,29 +68,6 @@ class Event(object):
     async def set(self):
         self._set = True
         await _reschedule_tasks(self._waiting, len(self._waiting))
-
-
-class SyncEvent(Event):
-    '''
-    An Event object that can only be awaited in asynchronous code, set
-    in synchronous code.   Useful for coordinating asynchronous tasks
-    from normal synchronous code.
-    '''
-    __slots__ = ('_reschedule_func',)
-
-    def __init__(self):
-        super().__init__()
-        self._reschedule_func = None
-
-    async def wait(self):
-        if self._reschedule_func is None:
-            self._reschedule_func = await _ksync_reschedule_function(self._waiting)
-        await super().wait()
-
-    def set(self):
-        self._set = True
-        if self._reschedule_func:
-            self._reschedule_func(len(self._waiting))
 
 
 class _LockBase(object):
@@ -288,6 +280,10 @@ class _contextadapt_basic(object):
     async def __aexit__(self, *args):
         return await workers.run_in_thread(self._manager.__exit__, *args)
 
+# Adapt a synchronous context-manager to an asynchronous manager, but 
+# with a reserved backing thread (the same thread used for the duration of the 
+# context manager)
+
 class _contextadapt_reserve(object):
     def __init__(self, manager):
         self._manager = manager
@@ -313,7 +309,7 @@ class _contextadapt_reserve(object):
         else:
             return item
 
-def abide(op, *args, **kwargs):
+def abide(op, *args, reserve_thread=False):
     '''
     Make curio abide by the execution requirements of an external
     synchronization primitive such as a Lock, Semaphore, or Condition
@@ -356,18 +352,17 @@ def abide(op, *args, **kwargs):
 
     # If op is already a coroutine function, return it unmodified
     if iscoroutinefunction(op):
-        return op(*args, **kwargs)
+        return op(*args)
 
     # If the object is already an asynchronous context manager, return it unmodified
     if hasattr(op, '__aexit__'):
         return op
 
     if hasattr(op, '__exit__'):
-        reserve_thread = kwargs.get('reserve_thread', False)
         return _contextadapt_reserve(op) if reserve_thread else _contextadapt_basic(op)
 
     # Object must be callable at least
     if not callable(op):
         raise TypeError('Must supply a callable')
 
-    return workers.block_in_thread(op, *args, **kwargs)
+    return workers.block_in_thread(op, *args)

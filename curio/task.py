@@ -73,15 +73,6 @@ class Task(object):
     def _finalize_agen(self, agen):
         print("Task %r -> Finalize %r" % (self, agen))
 
-    @property
-    def result(self):
-        if not self.terminated:
-            raise ResultUnavailable('Task not terminated')
-        if self.exc_info:
-            raise self.exc_info[1]
-        else:
-            return self.next_value
-
     async def join(self):
         '''
         Wait for a task to terminate.  Returns the return value (if any)

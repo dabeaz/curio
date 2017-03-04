@@ -46,11 +46,11 @@ from . import thread
 
 try:
     from ssl import SSLWantReadError, SSLWantWriteError
-    WantRead = (BlockingIOError, SSLWantReadError)
-    WantWrite = (BlockingIOError, SSLWantWriteError)
+    WantRead = (BlockingIOError, InterruptedError, SSLWantReadError)
+    WantWrite = (BlockingIOError, InterruptedError, SSLWantWriteError)
 except ImportError:
-    WantRead = BlockingIOError
-    WantWrite = BlockingIOError
+    WantRead = (BlockingIOError, InterruptedError)
+    WantWrite = (BlockingIOError, InterruptedError)
 
 # Wrapper class around an integer file descriptor. This is used
 # to take advantage of an I/O scheduling performance optimization

@@ -4,11 +4,16 @@
 
 __all__ = ['SignalSet']
 
+# -- Standard Library
+
 from contextlib import contextmanager
 from collections import deque
 import signal
 
+# -- Curio
+
 from .traps import *
+from . import thread
 
 
 class SignalSet(object):
@@ -30,10 +35,10 @@ class SignalSet(object):
         self.watching = False
 
     def __enter__(self):
-        raise RuntimeError('Use async with')
+        return thread.AWAIT(self.__aenter__())
 
     def __exit__(self, *args):
-        pass
+        return thread.AWAIT(self.__aexit__(*args))
 
     async def wait(self):
         '''

@@ -1568,12 +1568,12 @@ Curio's synchronization primitives aren't safe to use with externel threads or
 processes.   However, Curio can work with existing thread or process-level
 synchronization primitives if you use the :func:`abide` function.
 
-.. asyncfunction:: abide(op, *args, **kwargs)
+.. asyncfunction:: abide(op, *args, reserve_thread=False)
 
    Execute an operation in a manner that safely works with async code.
-   If ``op`` is a coroutine function, then ``op(*args, **kwargs)`` is
+   If ``op`` is a coroutine function, then ``op(*args)`` is
    returned.  If ``op`` is a synchronous function, then
-   ``block_in_thread(op, *args, **kwargs)`` is returned.  In both
+   ``block_in_thread(op, *args)`` is returned.  In both
    cases, you would use ``await`` to obtain the result.  If ``op`` is
    an asynchronous context manager, it is returned unmodified.  If
    ``op`` is a synchronous context manager, it is wrapped in a manner
