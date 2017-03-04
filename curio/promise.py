@@ -17,18 +17,24 @@ class Promise:
         return '<{} [{}]>'.format(res[1:-1], extra)
 
     def is_set(self):
+        '''Return `True` if the promise is set'''
         return self._event.is_set()
 
     def clear(self):
+        '''Clear the promise'''
         self._data = None
         self._exception = None
         self._event.clear()
 
     async def set(self, data):
+        '''Set the promise. Wake all waiting tasks (if any).'''
         self._data = data
         await self._event.set()
 
     async def get(self):
+        '''Wait for the promise to be set, and return the data.
+
+        If an exception was set, it will be raised.'''
         await self._event.wait()
 
         if self._exception is not None:
