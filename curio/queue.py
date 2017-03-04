@@ -208,17 +208,13 @@ class UniversalQueue(object):
                 self._get_sock.recv(1)
             except BlockingIOError:
                 pass
-
-        # If there was something waiting to put (if queue bounded), wake it
-        if self._putters:
-            putter = self._putters.popleft()
-            putter.set_result(None)
+        self._put_notify()
             
     def _get(self):
         fut = item = None
         with self._mutex:
             # Critical section never blocks.
-            if not self._queue:
+            if not self._queue or self._getters:
                 fut = Future()
                 fut.add_done_callback(lambda f: self._get_complete() if not f.cancelled() else None)
                 self._getters.append(fut)
@@ -243,7 +239,9 @@ class UniversalQueue(object):
                 await _future_wait(fut)
                 item = fut.result()
             except CancelledError as e:
-                fut.cancel()
+                # If we're cancelled, but the future completes successfully anyways,
+                # we must arrange for the item to go back onto the queue.  Note:
+                # the Curio kernel cancels futures when _future_wait() is cancelled.
                 fut.add_done_callback(lambda f: self._put(f.result(), True) if not f.cancelled() else None)
                 raise
         return item
@@ -256,6 +254,14 @@ class UniversalQueue(object):
             await asyncio.wait_for(asyncio.wrap_future(fut), None)
             item = fut.result()
         return item
+
+    # Wake any waiting putters
+    def _put_notify(self):
+        while self._putters:
+            putter = self._putters.popleft()
+            if not putter.cancelled():
+                putter.set_result(None)
+                break
 
     # Put something on the queue or return a Future that must
     # be waited on before retrying.
@@ -297,7 +303,13 @@ class UniversalQueue(object):
             fut = self._put(item)
             if not fut:
                 break
-            await _future_wait(fut)
+            try:
+                await _future_wait(fut)
+            except CancelledError:
+                # If we're cancelled, but the future completes, it means that the getter alerted
+                # a task that space was available, but the alert is lost.  We renotify any waiters.
+                fut.add_done_callback(lambda fut: self._put_notify() if not fut.cancelled() else None)
+                raise
 
     # Asynchronous put. For Asyncio.
     @asyncioable(put)
@@ -332,3 +344,4 @@ class UniversalQueue(object):
     async def join(self):
         loop = asyncio.get_event_loop()
         return loop.run_in_executor(None, self.join_sync)
+
