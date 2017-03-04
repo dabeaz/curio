@@ -28,6 +28,6 @@ async def fib_handler(client, addr):
 
 if __name__ == '__main__':
     try:
-        run(tcp_server('', 25000, fib_handler))
+        run(tcp_server, '', 25000, fib_handler)
     except KeyboardInterrupt:
         pass

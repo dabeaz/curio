@@ -69,13 +69,13 @@ class EchoApp(object):
             await task.cancel()
 
     async def main(self):
-        serv = await spawn(tcp_server('', 25000, self.echo_client))
+        serv = await spawn(tcp_server, '', 25000, self.echo_client)
         while True:
             coro = await self.coro_ops.get()
             await coro
 
     def run_forever(self):
-        threading.Thread(target=run, args=(self.main(),)).start()
+        threading.Thread(target=run, args=(self.main,)).start()
         self.root.mainloop()
 
 if __name__ == '__main__':

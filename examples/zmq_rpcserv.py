@@ -15,4 +15,4 @@ async def rpc_server(address):
             await sock.send_pyobj(e)
 
 if __name__ == '__main__':
-    zmq.run(rpc_server('tcp://*:9000'))
+    zmq.run(rpc_server, 'tcp://*:9000')

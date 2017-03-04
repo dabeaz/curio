@@ -41,7 +41,7 @@ async def kid():
 
 async def parent():
     print('Parent PID', os.getpid())
-    kid_task = await curio.spawn(kid())
+    kid_task = await curio.spawn(kid)
     await curio.sleep(5)
     print("Yes, go play")
     await start_evt.set()
@@ -50,7 +50,7 @@ async def parent():
     await curio.SignalSet(signal.SIGHUP).wait()
 
     print("Let's go")
-    count_task = await curio.spawn(countdown(10))
+    count_task = await curio.spawn(countdown, 10)
     await count_task.join()
     print("We're leaving!")
     try:
@@ -63,6 +63,6 @@ async def parent():
 
 if __name__ == '__main__':
     try:
-        curio.run(parent(), with_monitor=True)
+        curio.run(parent, with_monitor=True)
     except KeyboardInterrupt:
         pass

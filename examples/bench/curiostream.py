@@ -19,4 +19,4 @@ async def echo_handler(client, addr):
 
 
 if __name__ == '__main__':
-    run(tcp_server('', 25000, echo_handler))
+    run(tcp_server, '', 25000, echo_handler)

@@ -20,6 +20,6 @@ if __name__ == '__main__':
     except:
         pass
     try:
-        run(unix_server('/tmp/curiounixecho', echo_handler))
+        run(unix_server, '/tmp/curiounixecho', echo_handler)
     except KeyboardInterrupt:
         pass

@@ -11,4 +11,4 @@ async def pusher(address):
     await sock.send(b'exit')
 
 if __name__ == '__main__':
-    zmq.run(pusher('tcp://*:9000'))
+    zmq.run(pusher, 'tcp://*:9000')

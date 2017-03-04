@@ -58,7 +58,7 @@ class EchoApp(object):
             await task.cancel()
 
     async def main(self):
-        serv = await spawn(tcp_server('', 25000, self.echo_client))
+        serv = await spawn(tcp_server, '', 25000, self.echo_client)
         while True:
             self.root.update()
             for coro in self.pending:
@@ -68,5 +68,5 @@ class EchoApp(object):
 
 if __name__ == '__main__':
     app = EchoApp()
-    run(app.main())
+    run(app.main)
 

@@ -14,7 +14,7 @@ async def echo_server(address):
         while True:
             client, addr = await sock.accept()
             print('Connection from', addr)
-            await spawn(echo_client(client))
+            await spawn(echo_client, client)
 
 
 async def echo_client(client):
@@ -27,6 +27,6 @@ async def echo_client(client):
 
 if __name__ == '__main__':
     try:
-        run(echo_server(('', 25000)))
+        run(echo_server, ('', 25000))
     except KeyboardInterrupt:
         pass

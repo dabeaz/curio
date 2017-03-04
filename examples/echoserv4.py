@@ -16,6 +16,6 @@ async def echo_client(client, addr):
 
 if __name__ == '__main__':
     try:
-        run(tcp_server('', 25000, echo_client))
+        run(tcp_server, '', 25000, echo_client)
     except KeyboardInterrupt:
         pass

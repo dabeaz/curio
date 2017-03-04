@@ -26,4 +26,4 @@ async def echo_handler(client, addr):
 if __name__ == '__main__':
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
-    run(tcp_server('', 25000, echo_handler, ssl=ssl_context))
+    run(tcp_server, '', 25000, echo_handler, ssl=ssl_context)

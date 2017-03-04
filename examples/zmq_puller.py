@@ -13,4 +13,4 @@ async def puller(address):
         print('Got:', msg)
 
 if __name__ == '__main__':
-    zmq.run(puller('tcp://localhost:9000'))
+    zmq.run(puller, 'tcp://localhost:9000')

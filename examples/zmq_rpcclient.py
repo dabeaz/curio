@@ -14,7 +14,7 @@ async def ticker():
 
 async def client(address):
     # Run a background task to make sure the message passing operations don't block
-    await spawn(ticker(), daemon=True)
+    await spawn(ticker, daemon=True)
 
     # Compute the first 40 fibonacci numbers
     ctx = zmq.Context()
@@ -26,4 +26,4 @@ async def client(address):
         print(n, result)
 
 if __name__ == '__main__':
-    zmq.run(client('tcp://localhost:9000'))
+    zmq.run(client, 'tcp://localhost:9000')

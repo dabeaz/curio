@@ -26,7 +26,7 @@ async def pulling():
             print(greeting[0], file=null)
 
 async def main():
-    t = await spawn(pushing())
+    t = await spawn(pushing)
     try:
         begin = time.monotonic()
         await pulling()
@@ -36,6 +36,6 @@ async def main():
         pass
 
 if __name__ == '__main__':
-    zmq.run(main())
+    zmq.run(main)
 
 

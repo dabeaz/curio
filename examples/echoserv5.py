@@ -29,7 +29,7 @@ async def main(host, port):
     while True:
         async with SignalSet(signal.SIGHUP) as sigset:
             print('Starting the server')
-            serv_task = await spawn(tcp_server(host, port, echo_client))
+            serv_task = await spawn(tcp_server, host, port, echo_client)
             await sigset.wait()
             print('Server shutting down')
             await serv_task.cancel()
@@ -40,6 +40,6 @@ async def main(host, port):
 
 if __name__ == '__main__':
     try:
-        run(main('', 25000))
+        run(main, '', 25000)
     except KeyboardInterrupt:
         pass
