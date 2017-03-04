@@ -49,86 +49,6 @@ def blocking(trap_func):
 class BlockingTaskWarning(RuntimeWarning):
     pass
 
-# KernelSyncBase is an abstract base class used to support synchronization
-# primitives such as Events, Locks, Semaphores, etc.  There are different
-# kinds of synchronization and policies that one might implement. This
-# is merely specifying the expected kernel-side API.
-
-class KernelSyncBase(ABC):
-
-    @abstractmethod
-    def __len__(self):
-        pass
-
-    @abstractmethod
-    def add(self, task):
-        '''
-        Adds a new task.  This method *must* return a zero-argument
-        callable that can be used to remove the just added task
-        '''
-        pass
-
-    @abstractmethod
-    def pop(self, ntasks=1):
-        '''
-        Pop one or more task.  Returns a list of the removed tasks.
-        '''
-        pass
-
-# Kernel-level task synchronization primitives.  These are not
-# for end-users.  They're used to implement higher-level primitives.
-# See the curio/sync.py file.
-
-# Kernel queue with soft-delete on task cancellation
-
-
-class KSyncQueue(KernelSyncBase):
-
-    def __init__(self):
-        self._queue = deque()
-        self._actual_len = 0
-
-    def __len__(self):
-        return self._actual_len
-
-    def add(self, task):
-        item = [task]
-        self._queue.append(item)
-        self._actual_len += 1
-
-        def remove():
-            item[0] = None
-            self._actual_len -= 1
-        return remove
-
-    def pop(self, ntasks=1):
-        tasks = []
-        while ntasks > 0:
-            task, = self._queue.popleft()
-            if task:
-                tasks.append(task)
-                ntasks -= 1
-        self._actual_len -= len(tasks)
-        return tasks
-
-# Kernel event with delete on cancellation
-
-
-class KSyncEvent(KernelSyncBase):
-
-    def __init__(self):
-        self._tasks = set()
-
-    def __len__(self):
-        return len(self._tasks)
-
-    def add(self, task):
-        self._tasks.add(task)
-        return lambda: self._tasks.remove(task)
-
-    def pop(self, ntasks=1):
-        return [self._tasks.pop() for _ in range(ntasks)]
-
 # Dictionary that tracks the "safe" status of async generators with 
 # respect to asynchronous finalization.  Normally this is automatically
 # determined by looking at the code of async generators.  It can
@@ -513,7 +433,6 @@ class Kernel(object):
             if task.joining:
                 for wtask in task.joining.pop(len(task.joining)):
                     _reschedule_task(wtask)
-                task.joining = None
             task.terminated = True
 
             del tasks[task.id]
@@ -646,8 +565,8 @@ class Kernel(object):
 
         # Reschedule one or more tasks from a kernel sync
         @nonblocking
-        def _trap_ksync_reschedule(ksync, n):
-            tasks = ksync.pop(n)
+        def _trap_sched_wake(sched, n):
+            tasks = sched.pop(n)
             for task in tasks:
                 _reschedule_task(task)
 
@@ -657,9 +576,7 @@ class Kernel(object):
             if task.terminated:
                 return _trap_sleep(0, False)
             else:
-                if task.joining is None:
-                    task.joining = KSyncQueue()
-                return _trap_wait_ksync(task.joining, 'TASK_JOIN')
+                return _trap_sched_wait(task.joining, 'TASK_JOIN')
 
         # Cancel a task
         @nonblocking
@@ -694,10 +611,10 @@ class Kernel(object):
             _reschedule_task(task, exc=task.cancel_pending)
             task.cancel_pending = None
 
-        # Wait on a queue
+        # Wait on a scheduler primitive
         @blocking
-        def _trap_wait_ksync(ksync, state):
-            return (state, ksync.add(current))
+        def _trap_sched_wait(sched, state):
+            return (state, sched.add(current))
 
         # Sleep for a specified period. Returns value of monotonic clock.
         # absolute flag indicates whether or not an absolute or relative clock

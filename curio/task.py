@@ -11,6 +11,7 @@ import warnings
 
 from .errors import *
 from .traps import *
+from .sched import SchedBarrier
 
 __all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
@@ -36,30 +37,30 @@ class Task(object):
             taskid = Task._lastid
             Task._lastid += 1
         self.id = taskid
-        self.parentid = None       # Parent task id (if any)
-        self.coro = coro           # Underlying generator/coroutine
+        self.parentid = None          # Parent task id (if any)
+        self.coro = coro              # Underlying generator/coroutine
         self.name = getattr(coro, '__qualname__', str(coro))
-        self.daemon = daemon       # Daemonic flag
-        self.cycles = 0            # Execution cycles completed
-        self.state = 'INITIAL'     # Execution state
-        self.cancel_func = None    # Cancellation function
-        self.future = None         # Pending Future (if any)
-        self.sleep = None          # Pending sleep (if any)
-        self.timeout = None        # Pending timeout (if any)
-        self.exc_info = None       # Exception info (if any on crash)
-        self.next_value = None     # Next value to send on execution
-        self.next_exc = None       # Next exception to send on execution
-        self.joining = None        # Optional set of tasks waiting to join with this one
-        self.cancelled = None      # Has the task been cancelled?
-        self.terminated = False    # Has the task actually Terminated?
-        self.cancel_pending = None # Deferred cancellation exception pending (if any)
-        self.allow_cancel = True   # Can cancellation exceptions be delivered?
+        self.daemon = daemon          # Daemonic flag
+        self.cycles = 0               # Execution cycles completed
+        self.state = 'INITIAL'        # Execution state
+        self.cancel_func = None       # Cancellation function
+        self.future = None            # Pending Future (if any)
+        self.sleep = None             # Pending sleep (if any)
+        self.timeout = None           # Pending timeout (if any)
+        self.exc_info = None          # Exception info (if any on crash)
+        self.next_value = None        # Next value to send on execution
+        self.next_exc = None          # Next exception to send on execution
+        self.joining = SchedBarrier() # Set of tasks waiting to join with this one
+        self.cancelled = None         # Has the task been cancelled?
+        self.terminated = False       # Has the task actually Terminated?
+        self.cancel_pending = None    # Deferred cancellation exception pending (if any)
+        self.allow_cancel = True      # Can cancellation exceptions be delivered?
 
         self.task_local_storage = {}  # Task local storage
-        self._last_io = None       # Last I/O operation performed
-        self._send = coro.send     # Bound coroutine methods
+        self._last_io = None          # Last I/O operation performed
+        self._send = coro.send        # Bound coroutine methods
         self._throw = coro.throw
-        self._deadlines = []       # Timeout deadlines
+        self._deadlines = []          # Timeout deadlines
 
     def __repr__(self):
         return 'Task(id=%r, name=%r, %r, state=%r)' % (self.id, self.name, self.coro, self.state)

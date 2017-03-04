@@ -2187,16 +2187,16 @@ cancellation point.
 
    Synchronous trap. Cancel the indicated *task*.
 
-.. asyncfunction:: _wait_on_ksync(ksync, state_name)
+.. asyncfunction:: _scheduler_wait(sched, state_name)
 
-   Blocking trap.  Go to sleep on a kernel synchronization primitive. *ksync* is an instance of
-   ``curio.kernel.KernelSyncBase``. *state_name* is the name of the wait state (used in
+   Blocking trap.  Go to sleep on a kernel scheduler primitive. *sched* is an instance of
+   ``curio.sched.SchedBase``. *state_name* is the name of the wait state (used in
    debugging).
 
-.. asyncfunction:: _reschedule_tasks(ksync, n=1, value=None, exc=None)
+.. asyncfunction:: _scheduler_wake(sched, n=1, value=None, exc=None)
 
    Synchronous trap. Reschedule one or more tasks from a
-   kernel synchronization primitive. *n* is the
+   kernel scheduler primitive. *n* is the
    number of tasks to release. *value* and *exc* specify the return
    value or exception to raise in the task when it resumes execution.
 
@@ -2234,13 +2234,6 @@ cancellation point.
    Synchronous trap. Unset a timeout in the currently running
    task. *previous* is the value returned by the _set_timeout() call
    used to set the timeout.
-
-.. asyncfunction:: _ksync_reschedule_function(queue)
-
-   Synchronous trap. Return a function that allows tasks to be
-   rescheduled on a kernel sychronization primitive without the use of
-   await.  Can be used in synchronous code as long as it runs in the
-   same thread as the Curio kernel.
 
 .. asyncfunction:: _clock():
 

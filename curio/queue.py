@@ -13,8 +13,8 @@ import asyncio
 
 # -- Curio
 
-from .traps import _wait_on_ksync, _reschedule_tasks, _future_wait
-from .kernel import KSyncQueue
+from .traps import _scheduler_wait, _scheduler_wake, _future_wait
+from .sched import SchedFIFO
 from .errors import CurioError, CancelledError
 from .meta import awaitable, asyncioable
 from . import workers
@@ -33,9 +33,9 @@ class Queue(object):
 
     def __init__(self, maxsize=0):
         self.maxsize = maxsize
-        self._get_waiting = KSyncQueue()
-        self._put_waiting = KSyncQueue()
-        self._join_waiting = KSyncQueue()
+        self._get_waiting = SchedFIFO()
+        self._put_waiting = SchedFIFO()
+        self._join_waiting = SchedFIFO()
         self._task_count = 0
         self._queue = self._init_internal_queue()
 
@@ -56,12 +56,12 @@ class Queue(object):
         must_wait = bool(self._get_waiting)
         while must_wait or self.empty():
             must_wait = False
-            await _wait_on_ksync(self._get_waiting, 'QUEUE_GET')
+            await _scheduler_wait(self._get_waiting, 'QUEUE_GET')
 
         result = self._get()
 
         if self._put_waiting:
-            await _reschedule_tasks(self._put_waiting, n=1)
+            await _scheduler_wake(self._put_waiting, n=1)
         return result
 
     def _get(self):
@@ -69,15 +69,15 @@ class Queue(object):
 
     async def join(self):
         if self._task_count > 0:
-            await _wait_on_ksync(self._join_waiting, 'QUEUE_JOIN')
+            await _scheduler_wait(self._join_waiting, 'QUEUE_JOIN')
 
     async def put(self, item):
         while self.full():
-            await _wait_on_ksync(self._put_waiting, 'QUEUE_PUT')
+            await _scheduler_wait(self._put_waiting, 'QUEUE_PUT')
         self._put(item)
         self._task_count += 1
         if self._get_waiting:
-            await _reschedule_tasks(self._get_waiting, n=1)
+            await _scheduler_wake(self._get_waiting, n=1)
 
     def _put(self, item):
         self._queue.append(item)
@@ -88,7 +88,7 @@ class Queue(object):
     async def task_done(self):
         self._task_count -= 1
         if self._task_count == 0 and self._join_waiting:
-            await _reschedule_tasks(self._join_waiting, n=len(self._join_waiting))
+            await _scheduler_wake(self._join_waiting, n=len(self._join_waiting))
 
 
 class PriorityQueue(Queue):

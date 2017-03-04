@@ -11,7 +11,7 @@
 # Internally, there are a few kernel-level sychronization primitives
 # used to coordinate tasks (KSyncQueue, and KSyncEvent).  KSyncQueue
 # is used for queue-based coordination.  KSyncEvent is used for
-# barrier synchronization.  The _wait_on_ksync() and _reschedule_tasks()
+# barrier synchronization.  The _scheduler_wait() and _scheduler_wake()
 # traps are used to coordinate synchronization with the underlying Kernel.
 
 
@@ -19,8 +19,8 @@ __all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition
 
 # -- Curio
 
-from .traps import _wait_on_ksync, _reschedule_tasks
-from .kernel import KSyncQueue, KSyncEvent
+from .traps import _scheduler_wait, _scheduler_wake
+from .sched import SchedFIFO, SchedBarrier
 from . import workers
 from .task import current_task
 from .meta import awaitable, iscoroutinefunction
@@ -32,7 +32,7 @@ class Event(object):
 
     def __init__(self):
         self._set = False
-        self._waiting = KSyncEvent()
+        self._waiting = SchedBarrier()
 
     def __repr__(self):
         res = super().__repr__()
@@ -49,11 +49,11 @@ class Event(object):
         if self._set:
             return
 
-        await _wait_on_ksync(self._waiting, 'EVENT_WAIT')
+        await _scheduler_wait(self._waiting, 'EVENT_WAIT')
 
     async def set(self):
         self._set = True
-        await _reschedule_tasks(self._waiting, len(self._waiting))
+        await _scheduler_wake(self._waiting, len(self._waiting))
 
 
 class _LockBase(object):
@@ -77,7 +77,7 @@ class Lock(_LockBase):
 
     def __init__(self):
         self._acquired = False
-        self._waiting = KSyncQueue()
+        self._waiting = SchedFIFO()
 
     def __repr__(self):
         res = super().__repr__()
@@ -86,14 +86,14 @@ class Lock(_LockBase):
 
     async def acquire(self):
         if self._acquired:
-            await _wait_on_ksync(self._waiting, 'LOCK_ACQUIRE')
+            await _scheduler_wait(self._waiting, 'LOCK_ACQUIRE')
         self._acquired = True
         return True
 
     async def release(self):
         assert self._acquired, 'Lock not acquired'
         if self._waiting:
-            await _reschedule_tasks(self._waiting, n=1)
+            await _scheduler_wake(self._waiting, n=1)
         else:
             self._acquired = False
 
@@ -165,7 +165,7 @@ class Semaphore(_LockBase):
 
     def __init__(self, value=1):
         self._value = value
-        self._waiting = KSyncQueue()
+        self._waiting = SchedFIFO()
 
     def __repr__(self):
         res = super().__repr__()
@@ -175,14 +175,14 @@ class Semaphore(_LockBase):
 
     async def acquire(self):
         if self._value <= 0:
-            await _wait_on_ksync(self._waiting, 'SEMA_ACQUIRE')
+            await _scheduler_wait(self._waiting, 'SEMA_ACQUIRE')
         else:
             self._value -= 1
         return True
 
     async def release(self):
         if self._waiting:
-            await _reschedule_tasks(self._waiting, n=1)
+            await _scheduler_wake(self._waiting, n=1)
         else:
             self._value += 1
 
@@ -213,7 +213,7 @@ class Condition(_LockBase):
             self._lock = Lock()
         else:
             self._lock = lock
-        self._waiting = KSyncQueue()
+        self._waiting = SchedFIFO()
 
     def __repr__(self):
         res = super().__repr__()
@@ -234,7 +234,7 @@ class Condition(_LockBase):
             raise RuntimeError("Can't wait on unacquired lock")
         await self.release()
         try:
-            await _wait_on_ksync(self._waiting, 'COND_WAIT')
+            await _scheduler_wait(self._waiting, 'COND_WAIT')
         finally:
             await self.acquire()
 
@@ -248,7 +248,7 @@ class Condition(_LockBase):
     async def notify(self, n=1):
         if not self.locked():
             raise RuntimeError("Can't notify on unacquired lock")
-        await _reschedule_tasks(self._waiting, n=n)
+        await _scheduler_wake(self._waiting, n=n)
 
     async def notify_all(self):
         await self.notify(len(self._waiting))

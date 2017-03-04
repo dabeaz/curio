@@ -12,8 +12,8 @@
 
 __all__ = [ 
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
-    '_join_task', '_cancel_task', '_wait_on_ksync',
-    '_reschedule_tasks', '_sigwatch', '_sigunwatch', '_sigwait',
+    '_join_task', '_cancel_task', '_scheduler_wait',
+    '_scheduler_wake', '_sigwatch', '_sigunwatch', '_sigwait',
     '_get_kernel', '_get_current', '_set_timeout', '_unset_timeout',
     '_clock',
     ]
@@ -33,8 +33,8 @@ class Traps(IntEnum):
     _trap_future_wait = 1
     _trap_sleep = 2
     _trap_join_task = 3
-    _trap_wait_ksync = 4
-    _trap_ksync_reschedule = 5
+    _trap_sched_wait = 4
+    _trap_sched_wake = 5
     _trap_sigwait = 6
     _trap_cancel_task = 7
     _trap_get_kernel = 8
@@ -111,19 +111,19 @@ def _join_task(task):
 
 
 @coroutine
-def _wait_on_ksync(ksync, state):
+def _scheduler_wait(sched, state):
     '''
-    Put the task to sleep on a kernel synchronization primitive.
+    Put the task to sleep on a scheduler primitive.
     '''
-    yield (_trap_wait_ksync, ksync, state)
+    yield (_trap_sched_wait, sched, state)
 
 
 @coroutine
-def _reschedule_tasks(ksync, n=1):
+def _scheduler_wake(sched, n=1):
     '''
-    Reschedule one or more tasks waiting on a kernel sync primitive.
+    Reschedule one or more tasks waiting on a scheduler primitive.
     '''
-    yield (_trap_ksync_reschedule, ksync, n)
+    yield (_trap_sched_wake, sched, n)
 
 
 @coroutine
