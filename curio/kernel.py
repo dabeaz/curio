@@ -399,9 +399,9 @@ class Kernel(object):
         # ---- Task Support Functions
 
         # Create a new task. Putting it on the ready queue
-        def _new_task(coro, daemon=False):
+        def _new_task(coro, daemon=False, taskid=None):
             nonlocal njobs
-            task = Task(coro, daemon)
+            task = Task(coro, daemon, taskid=taskid)
             tasks[task.id] = task
             if not daemon:
                 njobs += 1
@@ -557,8 +557,8 @@ class Kernel(object):
 
         # Add a new task to the kernel
         @nonblocking
-        def _trap_spawn(coro, daemon):
-            task = _new_task(coro, daemon | current.daemon)    # Inherits daemonic status from parent
+        def _trap_spawn(coro, daemon, task_id):
+            task = _new_task(coro, daemon | current.daemon, task_id)    # Inherits daemonic status from parent
             task.parentid = current.id
             _copy_tasklocal(current, task)
             return task

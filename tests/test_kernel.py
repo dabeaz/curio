@@ -1037,3 +1037,12 @@ def test_task_gather_timeout(kernel):
         
     kernel.run(main)
 
+def test_custom_task_id(kernel):
+    async def t():
+        return
+
+    async def main():
+        nt = await spawn(t(), taskid=797)
+        assert nt.id == 797
+
+    kernel.run(main)

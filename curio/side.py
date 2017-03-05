@@ -37,7 +37,7 @@ def main(argv):
         sys.modules['__main__'] = mod
     (corofunc, args) = pickle.loads(base64.b64decode(sys.argv[2]))
     try:
-        run(_aside_child(corofunc, args)
+        run(_aside_child(corofunc, args))
     except CancelledError as e:
         raise SystemExit(1)
 
