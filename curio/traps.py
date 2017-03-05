@@ -87,11 +87,11 @@ def _sleep(clock, absolute):
 
 
 @coroutine
-def _spawn(coro, daemon):
+def _spawn(coro, daemon, taskid=None):
     '''
     Create a new task. Returns the resulting Task object.
     '''
-    return (yield _trap_spawn, coro, daemon)
+    return (yield _trap_spawn, coro, daemon, taskid)
 
 
 @coroutine

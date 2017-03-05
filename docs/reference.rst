@@ -84,7 +84,7 @@ Tasks
 
 The following functions are defined to help manage the execution of tasks.
 
-.. asyncfunction:: spawn(coro, daemon=False)
+.. asyncfunction:: spawn(coro, daemon=False, allow_cancel=True, task_id=None)
 
    Create a new task that runs the coroutine *coro*.  Returns a
    :class:`Task` instance as a result.  The *daemon* option, if

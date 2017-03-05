@@ -155,7 +155,7 @@ async def schedule():
     '''
     await sleep(0)
 
-async def spawn(corofunc, *args, daemon=False, allow_cancel=True):
+async def spawn(corofunc, *args, daemon=False, allow_cancel=True, taskid=None):
     '''
     Create a new task, running corofunc(*args). Use the daemon=True
     option if the task runs forever as a background task.  If
@@ -166,7 +166,7 @@ async def spawn(corofunc, *args, daemon=False, allow_cancel=True):
         coro = corofunc
     else:
         coro = corofunc(*args)
-    task = await _spawn(coro, daemon)
+    task = await _spawn(coro, daemon, taskid)
     task.allow_cancel = allow_cancel
     return task
 
