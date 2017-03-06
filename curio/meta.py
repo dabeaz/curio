@@ -5,8 +5,11 @@
 #   \/   \/             If you use it, you might die. No seriously.
 #
 
-__all__ = ['iscoroutinefunction', 'finalize', 'blocking', 'cpubound', 'awaitable', 'asyncioable', 'sync_only', 'AsyncABC', 
-           'AsyncObject']
+__all__ = [
+    'iscoroutinefunction', 'finalize', 'blocking', 'cpubound',
+    'awaitable', 'asyncioable', 'sync_only', 'AsyncABC',
+    'AsyncObject', 'curio_running'
+ ]
 
 # -- Standard Library
 
@@ -16,11 +19,28 @@ from functools import wraps, partial
 from abc import ABCMeta, abstractmethod
 import dis
 import asyncio
+import threading
 
 # -- Curio
 
 from .errors import SyncIOError
-from .kernel import Kernel
+
+
+_locals = threading.local()
+def set_running_flag(flag):
+    '''
+    Set a flag that indicates whether or not Curio is running in the
+    current thread.
+    '''
+    _locals.running = flag
+
+
+def curio_running():
+    '''
+    Return a flag that indicates whether or not Curio is running in the current thread.
+    '''
+    return getattr(_locals, 'running', False)
+
 
 # Some flags defined in Include/code.h
 _CO_NESTED = 0x0010
@@ -58,28 +78,6 @@ def iscoroutinefunction(func):
     if isinstance(func, partial):
         return iscoroutinefunction(func.func)
     return inspect.iscoroutinefunction(func)
-
-class finalize(object):
-    '''
-    Context manager that safely finalizes an asynchronous generator.
-    This might be needed if an asynchronous generator uses async functions
-    in try-finally and other constructs.
-    '''
-
-    _finalized = set()
-
-    def __init__(self, aobj):
-        self.aobj = aobj
-
-    async def __aenter__(self):
-        self._finalized.add(self.aobj)
-        return self.aobj
-
-    async def __aexit__(self, ty, val, tb):
-        if hasattr(self.aobj, 'aclose'):
-            await self.aobj.aclose()
-        self._finalized.discard(self.aobj)
-
 
 def blocking(func):
     '''
@@ -198,7 +196,7 @@ def asyncioable(awaitablefunc):
         def wrapper(*args, **kwargs):
             if _from_coroutine():
                 # Check if we're Curio or not
-                if getattr(Kernel._local, 'running', False):
+                if curio_running():
                     return awaitablefunc._asyncfunc(*args, **kwargs)
                 else:
                     return asyncfunc(*args, **kwargs)
@@ -258,7 +256,45 @@ class AsyncInstanceType(AsyncABCMeta):
 class AsyncObject(metaclass=AsyncInstanceType):
     pass
 
-def _is_safe_generator(code):
+
+# Dictionary that tracks the "safe" status of async generators with 
+# respect to asynchronous finalization.  Normally this is automatically
+# determined by looking at the code of async generators.  It can
+# be overridden using the @safe_generator decorator below. 
+
+_safe_async_generators = { }      # { code_objects: bool }
+
+def safe_generator(func):
+    _safe_async_generators[func.__code__] = True
+    return func
+
+
+class finalize(object):
+    '''
+    Context manager that safely finalizes an asynchronous generator.
+    This might be needed if an asynchronous generator uses async functions
+    in try-finally and other constructs.
+    '''
+
+    _finalized = set()
+
+    def __init__(self, aobj):
+        self.aobj = aobj
+
+    async def __aenter__(self):
+        self._finalized.add(self.aobj)
+        return self.aobj
+
+    async def __aexit__(self, ty, val, tb):
+        if hasattr(self.aobj, 'aclose'):
+            await self.aobj.aclose()
+        self._finalized.discard(self.aobj)
+
+    @classmethod
+    def is_finalized(cls, aobj):
+        return aobj in cls._finalized
+
+def is_safe_generator(agen):
     '''
     Examine the code of an async generator to see if it appears
     unsafe with respect to async finalization.  A generator
@@ -285,6 +321,9 @@ def _is_safe_generator(code):
        except Exception:
            await coro()
     '''
+    if agen.ag_code in _safe_async_generators:
+        return True
+
     def _is_unsafe_block(instr, end_offset=-1):
         is_generator = False
         in_final = False
@@ -304,5 +343,10 @@ def _is_safe_generator(code):
                 is_unsafe = True
         return (is_generator, is_unsafe)
 
-    return not _is_unsafe_block(dis.get_instructions(code))[1]
+    if not _is_unsafe_block(dis.get_instructions(agen.ag_code))[1]:
+        _safe_async_generators[agen.ag_code] = True
+        return True
+    else:
+        return False
+
         

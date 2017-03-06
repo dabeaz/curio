@@ -1,15 +1,16 @@
 # curio/monitor.py
 #
-# Copyright (C) 2015-2016
-# David Beazley (Dabeaz LLC), http://www.dabeaz.com
-# All rights reserved.
-#
 # Debugging monitor for curio. To enable the monitor, create a kernel
-# with the with_monitor argument:
+# and then attach a monitor to it, like this:
 #
-#    k = Kernel(with_monitor=True)
+#    k = Kernel()
+#    Monitor(k)
 #
-# Or run a curio program with the CURIOMONITOR environment variable set
+# If using the run() function, you can do this:
+#
+#    run(coro, with_monitor=True)
+#
+# run() also looks for the CURIOMONITOR environment variable
 #
 #    env CURIOMONITOR=TRUE python3 someprog.py
 #
@@ -26,10 +27,10 @@
 #
 # Theory of operation:
 # --------------------
-# The monitor works by opening up a loopback socket on the local machine and
-# allowing connections via telnet. By default, it only allows a connection
-# originating from the local machine.  Only a single monitor connection is
-# allowed at any given time.
+# The monitor works by opening up a loopback socket on the local
+# machine and allowing connections via telnet. By default, it only
+# allows a connection originating from the local machine.  Only a
+# single monitor connection is allowed at any given time.
 #
 # There are two parts to the monitor itself: a user interface and an
 # internal loop that runs on curio itself.  The user interface part
@@ -37,15 +38,15 @@
 # is that it allows curio to be monitored even if the curio kernel is
 # completely deadlocked, occupied with a large CPU-bound task, or
 # otherwise hosed in the some way.  At a minimum, you can connect,
-# look at the task table, and see what the tasks are doing.
+# look at the task table, and see what the tasks are doing.  
 #
 # The internal monitor loop implemented on curio itself is presently
-# used to implement external task cancellation.  Manipulating any
-# part of the kernel state or task status is unsafe from an outside thread.
+# used to implement external task cancellation.  Manipulating any part
+# of the kernel state or task status is unsafe from an outside thread.
 # To make it safe, the user-interface thread of the monitor hands over
-# requests requiring the involvement of the kernel to the monitor loop.
-# Since this loop runs on curio, it can safely make cancellation requests
-# and perform other kernel-related actions.
+# requests requiring the involvement of the kernel to the monitor
+# loop.  Since this loop runs on curio, it can safely make
+# cancellation requests and perform other kernel-related actions.
 
 import os
 import traceback
@@ -117,7 +118,7 @@ class Monitor(object):
         self.kernel = kern
         self.address = (host, port)
         self.monitor_queue = queue.UniversalQueue()
-
+                                               
         log.info('Starting Curio monitor at %s:%d', host, port)
 
         # The monitor launches both a separate thread and helper task

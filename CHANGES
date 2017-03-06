@@ -2,6 +2,34 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+03/06/2017 A lot of cleanup of the kernel. Moved some functionality 
+	   elsewhere. Removed unneeded traps.  Removed excess
+           abstraction in the interest of readability.  The different
+           trap functions in Curio are almost all quite small.
+           However, details concerning their execution behavior was
+           split across a few different places in the code and wrapped
+           with decorators--making it somewhat hard to piece together
+           how they worked looking at them in isolation.  Each trap 
+	   is now basically self-contained.  You can look at the code and 
+	   see exactly what it does.  Each trap is also afforded more
+	   flexibility about how it could work in the future (e.g.,
+	   scheduling behavior, cancellation, etc.).  
+
+	   Debug logging features have been removed from the kernel and
+	   placed into a new subsystem.  See the file curio/debug.py.
+	   This is still in progress.
+
+03/05/2017 Change to how the debugging monitor is invoked.  It's still
+           an option on the run() function.  However, it is not a
+           option on the Kernel class itself.  If you need to do that,
+           use this:
+
+                from curio import Kernel
+                from curio.monitor import Monitor
+
+                k = Kernel()
+                m = Monitor(k)
+
 03/04/2017 Support for using Event.set() from a synchronous context has
            been withdrawn.   This was undocumented and experimental.
 	   There are other mechanisms for achieving this.  For example,

@@ -1,8 +1,47 @@
 # curio/kernel.py
 #
-# Main execution kernel.
+# Main execution kernel.  
+#
+# Curio is based on two overarching design principles that drive the code
+# you'll find here. 
+#
+# 1. Environmental Isolation.  
+#
+#    Curio strictly separates the environment of async and synchronous
+#    programming.  All asynchronous functionality is placed in
+#    async-function definitions.  Async functions request the services
+#    of the kernel using low-level yield statements (traps).  The
+#    kernel is an opaque black-box from the perspective of synchronous
+#    code.  There is only one available operation--run(coro) which
+#    runs a new task.  There are no other mechanisms available for
+#    controlling the kernel from synchronous code.  A good analogy
+#    might be the distinction between user and protected mode in an
+#    OS.  User programs run in user-mode and the operating system
+#    kernel runs in protected mode.  The same thing happens here.
+#    User programs in Curio can only run in async functions. Those
+#    programs can request the services of the kernel.  However,
+#    they're not granted any further access than that.
+#    
+# 2. Microkernels
+#
+#    The low-level kernel is meant to be small, fast, and minimally
+#    featureful.  There are no publically exposed methods or
+#    extension hooks (e.g., inheritance).  In fact, almost nothing
+#    interesting happens here.  Instead, almost every useful part
+#    of Curio gets implemented in async functions found elsewhere.
+#    If you're trying to add new features to Curio, don't 
+#    add them to the kernel. Think about how to create objects and
+#    functions that operate at the async-function level instead.
+#    See files such as sync.py or queue.py for examples.   
+#
+# No part of Curio has direct linkage to the Kernel class (it's
+# not imported or used anywhere in the code base).   If you want,
+# you can make a completely custom Kernel object and have the
+# rest of Curio run on it.  You need to make sure you implement
+# the required traps.
 
-__all__ = ['Kernel', 'run', 'BlockingTaskWarning']
+
+__all__ = ['Kernel', 'run' ]
 
 # -- Standard Library
 
@@ -15,10 +54,9 @@ import logging
 import signal
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
-import warnings
-import threading
 import inspect
-from abc import ABC, abstractmethod
+from contextlib import contextmanager
+import threading
 
 # Logger where uncaught exceptions from crashed tasks are logged
 log = logging.getLogger(__name__)
@@ -28,54 +66,66 @@ log = logging.getLogger(__name__)
 from .errors import *
 from .task import Task
 from .traps import _read_wait, Traps
-from .local import _enable_tasklocal_for, _copy_tasklocal
+from .local import _set_tasklocal, _copy_tasklocal
+from . import meta
+from .debug import create_debuggers
 
-# Decorators that indicate the trap type.
+# ----------------------------------------------------------------------
+# async-generator support.
 #
-# A nonblocking trap is one that executes immediately and returns a
-# result back to the caller.  A blocking trap is one that suspends the
-# currently executing task and switches to another.
+# This context manager is used to manage the execution of async generators
+# in Python 3.6.  In certain circumstances, they can't be used safely
+# unless finalized properly.  This context manager installs some hooks
+# for dealing with this in Curio.
 
-def nonblocking(trap_func):
-    trap_func.blocking = False
-    return trap_func
+@contextmanager
+def _asyncgen_manager():
+    if hasattr(sys, 'get_asyncgen_hooks'):
+        old_asyncgen_hooks = sys.get_asyncgen_hooks()
+
+        def _init_async_gen(agen):
+            if not meta.is_safe_generator(agen) and not meta.finalize.is_finalized(agen):
+                # Inspect the code of the generator to see if it might be safe 
+                raise RuntimeError("Async generator with async finalization must be wrapped by\n"
+                                   "async with curio.meta.finalize(agen) as agen:\n"
+                                   "    async for n in agen:\n"
+                                   "         ...\n"
+                                   "See PEP 533 for further discussion.")
+
+        sys.set_asyncgen_hooks(_init_async_gen)
+    try:
+        yield
+    finally:
+        if hasattr(sys, 'get_asyncgen_hooks'):
+            sys.set_asyncgen_hooks(*old_asyncgen_hooks)
 
 
-def blocking(trap_func):
-    trap_func.blocking = True
-    return trap_func
-
-
-class BlockingTaskWarning(RuntimeWarning):
-    pass
-
-# Dictionary that tracks the "safe" status of async generators with 
-# respect to asynchronous finalization.  Normally this is automatically
-# determined by looking at the code of async generators.  It can
-# be overridden using the @safe_generator decorator below. 
-
-_safe_async_generators = { }      # { code_objects: bool }
-
-def safe_generator(func):
-    _safe_async_generators[func.__code__] = True
-    return func
-        
 # ----------------------------------------------------------------------
 # Underlying kernel that drives everything
 # ----------------------------------------------------------------------
 
 
 class Kernel(object):
+    '''
+    Curio run-time kernel.  selector argument to init specifies a
+    different I/O selector.  debug argument specifies a list of
+    debugger objects to apply. For example:
 
-    # Thread-local storage used to ensure one kernel per thread
-    _local = threading.local()
+        from curio.debug import schedtrace, traptrace
+        k = Kernel(debug=[schedtrace, traptrace])
 
-    def __init__(self, *, selector=None, with_monitor=False, log_errors=True,
-                 warn_if_task_blocks_for=None, with_asyncio_bridge=False, asyncio_loop=None):
-        if selector is None:
-            selector = DefaultSelector()
+    Use the kernel run() method to submit work.
+    '''
 
-        self._selector = selector
+    def __init__(self, *, selector=None, debug=None):
+        self._running = False
+
+        # Functions to call at shutdown
+        self._shutdown_funcs = []
+
+        # I/O Selector setup
+        self._selector = selector if selector else DefaultSelector()
+        self._call_at_shutdown(self._selector.close)
 
         # Ready queue and task table
         self._ready = deque()
@@ -100,40 +150,11 @@ class Kernel(object):
         # Sleeping task queue
         self._sleeping = []
 
-        # Optional process/thread pools (see workers.py)
-        self._thread_pool = None
-        self._process_pool = None
-
-        # Optional asyncio bridge
-        self._asyncio_bridge = None
-        self._asyncio_loop = None
-
-        if with_asyncio_bridge:
-            # Start the event loop in a separate thread.
-            # This will be managed by the kernel `run` loop later on.
-            import asyncio
-            self._asyncio_loop = asyncio_loop or asyncio.new_event_loop()
-
-            def _asyncio_thread(loop):
-                def _suspended():
-                    asyncio.set_event_loop(loop)
-                    loop.run_forever()
-
-                return _suspended
-
-            self._asyncio_bridge = _asyncio_thread(self._asyncio_loop)
-
-        # Optional settings
-        self._warn_if_task_blocks_for = warn_if_task_blocks_for
-        self._log_errors = log_errors
-        self._monitor = None
-
-        # If a monitor is specified, launch it
-        if with_monitor or 'CURIOMONITOR' in os.environ:
-            self._monitor = Monitor(self)
+        # Optional debug classes
+        self._debug = create_debuggers(debug)
 
     def __del__(self):
-        if self._selector is not None:
+        if self._shutdown_funcs is not None:
             raise RuntimeError(
                 'Curio kernel not properly terminated.  Please use Kernel.run(shutdown=True)')
 
@@ -143,89 +164,23 @@ class Kernel(object):
     def __exit__(self, *args):
         self.run(shutdown=True)
 
-    # Force the kernel to wake, possibly scheduling a task to run.
-    # This method is called by threads running concurrently to the
-    # curio kernel.  For example, it's triggered upon completion of
-    # Futures created by thread pools and processes. It's inherently
-    # dangerous for any kind of operation on the kernel to be
-    # performed by a separate thread.  Thus, the *only* thing that
-    # happens here is that the task gets appended to a deque and a
-    # notification message is written to the kernel notification
-    # socket.  append() and pop() operations on deques are thread safe
-    # and do not need additional locking.  See
-    # https://docs.python.org/3/library/collections.html#collections.deque
+    def _call_at_shutdown(self, func):
+        self._shutdown_funcs.append(func)
+
+
     # ----------
-    def _wake(self, task=None, future=None):
-        if self._selector:
-            if task:
-                self._wake_queue.append((task, future))
-            self._notify_sock.send(b'\x00')
-
-    def _init_loopback(self):
-        self._notify_sock, self._wait_sock = socket.socketpair()
-        self._wait_sock.setblocking(False)
-        self._notify_sock.setblocking(False)
-        return self._wait_sock.fileno()
-
-    def _init_signals(self):
-        self._signal_sets = defaultdict(list)
-        self._default_signals = {}
-        old_fd = signal.set_wakeup_fd(self._notify_sock.fileno())
-        assert old_fd < 0, 'Signals already initialized %d' % old_fd
-
-    def _signal_watch(self, sigset):
-        for signo in sigset.signos:
-            if not self._signal_sets[signo]:
-                self._default_signals[signo] = signal.signal(signo, lambda signo, frame: None)
-            self._signal_sets[signo].append(sigset)
-
-    def _signal_unwatch(self, sigset):
-        for signo in sigset.signos:
-            if sigset in self._signal_sets[signo]:
-                self._signal_sets[signo].remove(sigset)
-
-            # If there are no active watchers for a signal, revert it back to default behavior
-            if not self._signal_sets[signo]:
-                signal.signal(signo, self._default_signals[signo])
-                del self._signal_sets[signo]
-
-    def _shutdown_resources(self):
-        log.debug('Kernel %r shutting down', self)
-
-        if self._selector:
-            self._selector.close()
-            self._selector = None
-
-        if self._notify_sock:
-            self._notify_sock.close()
-            self._notify_sock = None
-            self._wait_sock.close()
-            self._wait_sock = None
-
-        if self._signal_sets:
-            signal.set_wakeup_fd(-1)
-            self._signal_sets = None
-            self._default_signals = None
-
-        if self._thread_pool:
-            self._thread_pool.shutdown()
-            self._thread_pool = None
-
-        if self._process_pool:
-            self._process_pool.shutdown()
-            self._process_pool = None
-
-        if self._asyncio_loop:
-            self._asyncio_loop.call_soon_threadsafe(self._asyncio_loop.stop)
-            self._asyncio_loop = None
-
-        if self._monitor:
-            self._monitor.close()
-
-    # Main Kernel Loop
-    # ----------
+    # Submit a new task to the kernel
 
     def run(self, corofunc=None, *args, shutdown=False, timeout=None):
+        if self._running:
+            raise RuntimeError('Curio kernel already running')
+
+        if meta.curio_running():
+            raise RuntimeError('Only one Curio kernel per thread is allowed')
+
+        if corofunc and self._crashed:
+            raise RuntimeError("Can't submit further tasks to a crashed kernel.")
+
         if inspect.iscoroutine(corofunc):
             coro = corofunc
         elif corofunc:
@@ -235,104 +190,96 @@ class Kernel(object):
         else:
             coro = None
 
-        if coro and self._crashed:
-            raise RuntimeError("Can't submit further tasks to a crashed kernel.")
-
-        if getattr(self._local, 'running', False):
-            raise RuntimeError('Only one Curio kernel per thread is allowed')
-        self._local.running = True
-
-        try:
-            if not self._runner:
-                if hasattr(sys, 'get_asyncgen_hooks'):
-                    self._asyncgen_hooks = sys.get_asyncgen_hooks()
-                self._runner = self._run_coro()
-                self._runner.send(None)
-
-            # Boot the asyncio worker thread, if applicable.
-            if self._asyncio_loop and not self._asyncio_loop.is_running():
-                self._local.asyncio_thread = threading.Thread(target=self._asyncio_bridge)
-                self._local.asyncio_thread.start()
-
-            # Submit the given coroutine (if any)
+        with _asyncgen_manager():
+            meta.set_running_flag(True)
+            self._running = True
             try:
-                if coro or not shutdown:
-                    ret_val, ret_exc = self._runner.send((coro, timeout))
-                else:
-                    ret_val = ret_exc = None
-            except BaseException as e:
-                # If the underlying runner coroutine died for some reason,
-                # then something bad happened.  Maybe a KeyboardInterrupt
-                # an internal programming program.  We'll remove it and
-                # mark the kernel as crashed.   It's still possible that someone
-                # will attempt a kernel shutdown later.
-                self._runner = None
-                self._crashed = True
-                if hasattr(sys, 'get_asyncgen_hooks'):
-                    sys.set_asyncgen_hooks(*self._asyncgen_hooks)
-                    self._asyncgen_hooks = None
-                raise
+                if not self._runner:
+                    self._runner = self._run_coro()
+                    self._runner.send(None)
 
-            # If shutdown has been requested, run the shutdown process
-            if shutdown:
-                # For "reasons" related to task scheduling, the task
-                # of shutting down all remaining tasks is best managed
-                # by a launching a task dedicated to carrying out the task (sic)
-                async def _shutdown_tasks(tocancel):
-                    for task in tocancel:
-                        try:
+                # Submit the given coroutine (if any)
+                try:
+                    if coro or not shutdown:
+                        ret_val, ret_exc = self._runner.send((coro, timeout))
+                    else:
+                        ret_val = ret_exc = None
+                except BaseException as e:
+                    # If the underlying runner coroutine died for some reason,
+                    # then something bad happened.  Maybe a KeyboardInterrupt
+                    # an internal programming program.  We'll remove it and
+                    # mark the kernel as crashed.   It's still possible that someone
+                    # will attempt a kernel shutdown later.
+                    self._runner = None
+                    self._crashed = True
+                    raise
+
+                # If shutdown has been requested, run the shutdown process
+                if shutdown:
+                    # For "reasons" related to task scheduling, the task
+                    # of shutting down all remaining tasks is best managed
+                    # by a launching a task dedicated to carrying out the task (sic)
+                    async def _shutdown_tasks(tocancel):
+                        for task in tocancel:
                             await task.cancel()
-                        except Exception as e:
-                            log.error('Exception %r ignored in curio shutdown' % e, exc_info=True)
 
-                while self._tasks:
-                    tocancel = [task for task in self._tasks.values()
-                                if task.id != self._kernel_task_id]
-                    tocancel.sort(key=lambda t: t.id)
-                    if self._kernel_task_id:
-                        tocancel.append(self._tasks[self._kernel_task_id])
-                    for task in tocancel:
-                        task.daemon = True
-                    self._runner.send((_shutdown_tasks(tocancel), None))
-                    self._kernel_task_id = None
-                self._runner.close()
-                del self._runner
-                self._shutdown_resources()
-                if hasattr(sys, 'set_asyncgen_hooks'):
-                    sys.set_asyncgen_hooks(*self._asyncgen_hooks)
+                    while self._tasks:
+                        tocancel = [task for task in self._tasks.values()
+                                    if task.id != self._kernel_task_id]
+                        tocancel.sort(key=lambda t: t.id)
+                        if self._kernel_task_id:
+                            tocancel.append(self._tasks[self._kernel_task_id])
+                        for task in tocancel:
+                            task.daemon = True
+                        self._runner.send((_shutdown_tasks(tocancel), None))
+                        self._kernel_task_id = None
+                    self._runner.close()
+                    del self._runner
 
-            if ret_exc:
-                raise ret_exc
-            else:
-                return ret_val
+                    log.debug('Kernel %r shutting down', self)
 
-        finally:
-            self._local.running = False
+                    # Call registered shutdown functions
+                    for func in self._shutdown_funcs:
+                        func()
+                    self._shutdown_funcs = None
 
-    # Discussion:  This is the main kernel execution loop.   To better
-    # support pause/resume functionality, it is also implemented as
-    # a coroutine.  The above run_coro() method starts it and uses
-    # the send() method to send in tasks to run.   By implementing it
-    # as a coroutine, various set-up steps don't have to be repeated
-    # on each invocation of run_coro().
-    def _run_coro(self):
-        '''
-        Run the kernel
-        '''
-        assert self._selector is not None, 'Kernel has been shut down'
+                if ret_exc:
+                    raise TaskError('Task Crashed') from ret_exc
+                else:
+                    return ret_val
 
-        njobs = 0
+            finally:
+                meta.set_running_flag(False)
+                self._running = False
+
+    # ------------------------------------------------------------
+    # Main kernel runtime
+    #
+    # This is the main kernel execution environment.  To better support
+    # pause/resume functionality, it is implemented as a coroutine.
+    # The above run() method starts it and uses the send() method to
+    # send in tasks to run.  By implementing it as a coroutine,
+    # various set-up steps don't have to be repeated on each
+    # invocation of run().
+    #
+    # At first glance, this function is going to look giant and
+    # insane. It is implementing the kernel runtime as a self-contained
+    # black box.  There is no external API.  The only possible 
+    # communication is via traps define in curio/traps.py
+
+    def _run_coro(kernel):
 
         # Motto:  "What happens in the kernel stays in the kernel"
 
+        njobs = 0
+
         # ---- Kernel State
         current = None                          # Currently running task
-        selector = self._selector               # Event selector
-        ready = self._ready                     # Ready queue
-        tasks = self._tasks                     # Task table
-        sleeping = self._sleeping               # Sleeping task queue
-        wake_queue = self._wake_queue           # External wake queue
-        warn_if_task_blocks_for = self._warn_if_task_blocks_for
+        selector = kernel._selector               # Event selector
+        ready = kernel._ready                     # Ready queue
+        tasks = kernel._tasks                     # Task table
+        sleeping = kernel._sleeping               # Sleeping task queue
+        wake_queue = kernel._wake_queue           # External wake queue
 
         # ---- Bound methods
         selector_register = selector.register
@@ -344,38 +291,32 @@ class Kernel(object):
         ready_popleft = ready.popleft
         ready_append = ready.append
         time_monotonic = time.monotonic
-        _wake = self._wake
 
-        # ---- In-kernel task used for processing signals and futures
-
-        # Initialize the loopback socket and launch the kernel task if needed
-        def _init_loopback_task():
-            self._init_loopback()
-            task = Task(_kernel_task(), taskid=0, daemon=True)
-            _reschedule_task(task)
-            self._kernel_task_id = task.id
-            self._tasks[task.id] = task
-
+        # ------------------------------------------------------------
+        # In-kernel task used for processing signals and futures.
+        #
         # Internal task that monitors the loopback socket--allowing the kernel to
-        # awake for non-I/O events.  Also processes incoming signals.  This only
-        # launches if needed to wait for external events (futures, signals, etc.)
+        # awake for non-I/O events. Also processes incoming signals.  
+
         async def _kernel_task():
             wake_queue_popleft = wake_queue.popleft
-            wait_sock = self._wait_sock
+            wait_sock = kernel._wait_sock
 
             while True:
                 await _read_wait(wait_sock)
                 data = wait_sock.recv(1000)
 
-                # Process any waking tasks.  These are tasks that have been awakened
-                # externally to the event loop (e.g., by separate threads, Futures, etc.)
+                # Process any waking tasks.  These are tasks that have
+                # been awakened externally to the event loop (e.g., by
+                # separate threads, Futures, etc.)
                 while wake_queue:
                     task, future = wake_queue_popleft()
-                    # If the future associated with wakeup no longer matches
-                    # the future stored on the task, wakeup is abandoned.
-                    # It means that a timeout or cancellation event occurred
-                    # in the time interval between the call to self._wake()
-                    # and the subsequent processing of the waking task
+                    # If the future associated with wakeup no longer
+                    # matches the future stored on the task, wakeup is
+                    # abandoned.  It means that a timeout or
+                    # cancellation event occurred in the time interval
+                    # between the call to _wake() and the
+                    # subsequent processing of the waking task
                     if future and task.future is not future:
                         continue
                     task.future = None
@@ -383,20 +324,47 @@ class Kernel(object):
                     task.cancel_func = None
                     ready_append(task)
 
-                # Any non-null bytes received here are assumed to be received signals.
-                # See if there are any pending signal sets and unblock if needed
-                if not self._signal_sets:
+                # Any non-null bytes received here are assumed to be
+                # received signals.  See if there are any pending
+                # signal sets and unblock if needed
+                if not kernel._signal_sets:
                     continue
 
-                sigs = (n for n in data if n in self._signal_sets)
+                sigs = (n for n in data if n in kernel._signal_sets)
                 for signo in sigs:
-                    for sigset in self._signal_sets[signo]:
+                    for sigset in kernel._signal_sets[signo]:
                         sigset.pending.append(signo)
                         if sigset.waiting:
                             _reschedule_task(sigset.waiting, value=signo)
                             sigset.waiting = None
 
-        # ---- Task Support Functions
+        # Force the kernel to wake, possibly scheduling a task to run.
+        # This method is called by threads running concurrently to the
+        # curio kernel.  For example, it's triggered upon completion of
+        # Futures created by thread pools and processes. It's inherently
+        # dangerous for any kind of operation on the kernel to be
+        # performed by a separate thread.  Thus, the *only* thing that
+        # happens here is that the task gets appended to a deque and a
+        # notification message is written to the kernel notification
+        # socket.  append() and pop() operations on deques are thread safe
+        # and do not need additional locking.  See
+        # https://docs.python.org/3/library/collections.html#collections.deque
+        # ----------
+        def _wake(task=None, future=None):
+            if task:
+                wake_queue.append((task, future))
+            kernel._notify_sock.send(b'\x00')
+
+        def _init_loopback():
+            kernel._notify_sock, kernel._wait_sock = socket.socketpair()
+            kernel._wait_sock.setblocking(False)
+            kernel._notify_sock.setblocking(False)
+            kernel._call_at_shutdown(kernel._notify_sock.close)
+            kernel._call_at_shutdown(kernel._wait_sock.close)
+
+        # ------------------------------------------------------------
+        # Task management functions.
+        #
 
         # Create a new task. Putting it on the ready queue
         def _new_task(coro, daemon=False):
@@ -408,21 +376,58 @@ class Kernel(object):
             _reschedule_task(task)
             return task
 
-        # Reschedule a task, putting it back on the ready queue so that it can run.
-        # value and exc specify a value or exception to send into the underlying
-        # coroutine when it is rescheduled.
+        # Reschedule a task, putting it back on the ready queue.
         def _reschedule_task(task, value=None, exc=None):
             ready_append(task)
             task.next_value = value
             task.next_exc = exc
             task.state = 'READY'
             task.cancel_func = None
+
+        # Suspend the current task
+        def _suspend_task(state, cancel_func):
+            nonlocal current
+            current.state = state
+            current.cancel_func = cancel_func
             
-        # Cleanup task.  This is called after the underlying coroutine has
-        # terminated.  value and exc give the return value or exception of
-        # the coroutine.  This wakes any tasks waiting to join.
-        def _cleanup_task(task, value=None, exc=None):
-            nonlocal main_task, main_value, main_exc, njobs
+            # Unregister previous I/O request. Discussion follows:
+            #
+            # When a task performs I/O, it registers itself with the underlying
+            # I/O selector.  When the task is reawakened, it unregisters itself
+            # and prepares to run.  However, in many network applications, the
+            # task will perform a small amount of work and then go to sleep on
+            # exactly the same I/O resource that it was waiting on before. For
+            # example, a client handling task in a server will often spend most
+            # of its time waiting for incoming data on a single socket.
+            #
+            # Instead of always unregistering the task from the selector, we
+            # can defer the unregistration process until after the task goes
+            # back to sleep again.  If it happens to be sleeping on the same
+            # resource as before, there's no need to unregister it--it will
+            # still be registered from the last I/O operation.
+            #
+            # The code here performs the unregister step for a task that
+            # ran, but is now sleeping for a *different* reason than repeating the
+            # prior I/O operation.  There is coordination with code in _trap_io().
+
+            if current._last_io:
+                _unregister_event(*current._last_io)
+                current._last_io = None
+
+            current = None
+
+        # Check if task has pending cancellation
+        def _check_cancellation():
+            if current.allow_cancel and current.cancel_pending:
+                current.next_exc = current.cancel_pending
+                current.next_value = current.cancel_pending = None
+                return True
+            else:
+                return False
+
+        # finalize task.  Called after the task has run to completion
+        def _finalize_task(task, value=None, exc=None):
+            nonlocal njobs
             task.next_value = value
             task.next_exc = exc
             task.timeout = None
@@ -430,19 +435,12 @@ class Kernel(object):
             if not task.daemon:
                 njobs -= 1
 
-            if task.joining:
-                for wtask in task.joining.pop(len(task.joining)):
-                    _reschedule_task(wtask)
+            # Wake any joining tasks
+            for wtask in task.joining.pop(len(task.joining)):
+                _reschedule_task(wtask)
+
             task.terminated = True
-
             del tasks[task.id]
-
-            # If the task just cleaned up was the main task, we set
-            # its return values.  This will cause the kernel loop to yield
-            if task == main_task:
-                main_value = value
-                main_exc = exc
-                main_task = None
 
         # Set a timeout or sleep event on the current task
         def _set_timeout(clock, sleep_type='timeout'):
@@ -450,7 +448,9 @@ class Kernel(object):
             heapq.heappush(sleeping, item)
             setattr(current, sleep_type, clock)
 
-        # ---- I/O Support functions
+        # ------------------------------------------------------------
+        # I/O Support functions
+        #
 
         def _register_event(fileobj, event, task):
             try:
@@ -476,33 +476,25 @@ class Kernel(object):
                 selector_modify(fileobj, mask,
                                 (None, wtask) if event == EVENT_READ else (rtask, None))
 
-        # ---- Traps
+        # ------------------------------------------------------------
+        # Traps
         #
         # These implement the low-level functionality that is
-        # triggered by coroutines.  They are never invoked directly
+        # triggered by user-level code.  They are never invoked directly
         # and there is no public API outside the kernel.  Instead,
         # coroutines use a statement such as
         #
         #   yield (_blocking_trap_io, sock, EVENT_READ, 'READ_WAIT')
         #
         # to invoke a specific trap.
-        #
-        # There are two calling conventions we use for implementing these:
-        #
-        # 1) Blocking trap handlers return the new values for
-        #
-        #       (task.state, task.cancel_func)
-        #
-        #    They don't have any way to pass values/exceptions back to the
-        #    invoker.
-        #
-        # 2) Nonblocking trap handlers act like regular function calls -- whatever
-        #    they return or raise will be passed back to the invoker.
+        # ------------------------------------------------------------
 
+        # ----------------------------------------
         # Wait for I/O
-
-        @blocking
         def _trap_io(fileobj, event, state):
+            if _check_cancellation():
+                return
+
             # See comment about deferred unregister in run().  If the requested
             # I/O operation is *different* than the last I/O operation that was
             # performed by the task, we need to unregister the last I/O resource used
@@ -513,19 +505,20 @@ class Kernel(object):
                 try:
                     _register_event(fileobj, event, current)
                 except CurioError as e:
-                    _reschedule_task(current, exc=e)
-                    return (current.state, None)
+                    current.next_exc = e
+                    current.next_value = None
+                    return
 
             # This step indicates that we have managed any deferred I/O management
-            # for the task.  Otherwise the run() method will perform an unregistration step.
+            # for the task.  Otherwise, I/O will be unregistered.
             current._last_io = None
-            return (state, lambda: _unregister_event(fileobj, event))
+            _suspend_task(state, lambda: _unregister_event(fileobj, event))
 
+        # ----------------------------------------
         # Wait on a Future
-        @blocking
         def _trap_future_wait(future, event):
-            if self._kernel_task_id is None:
-                _init_loopback_task()
+            if _check_cancellation():
+                return
 
             current.future = future
 
@@ -551,35 +544,20 @@ class Kernel(object):
             if event:
                 event.set()
 
-            return ('FUTURE_WAIT',
-                    lambda task=current:
-                        setattr(task, 'future', future.cancel() and None))
+            _suspend_task('FUTURE_WAIT',
+                          lambda task=current:
+                              setattr(task, 'future', future.cancel() and None))
 
+        # ----------------------------------------
         # Add a new task to the kernel
-        @nonblocking
         def _trap_spawn(coro, daemon):
             task = _new_task(coro, daemon | current.daemon)    # Inherits daemonic status from parent
             task.parentid = current.id
             _copy_tasklocal(current, task)
             return task
 
-        # Reschedule one or more tasks from a kernel sync
-        @nonblocking
-        def _trap_sched_wake(sched, n):
-            tasks = sched.pop(n)
-            for task in tasks:
-                _reschedule_task(task)
-
-        # Join with a task
-        @blocking
-        def _trap_join_task(task):
-            if task.terminated:
-                return _trap_sleep(0, False)
-            else:
-                return _trap_sched_wait(task.joining, 'TASK_JOIN')
-
+        # ----------------------------------------
         # Cancel a task
-        @nonblocking
         def _trap_cancel_task(task, exc=TaskCancelled, val=None):
             if task.cancelled:
                 return
@@ -611,16 +589,33 @@ class Kernel(object):
             _reschedule_task(task, exc=task.cancel_pending)
             task.cancel_pending = None
 
+        # ----------------------------------------
         # Wait on a scheduler primitive
-        @blocking
         def _trap_sched_wait(sched, state):
-            return (state, sched.add(current))
+            if _check_cancellation():
+                return
+            _suspend_task(state, sched.add(current))
 
+        # ----------------------------------------
+        # Reschedule one or more tasks from a scheduler primitive
+        def _trap_sched_wake(sched, n):
+            tasks = sched.pop(n)
+            for task in tasks:
+                _reschedule_task(task)
+
+        # ----------------------------------------
+        # Return the current value of the kernel clock
+        def _trap_clock():
+            return time_monotonic()
+
+        # ----------------------------------------
         # Sleep for a specified period. Returns value of monotonic clock.
         # absolute flag indicates whether or not an absolute or relative clock
         # interval has been provided
-        @blocking
         def _trap_sleep(clock, absolute):
+            if _check_cancellation():
+                return
+
             # We used to have a special case where sleep periods <= 0 would
             # simply reschedule the task to the end of the ready queue without
             # actually putting it on the sleep queue first. But this meant
@@ -632,35 +627,11 @@ class Kernel(object):
             if not absolute:
                 clock += time_monotonic()
             _set_timeout(clock, 'sleep')
-            return ('TIME_SLEEP',
-                    lambda task=current: setattr(task, 'sleep', None))
+            _suspend_task('TIME_SLEEP', 
+                          lambda task=current: setattr(task, 'sleep', None))
 
-        # Watch signals
-        @nonblocking
-        def _trap_sigwatch(sigset):
-            # Initialize the signal handling part of the kernel if not done already
-            # Note: This only works if running in the main thread
-            if self._kernel_task_id is None:
-                _init_loopback_task()
-
-            if self._signal_sets is None:
-                self._init_signals()
-
-            self._signal_watch(sigset)
-
-        # Unwatch signals
-        @nonblocking
-        def _trap_sigunwatch(sigset):
-            self._signal_unwatch(sigset)
-
-        # Wait for a signal
-        @blocking
-        def _trap_sigwait(sigset):
-            sigset.waiting = current
-            return ('SIGNAL_WAIT', lambda: setattr(sigset, 'waiting', None))
-
+        # ----------------------------------------
         # Set a timeout to be delivered to the calling task
-        @nonblocking
         def _trap_set_timeout(timeout):
             old_timeout = current.timeout
             if timeout is None:
@@ -673,8 +644,8 @@ class Kernel(object):
 
             return old_timeout
 
+        # ----------------------------------------
         # Clear a previously set timeout
-        @nonblocking
         def _trap_unset_timeout(previous):
             # Here's an evil corner case.  Suppose the previous timeout in effect
             # has already expired?  If so, then we need to arrange for a timeout
@@ -699,20 +670,57 @@ class Kernel(object):
                 if isinstance(current.cancel_pending, TaskTimeout):
                     current.cancel_pending = None
 
-        # Return the running kernel
-        @nonblocking
-        def _trap_get_kernel():
-            return self
+        # ----------------------------------------
+        # Watch signals
+        def _trap_sigwatch(sigset):
+            # Initialize the signal handling part of the kernel if not done already
+            # Note: This only works if running in the main thread
+            if kernel._signal_sets is None:
+                kernel._signal_sets = defaultdict(list)
+                kernel._default_signals = {}
+                old_fd = signal.set_wakeup_fd(kernel._notify_sock.fileno())
+                assert old_fd < 0, 'Signals already initialized %d' % old_fd
+                kernel._call_at_shutdown(lambda: signal.set_wakeup_fd(-1))
 
+            for signo in sigset.signos:
+                if not kernel._signal_sets[signo]:
+                    kernel._default_signals[signo] = signal.signal(signo, lambda signo, frame: None)
+                kernel._signal_sets[signo].append(sigset)
+
+        # ----------------------------------------
+        # Unwatch signals
+        def _trap_sigunwatch(sigset):
+            for signo in sigset.signos:
+                if sigset in kernel._signal_sets[signo]:
+                    kernel._signal_sets[signo].remove(sigset)
+
+                # If there are no active watchers for a signal, revert it back to default behavior
+                if not kernel._signal_sets[signo]:
+                    signal.signal(signo, kernel._default_signals[signo])
+                    del kernel._signal_sets[signo]
+
+        # ----------------------------------------
+        # Wait for a signal
+        def _trap_sigwait(sigset):
+            if _check_cancellation():
+                return
+
+            sigset.waiting = current
+            _suspend_task('SIGNAL_WAIT', lambda: setattr(sigset, 'waiting', None))
+
+        # ----------------------------------------
+        # Return the running kernel
+        def _trap_get_kernel():
+            return kernel
+
+        # ----------------------------------------
         # Return the currently running task
-        @nonblocking
         def _trap_get_current():
             return current
 
-        # Return the current value of the kernel clock
-        @nonblocking
-        def _trap_clock():
-            return time_monotonic()
+        # ------------------------------------------------------------
+        # Final setup.
+        # ------------------------------------------------------------
 
         # Create the traps tables
         traps = [None] * len(Traps)
@@ -720,47 +728,85 @@ class Kernel(object):
             traps[trap] = locals()[trap.name]
 
         # Initialize the loopback task (if not already initialized)
-        if self._kernel_task_id is None:
-            _init_loopback_task()
+        if kernel._kernel_task_id is None:
+            _init_loopback()
+            kernel._kernel_task_id = _new_task(_kernel_task(), daemon=True).id
 
         # If there are tasks on the ready queue already, must cancel 
         # any prior pending I/O before re-entering the kernel loop
-        for task in self._ready:
+        for task in kernel._ready:
             if task._last_io:
                 _unregister_event(*task._last_io)
                 task._last_io = None
 
-        # Return values for the send() method
-        main_value = None
-        main_exc = None
+        # Main task (if any)
         main_task = None
 
-        # Some support for async-generators
-        def _init_async_gen(agen):
-            from . import meta
+        # ------------------------------------------------------------
+        # TaskExecutor
+        #
+        # This context manager supervises the execution cycle of a single
+        # task, allowing for monitoring, cleanup actions, and other things.
+        # ------------------------------------------------------------
 
-            if agen.ag_code not in _safe_async_generators:
-                _safe_async_generators[agen.ag_code] = meta._is_safe_generator(agen.ag_code)
+        class TaskExecutor:
 
-            if not _safe_async_generators[agen.ag_code] and not agen in meta.finalize._finalized:
-                # Inspect the code of the generator to see if it might be safe 
-                raise RuntimeError("Async generator with async finalization must be wrapped by\n"
-                                   "async with curio.meta.finalize(agen) as agen:\n"
-                                   "    async for n in agen:\n"
-                                   "         ...\n"
-                                   "See PEP 533 for further discussion.")
+            def __init__(self, task):
+                self.task = task
 
-        if hasattr(sys, 'set_asyncgen_hooks'):
-            sys.set_asyncgen_hooks(_init_async_gen)
+            def __enter__(self):
+                task = self.task
+                task.state = 'RUNNING'
+                task.cycles += 1
+                _set_tasklocal(task)
+                return self
+
+            if kernel._debug:
+                def __enter__(self, _super=__enter__):
+                    result = _super(self)
+                    for d in kernel._debug:
+                        d.schedule(self.task)
+                    return result
+
+            def __exit__(self, ty, val, tb):
+                task = self.task
+                if task._last_io:
+                    _unregister_event(*task._last_io)
+                    task._last_io = None
+
+                # If pending exceptions, task must be finalized
+                if ty:
+                    _finalize_task(task)
+                    task.state = 'TERMINATED'
+
+            if kernel._debug:
+                def __exit__(self, ty, val, tb, _super=__exit__):
+                    result = _super(self, ty, val, tb)
+                    for d in kernel._debug:
+                        d.suspend(self.task, val)
+                    return result
+
+            def trap(self, trapno, args):
+                return traps[trapno](*args)
             
+            if kernel._debug:
+                def trap(self, trapno, args, _super=trap):
+                    result = _super(self,  trapno, args)
+                    for d in kernel._debug:
+                        d.trap(trapno, args)
+                    return result
+
         # ------------------------------------------------------------
         # Main Kernel Loop
         # ------------------------------------------------------------
         while True:
-            # If no main task is known, we yield in order to receive it
+
+            # ------------------------------------------------------------
+            # Wait for work if nothing to run
+            # ------------------------------------------------------------
+
             if njobs == 0:
-                coro, poll_timeout = yield (main_value, main_exc)
-                main_value = main_exc = None
+                coro, poll_timeout = (yield (main_task.next_value, main_task.next_exc)) if main_task else (yield (None, None))
                 main_task = _new_task(coro) if coro else None
                 # If a task was created and a timeout was given, we impose a deadline on the task
                 if main_task and poll_timeout:
@@ -768,7 +814,10 @@ class Kernel(object):
                     _set_timeout(poll_timeout + time_monotonic())
                 del coro
 
-            # Wait for an I/O event (or timeout)
+            # ------------------------------------------------------------
+            # I/O Polling/Waiting
+            # ------------------------------------------------------------
+
             if ready:
                 timeout = 0
             elif sleeping:
@@ -776,10 +825,7 @@ class Kernel(object):
                 if poll_timeout is not None and timeout > poll_timeout:
                     timeout = poll_timeout
             else:
-                if njobs == 0:
-                    timeout = poll_timeout
-                else:
-                    timeout = None
+                timeout = None if njobs else poll_timeout
 
             try:
                 events = selector_select(timeout)
@@ -828,7 +874,11 @@ class Kernel(object):
                     else:
                         selector_unregister(key.fileobj)
 
-            # Process sleeping tasks (if any)
+
+            # ------------------------------------------------------------
+            # Time handling (sleep/timeouts
+            # ------------------------------------------------------------
+
             if sleeping:
                 current_time = time_monotonic()
                 while sleeping and sleeping[0][0] <= current_time:
@@ -855,123 +905,41 @@ class Kernel(object):
                                     # mark it as pending cancellation
                                     task.cancel_pending = TaskTimeout(current_time)
 
-            # --------
+            # ------------------------------------------------------------
             # Run ready tasks
-            # --------
-            # We only run the tasks that were already in the queue when we
-            # started the loop. Any new tasks that are rescheduled onto the
-            # ready queue while we're going will have to wait until the next
-            # iteration of the outer loop, after we've checked for I/O and
-            # sleepers. This avoids various potential pathologies that could
-            # otherwise occur where tasks repeatedly reschedule themselves so
-            # the queue never empties and we end up never checking for I/O.
+            # ------------------------------------------------------------
+
             for _ in range(len(ready)):
                 current = ready_popleft()
                 try:
-                    if warn_if_task_blocks_for:
-                        task_start = time_monotonic()
-                    current.state = 'RUNNING'
-                    current.cycles += 1
-                    with _enable_tasklocal_for(current):
-                        if current.next_exc is None:
-                            trap = current._send(current.next_value)
-                            current.next_value = None
-                        else:
-                            trap = current._throw(current.next_exc)
-                            current.next_exc = None
-
-                        # If the trap is nonblocking, then handle it
-                        # immediately without
-                        # rescheduling. Nonblocking trap handlers have
-                        # a different API than blocking trap handlers
-                        # -- they just return or raise whatever the
-                        # trap should return or raise.
-                        trapfunc = traps[trap[0]]
-                        while not trapfunc.blocking:
-                            try:
-                                next_value = trapfunc(*trap[1:])
-                            except Exception as next_exc:
-                                trap = current._throw(next_exc)
+                    with TaskExecutor(task=current) as executor:
+                        # The current task runs traps until it suspends
+                        while current:
+                            if current.next_exc is None:
+                                trap = current._send(current.next_value)
+                                current.next_value = None
                             else:
-                                trap = current._send(next_value)
-                            trapfunc = traps[trap[0]]
+                                trap = current._throw(current.next_exc)
+                                current.next_exc = None
 
-                        # Execute a blocking trap
-                        assert trapfunc.blocking
+                            # Run the trap function
+                            try:
+                                result = executor.trap(trap[0], trap[1:])
+                                if result is not None:
+                                    current.next_value = result
+                            except Exception as e:
+                                current.next_exc = e
 
-                        # If there is a cancellation pending and delivery is allowed,
-                        # reschedule the task with the pending exception
-                        if current.allow_cancel and current.cancel_pending:
-                            _reschedule_task(current, exc=current.cancel_pending)
-                            current.cancel_pending = None
-                        else:
-                            current.state, current.cancel_func = trapfunc(*trap[1:])
-
+                # If here, the task has terminated. Set its final value based
+                # on how it terminated.
                 except StopIteration as e:
-                    if current.cancel_pending:
-                        _cleanup_task(current, exc=current.cancel_pending)
-                        current.state = 'CANCELLED'
-                    else:
-                        _cleanup_task(current, value=e.value)
-                        current.state = 'TERMINATED'
-
-                except (CancelledError, TaskExit) as e:
-                    current.exc_info = sys.exc_info()
-                    current.state = 'CANCELLED'
-                    _cleanup_task(current, exc=e)
+                    current.next_value = e.value
 
                 except Exception as e:
-                    current.exc_info = sys.exc_info()
-                    current.state = 'CRASHED'
-                    exc = TaskError('Task Crashed')
-                    exc.__cause__ = e
-                    _cleanup_task(current, exc=exc)
-                    if self._log_errors:
-                        log.error('Curio: Task Crash: %s' % current, exc_info=True)
+                    current.next_exc = e
 
-                except:  # (SystemExit, KeyboardInterrupt):
-                    _cleanup_task(current)
-                    current.state = 'TERMINATED'
-                    raise
-
-                finally:
-                    if warn_if_task_blocks_for:
-                        duration = time_monotonic() - task_start
-                        if duration > warn_if_task_blocks_for:
-                            msg = ("Event loop blocked for {:0.1f} ms "
-                                   "inside '{}' (task {})"
-                                   .format(1000 * duration,
-                                           current.coro.__qualname__,
-                                           current.id))
-                            warnings.warn(BlockingTaskWarning(msg))
-
-                    # Unregister previous I/O request. Discussion follows:
-                    #
-                    # When a task performs I/O, it registers itself with the underlying
-                    # I/O selector.  When the task is reawakened, it unregisters itself
-                    # and prepares to run.  However, in many network applications, the
-                    # task will perform a small amount of work and then go to sleep on
-                    # exactly the same I/O resource that it was waiting on before. For
-                    # example, a client handling task in a server will often spend most
-                    # of its time waiting for incoming data on a single socket.
-                    #
-                    # Instead of always unregistering the task from the selector, we
-                    # can defer the unregistration process until after the task goes
-                    # back to sleep again.  If it happens to be sleeping on the same
-                    # resource as before, there's no need to unregister it--it will
-                    # still be registered from the last I/O operation.
-                    #
-                    # The code here performs the unregister step for a task that
-                    # ran, but is now sleeping for a *different* reason than repeating the
-                    # prior I/O operation.  There is coordination with code in _trap_io().
-
-                    if current._last_io:
-                        _unregister_event(*current._last_io)
-                        current._last_io = None
-
-
-def run(corofunc, *args, log_errors=True, with_monitor=False, selector=None,
-        warn_if_task_blocks_for=None, timeout=None, **extra):
+def run(corofunc, *args, with_monitor=False, selector=None,
+        debug=None, timeout=None, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
@@ -985,16 +953,19 @@ def run(corofunc, *args, log_errors=True, with_monitor=False, selector=None,
     use its run() method instead.
     '''
 
-    kernel = Kernel(selector=selector, with_monitor=with_monitor,
-                    log_errors=log_errors,
-                    warn_if_task_blocks_for=warn_if_task_blocks_for,
+    kernel = Kernel(selector=selector, debug=debug,
                     **extra)
+
+
+    # Check if a monitor has been requested
+    if with_monitor or 'CURIOMONITOR' in os.environ:
+        from .monitor import Monitor
+        m = Monitor(kernel)
+        kernel._call_at_shutdown(m.close)
 
     with kernel:
         return kernel.run(corofunc, *args, timeout=timeout)
 
 
-
-
 from .monitor import Monitor
-from . import meta
+

@@ -71,6 +71,16 @@ async def run_in_executor(exc, callable, *args):
 
 MAX_WORKER_THREADS = 64
 
+async def reserve_thread_worker():
+    '''
+    Reserve a thread pool worker
+    '''
+    kernel = await _get_kernel()
+    if not hasattr(kernel, 'thread_pool'):
+        kernel.thread_pool = WorkerPool(ThreadWorker, MAX_WORKER_THREADS)
+        kernel._call_at_shutdown(kernel.thread_pool.shutdown)
+    return (await kernel.thread_pool.reserve())
+
 async def run_in_thread(callable, *args, call_on_cancel=None):
     '''
     Run callable(*args) in a separate thread and return the result. If
@@ -78,18 +88,93 @@ async def run_in_thread(callable, *args, call_on_cancel=None):
     executed.  If it start running, it will run fully to completion
     as a kind of zombie.
     '''
-    kernel = await _get_kernel()
-
-    if not kernel._thread_pool:
-        kernel._thread_pool = WorkerPool(ThreadWorker, MAX_WORKER_THREADS)
-
     worker = None
     try:
-        worker = await kernel._thread_pool.reserve()
+        worker = await reserve_thread_worker()
         return await worker.apply(callable, args, call_on_cancel)
     finally:
         if worker:
             await worker.release()
+
+# Support for blocking in threads.
+#
+# Discussion:
+#
+# The run_in_thread() function can be used to run any synchronous function
+# in a separate thread.  However, certain kinds of operations are
+# inherently unsafe.   For example, consider a worker task that wants
+# to wait on a threading Event like this:
+#
+#    evt = threading.Event()     # Foreign Event...
+#
+#    async def worker():
+#        await run_in_thread(evt.wait)
+#        print('Alive!')
+#
+# Now suppose Curio spins up a huge number of workers:
+#
+#    for n in range(1000):
+#        await spawn(worker())
+#
+# At this point, you're in a bad situation.  The worker tasks have all
+# called run_in_thread() and are blocked indefinitely.  Because the
+# pool of worker threads is limited, you've exhausted all available
+# resources.  Nobody can now call run_in_thread() without blocking.
+# There's a pretty good chance that your code is permanently
+# deadlocked.  There are dark clouds.
+#
+# This problem can be solved by wrapping run_in_thread() with a
+# semaphore. Like this:
+#
+#    _barrier = curio.Semaphore()
+#
+#    async def worker():
+#        async with _barrier:
+#            await run_in_thread(evt.wait)
+#
+# However, to make it much more convenient, we can take care of
+# a lot of fiddly details.  We can cache the requested callable,
+# build a set of semaphores and synchronize things in the background.
+# That's what the block_in_thread() function is doing.  For example:
+#
+#    async def worker():
+#        await block_in_thread(evt.wait)
+#        print('Alive!')
+#
+# Unlike run_in_thread(), spawning up 1000 workers creates a
+# situation where only 1 worker is actually blocked in a thread.
+# The other 999 workers are blocked on a semaphore waiting for service.
+
+_pending = Counter()
+_barrier = defaultdict(sync.Semaphore)
+
+async def block_in_thread(callable, *args, call_on_cancel=None):
+    '''
+    Run callable(*args) in a thread with the expectation that the
+    operation is going to block for an indeterminate amount of time.
+    Guarantees that at most only one background thread is used
+    regardless of how many curio tasks are actually waiting on the
+    same callable (e.g., if 1000 Curio tasks all decide to call
+    block_on_thread on the same callable, they'll all be handled by a
+    single thread). Primary use of this function is on foreign locks,
+    queues, and other synchronization primitives where you have to use
+    a thread, but you just don't have any idea when the operation will
+    complete.
+    '''
+    if hasattr(callable, '__self__'):
+        call_key = (callable.__name__, id(callable.__self__))
+    else:
+        call_key = id(callable)
+    _pending[call_key] += 1
+    async with _barrier[call_key]:
+        try:
+            return await run_in_thread(callable, *args, call_on_cancel=call_on_cancel)
+        finally:
+            _pending[call_key] -= 1
+            if not _pending[call_key]:
+                del _pending[call_key]
+                del _barrier[call_key]
+
 
 MAX_WORKER_PROCESSES = multiprocessing.cpu_count()
 
@@ -118,12 +203,12 @@ async def run_in_process(callable, *args):
     variables, files, or connections.
     '''
     kernel = await _get_kernel()
-    if not kernel._process_pool:
-        kernel._process_pool = WorkerPool(ProcessWorker,
-                                          MAX_WORKER_PROCESSES)
-
+    if not hasattr(kernel, 'process_pool'):
+        kernel.process_pool = WorkerPool(ProcessWorker, MAX_WORKER_PROCESSES)
+        kernel._call_at_shutdown(kernel.process_pool.shutdown)
+    worker = None
     try:
-        worker = await kernel._process_pool.reserve()
+        worker = await kernel.process_pool.reserve()
         return await worker.apply(callable, args)
     finally:
         if worker:
@@ -364,91 +449,3 @@ class WorkerPool(object):
 # Pool definitions should anyone want to use them directly
 ProcessPool = lambda nworkers: WorkerPool(ProcessWorker, nworkers)
 ThreadPool = lambda nworkers: WorkerPool(ThreadWorker, nworkers)
-
-async def reserve_thread_worker():
-    '''
-    Reserve a thread pool worker
-    '''
-    kernel = await _get_kernel()
-    if not kernel._thread_pool:
-        kernel._thread_pool = WorkerPool(ThreadWorker, MAX_WORKER_THREADS)
-    return await kernel._thread_pool.reserve()
-
-# Support for blocking in threads.
-#
-# Discussion:
-#
-# The run_in_thread() function can be used to run any synchronous function
-# in a separate thread.  However, certain kinds of operations are
-# inherently unsafe.   For example, consider a worker task that wants
-# to wait on a threading Event like this:
-#
-#    evt = threading.Event()     # Foreign Event...
-#
-#    async def worker():
-#        await run_in_thread(evt.wait)
-#        print('Alive!')
-#
-# Now suppose Curio spins up a huge number of workers:
-#
-#    for n in range(1000):
-#        await spawn(worker())
-#
-# At this point, you're in a bad situation.  The worker tasks have
-# all called run_in_thread() and are blocked indefinitely.  Because
-# the pool of worker threads is limited, you've exhausted all
-# available resources.  Nobody call run_in_thread() without blocking.
-# There's a pretty good chance that your code is permanently deadlocked.
-# There are dark clouds.
-#
-# This problem can be solved by wrapping run_in_thread() with a
-# semaphore. Like this:
-#
-#    _barrier = curio.Semaphore()
-#
-#    async def worker():
-#        async with _barrier:
-#            await run_in_thread(evt.wait)
-#
-# However, to make it much more convenient, we can take care of
-# a lot of fiddly details.  We can cache the requested callable,
-# build a set of semaphores and synchronize things in the background.
-# That's what the block_in_thread() function is doing.  For example:
-#
-#    async def worker():
-#        await block_in_thread(evt.wait)
-#        print('Alive!')
-#
-# Unlike run_in_thread(), spawning up 1000 workers creates a
-# situation where only 1 worker is actually blocked in a thread.
-# The other 999 workers are blocked on a semaphore waiting for service.
-
-_pending = Counter()
-_barrier = defaultdict(sync.Semaphore)
-
-async def block_in_thread(callable, *args, call_on_cancel=None):
-    '''
-    Run callable(*args) in a thread with the expectation
-    that the operation is going to block for an indeterminate amount
-    of time.  Guarantees that at most only one background thread is used
-    regardless of how many curio tasks are actually waiting on the same
-    callable (e.g., if 1000 Curio tasks all decide to call
-    block_on_thread on the same callable, they'll all be handled by
-    a single thread). Primary use of this function is on foreign locks,
-    queues, and other synchronization primitives where you have
-    to use a thread, but you just don't have any idea when the operation
-    will complete.
-    '''
-    if hasattr(callable, '__self__'):
-        call_key = (callable.__name__, id(callable.__self__))
-    else:
-        call_key = id(callable)
-    _pending[call_key] += 1
-    async with _barrier[call_key]:
-        try:
-            return await run_in_thread(callable, *args, call_on_cancel=call_on_cancel)
-        finally:
-            _pending[call_key] -= 1
-            if not _pending[call_key]:
-                del _pending[call_key]
-                del _barrier[call_key]

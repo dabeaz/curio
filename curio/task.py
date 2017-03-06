@@ -25,18 +25,16 @@ class Task(object):
     '''
     __slots__ = (
         'id', 'parentid', 'coro', 'daemon', 'name', '_send', '_throw', 'cycles', 'state',
-        'cancel_func', 'future', 'sleep', 'timeout', 'exc_info', 'next_value',
+        'cancel_func', 'future', 'sleep', 'timeout', 'next_value',
         'next_exc', 'joining', 'cancelled', 'terminated', 'cancel_pending',
         '_last_io', '_deadlines', 'task_local_storage', 'allow_cancel',
-        '__weakref__',
+        '__weakref__', '__dict__'
     )
     _lastid = 1
 
-    def __init__(self, coro, daemon=False, taskid=None):
-        if taskid is None:
-            taskid = Task._lastid
-            Task._lastid += 1
-        self.id = taskid
+    def __init__(self, coro, daemon=False):
+        self.id = Task._lastid
+        Task._lastid += 1
         self.parentid = None          # Parent task id (if any)
         self.coro = coro              # Underlying generator/coroutine
         self.name = getattr(coro, '__qualname__', str(coro))
@@ -47,7 +45,6 @@ class Task(object):
         self.future = None            # Pending Future (if any)
         self.sleep = None             # Pending sleep (if any)
         self.timeout = None           # Pending timeout (if any)
-        self.exc_info = None          # Exception info (if any on crash)
         self.next_value = None        # Next value to send on execution
         self.next_exc = None          # Next exception to send on execution
         self.joining = SchedBarrier() # Set of tasks waiting to join with this one
@@ -79,9 +76,10 @@ class Task(object):
         Wait for a task to terminate.  Returns the return value (if any)
         or raises a TaskError if the task crashed with an exception.
         '''
-        await _join_task(self)
-        if self.exc_info:
-            raise TaskError('Task crash') from self.exc_info[1]
+        if not self.terminated:
+            await _scheduler_wait(self.joining, 'TASK_JOIN')
+        if self.next_exc:
+            raise TaskError('Task crash') from self.next_exc
         else:
             return self.next_value
 
@@ -104,7 +102,7 @@ class Task(object):
             return False
         await _cancel_task(self)
         if blocking:
-            await _join_task(self)
+            await _scheduler_wait(self.joining, 'TASK_JOIN')
         return True
 
     def pdb(self):
@@ -112,8 +110,8 @@ class Task(object):
         Run a pdb post-mortem on any pending exception information
         '''
         import pdb
-        if self.exc_info:
-            pdb.post_mortem(self.exc_info[2])
+        if self.next_exc:
+            pdb.post_mortem(self.next_exc.__traceback__)
 
 # ----------------------------------------------------------------------
 # Public-facing task-related functions.  Some of these functions are

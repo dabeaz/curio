@@ -12,10 +12,9 @@
 
 __all__ = [ 
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
-    '_join_task', '_cancel_task', '_scheduler_wait',
-    '_scheduler_wake', '_sigwatch', '_sigunwatch', '_sigwait',
-    '_get_kernel', '_get_current', '_set_timeout', '_unset_timeout',
-    '_clock',
+    '_cancel_task', '_scheduler_wait', '_scheduler_wake', '_sigwatch',
+    '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
+    '_set_timeout', '_unset_timeout', '_clock',
     ]
 
 # -- Standard library
@@ -32,19 +31,18 @@ class Traps(IntEnum):
     _trap_io = 0
     _trap_future_wait = 1
     _trap_sleep = 2
-    _trap_join_task = 3
-    _trap_sched_wait = 4
-    _trap_sched_wake = 5
-    _trap_sigwait = 6
-    _trap_cancel_task = 7
-    _trap_get_kernel = 8
-    _trap_get_current = 9
-    _trap_set_timeout = 10
-    _trap_unset_timeout = 11
-    _trap_clock = 12
-    _trap_sigwatch = 13
-    _trap_sigunwatch = 14
-    _trap_spawn = 15
+    _trap_sched_wait = 3
+    _trap_sched_wake = 4
+    _trap_sigwait = 5
+    _trap_cancel_task = 6
+    _trap_get_kernel = 7
+    _trap_get_current = 8
+    _trap_set_timeout = 9
+    _trap_unset_timeout = 10
+    _trap_clock = 11
+    _trap_sigwatch = 12
+    _trap_sigunwatch = 13
+    _trap_spawn = 14
 
 
 
@@ -100,14 +98,6 @@ def _cancel_task(task, exc=errors.TaskCancelled, val=None):
     Cancel a task. Causes a CancelledError exception to raise in the task.
     '''
     yield (_trap_cancel_task, task, exc, val)
-
-
-@coroutine
-def _join_task(task):
-    '''
-    Wait for a task to terminate.
-    '''
-    yield (_trap_join_task, task)
 
 
 @coroutine

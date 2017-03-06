@@ -78,6 +78,10 @@ def _enable_tasklocal_for(task):
     finally:
         _current_task_local_storage.value = old
 
+def _set_tasklocal(task):
+    old = getattr(_current_task_local_storage, 'value', None)
+    _current_task_local_storage.value = task.task_local_storage
+    return old
 
 # Called from _trap_spawn to implement task local inheritance.
 def _copy_tasklocal(parent, child):

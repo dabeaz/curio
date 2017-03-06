@@ -53,7 +53,7 @@ If you are going to repeatedly run coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
 them using its ``run()`` method as described below:
 
-.. class:: Kernel(log_errors=True, selector=None, with_monitor=False)
+.. class:: Kernel(selector=None, log_errors=True)
 
    Create an instance of a curio kernel.  The arguments are the same
    as described above for the :func:`run()` function.
@@ -2175,13 +2175,6 @@ cancellation point.
 
    Blocking trap. Sleep until a result is set on *future*.  *future*
    is an instance of :py:class:`concurrent.futures.Future`.
-
-.. asyncfunction:: _join_task(task)
-
-   Blocking trap. Sleep until the indicated *task* completes. After
-   this trap completes, then the task's return value or raised
-   exception information is available in ``task.next_value`` or
-   ``task.exc_info``, respectively.
 
 .. asyncfunction:: _cancel_task(task)
 
