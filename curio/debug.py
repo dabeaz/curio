@@ -2,55 +2,52 @@
 #
 # Task debugging tools
 
+__all__ = [ 'longblock', 'schedtrace' ]
+
 import time
 import logging
-
 log = logging.getLogger(__name__)
 
-class DebugBase:
-    def schedule(self, task):
-        pass
+# -- Curio
 
-    def suspend(self, task, exc):
-        pass
+from .activation import ActivationBase
 
-    def trap(self, trapno, args):
-        pass
+class DebugBase(ActivationBase):
+    pass
 
 class longblock(DebugBase):
     '''
     Report warnings for tasks that block the event loop for a long duration.
     '''
-    def __init__(self, max_time=0.05, level=logging.WARNING):
+    def __init__(self, *, max_time=0.05, level=logging.WARNING):
         self.max_time = max_time
         self.level = level
 
-    def schedule(self, task):
+    def scheduled(self, task):
         self.start = time.monotonic()
 
-    def suspend(self, task, exc):
+    def suspended(self, task, exc):
         duration = time.monotonic() - self.start
         if duration > self.max_time:
-            log.log(self.level, 'Task %r ran for %s seconds' % (task, duration))
+            log.log(self.level, 'Task id=%d (%s) ran for %s seconds' % (task.id, task, duration))
 
 class schedtrace(DebugBase):
     '''
     Report when tasks get scheduled.
     '''
-    def schedule(self, task):
-        log.info('SCHEDULE:%f:%d:%s', time.time(), task.id, task)
+    def __init__(self, *, level=logging.INFO, **kwargs):
+        self.level = level
 
-class traptrace(DebugBase):
-    '''
-    Report traps
-    '''
-    def trap(self, trapno, args):
-        log.info('TRAP:%r:%s', trapno, args)
+    def scheduled(self, task):
+        log.log(self.level, 'SCHEDULE:%f:%d:%s', time.time(), task.id, task)
 
 
 def create_debuggers(debug):
+    '''
+    Create debugger objects.  Called by the kernel to instantiate the objects.
+    '''
     if debug is None:
-        return None
+        return []
 
     if debug is True:
         # Set a default set of debuggers

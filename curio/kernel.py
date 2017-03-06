@@ -66,7 +66,7 @@ log = logging.getLogger(__name__)
 from .errors import *
 from .task import Task
 from .traps import _read_wait, Traps
-from .local import _set_tasklocal, _copy_tasklocal
+from .local import LocalsActivation
 from . import meta
 from .debug import create_debuggers
 
@@ -117,7 +117,7 @@ class Kernel(object):
     Use the kernel run() method to submit work.
     '''
 
-    def __init__(self, *, selector=None, debug=None):
+    def __init__(self, *, selector=None, debug=None, activations=None):
         self._running = False
 
         # Functions to call at shutdown
@@ -152,6 +152,14 @@ class Kernel(object):
 
         # Optional debug classes
         self._debug = create_debuggers(debug)
+
+        # Activations
+        self._activations = activations if activations else []
+        self._activations.insert(0, LocalsActivation())
+        
+        # Debugging (activations in disguise)
+        if debug:
+            self._activations.extend(create_debuggers(debug))
 
     def __del__(self):
         if self._shutdown_funcs is not None:
@@ -553,7 +561,6 @@ class Kernel(object):
         def _trap_spawn(coro, daemon):
             task = _new_task(coro, daemon | current.daemon)    # Inherits daemonic status from parent
             task.parentid = current.id
-            _copy_tasklocal(current, task)
             return task
 
         # ----------------------------------------
@@ -723,7 +730,7 @@ class Kernel(object):
         # ------------------------------------------------------------
 
         # Create the traps tables
-        traps = [None] * len(Traps)
+        kernel._traps = traps = [None] * len(Traps)
         for trap in Traps:
             traps[trap] = locals()[trap.name]
 
@@ -738,6 +745,12 @@ class Kernel(object):
             if task._last_io:
                 _unregister_event(*task._last_io)
                 task._last_io = None
+
+        # Initialize activations
+        kernel._activations = [ act() if (isinstance(act, type) and issubclass(act, ActivationBase)) else act
+                                for act in kernel._activations ]
+        for act in kernel._activations:
+            act.activate(kernel)
 
         # Main task (if any)
         main_task = None
@@ -756,17 +769,12 @@ class Kernel(object):
 
             def __enter__(self):
                 task = self.task
+                for a in kernel._activations:
+                    a.scheduled(task)
+
                 task.state = 'RUNNING'
                 task.cycles += 1
-                _set_tasklocal(task)
                 return self
-
-            if kernel._debug:
-                def __enter__(self, _super=__enter__):
-                    result = _super(self)
-                    for d in kernel._debug:
-                        d.schedule(self.task)
-                    return result
 
             def __exit__(self, ty, val, tb):
                 task = self.task
@@ -779,22 +787,8 @@ class Kernel(object):
                     _finalize_task(task)
                     task.state = 'TERMINATED'
 
-            if kernel._debug:
-                def __exit__(self, ty, val, tb, _super=__exit__):
-                    result = _super(self, ty, val, tb)
-                    for d in kernel._debug:
-                        d.suspend(self.task, val)
-                    return result
-
-            def trap(self, trapno, args):
-                return traps[trapno](*args)
-            
-            if kernel._debug:
-                def trap(self, trapno, args, _super=trap):
-                    result = _super(self,  trapno, args)
-                    for d in kernel._debug:
-                        d.trap(trapno, args)
-                    return result
+                for a in kernel._activations:
+                    a.suspended(task, val)
 
         # ------------------------------------------------------------
         # Main Kernel Loop
@@ -924,7 +918,7 @@ class Kernel(object):
 
                             # Run the trap function
                             try:
-                                result = executor.trap(trap[0], trap[1:])
+                                result = traps[trap[0]](*trap[1:])
                                 if result is not None:
                                     current.next_value = result
                             except Exception as e:
@@ -939,7 +933,7 @@ class Kernel(object):
                     current.next_exc = e
 
 def run(corofunc, *args, with_monitor=False, selector=None,
-        debug=None, timeout=None, **extra):
+        debug=None, activations=None, timeout=None, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
@@ -953,7 +947,7 @@ def run(corofunc, *args, with_monitor=False, selector=None,
     use its run() method instead.
     '''
 
-    kernel = Kernel(selector=selector, debug=debug,
+    kernel = Kernel(selector=selector, debug=debug, activations=activations,
                     **extra)
 
 

@@ -54,29 +54,34 @@ __all__ = ["Local"]
 # cases like when a request handler spawns some small short-lived worker tasks
 # as part of its processing and those want to do logging as well.
 
+# -- Standard library
+
 import threading
-from contextlib import contextmanager
+
+# -- Curio
+
+from .activation import ActivationBase, trap_patch
+from .traps import Traps
 
 # The thread-local storage slot that points to the task-local storage dict for
 # whatever task is currently running.
 _current_task_local_storage = threading.local()
 
+class LocalsActivation(ActivationBase):
+    def activate(self, kernel):
+        @trap_patch(kernel, Traps._trap_spawn)
+        def spawn(*args, trap):
+            newtask = trap(*args)
+            _copy_tasklocal(self.current, newtask)
+            return newtask
 
-@contextmanager
-def _enable_tasklocal_for(task):
-    # Using a full save/restore pattern here is a little paranoid, but
-    # safe. Even if someone does something silly like calling curio.run() from
-    # inside a curio coroutine.
-    try:
-        old = _current_task_local_storage.value
-    except AttributeError:
-        old = None
-
-    try:
-        _current_task_local_storage.value = task.task_local_storage
-        yield
-    finally:
-        _current_task_local_storage.value = old
+    def scheduled(self, task):
+        self.current = task
+        self.old = _set_tasklocal(task)
+        
+    def suspended(self, task, exc):
+        _current_task_local_storage.value = self.old
+        self.current = None
 
 def _set_tasklocal(task):
     old = getattr(_current_task_local_storage, 'value', None)
