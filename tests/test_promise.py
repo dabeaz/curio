@@ -35,6 +35,15 @@ def test_promise_exception(kernel):
 
     kernel.run(main())
 
+def test_promise_no_exception(kernel):
+    async def main():
+        promise = Promise()
+        async with promise:
+            pass
+        assert not promise.is_set()
+
+    kernel.run(main())
+
 def test_promise_internals(kernel):
     async def main():
         promise = Promise()

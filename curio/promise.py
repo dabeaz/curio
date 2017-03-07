@@ -46,7 +46,8 @@ class Promise:
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
-        self._exception = exc
-        await self._event.set()
+        if exc_type is not None:
+            self._exception = exc
+            await self._event.set()
 
-        return True
+            return True
