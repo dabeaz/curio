@@ -75,7 +75,7 @@ class LocalsActivation(ActivationBase):
             _copy_tasklocal(self.current, newtask)
             return newtask
 
-    def scheduled(self, task):
+    def running(self, task):
         self.current = task
         self.old = _set_tasklocal(task)
         

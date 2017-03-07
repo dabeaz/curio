@@ -2,7 +2,7 @@
 #
 # Task debugging tools
 
-__all__ = [ 'longblock', 'schedtrace' ]
+__all__ = [ 'longblock', 'schedtrace', 'traptrace' ]
 
 import time
 import logging
@@ -10,37 +10,78 @@ log = logging.getLogger(__name__)
 
 # -- Curio
 
-from .activation import ActivationBase
+from .activation import ActivationBase, trap_patch
+from .traps import Traps
 
 class DebugBase(ActivationBase):
-    pass
+    def __init__(self, level=logging.INFO, filter=None, **kwargs):
+        self.level = level
+        self.filter = filter
+
+    def check_filter(self, task):
+        if self.filter and task.name not in self.filter:
+            return False
+        return True
 
 class longblock(DebugBase):
     '''
     Report warnings for tasks that block the event loop for a long duration.
     '''
-    def __init__(self, *, max_time=0.05, level=logging.WARNING):
+    def __init__(self, *, max_time=0.05, level=logging.WARNING, **kwargs):
+        super().__init__(level=level, **kwargs)
         self.max_time = max_time
-        self.level = level
 
-    def scheduled(self, task):
-        self.start = time.monotonic()
+    def running(self, task):
+        if self.check_filter(task):
+            self.start = time.monotonic()
 
     def suspended(self, task, exc):
-        duration = time.monotonic() - self.start
-        if duration > self.max_time:
-            log.log(self.level, 'Task id=%d (%s) ran for %s seconds' % (task.id, task, duration))
+        if self.check_filter(task):
+            duration = time.monotonic() - self.start
+            if duration > self.max_time:
+                log.log(self.level, 'Task id=%d (%s) ran for %s seconds' % (task.id, task, duration))
 
 class schedtrace(DebugBase):
     '''
-    Report when tasks get scheduled.
+    Report when tasks run
     '''
-    def __init__(self, *, level=logging.INFO, **kwargs):
-        self.level = level
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-    def scheduled(self, task):
-        log.log(self.level, 'SCHEDULE:%f:%d:%s', time.time(), task.id, task)
+    def running(self, task):
+        if self.check_filter(task):
+            log.log(self.level, 'SCHEDULE:%f:%d:%s', time.time(), task.id, task)
 
+class traptrace(schedtrace):
+    '''
+    Report traps executed
+    '''
+    def __init__(self, *, traps=None, **kwargs):
+        super().__init__(**kwargs)
+        self.traps = traps
+        self.report = False
+
+    def activate(self, kernel):
+        for trapno in Traps:
+            if self.traps and trapno not in self.traps:
+                continue
+
+            @trap_patch(kernel, trapno)
+            def trapfunc(*args, trap, trapno=trapno):
+                if self.report:
+                    log.log(self.level, 'TRAP:%f:%s:%r', 
+                            time.time(),
+                            trapno,
+                            args)
+                return trap(*args)
+
+    def running(self, task):
+        super().running(task)
+        if self.check_filter(task):
+            self.report = True
+
+    def suspended(self, task, exc):
+        self.report = False
 
 def create_debuggers(debug):
     '''

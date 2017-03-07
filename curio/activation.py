@@ -17,9 +17,9 @@ class ActivationBase:
         '''
         pass
 
-    def scheduled(self, task):
+    def running(self, task):
         '''
-        Called before the execution of a task.
+        Called right before the execution of a task.
         '''
         pass
 

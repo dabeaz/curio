@@ -747,9 +747,11 @@ class Kernel(object):
                 task._last_io = None
 
         # Initialize activations
-        kernel._activations = [ act() if (isinstance(act, type) and issubclass(act, ActivationBase)) else act
-                                for act in kernel._activations ]
-        for act in kernel._activations:
+        _activations = [ act() if (isinstance(act, type) and issubclass(act, ActivationBase)) else act
+                         for act in kernel._activations ]
+        kernel._activations = _activations
+
+        for act in _activations:
             act.activate(kernel)
 
         # Main task (if any)
@@ -769,8 +771,8 @@ class Kernel(object):
 
             def __enter__(self):
                 task = self.task
-                for a in kernel._activations:
-                    a.scheduled(task)
+                for a in _activations:
+                    a.running(task)
 
                 task.state = 'RUNNING'
                 task.cycles += 1
@@ -787,7 +789,7 @@ class Kernel(object):
                     _finalize_task(task)
                     task.state = 'TERMINATED'
 
-                for a in kernel._activations:
+                for a in _activations:
                     a.suspended(task, val)
 
         # ------------------------------------------------------------
