@@ -1,3 +1,4 @@
+import sys
 import pytest
 from curio import Kernel
 from curio.monitor import Monitor
@@ -9,3 +10,7 @@ def kernel(request):
     request.addfinalizer(lambda: k.run(shutdown=True))
     request.addfinalizer(m.close)
     return k
+
+collect_ignore = []
+if sys.version_info < (3,6):
+    collect_ignore.append("test_asyncgen.py")
