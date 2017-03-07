@@ -6,6 +6,9 @@
 
 import inspect
 import warnings
+import logging
+
+log = logging.getLogger(__name__)
 
 # -- Curio
 
@@ -58,6 +61,7 @@ class Task(object):
         self._send = coro.send        # Bound coroutine methods
         self._throw = coro.throw
         self._deadlines = []          # Timeout deadlines
+        self._joined = False          # Indicate whether task was joined/cancelled
 
     def __repr__(self):
         return 'Task(id=%r, name=%r, %r, state=%r)' % (self.id, self.name, self.coro, self.state)
@@ -67,6 +71,11 @@ class Task(object):
 
     def __del__(self):
         self.coro.close()
+        if not self._joined and not self.cancelled:
+            if self.next_exc:
+                log.error('Exception in unjoined task %r', self, exc_info=self.next_exc)
+            elif not self.daemon:
+                log.warning('%r never joined', self)
 
     def _finalize_agen(self, agen):
         print("Task %r -> Finalize %r" % (self, agen))
@@ -78,6 +87,7 @@ class Task(object):
         '''
         if not self.terminated:
             await _scheduler_wait(self.joining, 'TASK_JOIN')
+        self._joined = True
         if self.next_exc:
             raise TaskError('Task crash') from self.next_exc
         else:

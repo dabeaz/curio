@@ -2,6 +2,22 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+03/07/2017 Refined error reporting and warnings related to Task
+           termination.  If any non-daemonic task is garbage collected
+           and it hasn't been explicitly joined or cancelled, a
+           warning message is logged.  This warning means that a task
+           was launched, but that nobody ever looked at its result.
+           If any unjoined task is garbage collected and it has
+           crashed with an uncaught exception, that exception is
+           logged as an error.
+
+	   This change has a few impacts.  First, if a task crashes,
+           but is joined, you won't get a spurious output message
+           showing the crash.  The exception was delivered to someone
+           else.   On the other hand, you might get more warning
+           messages if you've been launching tasks without paying
+           attention to their result. 
+
 03/06/2017 A lot of cleanup of the kernel. Moved some functionality 
 	   elsewhere. Removed unneeded traps.  Removed excess
            abstraction in the interest of readability.  The different

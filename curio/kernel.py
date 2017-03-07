@@ -802,6 +802,8 @@ class Kernel(object):
             # ------------------------------------------------------------
 
             if njobs == 0:
+                if main_task:
+                    main_task._joined = True
                 coro, poll_timeout = (yield (main_task.next_value, main_task.next_exc)) if main_task else (yield (None, None))
                 main_task = _new_task(coro) if coro else None
                 # If a task was created and a timeout was given, we impose a deadline on the task
