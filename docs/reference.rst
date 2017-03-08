@@ -2193,21 +2193,6 @@ cancellation point.
    number of tasks to release. *value* and *exc* specify the return
    value or exception to raise in the task when it resumes execution.
 
-.. asyncfunction:: _sigwatch(sigset)
-
-   Synchronous trap. Tell the kernel to start queuing signals in the
-   given signal set *sigset*.
-
-.. asyncfunction:: _sigunwatch(sigset)
-
-   Synchronous trap. Tell the kernel to stop queuing signals in the
-   given signal set.
-
-.. asyncfunction:: _sigwait(sigset)
-
-   Blocking trap. Wait for the arrival of a signal in a given signal
-   set. Returns the signal number of the received signal.
-
 .. asyncfunction:: _get_kernel()
 
    Synchronous trap. Get a reference to the running ``Kernel`` object.

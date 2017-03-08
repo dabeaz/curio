@@ -2,6 +2,9 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+03/08/2017 Removed signal handling from the kernel up into Curio
+	   "user-space".  No existing code the uses signals should break.
+
 03/07/2017 Refined error reporting and warnings related to Task
            termination.  If any non-daemonic task is garbage collected
            and it hasn't been explicitly joined or cancelled, a

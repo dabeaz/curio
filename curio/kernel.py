@@ -51,7 +51,6 @@ import time
 import os
 import sys
 import logging
-import signal
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
 import inspect
@@ -134,10 +133,6 @@ class Kernel(object):
         # Coroutine runner and internal state
         self._runner = None
         self._crashed = False
-
-        # Dict { signo: [ sigsets ] } of watched signals (initialized only if signals used)
-        self._signal_sets = None
-        self._default_signals = None      # Dict of default signal handlers
 
         # Attributes related to the loopback socket (only initialized if required)
         self._notify_sock = None
@@ -301,10 +296,10 @@ class Kernel(object):
         time_monotonic = time.monotonic
 
         # ------------------------------------------------------------
-        # In-kernel task used for processing signals and futures.
+        # In-kernel task used for processing futures.
         #
         # Internal task that monitors the loopback socket--allowing the kernel to
-        # awake for non-I/O events. Also processes incoming signals.  
+        # awake for non-I/O events. 
 
         async def _kernel_task():
             wake_queue_popleft = wake_queue.popleft
@@ -331,20 +326,6 @@ class Kernel(object):
                     task.state = 'READY'
                     task.cancel_func = None
                     ready_append(task)
-
-                # Any non-null bytes received here are assumed to be
-                # received signals.  See if there are any pending
-                # signal sets and unblock if needed
-                if not kernel._signal_sets:
-                    continue
-
-                sigs = (n for n in data if n in kernel._signal_sets)
-                for signo in sigs:
-                    for sigset in kernel._signal_sets[signo]:
-                        sigset.pending.append(signo)
-                        if sigset.waiting:
-                            _reschedule_task(sigset.waiting, value=signo)
-                            sigset.waiting = None
 
         # Force the kernel to wake, possibly scheduling a task to run.
         # This method is called by threads running concurrently to the
@@ -676,44 +657,6 @@ class Kernel(object):
                 # pending exception.
                 if isinstance(current.cancel_pending, TaskTimeout):
                     current.cancel_pending = None
-
-        # ----------------------------------------
-        # Watch signals
-        def _trap_sigwatch(sigset):
-            # Initialize the signal handling part of the kernel if not done already
-            # Note: This only works if running in the main thread
-            if kernel._signal_sets is None:
-                kernel._signal_sets = defaultdict(list)
-                kernel._default_signals = {}
-                old_fd = signal.set_wakeup_fd(kernel._notify_sock.fileno())
-                assert old_fd < 0, 'Signals already initialized %d' % old_fd
-                kernel._call_at_shutdown(lambda: signal.set_wakeup_fd(-1))
-
-            for signo in sigset.signos:
-                if not kernel._signal_sets[signo]:
-                    kernel._default_signals[signo] = signal.signal(signo, lambda signo, frame: None)
-                kernel._signal_sets[signo].append(sigset)
-
-        # ----------------------------------------
-        # Unwatch signals
-        def _trap_sigunwatch(sigset):
-            for signo in sigset.signos:
-                if sigset in kernel._signal_sets[signo]:
-                    kernel._signal_sets[signo].remove(sigset)
-
-                # If there are no active watchers for a signal, revert it back to default behavior
-                if not kernel._signal_sets[signo]:
-                    signal.signal(signo, kernel._default_signals[signo])
-                    del kernel._signal_sets[signo]
-
-        # ----------------------------------------
-        # Wait for a signal
-        def _trap_sigwait(sigset):
-            if _check_cancellation():
-                return
-
-            sigset.waiting = current
-            _suspend_task('SIGNAL_WAIT', lambda: setattr(sigset, 'waiting', None))
 
         # ----------------------------------------
         # Return the running kernel

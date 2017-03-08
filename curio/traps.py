@@ -12,9 +12,9 @@
 
 __all__ = [ 
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
-    '_cancel_task', '_scheduler_wait', '_scheduler_wake', '_sigwatch',
-    '_sigunwatch', '_sigwait', '_get_kernel', '_get_current',
-    '_set_timeout', '_unset_timeout', '_clock',
+    '_cancel_task', '_scheduler_wait', '_scheduler_wake',
+    '_get_kernel', '_get_current', '_set_timeout', '_unset_timeout',
+    '_clock',
     ]
 
 # -- Standard library
@@ -33,17 +33,13 @@ class Traps(IntEnum):
     _trap_sleep = 2
     _trap_sched_wait = 3
     _trap_sched_wake = 4
-    _trap_sigwait = 5
-    _trap_cancel_task = 6
-    _trap_get_kernel = 7
-    _trap_get_current = 8
-    _trap_set_timeout = 9
-    _trap_unset_timeout = 10
-    _trap_clock = 11
-    _trap_sigwatch = 12
-    _trap_sigunwatch = 13
-    _trap_spawn = 14
-
+    _trap_cancel_task = 5
+    _trap_get_kernel = 6
+    _trap_get_current = 7
+    _trap_set_timeout = 8
+    _trap_unset_timeout = 9
+    _trap_clock = 10
+    _trap_spawn = 11
 
 
 globals().update((trap.name, trap) for trap in Traps)
@@ -114,30 +110,6 @@ def _scheduler_wake(sched, n=1):
     Reschedule one or more tasks waiting on a scheduler primitive.
     '''
     yield (_trap_sched_wake, sched, n)
-
-
-@coroutine
-def _sigwatch(sigset):
-    '''
-    Start monitoring a signal set
-    '''
-    yield (_trap_sigwatch, sigset)
-
-
-@coroutine
-def _sigunwatch(sigset):
-    '''
-    Stop watching a signal set
-    '''
-    yield (_trap_sigunwatch, sigset)
-
-
-@coroutine
-def _sigwait(sigset):
-    '''
-    Wait for a signal to arrive.
-    '''
-    yield (_trap_sigwait, sigset)
 
 
 @coroutine
