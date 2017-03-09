@@ -36,7 +36,7 @@ from .meta import awaitable
 # to various signal numbers.  These queues can be registered
 # and unregistered by various Curio tasks, threads, and other
 # parts of the system.   This arrangement allows for a high-degree
-# of flexibility.  For example, Curio allows signals can be 
+# of flexibility.  For example, Curio allows signals to be 
 # received by different threads.  
 
 _handler = None
