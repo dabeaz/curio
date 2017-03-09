@@ -2,6 +2,11 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+03/08/2017 Further improvement to signal handling.  Now handled by a backing
+           thread.  Supports signal delivery to multiple threads, 
+           multiple instances of Curio running, asyncio, and all sorts
+           of stuff.
+
 03/08/2017 Removed signal handling from the kernel up into Curio
 	   "user-space".  No existing code the uses signals should break.
 
