@@ -163,7 +163,7 @@ class UniversalQueue(object):
         # a race condition on a few attributes.  It is only held
         # briefly, and never in a situation where a blocking operation
         # would take place with the lock held.
-        self._mutex = threading.RLock()
+        self._mutex = threading.Lock()
         self._all_tasks_done = threading.Condition(self._mutex)
         self._unfinished_tasks = 0
 

@@ -1915,7 +1915,11 @@ as an asynchronous context manager.  The recommended usage looks like this::
 
 For all of the statements inside the context-manager, signals will
 be queued.  The `sigset.wait()` operation will return received
-signals one at a time from the signal queue.
+signals one at a time from the signal queue.  Even though this queue
+contains signals as they were received by Python, be aware that 
+"reliable signaling" is not guaranteed.  Python only runs signal
+handlers periodically in the background and multiple signals might
+be collapsed into a single signal delivery.  
 
 Signals can be temporarily ignored using a normal context manager::
 
