@@ -19,7 +19,6 @@ log = logging.getLogger(__name__)
 # -- Curio
 
 from .queue import UniversalQueue
-from .meta import awaitable
 from . import sync
 
 # Discussion:  Signal handling.
