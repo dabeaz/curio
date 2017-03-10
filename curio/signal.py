@@ -65,6 +65,10 @@ class _SignalHandler(object):
                 for q in list(self.signal_queues[signo]):
                     q.put(signo)
 
+    def _handler(self, signo, frame):
+        if isinstance(self.default_handlers[signo], SignalEvent):
+            self.default_handlers[signo](signo, frame)
+
     def watch(self, signos, queue):
         '''
         Attach a queue to a set of signal numbers
@@ -72,7 +76,7 @@ class _SignalHandler(object):
         with self.lock:
             for signo in signos:
                 if self.watching[signo] == 0:
-                    self.default_handlers[signo] = signal.signal(signo, lambda signo, frame: None)
+                    self.default_handlers[signo] = signal.signal(signo, self._handler)
                 self.watching[signo] += 1
                 if queue:
                     self.signal_queues[signo].add(queue)
@@ -103,7 +107,7 @@ class SignalQueue(UniversalQueue):
     UniversalQueue and is safe to use in Curio or threads.
     '''
 
-    def __init__(self, signos, maxsize=0, **kwargs):
+    def __init__(self, *signos, maxsize=0, **kwargs):
         assert maxsize == 0, 'SignalQueues must be unbounded'
         super().__init__(**kwargs)
         self._signos = signos
@@ -131,21 +135,22 @@ class SignalQueue(UniversalQueue):
         return self.__exit__(*args)
 
 class SignalEvent(sync.UniversalEvent):
-    def __init__(self, signo):
+    def __init__(self, *signos):
         super().__init__()
-        self._signo = signo
-        self._default = signal.signal(signo, self)
+        self._signos = signos
+        self._defaults = { signo: signal.signal(signo, self) for signo in signos }
 
     def __call__(self, signo, frame):
         self.set()
-        if isinstance(self._default, SignalEvent):
-            self._default(signo, frame)
+        if isinstance(self._defaults[signo], SignalEvent):
+            self._defaults[signo](signo, frame)
              
     def __del__(self):
-        signal.signal(self._signo, self._default)
+        for signo, default in self._defaults.items():
+            signal.signal(signo, default)
 
 @contextmanager
-def enable_signal_queues(signos):
+def enable_signal_queues(*signos):
     '''
     Enable signal queuing on a given set of signals.  This function
     is only needed if any part of signal handling is going to run
