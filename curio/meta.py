@@ -169,6 +169,7 @@ def awaitable(syncfunc):
                 return syncfunc(*args, **kwargs)
         wrapper._syncfunc = syncfunc
         wrapper._asyncfunc = asyncfunc
+        wrapper.__doc__ = syncfunc.__doc__ or asyncfunc.__doc__
         return wrapper
     return decorate
 

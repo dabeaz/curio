@@ -15,7 +15,11 @@
 # traps are used to coordinate synchronization with the underlying Kernel.
 
 
-__all__ = ['Event', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide']
+__all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide']
+
+# -- Standard library
+
+import threading
 
 # -- Curio
 
@@ -25,7 +29,6 @@ from . import workers
 from .task import current_task
 from .meta import awaitable, iscoroutinefunction
 from . import thread
-
 
 class Event(object):
     __slots__ = ('_set', '_waiting')
@@ -55,6 +58,29 @@ class Event(object):
         self._set = True
         await _scheduler_wake(self._waiting, len(self._waiting))
 
+class UniversalEvent(object):
+    '''
+    An event that's safe to use from Curio and threads.
+    '''
+    def __init__(self):
+        self._evt = threading.Event()
+        
+    def is_set(self):
+        return self._evt.is_set()
+
+    def wait(self):
+        self._evt.wait()
+
+    @awaitable(wait)
+    async def wait(self):
+        await workers.block_in_thread(self._evt.wait)
+
+    def set(self):
+        self._evt.set()
+
+    @awaitable(set)
+    async def set(self):
+        self._evt.set()
 
 class _LockBase(object):
 

@@ -2,7 +2,7 @@
 #
 # Signal sets and signal related functionality
 
-__all__ = ['SignalSet', 'EnableSignals']
+__all__ = ['SignalQueue', 'SignalEvent', 'SignalSet', 'EnableSignals', 'enable_signal_queues']
 
 # -- Standard Library
 
@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 
 from .queue import UniversalQueue
 from .meta import awaitable
+from . import sync
 
 # Discussion:  Signal handling.
 #
@@ -55,6 +56,9 @@ class _SignalHandler(object):
         threading.Thread(target=self._monitor, daemon=True).start()
         
     def _monitor(self):
+        '''
+        Internal thread that watches for signals and dispatches them to queues
+        '''
         while True:
             received_sigs = self._wait_sock.recv(1000)
             for signo in received_sigs:
@@ -62,6 +66,9 @@ class _SignalHandler(object):
                     q.put(signo)
 
     def watch(self, signos, queue):
+        '''
+        Attach a queue to a set of signal numbers
+        '''
         with self.lock:
             for signo in signos:
                 if self.watching[signo] == 0:
@@ -71,6 +78,9 @@ class _SignalHandler(object):
                     self.signal_queues[signo].add(queue)
 
     def unwatch(self, signos, queue):
+        '''
+        Detach a queue from a set of signal  numbers
+        '''
         with self.lock:
             for signo in signos:
                 self.watching[signo] -= 1
@@ -81,6 +91,89 @@ class _SignalHandler(object):
                         log.warning('Exception %r ignored.', e)
                 if queue:
                     self.signal_queues[signo].discard(queue)
+
+def _init_handler():
+    global _handler
+    if _handler is None:
+        _handler = _SignalHandler()
+
+class SignalQueue(UniversalQueue):
+    '''
+    A queue for watching a given set of signals. This is a subclass of
+    UniversalQueue and is safe to use in Curio or threads.
+    '''
+
+    def __init__(self, signos, maxsize=0, **kwargs):
+        assert maxsize == 0, 'SignalQueues must be unbounded'
+        super().__init__(**kwargs)
+        self._signos = signos
+        self._watching = False
+        
+    def __enter__(self):
+        assert not self._watching
+        _init_handler()
+        try:
+            _handler.watch(self._signos, self)
+        except Exception as e:
+            log.error("Could not install signal handler.", exc_info=e)
+            raise
+        self._watching = True
+        return self
+
+    def __exit__(self, *args):
+        _handler.unwatch(self._signos, self)
+        self._watching = False
+
+    async def __aenter__(self):
+        return self.__enter__()
+
+    async def __aexit__(self, *args):
+        return self.__exit__(*args)
+
+class SignalEvent(sync.UniversalEvent):
+    def __init__(self, signo):
+        super().__init__()
+        self._signo = signo
+        self._default = signal.signal(signo, self)
+
+    def __call__(self, signo, frame):
+        self.set()
+        if isinstance(self._default, SignalEvent):
+            self._default(signo, frame)
+             
+    def __del__(self):
+        signal.signal(self._signo, self._default)
+
+@contextmanager
+def enable_signal_queues(signos):
+    '''
+    Enable signal queuing on a given set of signals.  This function
+    is only needed if any part of signal handling is going to run
+    in a different thread than the main thread.  Python signals can
+    only be initialized in the main thread so you need to do this
+    in the main thread first.
+    '''
+    _init_handler()
+    _handler.watch(signos, None)
+    try:
+        yield
+    finally:
+        _handler.unwatch(signos, None)
+
+@contextmanager
+def ignore_signals(*signos):
+    '''
+    Temporarily ignore a set of signals.  This is only safe to use
+    from Python's main thread.
+    '''
+    orig_signals = [(signo, signal.signal(signo, signal.SIG_IGN)) for signo in self.signos]
+    try:
+        yield
+    finally:
+        for signo, handler in orig_signals:
+            signal.signal(signo, handler)
+
+
 
 class SignalSet(object):
 
@@ -118,7 +211,16 @@ class SignalSet(object):
         self._pending = None
         self._watching = False
 
+    def signals_pending(self):
+        '''
+        Returns the number of signals pending.  
+        '''
+        return self._pending.qsize()
+
     def wait(self):
+        '''
+        Wait for any signals. Returns the signal number of first received signal
+        '''
         assert not self._noqueue, "Can't wait on a non-queuing signal set"
         if not self._watching:
             with self:
@@ -127,9 +229,6 @@ class SignalSet(object):
 
     @awaitable(wait)
     async def wait(self):
-        '''
-        Wait for any signals. Returns the signal number of first received signal
-        '''
         assert not self._noqueue, "Can't wait on a non-queuing signal set"
         if not self._watching:
             async with self:
@@ -141,6 +240,7 @@ class SignalSet(object):
     def ignore(self):
         '''
         Context manager. Temporarily ignores all signals in the signal set.
+        This can only be used in Python's main thread.  
         '''
         try:
             orig_signals = [(signo, signal.signal(signo, signal.SIG_IGN)) for signo in self.signos]
@@ -153,7 +253,9 @@ class SignalSet(object):
 # A special signal set that can be used to enable signals, but 
 # doesn't perform any queuing of its own.  Mainly this is used
 # if you're going to be running Curio in a different thread.
-# You'd do something like this:
+# Since signal handlers can only be initialized in Python's main
+# thread, you'd have to set up handling there first before 
+# launching the rest of the application.  Do this:
 #
 # with EnableSignals(signal.SIGUSR1, signal.SIGINT):
 #     threading.Thread(target=run, args=(main,)).start()
