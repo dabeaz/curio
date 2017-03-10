@@ -2,6 +2,14 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+03/10/2017 SignalSet is gone.   Use a SignalQueue instead.  Usage
+           is almost identical:
+
+               async with SignalQueue(signal.SIGUSR1) as sq:
+                   while True:
+                        signo = await sq.get()
+                        ...
+
 03/08/2017 More work on signal handling. New objects: SignalQueue 
 	   and SignalEvent.  SignalEvents are neat:
 

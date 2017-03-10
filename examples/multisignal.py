@@ -8,18 +8,18 @@ import signal
 import threading
 
 async def signal_task(label):
-    async with SignalSet(signal.SIGUSR1, signal.SIGUSR2, signal.SIGINT) as s:
+    async with SignalQueue(signal.SIGUSR1, signal.SIGUSR2, signal.SIGINT) as s:
         while True:
-            signo = await s.wait()
+            signo = await s.get()
             print(label, 'got:', signo)
             if signo == signal.SIGINT:
                 print(label, 'Goodbye!')
                 break
 
 def signal_thread(label):
-    with SignalSet(signal.SIGUSR1, signal.SIGUSR2, signal.SIGINT) as s:
+    with SignalQueue(signal.SIGUSR1, signal.SIGUSR2, signal.SIGINT) as s:
         while True:
-            signo = s.wait()
+            signo = s.get()
             print(label, 'got:', signo)
             if signo == signal.SIGINT:
                 print(label, 'Goodbye!')
@@ -42,7 +42,7 @@ async def main():
     await run_in_thread(t3.join)
 
 if __name__ == '__main__':
-    with EnableSignals(signal.SIGUSR1, signal.SIGUSR2, signal.SIGINT) as s:
+    with enable_signals([signal.SIGUSR1, signal.SIGUSR2, signal.SIGINT]):
         run(main())
 
     

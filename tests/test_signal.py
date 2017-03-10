@@ -10,10 +10,10 @@ def test_task_signal(kernel):
     results = []
 
     async def child():
-        async with SignalSet(signal.SIGUSR1, signal.SIGUSR2) as sig:
-            signo = await sig.wait()
+        async with SignalQueue(signal.SIGUSR1, signal.SIGUSR2) as sig:
+            signo = await sig.get()
             results.append(signo)
-            signo = await sig.wait()
+            signo = await sig.get()
             results.append(signo)
 
     async def main():
@@ -37,15 +37,14 @@ def test_task_signal(kernel):
     ]
 
 
-def test_task_signal_waitone(kernel):
+def test_task_signal_event(kernel):
     results = []
 
     async def child():
-        sig = SignalSet(signal.SIGUSR1, signal.SIGUSR2)
-        signo = await sig.wait()
-        results.append(signo)
-        signo = await sig.wait()
-        results.append(signo)
+        await SignalEvent(signal.SIGUSR1).wait()
+        results.append(signal.SIGUSR1)
+        await SignalEvent(signal.SIGUSR2).wait()
+        results.append(signal.SIGUSR2)
 
     async def main():
         task = await spawn(child())
@@ -72,9 +71,9 @@ def test_task_signal_timeout(kernel):
     results = []
 
     async def child():
-        async with SignalSet(signal.SIGUSR1, signal.SIGUSR2) as sig:
+        async with SignalQueue(signal.SIGUSR1, signal.SIGUSR2) as sig:
             try:
-                signo = await timeout_after(1.0, sig.wait())
+                signo = await timeout_after(1.0, sig.get())
                 results.append(signo)
             except TaskTimeout:
                 results.append('timeout')

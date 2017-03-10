@@ -47,7 +47,7 @@ async def parent():
     await start_evt.set()
 
     print("Parent says send me a SIGHUP when you want me to leave with the kid")
-    await curio.SignalSet(signal.SIGHUP).wait()
+    await curio.SignalEvent(signal.SIGHUP).wait()
 
     print("Let's go")
     count_task = await curio.spawn(countdown, 10)

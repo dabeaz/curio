@@ -1900,65 +1900,112 @@ both a threaded and asynchronous world.
 Signals
 -------
 
-Unix signals are managed by the :class:`SignalSet` class.   This class operates
-as an asynchronous context manager.  The recommended usage looks like this::
+One way to manage Unix signals is to use the :class:`SignalQueue` class.
+This class operates as a queue, but you use it with an asynchronous context
+manager to enable the delivery of signals.  The usage looks like this::
 
     import signal
 
     async def coro():
         ...
-        async with SignalSet(signal.SIGUSR1, signal.SIGHUP) as sigset:
+        async with SignalQueue(signal.SIGUSR1, signal.SIGHUP) as sig_q:
               ...
-              signo = await sigset.wait()
+              signo = await sig_q.get()
               print('Got signal', signo)
               ...
 
-For all of the statements inside the context-manager, signals will
-be queued.  The `sigset.wait()` operation will return received
-signals one at a time from the signal queue.  Even though this queue
-contains signals as they were received by Python, be aware that 
+For all of the statements inside the context-manager, signals will be
+queued in the background.  The ``sig_q.get()`` operation will return
+received signals one at a time from the queue.  Even though this queue
+contains signals as they were received by Python, be aware that
 "reliable signaling" is not guaranteed.  Python only runs signal
-handlers periodically in the background and multiple signals might
-be collapsed into a single signal delivery.  
+handlers periodically in the background and multiple signals might be
+collapsed into a single signal delivery.
 
-Signals can be temporarily ignored using a normal context manager::
+Another way to receive signals is to use the :class:`SignalEvent` class.
+This is particularly useful for one-time signals such as the keyboard
+interrupt or ``SIGTERM`` signal.  Here's an example of how you might
+use a signal event to shutdown a task::
+
+    Goodbye = SignalEvent(signal.SIGINT, signal.SIGTERM)
+
+    async def child():
+        while True:
+            print('Spinning')
+            await sleep(1)
 
     async def coro():
-        ...
-        sigset = SignalSet(signal.SIGINT)
-        with sigset.ignore():
-              ...
-              # Signals temporarily disabled
-              ...
+        task = await spawn(child)
+        await Goodbye.wait()
+	print('Got signal. Goodbye')    
+	await task.cancel()
 
-Caution: Signal handling only works if the curio kernel is running in Python's
-main execution thread.  Also, mixing signals with threads, subprocesses, and other
-concurrency primitives is a well-known way to make your head shatter into
-small pieces.  Tread lightly.
+.. class:: SignalQueue(*signals)
 
-.. class:: SignalSet(*signals)
+   Create a queue for receiving signals. *signals* is one or more
+   signals as defined in the built-in :mod:`signal` module.  A 
+   ``SignalQueue`` is a proper queue.  Use the ``get()`` method
+   to receive a signal.  Other queue methods can be used as well.
+   For example, you can call ``put()`` to manually put a signal
+   number on the queue if you want (possibly useful in testing).
+   The queue must be used as an asynchronous-context manager for
+   signal delivery to enabled.
 
-   Represents a set of one or more Unix signals.  *signals* is a list of
-   signals as defined in the built-in :mod:`signal` module.
+.. class:: SignalEvent(*signals)
 
-The following methods are available on a :class:`SignalSet` instance. They
-may only be used in coroutines.
+   Create an event that allows signal waiting.  Use the ``wait()``
+   method to wait for arrival.  This is a proper ``Event`` object.
+   You can use other methods such as ``set()`` or ``is_set()``.
+   		 
 
-.. asyncmethod:: SignalSet.wait()
+The following functions are also defined for signal management::
 
-   Wait for one of the signals in the signal set to arrive. Returns
-   the signal number of the signal received.  Normally this method is
-   used inside an ``async with`` statement because this allows
-   received signals to be properly queued.  It can be used in
-   isolation, but be aware that this will only catch a single signal
-   right at that line of code.  It's possible that you might lose
-   signals if you use this method outside of a context manager.
+.. function::ignore_signals(signals)
 
-.. method:: SignalSet.ignore()
+   Return a context manager in which signals are ignored. ``signals`` is
+   a set of signal numbers from the ``signal`` module.  This
+   function may only be called from Python's main execution thread.
+   Note that signals are not delivered asynchronous to Curio via 
+   callbacks (they only come via queues or events). Because of this,
+   it's rarely necessary to mask signals.  You may be better off
+   blocking cancellation with the ``disable_cancellation()`` function
+   instead.
 
-   Returns a context manager wherein signals from the signal set are
-   temporarily disabled.  Note: This is a normal context manager--
-   use a normal ``with``-statement.
+.. function::enable_signals(signals)
+
+   Returns a context manager in which the Curio signaling system is
+   initialized for a given set of signals.  This function may only
+   be called by Python's main execution thread and is only needed
+   if you intend to run Curio in a separate thread.  ``signals``
+   should specify the complete set of signals that will be caught
+   in the application.   The main reason this is needed is that
+   signals can only be initialized in Python's main thread. If you
+   don't do this and you attempt to run Curio in a separate thread,
+   the other signal-related functionality will fail.
+
+These last two functions are mainly intended for use in setting up
+the runtime environment for Curio.  For example, if you needed to run
+Curio in a separate thread and your code involved signal handling,
+you'd need to do this::
+
+    import threading
+    import curio
+    import signal
+
+    allowed_signals = { signal.SIGINT, signal.SIGTERM, signal.SIGUSR1 }
+
+    async def main():
+         ...
+
+    if __name__ == '__main__':
+       with curio.enable_signals(allowed_signals):
+           t = threading.Thread(target=curio.run, args=(main,))
+           t.start()
+	   ...
+           t.join()
+
+Again, keep in mind you don't need to do this is Curio is running in the
+main thread.  Running in a separate thread is more of a special case.
 
 Asynchronous Metaprogramming
 ----------------------------

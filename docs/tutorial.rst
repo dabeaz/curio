@@ -359,7 +359,7 @@ Signals
 What kind of helicopter parent lets their child play Minecraft for a measly 5
 seconds?  Instead, let's have the parent allow the child to play as
 much as they want until a Unix signal arrives, indicating that it's
-time to go.  Modify the code to wait on a ``SignalSet`` like this::
+time to go.  Modify the code to wait on a ``SignalEvent`` like this::
 
     import signal, os
 
@@ -371,7 +371,7 @@ time to go.  Modify the code to wait on a ``SignalSet`` like this::
         print('Yes, go play')
         await start_evt.set()
         
-        await curio.SignalSet(signal.SIGHUP).wait()
+        await curio.SignalEvent(signal.SIGHUP).wait()
      
         print("Let's go")
         count_task = await curio.spawn(countdown(10))
@@ -654,7 +654,7 @@ Let's make a slightly more sophisticated echo server that responds
 to a Unix signal::
 
     import signal
-    from curio import run, spawn, SignalSet, CancelledError, tcp_server, current_task
+    from curio import run, spawn, SignalEvent, CancelledError, tcp_server, current_task
 
     clients = set()
 
@@ -677,15 +677,15 @@ to a Unix signal::
     
     async def main(host, port):
         while True:
-            async with SignalSet(signal.SIGHUP) as sigset:
-                print('Starting the server')
-                serv_task = await spawn(tcp_server(host, port, echo_client))
-                await sigset.wait()
-                print('Server shutting down')
-                await serv_task.cancel()
+	    goodbye = SignalEvent(signal.SIGHUP)
+            print('Starting the server')
+            serv_task = await spawn(tcp_server(host, port, echo_client))
+            await goodbye.wait()
+            print('Server shutting down')
+            await serv_task.cancel()
 
-                for task in list(clients):
-                    await task.cancel()
+            for task in list(clients):
+                await task.cancel()
 
     if __name__ == '__main__':
         run(main('', 25000))
