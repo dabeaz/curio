@@ -4,6 +4,7 @@ from collections import deque
 from curio import *
 import time
 import threading
+from curio.traps import _read_wait
 
 def test_queue_simple(kernel):
     results = []
@@ -258,6 +259,13 @@ def test_queue_put_timeout(kernel):
         'producer timeout'
     ]
 
+def test_queue_qsize(kernel):
+    async def main():
+        q = Queue()
+        repr(q)
+        await q.put(1)
+        assert q.qsize() == 1
+    kernel.run(main)
 
 def test_priority_queue(kernel):
     results = []
@@ -317,6 +325,12 @@ def test_lifo_queue(kernel):
 
     kernel.run(producer())
     assert results == list(reversed(items))
+
+def test_univ_queue_basic(kernel):
+    q = UniversalQueue()
+    assert q.empty()
+    assert q.qsize() == 0
+    assert not q.full()
 
 def test_univ_queue_sync_async(kernel):
     result = [ ]
@@ -487,13 +501,149 @@ def test_univ_queue_multiple_kernels(kernel):
 
     kernel.run(main())
 
+def test_univ_queue_withfd(kernel):
+    result = [ ]
+    async def consumer(q):
+        while True:
+            await _read_wait(q)
+            item = await q.get()
+            if item is None:
+                break
+            result.append(item)
+            await q.task_done()
 
+    def producer(q):
+        for i in range(10):
+            q.put(i)
+            time.sleep(0.1)
+        q.join()
+        assert True
 
+    async def main():
+        q = UniversalQueue(withfd=True)
+        t1 = await spawn(consumer(q))
+        t2 = threading.Thread(target=producer, args=(q,))
+        t2.start()
+        await run_in_thread(t2.join)
+        await q.put(None)
+        await t1.join()
+        assert result == [0,1,2,3,4,5,6,7,8,9]
+
+    kernel.run(main())
     
 
+def test_uqueue_simple_iter(kernel):
+    async def consumer(queue):
+        results = []
+        async for item in queue:
+            if item is None:
+                break
+            results.append(item)
+        assert results == list(range(10))
+
+    def tconsumer(queue):
+        results = []
+        for item in queue:
+            if item is None:
+                break
+            results.append(item)
+        assert results == list(range(10))
+
+    async def producer():
+        queue = UniversalQueue()
+        t = await spawn(consumer, queue)
+        for n in range(10):
+            await queue.put(n)
+        await queue.put(None)
+        await t.join()
+        t = threading.Thread(target=tconsumer, args=(queue,))
+        t.start()
+        for n in range(10):
+            await queue.put(n)
+        await queue.put(None)
+        await run_in_thread(t.join)
+
+    kernel.run(producer())
 
 
-    
+def test_uqueue_asyncio_iter(kernel):
+    async def consumer(queue):
+        results = []
+        async for item in queue:
+            if item is None:
+                break
+            results.append(item)
+        assert results == list(range(10))
+
+    async def producer():
+        queue = UniversalQueue(maxsize=2)
+        async with AsyncioLoop() as loop:
+            t = await spawn(loop.run_asyncio(consumer, queue))
+            for n in range(10):
+                await queue.put(n)
+            await queue.put(None)
+            await t.join()
+
+    kernel.run(producer())
+
+
+def test_uqueue_asyncio_prod(kernel):
+    async def consumer():
+        queue = UniversalQueue(maxsize=2)
+        async with AsyncioLoop() as loop:
+            t = await spawn(loop.run_asyncio(producer, queue))
+            results = []
+            async for item in queue:
+                await queue.task_done()
+                if item is None:
+                    break
+                results.append(item)
+            
+            assert results == list(range(10))
+            await t.join()
+
+    async def producer(queue):
+        for n in range(10):
+            await queue.put(n)
+        await queue.put(None)
+        await queue.join()
+
+    kernel.run(consumer())
+
+def test_uqueue_withfd_corner(kernel):
+    async def main():
+        queue = UniversalQueue(withfd=True)
+        await queue.put(1)
+        queue._get_sock.recv(1000)    # Drain the socket
+        item = await queue.get()
+        assert item == 1
+
+        # Fill the I/O buffer
+        while True:
+            try:
+                queue._put_sock.send(b'x'*10000)
+            except BlockingIOError:
+                break
+
+        # Make sure this doesn't fail
+        await queue.put(2)
+        item = await queue.get()
+        assert item == 2
+
+    kernel.run(main)
+
+def test_uqueue_put_cancel(kernel):
+    async def main():
+        queue = UniversalQueue(maxsize=1)
+        await queue.put(1)
+        try:
+            await timeout_after(0.1, queue.put(2))
+            assert False
+        except TaskTimeout:
+            assert True
+
+    kernel.run(main)
+
 
 
 

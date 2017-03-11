@@ -195,7 +195,7 @@ class UniversalQueue(object):
     def _put_send(self):
         if self._put_sock:
             try:
-                self._put_sock.put(b'\x01')
+                self._put_sock.send(b'\x01')
             except BlockingIOError:
                 pass
 
