@@ -383,6 +383,7 @@ def test_channel_hello_auth_fail(kernel, chs):
 
     kernel.run(main(*chs))
 
+@pytest.mark.skip
 def test_channel_slow_connect(kernel, chs):
     results = []
 
