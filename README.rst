@@ -112,17 +112,20 @@ threads and processes. The task model fully supports cancellation,
 timeouts, monitoring, and other features critical to writing reliable
 code.
 
-Projects Using Curio
---------------------
-
-Please feel free to add your project here.
-
 Talks Related to Curio
 ----------------------
 
 * `Fear and Awaiting in Async <https://www.youtube.com/watch?v=E-1Y4kSsAFc>`_, Keynote talk by David Beazley at PyOhio 2016.
 
 * `Topics of Interest (Async) <https://www.youtube.com/watch?v=ZzfHjytDceU>`_, Keynote talk by David Beazley at Python Brasil 2015.
+
+Other Resources
+---------------
+
+* `Some thoughts on asynchronous API design in a post-async/await world <https://vorpus.org/blog/some-thoughts-on-asynchronous-api-design-in-a-post-asyncawait-world/>`, by Nathaniel Smith.
+
+* `A Tale of Event Loops <https://github.com/AndreLouisCaron/a-tale-of-event-loops>`, by André Caron.
+
 
 The Big Question: Why?
 ----------------------
@@ -188,22 +191,24 @@ combined with any per-user limits imposed by the operating system.
  
 **Q: Can curio interoperate with other event loops?**
 
-A: At this time, no.  However, curio is a young project. It's
-something that might be added later.
+A: It depends on what you mean by the word "interoperate."  Curio's
+preferred mechanism of communication with the external world is a
+queue.  It is possible to communicate between Curio, threads, and
+other event loops using queues.  Curio can also submit work to 
+the ``asyncio`` event loop with the provision that it must be running
+separately in a different thread.
 
 **Q: How fast is curio?**
 
 A: In rough benchmarking of the simple echo server shown here, Curio
-runs between 75-150% faster than comparable code using coroutines in
-``asyncio``, 5-40% faster than the same coroutines running on
-``uvloop`` (an alternative event-loop for ``asyncio``), and at about
-the same speed as gevent.  This is on OS-X so your mileage might
+runs about 20% faster than comparable code using coroutines in
+``asyncio`` on Python 3.6. This is on OS-X so your mileage might
 vary. Curio is not as fast as servers that utilize threads, low-level
 callback-based event handling (e.g., low-level protocols in
 ``asyncio``), or direct coding in assembly language.  However, those
 approaches also don't involve coroutines (which is the whole point of
 Curio). See the ``examples/benchmark`` directory of the distribution
-for various testing programs.
+for various testing programs.  
 
 **Q: Is curio going to evolve into a framework?**
 
@@ -211,7 +216,7 @@ A: No. The current goal is merely to provide a small, simple library
 for performing concurrent I/O, task synchronization, and common
 systems operations involving interprocess communication and
 subprocesses. It is not anticipated that curio itself would evolve
-into a framework for implementing application level protocols such as
+into a giant framework for implementing application level protocols such as
 HTTP.  However, it might serve as a foundation for other packages that
 want to provide that kind of functionality.
 
@@ -220,7 +225,8 @@ want to provide that kind of functionality.
 A: Future work on curio will primarily focus on features related to
 performance, debugging, diagnostics, and reliability.  A main goal is
 to provide a robust environment for running and controlling concurrent
-tasks.
+tasks.  However, it's also supposed to be fun. A lot of time is
+being spent thinking about the API and how to make it pleasant.
 
 **Q: Is there a Curio sticker?**
 
@@ -228,8 +234,8 @@ A: No.
 
 **Q: How big is curio?**
 
-A: The complete library currently consists of fewer than 2500 lines of
-source statements.  This does not include blank lines and comments.
+A: The complete library currently consists of about 4000 lines of 
+source statements.  This does not include blank lines, comments, or tests.
 
 **Q: Can I contribute?**
 
