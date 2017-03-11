@@ -46,6 +46,46 @@ def test_queue_simple(kernel):
         'producer_done',
     ]
 
+def test_queue_simple_iter(kernel):
+    results = []
+    async def consumer(queue, label):
+        async for item in queue:
+            if item is None:
+                break
+            results.append((label, item))
+            await queue.task_done()
+        await queue.task_done()
+        results.append(label + ' done')
+
+    async def producer():
+        queue = Queue()
+        results.append('producer_start')
+        await spawn(consumer(queue, 'cons1'))
+        await spawn(consumer(queue, 'cons2'))
+        await sleep(0.1)
+        for n in range(4):
+            await queue.put(n)
+            await sleep(0.1)
+        for n in range(2):
+            await queue.put(None)
+        results.append('producer_join')
+        await queue.join()
+        results.append('producer_done')
+
+    kernel.run(producer())
+
+    assert results == [
+        'producer_start',
+        ('cons1', 0),
+        ('cons2', 1),
+        ('cons1', 2),
+        ('cons2', 3),
+        'producer_join',
+        'cons1 done',
+        'cons2 done',
+        'producer_done',
+    ]
+
 
 def test_queue_unbounded(kernel):
     results = []

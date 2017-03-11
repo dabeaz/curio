@@ -2,7 +2,7 @@
 #
 # Task debugging tools
 
-__all__ = [ 'longblock', 'schedtrace', 'traptrace' ]
+__all__ = [ 'longblock', 'schedtrace', 'traptrace', 'logcrash' ]
 
 import time
 import logging
@@ -39,7 +39,19 @@ class longblock(DebugBase):
         if self.check_filter(task):
             duration = time.monotonic() - self.start
             if duration > self.max_time:
-                log.log(self.level, 'Task id=%d (%s) ran for %s seconds' % (task.id, task, duration))
+                log.log(self.level, 'Task id=%d (%s) ran for %s seconds', task.id, task, duration)
+
+class logcrash(DebugBase):
+    '''
+    Report tasks that crash with an uncaught exception
+    '''
+    def __init__(self, level=logging.ERROR, **kwargs):
+        super().__init__(level=level, **kwargs)
+
+    def suspended(self, task, exc):
+        if exc and self.check_filter(task):
+            if not isinstance(exc, StopIteration):
+                log.log(self.level, 'Task %r crashed', task.id, exc_info=exc)
 
 class schedtrace(DebugBase):
     '''
@@ -83,7 +95,8 @@ class traptrace(schedtrace):
     def suspended(self, task, exc):
         self.report = False
 
-def create_debuggers(debug):
+
+def _create_debuggers(debug):
     '''
     Create debugger objects.  Called by the kernel to instantiate the objects.
     '''

@@ -71,9 +71,8 @@ class LocalsActivation(ActivationBase):
     def activate(self, kernel):
         @trap_patch(kernel, Traps._trap_spawn)
         def spawn(*args, trap):
-            newtask = trap(*args)
-            _copy_tasklocal(self.current, newtask)
-            return newtask
+            trap(*args)
+            _copy_tasklocal(self.current, self.current.next_value)
 
     def running(self, task):
         self.current = task

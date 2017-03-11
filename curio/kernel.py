@@ -67,7 +67,7 @@ from .task import Task
 from .traps import _read_wait, Traps
 from .local import LocalsActivation
 from . import meta
-from .debug import create_debuggers
+from .debug import _create_debuggers
 
 # ----------------------------------------------------------------------
 # async-generator support.
@@ -145,16 +145,13 @@ class Kernel(object):
         # Sleeping task queue
         self._sleeping = []
 
-        # Optional debug classes
-        self._debug = create_debuggers(debug)
-
         # Activations
         self._activations = activations if activations else []
         self._activations.insert(0, LocalsActivation())
         
         # Debugging (activations in disguise)
         if debug:
-            self._activations.extend(create_debuggers(debug))
+            self._activations.extend(_create_debuggers(debug))
 
     def __del__(self):
         if self._shutdown_funcs is not None:
@@ -268,7 +265,8 @@ class Kernel(object):
     # At first glance, this function is going to look giant and
     # insane. It is implementing the kernel runtime as a self-contained
     # black box.  There is no external API.  The only possible 
-    # communication is via traps define in curio/traps.py
+    # communication is via traps defined in curio/traps.py.  
+    # It's best to think of this as a "program within a program".  
 
     def _run_coro(kernel):
 
@@ -278,11 +276,11 @@ class Kernel(object):
 
         # ---- Kernel State
         current = None                          # Currently running task
-        selector = kernel._selector               # Event selector
-        ready = kernel._ready                     # Ready queue
-        tasks = kernel._tasks                     # Task table
-        sleeping = kernel._sleeping               # Sleeping task queue
-        wake_queue = kernel._wake_queue           # External wake queue
+        selector = kernel._selector             # Event selector
+        ready = kernel._ready                   # Ready queue
+        tasks = kernel._tasks                   # Task table
+        sleeping = kernel._sleeping             # Sleeping task queue
+        wake_queue = kernel._wake_queue         # External wake queue
 
         # ---- Bound methods
         selector_register = selector.register
@@ -542,7 +540,7 @@ class Kernel(object):
         def _trap_spawn(coro, daemon):
             task = _new_task(coro, daemon | current.daemon)    # Inherits daemonic status from parent
             task.parentid = current.id
-            return task
+            current.next_value = task
 
         # ----------------------------------------
         # Cancel a task
@@ -594,7 +592,7 @@ class Kernel(object):
         # ----------------------------------------
         # Return the current value of the kernel clock
         def _trap_clock():
-            return time_monotonic()
+            current.next_value = time_monotonic()
 
         # ----------------------------------------
         # Sleep for a specified period. Returns value of monotonic clock.
@@ -630,7 +628,7 @@ class Kernel(object):
                 if old_timeout and current.timeout > old_timeout:
                     current.timeout = old_timeout
 
-            return old_timeout
+            current.next_value = old_timeout
 
         # ----------------------------------------
         # Clear a previously set timeout
@@ -661,12 +659,12 @@ class Kernel(object):
         # ----------------------------------------
         # Return the running kernel
         def _trap_get_kernel():
-            return kernel
+            current.next_value = kernel
 
         # ----------------------------------------
         # Return the currently running task
         def _trap_get_current():
-            return current
+            current.next_value = current
 
         # ------------------------------------------------------------
         # Final setup.
@@ -863,16 +861,15 @@ class Kernel(object):
                                 trap = current._throw(current.next_exc)
                                 current.next_exc = None
 
-                            # Run the trap function
+                            # Run the trap function. These never raise exceptions
+                            # unless there's a fatal programming error in the kernel itself
                             try:
-                                result = traps[trap[0]](*trap[1:])
-                                if result is not None:
-                                    current.next_value = result
+                                traps[trap[0]](*trap[1:])
                             except Exception as e:
-                                current.next_exc = e
+                                raise KernelExit('Fatal Kernel Error') from e
 
-                # If here, the task has terminated. Set its final value based
-                # on how it terminated.
+                # Exception is raised during coroutine execution, the task
+                # terminated. Set final return code and break out
                 except StopIteration as e:
                     current.next_value = e.value
 

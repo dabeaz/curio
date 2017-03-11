@@ -1,6 +1,5 @@
 curio - concurrent I/O
 ======================
-.. image:: https://travis-ci.org/dabeaz/curio.svg?branch=master :target: https://travis-ci.org/dabeaz/curio
 
 Curio is a library for performing concurrent I/O and common system
 programming tasks such as launching subprocesses and farming work
