@@ -122,9 +122,9 @@ Talks Related to Curio
 Other Resources
 ---------------
 
-* `Some thoughts on asynchronous API design in a post-async/await world <https://vorpus.org/blog/some-thoughts-on-asynchronous-api-design-in-a-post-asyncawait-world/>`, by Nathaniel Smith.
+* `Some thoughts on asynchronous API design in a post-async/await world <https://vorpus.org/blog/some-thoughts-on-asynchronous-api-design-in-a-post-asyncawait-world/>`_, by Nathaniel Smith.
 
-* `A Tale of Event Loops <https://github.com/AndreLouisCaron/a-tale-of-event-loops>`, by André Caron.
+* `A Tale of Event Loops <https://github.com/AndreLouisCaron/a-tale-of-event-loops>`_, by André Caron.
 
 
 The Big Question: Why?
