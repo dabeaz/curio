@@ -4,7 +4,7 @@
 
 from collections import deque
 from curio import *
-
+import pytest
 import threading
 import time
 
@@ -323,6 +323,29 @@ class TestRLock:
             'simple releasing'
         ]
 
+    def test_rlock_notowner(self, kernel):
+        async def child1(lck):
+            await lck.acquire()
+            await sleep(0.25)
+            await lck.release()
+
+        async def child2(lck):
+            await sleep(0.1)
+            with pytest.raises(RuntimeError):
+                await lck.release()
+
+        async def main():
+            lck = RLock()
+            with pytest.raises(RuntimeError):
+                await lck.release()
+
+            t1 = await spawn(child1, lck)
+            t2 = await spawn(child2, lck)
+            await t1.join()
+            await t2.join()
+
+        kernel.run(main)
+
 
 class TestSemaphore:
 
@@ -459,6 +482,8 @@ class TestSemaphore:
         results = []
         async def task():
             sema = BoundedSemaphore(1)
+            await sema.acquire()
+            await sema.release()
             try:
                 await sema.release()
                 results.append('not here')
@@ -504,7 +529,7 @@ class TestCondition:
                 await sleep(0.1)
 
         async def main():
-            cond = Condition()
+            cond = Condition(Lock())
             q = deque()
             t1 = await spawn(consumer, cond, q, 'cons1')
             t2 = await spawn(consumer, cond, q, 'cons2')
@@ -671,6 +696,16 @@ class TestCondition:
             'cons2 done'
         ]
 
+    def test_condition_error(self, kernel):
+        async def main():
+            c = Condition()
+            with pytest.raises(RuntimeError):
+                await c.notify()
+                
+            with pytest.raises(RuntimeError):
+                await c.wait()
+
+        kernel.run(main)
 
 class TestAbide:
 
@@ -814,3 +849,101 @@ class TestAbide:
             'released',
             'tester finish'
         ]
+
+    def test_abide_file(self, kernel):
+        import os
+        dirname = os.path.dirname(__file__)
+        testinput = os.path.join(dirname, 'testdata.txt')
+        async def main():
+            async with abide(open(testinput), reserve_thread=True) as f:
+                assert f.closed == False
+                data = await f.read()
+                assert data == 'line 1\nline 2\nline 3\n'
+        kernel.run(main())
+
+    def test_badabide(self, kernel):
+        async def main():
+            with pytest.raises(TypeError):
+                async with abide(2):
+                    pass
+
+        kernel.run(main)
+
+class TestUniversalEvent:
+
+    def test_uevent_get_wait(self, kernel):
+        results = []
+        async def event_setter(evt, seconds):
+            results.append('sleep')
+            await sleep(seconds)
+            results.append('event_set')
+            await evt.set()
+
+        async def event_waiter(evt):
+            results.append('wait_start')
+            results.append(evt.is_set())
+            await evt.wait()
+            results.append('wait_done')
+            results.append(evt.is_set())
+            evt.clear()
+            results.append(evt.is_set())
+
+        async def main():
+            evt = UniversalEvent()
+            t1 = await spawn(event_waiter, evt)
+            t2 = await spawn(event_setter, evt, 1)
+            await t1.join()
+            await t2.join()
+
+        kernel.run(main())
+        assert results == [
+            'wait_start',
+            False,
+            'sleep',
+            'event_set',
+            'wait_done',
+            True,
+            False
+        ]
+
+
+    def test_uevent_get_twait(self, kernel):
+        results = []
+        async def event_setter(evt, seconds):
+            results.append('sleep')
+            await sleep(seconds)
+            results.append('event_set')
+            await evt.set()
+
+        def event_waiter(evt):
+            results.append('wait_start')
+            results.append(evt.is_set())
+            evt.wait()
+            results.append('wait_done')
+            results.append(evt.is_set())
+            evt.clear()
+            results.append(evt.is_set())
+
+        async def main():
+            evt = UniversalEvent()
+            t1 = threading.Thread(target=event_waiter, args=(evt,))
+            t1.start()
+            t2 = await spawn(event_setter, evt, 1)
+            await run_in_thread(t1.join)
+            await t2.join()
+
+        kernel.run(main())
+        assert results == [
+            'wait_start',
+            False,
+            'sleep',
+            'event_set',
+            'wait_done',
+            True,
+            False
+        ]
+
+def test_repr():
+    # For test coverage
+    for cls in [Lock, Event, Semaphore, BoundedSemaphore, Condition, RLock, UniversalEvent ]:
+        repr(cls())

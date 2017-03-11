@@ -68,6 +68,9 @@ class UniversalEvent(object):
     def is_set(self):
         return self._evt.is_set()
 
+    def clear(self):
+        self._evt.clear()
+
     def wait(self):
         self._evt.wait()
 
@@ -146,9 +149,9 @@ class RLock(_LockBase):
         me = await current_task()
 
         if self._owner is not me:
-
             await self._lock.acquire()
             self._owner = me
+
         self._count += 1
         return True
 
@@ -173,13 +176,14 @@ class RLock(_LockBase):
         >>>          'another coroutine acquires this lock')
 
         """
-        if not await current_task() is self._owner:
-            raise RuntimeError('RLock can only be released by the owner')
         if not self.locked():
             raise RuntimeError('RLock is not locked')
+        if not await current_task() is self._owner:
+            raise RuntimeError('RLock can only be released by the owner')
         self._count -= 1
         if self._count == 0:
             await self._lock.release()
+            self._owner = None
 
     def locked(self):
         return self._count > 0

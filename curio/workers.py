@@ -328,9 +328,6 @@ class ThreadWorker(object):
         finally:
             done_evt.set()
 
-    async def run(self, func, *args, call_on_cancel=None):
-        return await self.apply(func, args, call_on_cancel)
-
 class ProcessWorker(object):
     '''
     Managed process worker for running CPU-intensive tasks.  The main
@@ -391,9 +388,6 @@ class ProcessWorker(object):
         except CancelledError:
             self.shutdown()
             raise
-
-    async def run(self, func, *args):
-        return await self.apply(func, args)
 
 # Pool of workers for carrying out jobs on behalf of curio tasks.
 #

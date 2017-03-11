@@ -218,7 +218,7 @@ class Channel(object):
                     if authkey:
                         await c.authenticate_server(authkey)
                 break
-            except (TaskTimeout, AuthenticationError):
+            except (TaskTimeout, AuthenticationError, EOFError):
                 await c.close()
                 del c
                 del client_stream
@@ -249,35 +249,3 @@ class Channel(object):
         if self.sock:
             await self.sock.close()
         self.sock = None
-
-class Listener(object):
-
-    def __init__(self, address, family=socket.AF_INET, backlog=1, authkey=None):
-        self._sock = socket.socket(family, socket.SOCK_STREAM)
-        if family == socket.AF_INET:
-            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-        self._sock.bind(address)
-        self._sock.listen(backlog)
-        self._authkey = authkey
-
-    async def accept(self):
-        client, addr = await self._sock.accept()
-        fileno = client.detach()
-        ch = Connection(FileStream(open(fileno, 'rb', buffering=0)),
-                        FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
-        if self._authkey:
-            await ch.authenticate_server(self._authkey)
-        return ch
-
-    async def close(self):
-        await self._sock.close()
-
-async def Client(address, family=socket.AF_INET, authkey=None):
-    sock = socket.socket(family, socket.SOCK_STREAM)
-    await sock.connect(address)
-    fileno = sock.detach()
-    ch = Connection(FileStream(open(fileno, 'rb', buffering=0)),
-                    FileStream(open(fileno, 'wb', buffering=0, closefd=False)))
-    if authkey:
-        await ch.authenticate_client(authkey)
-    return ch

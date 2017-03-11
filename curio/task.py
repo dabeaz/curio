@@ -77,9 +77,6 @@ class Task(object):
             elif not self.daemon:
                 log.warning('%r never joined', self)
 
-    def _finalize_agen(self, agen):
-        print("Task %r -> Finalize %r" % (self, agen))
-
     async def join(self):
         '''
         Wait for a task to terminate.  Returns the return value (if any)

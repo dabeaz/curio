@@ -4,7 +4,7 @@
 # The curio->asyncio bridge runs a separate asyncio event loop in a different thread,
 # which has coroutines submitted to it over the course of the kernel's lifetime.
 
-__all__ = ["acb"]
+__all__ = [ 'AsyncioLoop' ]
 
 # -- Standard library
 
@@ -17,36 +17,6 @@ from .traps import _get_kernel, _future_wait
 from .sync import Event
 from . import task
 from . import workers
-
-async def acb(coro):
-    '''
-    Runs a coroutine in the current event loop running alongside this kernel.
-    '''
-    kernel = await _get_kernel()
-    if not hasattr(kernel, 'asyncio_loop'):
-        loop = kernel.asyncio_loop = asyncio.new_event_loop()
-        
-        def _asyncio_thread():
-            asyncio.set_event_loop(loop)
-            loop.run_forever()
-        
-        threading.Thread(target=_asyncio_thread).start()
-        kernel._call_at_shutdown(lambda: loop.call_soon_threadsafe(loop.stop))
-
-    # How this works:
-    # First, it schedules a new coroutine on the kernel's asyncio loop,
-    # which will be running alongside.
-    # Then, it will simply wait for the result in another thread (yay threading!)
-    #
-    # Possible improvements:
-    #  1) Wrap the future in a Task which can be `.join`'d on rather than
-    #     waiting on an event.
-    #  2) Force the user to pass their own loop in, instead of having the kernel
-    #     manage it.
-    fut = asyncio.run_coroutine_threadsafe(coro, kernel.asyncio_loop)
-
-    await _future_wait(fut)
-    return fut.result
 
 class AsyncioLoop(object):
     '''

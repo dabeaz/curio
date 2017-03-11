@@ -2,6 +2,7 @@
 
 import os.path
 from curio import *
+import pytest
 
 dirname = os.path.dirname(__file__)
 testinput = os.path.join(dirname, 'testdata.txt')
@@ -81,6 +82,25 @@ def test_readiter(kernel):
 
     kernel.run(main())
 
+def test_read_anext(kernel):
+    async def main():
+        async with aopen(testinput, 'r') as f:
+            lines = []
+            while True:
+                line = await anext(f, '')
+                if not line:
+                    break
+                lines.append(line)
+
+        assert lines == ['line 1\n', 'line 2\n', 'line 3\n']
+
+    kernel.run(main())
+
+def test_bad_usage(kernel):
+    async def main():
+        f = aopen(testinput, 'r')
+        with pytest.raises(RuntimeError):
+            await f.read()
 
 wlines = ['line1\n', 'line2\n', 'line3\n']
 
