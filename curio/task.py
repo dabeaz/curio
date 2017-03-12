@@ -4,7 +4,6 @@
 
 # -- Standard library
 
-import inspect
 import warnings
 import logging
 
@@ -15,6 +14,7 @@ log = logging.getLogger(__name__)
 from .errors import *
 from .traps import *
 from .sched import SchedBarrier
+from . import meta
 
 __all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
@@ -167,10 +167,7 @@ async def spawn(corofunc, *args, daemon=False, allow_cancel=True):
     allow_cancel=False is specified, the task disables the delivery of
     cancellation related exceptions (including timeouts).
     '''
-    if inspect.iscoroutine(corofunc):
-        coro = corofunc
-    else:
-        coro = corofunc(*args)
+    coro = meta.instantiate_coroutine(corofunc, *args)
     task = await _spawn(coro, daemon)
     task.allow_cancel = allow_cancel
     return task
@@ -496,7 +493,8 @@ class _TimeoutAfter(object):
     def __exit__(self, *args):
         return thread.AWAIT(self.__aexit__(*args))
 
-async def _timeout_after_func(clock, absolute, coro, ignore=False, timeout_result=None):
+async def _timeout_after_func(clock, absolute, coro, args, ignore=False, timeout_result=None):
+    coro = meta.instantiate_coroutine(coro, *args)
     task = await current_task()
     if not absolute and clock:
         clock += await _clock()
@@ -539,9 +537,7 @@ def timeout_at(clock, coro=None, *args):
     if coro is None:
         return _TimeoutAfter(clock, True)
     else:
-        if not inspect.iscoroutine(coro):
-            coro = coro(*args)
-        return _timeout_after_func(clock, True, coro)
+        return _timeout_after_func(clock, True, coro, args)
 
 
 def timeout_after(seconds, coro=None, *args):
@@ -563,9 +559,7 @@ def timeout_after(seconds, coro=None, *args):
     if coro is None:
         return _TimeoutAfter(seconds, False)
     else:
-        if not inspect.iscoroutine(coro):
-            coro = coro(*args)
-        return _timeout_after_func(seconds, False, coro)
+        return _timeout_after_func(seconds, False, coro, args)
 
 
 def ignore_at(clock, coro=None, *args, timeout_result=None):
@@ -576,9 +570,7 @@ def ignore_at(clock, coro=None, *args, timeout_result=None):
     if coro is None:
         return _TimeoutAfter(clock, True, ignore=True, timeout_result=timeout_result)
     else:
-        if not inspect.iscoroutine(coro):
-            coro = coro(*args)
-        return _timeout_after_func(clock, True, coro, ignore=True, timeout_result=timeout_result)
+        return _timeout_after_func(clock, True, coro, args, ignore=True, timeout_result=timeout_result)
 
 
 def ignore_after(seconds, coro=None, *args, timeout_result=None):
@@ -612,9 +604,7 @@ def ignore_after(seconds, coro=None, *args, timeout_result=None):
     if coro is None:
         return _TimeoutAfter(seconds, False, ignore=True, timeout_result=timeout_result)
     else:
-        if not inspect.iscoroutine(coro):
-            coro = coro(*args)
-        return _timeout_after_func(seconds, False, coro, ignore=True, timeout_result=timeout_result)
+        return _timeout_after_func(seconds, False, coro, args, ignore=True, timeout_result=timeout_result)
 
 
 from . import queue

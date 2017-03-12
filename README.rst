@@ -7,18 +7,20 @@ out to thread and process pools.  It uses Python coroutines and the
 explicit async/await syntax introduced in Python 3.5.  Its programming
 model is based on cooperative multitasking and existing programming
 abstractions such as threads, sockets, files, subprocesses, locks, and
-queues.  You'll find it to be small and fast.
+queues.  You'll find it to be small, fast, and fun.
 
 Important Disclaimer
 --------------------
 
 Curio is experimental software that currently only works on POSIX
-systems (OS X, Linux, etc.).  It is a work in progress and it may
-change at any time.  Although curio can be installed via pip, the
-version uploaded on PyPI is only updated occasionally.  You'll
-probably get better results using the version cloned from github.
-You'll also want to make sure you're using Python 3.6. Of course, your
-mileage might vary.
+systems (OS X, Linux, etc.).  Although it is a work in progress, it is
+extensively documented and has a fairly comprehensive test suite.
+Just be aware that the programming API is fluid and could change at
+any time.  Although curio can be installed via pip, the version
+uploaded on PyPI is only updated occasionally.  You'll probably get
+better results using the version cloned from github.  You'll also want
+to make sure you're using Python 3.6. Of course, your mileage might
+vary.
 
 News
 ----
@@ -212,7 +214,7 @@ for various testing programs.
 
 **Q: Is curio going to evolve into a framework?**
 
-A: No. The current goal is merely to provide a small, simple library
+A: Unclear. The current goal is merely to provide a small, simple library
 for performing concurrent I/O, task synchronization, and common
 systems operations involving interprocess communication and
 subprocesses. It is not anticipated that curio itself would evolve
@@ -234,8 +236,8 @@ A: No.
 
 **Q: How big is curio?**
 
-A: The complete library currently consists of about 4000 lines of 
-source statements.  This does not include blank lines, comments, or tests.
+A: The complete library currently consists of about 3200 statements
+as reported in coverage tests.
 
 **Q: Can I contribute?**
 

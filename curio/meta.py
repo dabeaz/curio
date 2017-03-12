@@ -8,7 +8,7 @@
 __all__ = [
     'iscoroutinefunction', 'finalize', 'blocking', 'cpubound',
     'awaitable', 'asyncioable', 'sync_only', 'AsyncABC',
-    'AsyncObject', 'curio_running'
+    'AsyncObject', 'curio_running', 'instantiate_coroutine',
  ]
 
 # -- Standard Library
@@ -77,8 +77,35 @@ def iscoroutinefunction(func):
     '''
     if isinstance(func, partial):
         return iscoroutinefunction(func.func)
-    return inspect.iscoroutinefunction(func)
+    if hasattr(func, '__func__'):
+        return iscoroutinefunction(func.__func__)
+    return inspect.iscoroutinefunction(func) or hasattr(func, '_awaitable')
 
+def instantiate_coroutine(corofunc, *args, **kwargs):
+    '''
+    Try to instantiate a coroutine. If corofunc is already a coroutine,
+    we're done.  If it's a coroutine function, we call it inside an
+    async context with the given arguments to create a coroutine.  If
+    it's not a coroutine, we call corofunc(*args, **kwargs) and hope
+    for the best.
+    '''
+    if inspect.iscoroutine(corofunc):
+        return corofunc
+
+    if not iscoroutinefunction(corofunc):
+        coro = corofunc(*args, **kwargs)
+        if not inspect.iscoroutine(coro):
+            raise TypeError('Could not create coroutine from %s' % corofunc)
+        return coro
+
+    async def context():
+        return corofunc(*args, **kwargs)
+
+    try:
+        context().send(None)
+    except StopIteration as e:
+        return e.value
+    
 def blocking(func):
     '''
     Decorator indicating that a function performs a blocking operation.
@@ -169,6 +196,7 @@ def awaitable(syncfunc):
                 return syncfunc(*args, **kwargs)
         wrapper._syncfunc = syncfunc
         wrapper._asyncfunc = asyncfunc
+        wrapper._awaitable = True
         wrapper.__doc__ = syncfunc.__doc__ or asyncfunc.__doc__
         return wrapper
     return decorate
@@ -203,6 +231,7 @@ def asyncioable(awaitablefunc):
                     return asyncfunc(*args, **kwargs)
             else:
                 return awaitablefunc._syncfunc(*args, **kwargs)
+        wrapper._awaitable = True
         return wrapper
     return decorate
 

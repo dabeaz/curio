@@ -53,7 +53,6 @@ import sys
 import logging
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
-import inspect
 from contextlib import contextmanager
 import threading
 
@@ -181,12 +180,8 @@ class Kernel(object):
         if corofunc and self._crashed:
             raise RuntimeError("Can't submit further tasks to a crashed kernel.")
 
-        if inspect.iscoroutine(corofunc):
-            coro = corofunc
-        elif corofunc:
-            if not meta.iscoroutinefunction(corofunc):
-                raise TypeError('run() must be passed a coroutine or an async-function')
-            coro = corofunc(*args)
+        if corofunc:
+            coro = meta.instantiate_coroutine(corofunc, *args)
         else:
             coro = None
 

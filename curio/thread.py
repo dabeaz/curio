@@ -30,7 +30,7 @@ class AsyncThread(object):
 
         self._request = Future()
         self._done_evt = threading.Event()
-        self._terminate_evt = sync.Event()
+        self._terminate_evt = sync.UniversalEvent()
 
         self._coro = None
         self._result_value = None

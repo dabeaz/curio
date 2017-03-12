@@ -1053,6 +1053,38 @@ def test_io_registration(kernel):
 
     kernel.run(main)
 
+from functools import partial
+
+def test_coro_partial(kernel):
+    async def func(x, y, z):
+        assert x == 1
+        assert y == 2
+        assert z == 3
+        return True
+        
+    async def main():
+        assert await func(1, 2, 3)
+        assert await ignore_after(1, func(1,2,3))
+        assert await ignore_after(1, func, 1, 2, 3)
+        assert await ignore_after(1, partial(func, 1, 2), 3)
+        assert await ignore_after(1, partial(func, z=3), 1, 2)
+
+        # Try spawns
+        t = await spawn(func(1,2,3))
+        assert await t.join()
+
+        t = await spawn(func, 1, 2, 3)
+        assert await t.join()
+
+        t = await spawn(partial(func, 1, 2), 3)
+        assert await t.join()
+
+        t = await spawn(partial(func, z=3), 1, 2)
+        assert await t.join()
+
+    kernel.run(main)
+
+        
 
 
         

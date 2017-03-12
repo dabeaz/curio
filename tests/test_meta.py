@@ -93,4 +93,44 @@ def test_bad_awaitable():
         def spam(x, y, z):
             pass
 
+
+from functools import partial
+
+def test_awaitable_partial(kernel):
+    def func(x, y, z):
+        assert False
+
+    @meta.awaitable(func)
+    async def func(x, y, z):
+        assert x == 1
+        assert y == 2
+        assert z == 3
+        return True
+        
+    async def main():
+        assert await func(1, 2, 3)
+        assert await ignore_after(1, func(1,2,3))
+        assert await ignore_after(1, func, 1, 2, 3)
+        assert await ignore_after(1, partial(func, 1, 2), 3)
+        assert await ignore_after(1, partial(func, z=3), 1, 2)
+
+        # Try spawns
+        t = await spawn(func(1,2,3))
+        assert await t.join()
+
+        t = await spawn(func, 1, 2, 3)
+        assert await t.join()
+
+        t = await spawn(partial(func, 1, 2), 3)
+        assert await t.join()
+
+        t = await spawn(partial(func, z=3), 1, 2)
+        assert await t.join()
+
+    kernel.run(main)
+    kernel.run(func, 1, 2, 3)
+    kernel.run(partial(func, 1, 2), 3)
+    kernel.run(partial(func, z=3), 1, 2)
+
+
     
