@@ -4,6 +4,7 @@ import sys
 from curio import subprocess
 from curio import *
 import os
+import pytest
 
 # ---- Test subprocesses and worker task related functions
 
@@ -80,3 +81,61 @@ def test_timeout(kernel):
 
     kernel.run(subproc())
     assert results == ['timeout', b't-minus 4\n', b'']
+
+def test_universal():
+    with pytest.raises(RuntimeError):
+        p = subprocess.Popen([executable, '-m', 'bad'], universal_newlines=True)
+
+def test_stdin_pipe(kernel):
+    async def main():
+         p1 = subprocess.Popen([executable, os.path.join(dirname, 'child.py')], stdout=subprocess.PIPE)
+         p2 = subprocess.Popen([executable, os.path.join(dirname, 'ichild.py')], stdin=p1.stdout, stdout=subprocess.PIPE)
+         out = await p2.stdout.read()
+         assert out == b'4\n'
+
+    kernel.run(main())
+
+def test_check_output_stdin(kernel):
+    async def main():
+         out = await subprocess.check_output([executable, os.path.join(dirname, 'ichild.py')],
+                                             input=b'Line1\nLine2\nLine3\n')
+         assert out == b'3\n'
+
+    kernel.run(main())
+
+def test_no_input_cancel(kernel):
+    async def child():
+        p = subprocess.Popen([executable, os.path.join(dirname, 'child.py')], stdin=subprocess.PIPE)
+        try:
+            out = await p.communicate(input=b'x'*10000000)
+            assert False
+        except CancelledError as e:
+            assert e.stdout == b''
+            assert e.stderr == b''
+            raise
+
+    async def main():
+        t = await spawn(child)
+        await sleep(0.1)
+        await t.cancel()
+        
+    kernel.run(main())
+
+def test_popen_join(kernel):
+    async def main():
+         p = subprocess.Popen([executable, '-c', 'import time;time.sleep(1)'])
+         code = await p.wait()
+         assert code == 0
+
+    kernel.run(main)
+
+def test_io_error(kernel):
+    async def main():
+         with pytest.raises(BrokenPipeError):
+             out = await subprocess.check_output([executable, '-c', 'import sys, time; sys.stdin.close(); time.sleep(1)'],
+                                           input=b'x'*10000000)
+
+    kernel.run(main)
+
+
+         

@@ -4,7 +4,7 @@ from curio import *
 from curio.socket import *
 import io
 import socket as std_socket
-
+import pytest
 
 def test_socket_blocking(kernel):
     '''
@@ -552,3 +552,4 @@ def test_double_recv(kernel):
         b'Msg',
         'handler done'
         ]
+

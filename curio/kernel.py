@@ -768,7 +768,7 @@ class Kernel(object):
 
             try:
                 events = selector_select(timeout)
-            except OSError as e:
+            except OSError as e:     # pragma: no cover
                 # If there is nothing to select, windows throws an
                 # OSError, so just set events to an empty list.
                 log.error('Exception %r from selector_select ignored ' % e,
@@ -896,7 +896,7 @@ def run(corofunc, *args, with_monitor=False, selector=None,
 
 
     # Check if a monitor has been requested
-    if with_monitor or 'CURIOMONITOR' in os.environ:
+    if with_monitor or 'CURIOMONITOR' in os.environ:   # pragma: no cover
         from .monitor import Monitor
         m = Monitor(kernel)
         kernel._call_at_shutdown(m.close)

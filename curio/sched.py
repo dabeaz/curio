@@ -12,7 +12,7 @@
 from abc import ABC, abstractmethod
 from collections import deque
 
-class SchedBase(ABC):
+class SchedBase(ABC):     # pragma: no cover
 
     @abstractmethod
     def __len__(self):

@@ -48,7 +48,7 @@ try:
     from ssl import SSLWantReadError, SSLWantWriteError
     WantRead = (BlockingIOError, InterruptedError, SSLWantReadError)
     WantWrite = (BlockingIOError, InterruptedError, SSLWantWriteError)
-except ImportError:
+except ImportError:    # pragma: no cover
     WantRead = (BlockingIOError, InterruptedError)
     WantWrite = (BlockingIOError, InterruptedError)
 
@@ -537,6 +537,8 @@ class FileStream(StreamBase):
             raise
 
     async def flush(self):
+        if not self._file:
+            return
         while True:
             try:
                 return self._file.flush()

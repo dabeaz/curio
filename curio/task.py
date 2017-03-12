@@ -112,7 +112,7 @@ class Task(object):
             await _scheduler_wait(self.joining, 'TASK_JOIN')
         return True
 
-    def pdb(self):
+    def pdb(self):      # pragma: no cover
         '''
         Run a pdb post-mortem on any pending exception information
         '''

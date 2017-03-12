@@ -4,6 +4,7 @@ import time
 import pytest
 from curio import *
 kernel_clock = clock
+from curio import traps
 
 def test_hello(kernel):
 
@@ -929,3 +930,130 @@ def test_task_gather_timeout(kernel):
         
     kernel.run(main)
 
+def test_reentrant_kernel(kernel):
+    async def child():
+        pass
+
+    async def main():
+        with pytest.raises(RuntimeError):
+            kernel.run(child)
+
+    kernel.run(main)
+
+def test_submit_errors(kernel):
+    import types
+    @types.coroutine
+    def bad_trap():
+        yield (123, "bad")
+
+    async def main():
+        await bad_trap()
+
+    with pytest.raises(TypeError):
+        kernel.run(abs)
+
+    with pytest.raises(KernelExit):
+        kernel.run(main)
+
+    with pytest.raises(RuntimeError):
+        kernel.run(main)
+
+    # Repair the kernel (only for testing)
+    kernel._crashed = False
+    kernel._shutdown_funcs = []
+    kernel._kernel_task_id = None
+
+from curio.traps import *
+
+def test_pending_cancellation(kernel):
+    async def main():
+        self = await _get_current()
+        self.cancel_pending = CancelledError()
+
+        with pytest.raises(CancelledError):
+            await _read_wait(None)
+
+        self.cancel_pending = CancelledError()        
+        with pytest.raises(CancelledError):
+            await _future_wait(None)
+
+        self.cancel_pending = CancelledError()
+        with pytest.raises(CancelledError):
+            await _scheduler_wait(None, None)
+
+        self.cancel_pending = TaskTimeout()
+        try:
+            await _unset_timeout(None)
+            assert True
+        except TaskTimeout:
+            assert False
+            
+    kernel.run(main)
+
+from functools import partial
+
+def test_single_stepping(kernel):
+    value = 0
+    async def child():
+        nonlocal value
+        await sleep(0)
+        value = 1
+        await sleep(0.5)
+        value = 2
+
+    task = kernel.run(partial(spawn, child, daemon=True))
+    while value < 1:
+        kernel.run(timeout=None)
+    assert True
+    while value < 2:
+        kernel.run(timeout=0.1)
+    assert True
+
+    with pytest.raises(TaskError):
+        kernel.run(sleep,1,timeout=0.1)
+
+def test_io_registration(kernel):
+    # Tests some tricky corner cases of the kernel that are difficult
+    # to get to under normal socket usage
+    import socket
+    s1, s2 = socket.socketpair()
+    s1.setblocking(False)
+    s2.setblocking(False)
+    
+    # Fill the send buffer
+    while True:
+        try:
+            s1.send(b'x'*100000)
+        except BlockingIOError:
+            break
+
+    async def reader1():
+        await traps._read_wait(s1.fileno())
+        data = s1.recv(100)
+        assert data == b'hello'
+
+    async def writer1():
+        await traps._write_wait(s1.fileno())
+        assert False
+
+    async def writer2():
+        with pytest.raises(CurioError):
+            await traps._write_wait(s1.fileno())
+
+    async def main():
+        t0 = await spawn(reader1)
+        t1 = await spawn(writer1)
+        t2 = await spawn(writer2)
+        await t2.join()
+        await t1.cancel()
+        s2.send(b'hello')
+        await t0.join()
+        s1.close()
+        s2.close()
+
+    kernel.run(main)
+
+
+
+        
+            

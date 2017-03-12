@@ -153,3 +153,27 @@ def test_within_thread():
         t.join()
         if exceptions:
             raise exceptions.pop()
+
+
+def test_outside_context(kernel):
+    # Test what happens if you access locals in environment where no task is running right now
+    local = Local()
+    t1 = None
+
+    async def inner():
+        assert not hasattr(local, "a")
+        local.a = "inner"
+        assert local.a == "inner"
+        await sleep(1)
+
+    async def main():
+        nonlocal t1
+        t1 = await spawn(inner)
+        await t1.join()
+
+    kernel.run(main())
+    with pytest.raises(RuntimeError):
+        local.a
+
+
+

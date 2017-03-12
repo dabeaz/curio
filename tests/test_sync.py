@@ -753,7 +753,7 @@ class TestAbide:
         def tester(lck, evt):
             with lck:
                 results.append('tester')
-                time.sleep(0.1)
+                time.sleep(0.2)
             evt.wait()
             with lck:
                 results.append('tester finish')
@@ -762,7 +762,7 @@ class TestAbide:
             lck = threading.Lock()
             evt = threading.Event()
             t1 = await spawn(run_in_thread, tester, lck, evt)
-            await sleep(0.01)
+            await sleep(0.1)
             t2 = await spawn(waiter, lck, evt)
             await t1.join()
             await t2.join()
@@ -792,7 +792,7 @@ class TestAbide:
             with lck:
                 results.append('tester')
                 time.sleep(1)
-            time.sleep(0.1)
+            time.sleep(0.2)
             with lck:
                 results.append('tester2')
             evt.wait()
@@ -803,7 +803,7 @@ class TestAbide:
             lck = threading.Lock()
             evt = threading.Event()
             t1 = await spawn(run_in_thread, tester, lck, evt)
-            await sleep(0.01)
+            await sleep(0.1)
             t2 = await spawn(waiter, lck, evt)
             await t1.join()
             await t2.join()
@@ -828,7 +828,7 @@ class TestAbide:
         def tester(lck, evt):
             with lck:
                 results.append('tester')
-                time.sleep(0.1)
+                time.sleep(0.2)
             evt.wait()
             with lck:
                 results.append('tester finish')
@@ -837,7 +837,7 @@ class TestAbide:
             lck = threading.RLock()
             evt = threading.Event()
             t1 = await spawn(run_in_thread, tester, lck, evt)
-            await sleep(0.01)
+            await sleep(0.1)
             t2 = await spawn(waiter, lck, evt)
             await t1.join()
             await t2.join()
