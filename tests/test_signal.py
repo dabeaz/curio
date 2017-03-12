@@ -9,8 +9,10 @@ import os
 def test_task_signal(kernel):
     results = []
 
+    evt = Event()
     async def child():
         async with SignalQueue(signal.SIGUSR1, signal.SIGUSR2) as sig:
+            await evt.set()
             signo = await sig.get()
             results.append(signo)
             signo = await sig.get()
@@ -18,7 +20,7 @@ def test_task_signal(kernel):
 
     async def main():
         task = await spawn(child())
-        await sleep(0.1)
+        await evt.wait()
         results.append('sending USR1')
         os.kill(os.getpid(), signal.SIGUSR1)
         await sleep(0.1)
@@ -40,10 +42,12 @@ def test_task_signal(kernel):
 def test_task_signal_event(kernel):
     results = []
 
+    SigUSR1 = SignalEvent(signal.SIGUSR1)
+    SigUSR2 = SignalEvent(signal.SIGUSR2)
     async def child():
-        await SignalEvent(signal.SIGUSR1).wait()
+        await SigUSR1.wait()
         results.append(signal.SIGUSR1)
-        await SignalEvent(signal.SIGUSR2).wait()
+        await SigUSR2.wait()
         results.append(signal.SIGUSR2)
 
     async def main():
