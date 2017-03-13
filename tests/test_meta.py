@@ -113,6 +113,7 @@ def test_awaitable_partial(kernel):
         assert await ignore_after(1, func, 1, 2, 3)
         assert await ignore_after(1, partial(func, 1, 2), 3)
         assert await ignore_after(1, partial(func, z=3), 1, 2)
+        assert await ignore_after(1, partial(partial(func, 1), 2), 3)
 
         # Try spawns
         t = await spawn(func(1,2,3))
@@ -126,6 +127,10 @@ def test_awaitable_partial(kernel):
 
         t = await spawn(partial(func, z=3), 1, 2)
         assert await t.join()
+
+        t = await spawn(partial(partial(func, 1), 2), 3)
+        assert await t.join()
+
 
     kernel.run(main)
     kernel.run(func, 1, 2, 3)

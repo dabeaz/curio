@@ -17,7 +17,7 @@ from .errors import CancelledError
 # Signal handling task in the child process
 async def _aside_term(task):
     from . import signal as curio_signal
-    await curio_signal.SignalSet(signal.SIGTERM).wait()
+    await curio_signal.SignalEvent(signal.SIGTERM).wait()
     raise SystemExit(1)
 
 # Task that runs the requested coroutine
@@ -37,7 +37,7 @@ def main(argv):
         sys.modules['__main__'] = mod
     (corofunc, args) = pickle.loads(base64.b64decode(sys.argv[2]))
     try:
-        run(_aside_child(corofunc, args)
+        run(_aside_child(corofunc, args))
     except CancelledError as e:
         raise SystemExit(1)
 

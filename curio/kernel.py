@@ -66,7 +66,7 @@ from .task import Task
 from .traps import _read_wait, Traps
 from .local import LocalsActivation
 from . import meta
-from .debug import _create_debuggers
+from .debug import _create_debuggers, logcrash
 
 # ----------------------------------------------------------------------
 # async-generator support.
@@ -872,7 +872,7 @@ class Kernel(object):
                     current.next_exc = e
 
 def run(corofunc, *args, with_monitor=False, selector=None,
-        debug=None, activations=None, timeout=None, **extra):
+        debug=(logcrash,), activations=None, timeout=None, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This

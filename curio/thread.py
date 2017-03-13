@@ -114,43 +114,6 @@ def AWAIT(coro):
     else:
         raise errors.AsyncOnlyError('Must be used as async')
 
-class _AContextRunner(object):
-    def __init__(self, acontext):
-        self.acontext = acontext
-
-    def __enter__(self):
-        return AWAIT(self.acontext.__aenter__())
-
-    def __exit__(self, ty, val, tb):
-        return AWAIT(self.acontext.__aexit__(ty, val, tb))
-
-def async_context(acontext):
-    '''
-    Run an asynchronous context-manager in an asynchronous thread.
-    '''
-    return _AContextRunner(acontext)
-
-class _AIterRunner(object):
-    def __init__(self, aiter):
-        self.aiter = aiter
-
-    def __iter__(self):
-        return _AIterRunner(self.aiter.__aiter__())
-
-    def __next__(self):
-        try:
-            return AWAIT(self.aiter.__anext__())
-
-        except StopAsyncIteration as e:
-            raise StopIteration from None
-
-def async_iter(aiter):
-    '''
-    Run an asynchronous iterator in an asynchronous thread.
-    '''
-    return _AIterRunner(aiter)
-
-
 def async_thread(func=None, *, daemon=False):
     if func is None:
         return lambda func: async_thread(func, daemon=daemon)

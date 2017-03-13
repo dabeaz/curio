@@ -104,8 +104,6 @@ class Task(object):
         the task was already completed.
         '''
         if self.terminated:
-            if blocking:
-                await _sleep(0, False)
             return False
         await _cancel_task(self)
         if blocking:
@@ -421,6 +419,7 @@ class _TimeoutAfter(object):
         self._absolute = absolute
         self._ignore = ignore
         self._timeout_result = timeout_result
+        self.expired = False
         self.result = True
 
     async def __aenter__(self):
@@ -477,6 +476,7 @@ class _TimeoutAfter(object):
                 else:
                     # The timeout is us.  Make sure it's a TaskTimeout (unless ignored)
                     self.result = self._timeout_result
+                    self.expired = True
                     if self._ignore:
                         return True
                     else:
@@ -495,39 +495,8 @@ class _TimeoutAfter(object):
 
 async def _timeout_after_func(clock, absolute, coro, args, ignore=False, timeout_result=None):
     coro = meta.instantiate_coroutine(coro, *args)
-    task = await current_task()
-    if not absolute and clock:
-        clock += await _clock()
-    prior = await _set_timeout(clock)
-    task._deadlines.append(clock)
-    try:
+    async with _TimeoutAfter(clock, absolute, ignore=ignore, timeout_result=timeout_result):
         return await coro
-    except (TaskTimeout, TimeoutCancellationError) as e:
-        timeout_clock = e.args[0]
-        for n, deadline in enumerate(task._deadlines):
-            if deadline <= timeout_clock:
-                break
-        else:
-            raise UncaughtTimeoutError('Uncaught timeout received')
-
-        if n < len(task._deadlines) - 1:
-            if isinstance(e, TaskTimeout):
-                raise TimeoutCancellationError(e.args[0]).with_traceback(e.__traceback__) from None
-            else:
-                raise
-
-        # We're getting the timeout
-        if not ignore:
-            if isinstance(e, TimeoutCancellationError):
-                raise TaskTimeout(e.args[0]).with_traceback(e.__traceback__) from None
-            else:
-                raise
-        return timeout_result
-
-    finally:
-        task._deadlines.pop()
-        await _unset_timeout(prior)
-
 
 def timeout_at(clock, coro=None, *args):
     '''

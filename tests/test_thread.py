@@ -2,7 +2,7 @@
 
 import pytest
 from curio import *
-from curio.thread import AWAIT, AsyncThread, async_thread, async_context, async_iter
+from curio.thread import AWAIT, AsyncThread, async_thread
 from curio.file import aopen
 
 def simple_func(x, y):
@@ -157,31 +157,29 @@ def test_subprocess_popen(kernel):
         await t.join()
 
     kernel.run(main())
-    
-def test_async_context_iter(kernel):
 
-    ran = False
+def test_task_wait_thread(kernel):
+    results = []
+    async def add(x, y):
+        return x + y
 
-    @async_thread(daemon=True)
-    def func():
-        nonlocal ran
-        f = aopen(testinput, 'r')
-        result = []
-        with async_context(f) as g:
-            for line in async_iter(g):
-                result.append(line)
-
-        assert result == ['line 1\n', 'line 2\n', 'line 3\n']
-        ran = True
+    def task():
+        task1 = AWAIT(spawn(add, 1, 1))
+        task2 = AWAIT(spawn(add, 2, 2))
+        task3 = AWAIT(spawn(add, 3, 3))
+        w = wait([task1, task2, task3])
+        with w:
+            for task in w:
+                result = AWAIT(task.join())
+                results.append(result)
 
     async def main():
-        await func()
-        assert ran
-
-
-    AWAIT(kernel.run(main()))
-
-
+        t = AsyncThread(target=task)
+        await t.start()
+        await t.join()
+    
+    kernel.run(main)
+    assert results == [2, 4, 6]
             
                  
 

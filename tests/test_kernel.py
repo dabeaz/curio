@@ -106,6 +106,26 @@ def test_sleep_timeout_absolute(kernel):
     kernel.run(main)
     assert cancelled
 
+
+def test_sleep_timeout_absolute_context(kernel):
+    cancelled = False
+
+    async def sleeper():
+        nonlocal cancelled
+        try:
+            async with timeout_at((await kernel_clock()) + 0.1):
+                await sleep(1)
+            assert False
+        except TaskTimeout:
+            cancelled = True
+
+    async def main():
+        task = await spawn(sleeper)
+        await task.join()
+
+    kernel.run(main)
+    assert cancelled
+
 def test_sleep_ignore_timeout(kernel):
     async def sleeper():
         cancelled = False
@@ -534,6 +554,66 @@ def test_nested_context_timeout(kernel):
         'parent timeout'
     ]
 
+def test_nested_context_timeout2(kernel):
+    async def coro1():
+        try:
+            async with timeout_after(10):
+                await sleep(5)
+        except CancelledError as e:
+            assert isinstance(e, TimeoutCancellationError)
+            raise
+        else:
+            assert False
+
+    async def coro2():
+        try:
+            async with timeout_after(15):
+                await coro1()
+        except CancelledError as e:
+            assert isinstance(e, TimeoutCancellationError)
+            raise
+        else:
+            assert False
+
+    async def parent():
+        try:
+            async with timeout_after(0.1):
+                await coro2()
+        except Exception as e:
+            assert isinstance(e, TaskTimeout)
+        else:
+            assert False
+
+    kernel.run(parent)
+
+def test_nested_context_timeout3(kernel):
+    async def coro1():
+        try:
+            await timeout_after(10, sleep, 5)
+        except CancelledError as e:
+            assert isinstance(e, TimeoutCancellationError)
+            raise
+        else:
+            assert False
+
+    async def coro2():
+        try:
+            await timeout_after(15, coro1)
+        except CancelledError as e:
+            assert isinstance(e, TimeoutCancellationError)
+            raise
+        else:
+            assert False
+
+    async def parent():
+        try:
+            await timeout_after(0.1, coro2)
+        except Exception as e:
+            assert isinstance(e, TaskTimeout)
+        else:
+            assert False
+
+    kernel.run(parent)
 
 def test_nested_timeout_uncaught(kernel):
     results = []
@@ -625,110 +705,6 @@ def test_nested_timeout_none(kernel):
         'parent timeout'
     ]
 
-def test_task_wait_no_cancel(kernel):
-    results = []
-
-    async def child(name, n):
-        results.append(name + ' start')
-        await sleep(n)
-        results.append(name + ' end')
-        return n
-
-    async def main():
-        task1 = await spawn(child, 'child1', 0.75)
-        task2 = await spawn(child, 'child2', 0.5)
-        task3 = await spawn(child, 'child3', 0.25)
-        w = wait([task1, task2, task3])
-        async for task in w:
-            result = await task.join()
-            results.append(result)
-
-    kernel.run(main)
-    assert results == [
-        'child1 start',
-        'child2 start',
-        'child3 start',
-        'child3 end',
-        0.25,
-        'child2 end',
-        0.5,
-        'child1 end',
-        0.75
-    ]
-
-
-def test_task_wait_cancel(kernel):
-    results = []
-
-    async def child(name, n):
-        results.append(name + ' start')
-        try:
-            await sleep(n)
-            results.append(name + ' end')
-        except CancelledError:
-            results.append(name + ' cancel')
-        return n
-
-    async def main():
-        task1 = await spawn(child, 'child1', 0.75)
-        task2 = await spawn(child, 'child2', 0.5)
-        task3 = await spawn(child, 'child3', 0.25)
-        w = wait([task1, task2, task3])
-        async with w:
-            task = await w.next_done()
-            result = await task.join()
-            results.append(result)
-
-    kernel.run(main)
-    assert results == [
-        'child1 start',
-        'child2 start',
-        'child3 start',
-        'child3 end',
-        0.25,
-        'child1 cancel',
-        'child2 cancel'
-    ]
-
-
-def test_task_wait_add(kernel):
-    results = []
-
-    async def child(name, n):
-        results.append(name + ' start')
-        try:
-            await sleep(n)
-            results.append(name + ' end')
-        except CancelledError:
-            results.append(name + ' cancel')
-        return n
-
-    async def main():
-        task1 = await spawn(child, 'child1', 0.75)
-        task2 = await spawn(child, 'child2', 0.5)
-        w = wait([task1, task2])
-        async with w:
-            task = await w.next_done()
-            result = await task.join()
-            results.append(result)
-            await w.add_task(await spawn(child, 'child3', 0.1))
-            task = await w.next_done()
-            result = await task.join()
-            results.append(result)
-
-    kernel.run(main)
-    assert results == [
-        'child1 start',
-        'child2 start',
-        'child2 end',
-        0.5,
-        'child3 start',
-        'child3 end',
-        0.1,
-        'child1 cancel',
-    ]
-
-
 
 def test_task_run_error(kernel):
     results = []
@@ -743,74 +719,6 @@ def test_task_run_error(kernel):
     else:
         assert False
 
-
-def test_defer_cancellation(kernel):
-    async def cancel_me(e1, e2):
-        with pytest.raises(CancelledError):
-            async with disable_cancellation():
-                await e1.set()
-                await e2.wait()
-            await check_cancellation()
-
-    async def main():
-        e1 = Event()
-        e2 = Event()
-        task = await spawn(cancel_me, e1, e2)
-        await e1.wait()
-        await task.cancel(blocking=False)
-        await e2.set()
-        await task.join()
-
-    kernel.run(main)
-
-
-def test_disable_cancellation_function(kernel):
-    async def cancel_it(e1, e2):
-        await e1.set()
-        await e2.wait()
-
-    async def cancel_me(e1, e2):
-        with pytest.raises(CancelledError):
-            await disable_cancellation(cancel_it(e1, e2))
-            await check_cancellation()
-
-    async def main():
-        e1 = Event()
-        e2 = Event()
-        task = await spawn(cancel_me, e1, e2)
-        await e1.wait()
-        await task.cancel(blocking=False)
-        await e2.set()
-        await task.join()
-
-    kernel.run(main)
-
-
-def test_self_cancellation(kernel):
-    async def suicidal_task():
-        task = await current_task()
-        await task.cancel(blocking=False)
-        # Cancellation is delivered the next time we block
-        with pytest.raises(CancelledError):
-            await sleep(0)
-
-    kernel.run(suicidal_task)
-
-def test_illegal_enable_cancellation(kernel):
-    async def task():
-        with pytest.raises(RuntimeError):
-             async with enable_cancellation():
-                 pass
-
-    kernel.run(task)
-
-def test_illegal_disable_cancellation_exception(kernel):
-    async def task():
-        with pytest.raises(RuntimeError):
-             async with disable_cancellation():
-                 raise CancelledError()
-
-    kernel.run(task)
 
 def test_sleep_0_starvation(kernel):
     # This task should not block other tasks from running, and should be
