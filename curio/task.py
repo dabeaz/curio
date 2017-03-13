@@ -355,19 +355,21 @@ class _CancellationManager(object):
         return thread.AWAIT(self.__aexit__(*args))
 
 
-def enable_cancellation(coro=None):
+def enable_cancellation(coro=None, *args):
     if coro is None:
         return _CancellationManager(True)
     else:
+        coro = meta.instantiate_coroutine(coro, *args)
         async def run():
             async with _CancellationManager(True):
                 return await coro
         return run()
 
-def disable_cancellation(coro=None):
+def disable_cancellation(coro=None, *args):
     if coro is None:
         return _CancellationManager(False)
     else:
+        coro = meta.instantiate_coroutine(coro, *args)
         async def run():
             async with _CancellationManager(False):
                 return await coro

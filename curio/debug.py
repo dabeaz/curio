@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 
 from .activation import ActivationBase, trap_patch
 from .traps import Traps
+from .errors import TaskCancelled
 
 class DebugBase(ActivationBase):
     def __init__(self, level=logging.INFO, filter=None, **kwargs):
@@ -50,7 +51,7 @@ class logcrash(DebugBase):
 
     def suspended(self, task, exc):
         if exc and self.check_filter(task):
-            if not isinstance(exc, StopIteration):
+            if not isinstance(exc, (StopIteration, TaskCancelled)):
                 log.log(self.level, 'Task %r crashed', task.id, exc_info=exc)
 
 class schedtrace(DebugBase):

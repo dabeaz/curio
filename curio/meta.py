@@ -89,7 +89,7 @@ def instantiate_coroutine(corofunc, *args, **kwargs):
     it's not a coroutine, we call corofunc(*args, **kwargs) and hope
     for the best.
     '''
-    if inspect.iscoroutine(corofunc):
+    if inspect.iscoroutine(corofunc) or inspect.isgenerator(corofunc):
         return corofunc
 
     if not iscoroutinefunction(corofunc):

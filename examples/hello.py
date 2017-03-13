@@ -6,6 +6,8 @@ import signal
 import os
 
 
+Goodbye = curio.SignalEvent(signal.SIGHUP)
+
 async def countdown(n):
     while n > 0:
         print('T-minus', n)
@@ -46,8 +48,8 @@ async def parent():
     print("Yes, go play")
     await start_evt.set()
 
-    print("Parent says send me a SIGHUP when you want me to leave with the kid")
-    await curio.SignalEvent(signal.SIGHUP).wait()
+    print("Parent says send SIGHUP when you want me to leave with the kid")
+    await Goodbye.wait()
 
     print("Let's go")
     count_task = await curio.spawn(countdown, 10)
