@@ -2,6 +2,16 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+03/12/2017 Added a .cancelled attribute to the context manager used
+	   by the ignore_after() and ignore_at() functions.  It
+	   can be used to determine if a timeout fired.  For example:
+
+              async with ignore_after(10) as context:
+                  await sleep(100)
+
+              if context.cancelled:
+                  print('Cancelled!')
+
 03/10/2017 SignalSet is gone.   Use a SignalQueue instead.  Usage
            is almost identical:
 
