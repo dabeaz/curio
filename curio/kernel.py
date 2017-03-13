@@ -53,7 +53,6 @@ import sys
 import logging
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque, defaultdict
-from contextlib import contextmanager
 import threading
 
 # Logger where uncaught exceptions from crashed tasks are logged
@@ -67,36 +66,6 @@ from .traps import _read_wait, Traps
 from .local import LocalsActivation
 from . import meta
 from .debug import _create_debuggers, logcrash
-
-# ----------------------------------------------------------------------
-# async-generator support.
-#
-# This context manager is used to manage the execution of async generators
-# in Python 3.6.  In certain circumstances, they can't be used safely
-# unless finalized properly.  This context manager installs some hooks
-# for dealing with this in Curio.
-
-@contextmanager
-def _asyncgen_manager():
-    if hasattr(sys, 'get_asyncgen_hooks'):
-        old_asyncgen_hooks = sys.get_asyncgen_hooks()
-
-        def _init_async_gen(agen):
-            if not meta.is_safe_generator(agen) and not meta.finalize.is_finalized(agen):
-                # Inspect the code of the generator to see if it might be safe 
-                raise RuntimeError("Async generator with async finalization must be wrapped by\n"
-                                   "async with curio.meta.finalize(agen) as agen:\n"
-                                   "    async for n in agen:\n"
-                                   "         ...\n"
-                                   "See PEP 533 for further discussion.")
-
-        sys.set_asyncgen_hooks(_init_async_gen)
-    try:
-        yield
-    finally:
-        if hasattr(sys, 'get_asyncgen_hooks'):
-            sys.set_asyncgen_hooks(*old_asyncgen_hooks)
-
 
 # ----------------------------------------------------------------------
 # Underlying kernel that drives everything
@@ -185,7 +154,7 @@ class Kernel(object):
         else:
             coro = None
 
-        with _asyncgen_manager():
+        with meta.asyncgen_manager():
             meta.set_running_flag(True)
             self._running = True
             try:

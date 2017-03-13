@@ -13,11 +13,13 @@ import signal
 
 from . import task
 from .errors import CancelledError
+from .signal import SignalEvent
+
+goodbye = SignalEvent(signal.SIGTERM)
 
 # Signal handling task in the child process
 async def _aside_term(task):
-    from . import signal as curio_signal
-    await curio_signal.SignalEvent(signal.SIGTERM).wait()
+    await goodbye.wait()
     raise SystemExit(1)
 
 # Task that runs the requested coroutine

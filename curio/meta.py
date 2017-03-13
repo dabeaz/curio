@@ -14,12 +14,14 @@ __all__ = [
 # -- Standard Library
 
 from sys import _getframe
+import sys
 import inspect
 from functools import wraps, partial
 from abc import ABCMeta, abstractmethod
 import dis
 import asyncio
 import threading
+from contextlib import contextmanager
 
 # -- Curio
 
@@ -378,5 +380,34 @@ def is_safe_generator(agen):
         return True
     else:
         return False
+
+
+
+# This context manager is used to manage the execution of async generators
+# in Python 3.6.  In certain circumstances, they can't be used safely
+# unless finalized properly.  This context manager installs some hooks
+# for dealing with this in Curio.
+
+@contextmanager
+def asyncgen_manager():
+    if hasattr(sys, 'get_asyncgen_hooks'):
+        old_asyncgen_hooks = sys.get_asyncgen_hooks()
+
+        def _init_async_gen(agen):
+            if not is_safe_generator(agen) and not finalize.is_finalized(agen):
+                # Inspect the code of the generator to see if it might be safe 
+                raise RuntimeError("Async generator with async finalization must be wrapped by\n"
+                                   "async with curio.meta.finalize(agen) as agen:\n"
+                                   "    async for n in agen:\n"
+                                   "         ...\n"
+                                   "See PEP 533 for further discussion.")
+
+        sys.set_asyncgen_hooks(_init_async_gen)
+    try:
+        yield
+    finally:
+        if hasattr(sys, 'get_asyncgen_hooks'):
+            sys.set_asyncgen_hooks(*old_asyncgen_hooks)
+
 
         
