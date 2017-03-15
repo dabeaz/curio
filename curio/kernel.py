@@ -830,7 +830,7 @@ class Kernel(object):
                             try:
                                 traps[trap[0]](*trap[1:])
                             except Exception as e:
-                                raise KernelExit('Fatal Kernel Error') from e
+                                current.next_exc = e
 
                 # Exception is raised during coroutine execution, the task
                 # terminated. Set final return code and break out

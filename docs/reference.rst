@@ -116,6 +116,11 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
    If called on a task that has been cancelled, the ``__cause__``
    attribute is set to :exc:`curio.TaskCancelled`.
 
+.. asyncmethod:: Task.wait()
+
+   Like ``join()`` but doesn't return any value.  The caller must obtain the
+   result of the task separately via the ``result`` or ``exception`` attribute.
+
 .. asyncmethod:: Task.cancel(blocking=True)
 
    Cancels the task. This raises a :exc:`curio.TaskCancelled`
@@ -156,10 +161,15 @@ The following public attributes are available of :class:`Task` instances:
    if you're trying to figure out if a task is running or not. Or if you're
    trying to monitor a task's progress.
 
-.. attribute:: Task.exc_info
+.. attribute:: Task.result
 
-   A tuple of exception information obtained from :py:func:`sys.exc_info` if the
-   task crashes for some reason.  Potentially useful for debugging.
+   The result of a task, if completed.  If accessed before the task terminated,
+   a ``RuntimeError`` exception is raised.  If the task crashed with an exception,
+   that exception is reraised on access.
+
+.. attribute:: Task.exception
+
+   Exception raised by a task, if any.
 
 .. attribute:: Task.cancelled
 
@@ -168,6 +178,150 @@ The following public attributes are available of :class:`Task` instances:
 .. attribute:: Task.terminated
 
    A boolean flag that indicates whether or not the task has run to completion.
+
+
+Task Groups
+-----------
+
+Curio provides a mechanism for grouping tasks together and managing their
+execution.  This includes cancelling tasks as a group, waiting for tasks
+to finish, or watching a group of tasks as they finish.   To do this, create
+a ``TaskGroup`` instance.
+
+.. class:: TaskGroup(tasks=(), *, name=None)
+
+   A class representing a group of executing tasks.  *tasks* is an
+   optional set of existing tasks to put into the group.  New tasks
+   can later be added using the ``spawn()`` method below.
+
+The following methods are supported on ``TaskGroup`` instances:
+
+.. asyncmethod:: TaskGroup.spawn(corofunc, *args)
+
+   Create a new task that's part of the group.  Returns a ``Task`` instance.
+
+.. asyncmethod:: TaskGroup.add_task(coro)
+
+   Adds an already existing task to the task group. 
+
+.. asyncmethod:: TaskGroup.next_done()
+
+   Returns the next completed task.  Returns ``None`` if no more tasks remain.
+   A ``TaskGroup`` may also be used as an asynchronous iterator.
+
+.. asyncmethod:: TaskGroup.join()
+
+   Wait for all tasks in the group to terminate.  If any task returns
+   with an error, then all remaining tasks are immediately cancelled
+   and a ``TaskGroupError`` exception is raised.  If the ``join()``
+   operation itself is cancelled, all remaining tasks in the group are
+   also cancelled.   If a ``TaskGroup`` is used as a context manager,
+   the ``join()`` method is called on context-exit.
+
+.. asyncmethod:: TaskGroup.cancel_remaining()
+
+   Cancel all remaining tasks.
+
+The preferred way to use a ``TaskGroup`` is as a context manager.  For
+example, here is how you can create a group of tasks, wait for them
+to finish, and collect their results::
+
+    async with TaskGroup() as g:
+        t1 = await g.spawn(func1)
+        t2 = await g.spawn(func2)
+        t3 = await g.spawn(func3)
+
+    # all tasks done here
+    print('t1 got', t1.result)
+    print('t2 got', t2.result)
+    print('t3 got', t3.result)
+
+Here is how you would launch tasks and collect their results as
+as they complete::
+
+    async with TaskGroup() as g:
+        t1 = await g.spawn(func1)
+        t2 = await g.spawn(func2)
+        t3 = await g.spawn(func3)
+        async for task in g:
+            print(task, 'completed.', task.result)
+
+If you wanted to launch tasks and exit when the first one has finished,
+use the ``cancel_remaining()`` method like this::
+
+    async with TaskGroup() as g:
+        t1 = await g.spawn(func1)
+        t2 = await g.spawn(func2)
+        t3 = await g.spawn(func3)
+        async for task in g:
+            result = task.result
+            break
+	await g.cancel_remaining()
+
+If any exception is raised inside the task group context, all launched
+tasks are cancelled and the exception is reraised.  For example::
+
+    try:
+        async with TaskGroup() as g:
+            t1 = await g.spawn(func1)
+            t2 = await g.spawn(func2)
+            t3 = await g.spawn(func3)
+            raise RuntimeError()
+    except RuntimeError:
+        # All launched tasks will have terminated or been cancelled
+        assert t1.terminated
+        assert t2.terminated
+        assert t3.terminated
+
+This behavior also applies to features such as a timeout. For
+example::
+
+    try:
+        async with timeout_after(10):
+            async with TaskGroup() as g:
+                t1 = await g.spawn(func1)
+                t2 = await g.spawn(func2)
+                t3 = await g.spawn(func3)
+
+            # All tasks cancelled here on timeout
+
+    except TaskTimeout:
+        # All launched tasks will have terminated or been cancelled
+        assert t1.terminated
+        assert t2.terminated
+        assert t3.terminated
+
+The timeout exception itself is only raised in the code that's using
+the task group.  Child tasks are cancelled using the ``cancel()`` 
+method and would receive a ``TaskCancelled`` exception.
+
+If any launched tasks exit with an exception other than
+``TaskCancelled``, a ``TaskGroupError`` exception is raised.  For
+example::
+
+    async def bad1():
+        raise ValueError('bad value')
+
+    async def bad2():
+        raise RuntimeError('bad run')
+
+    try:
+        async with TaskGroup() as g:
+            await g.spawn(bad1)
+            await g.spawn(bad2)
+            await sleep(1)
+    except TaskGroupError as e:
+        print('Failed:', e.errors)   # Print set of exception types
+	for task in e:
+	    print('Task', task, 'failed because of:', task.exception)
+
+A ``TaskGroupError`` exception contains more information about what happened
+with the tasks.  The ``errors`` attribute is a set of exception types
+that took place.  In this example, it would be the set ``{ ValueError, RuntimeError }``.
+To get more specific information, you can iterate over the exception (or look at its
+``failed`` attribute).   This will produce all of the tasks that failed.  The
+``task.exception`` attribute can be used to get specific exception information 
+for that task.
 
 Task local storage
 ------------------

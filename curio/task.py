@@ -6,6 +6,7 @@
 
 import warnings
 import logging
+from collections import deque
 
 log = logging.getLogger(__name__)
 
@@ -16,22 +17,24 @@ from .traps import *
 from .sched import SchedBarrier
 from . import meta
 
-__all__ = ['Task', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
+__all__ = ['Task', 'TaskGroup', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
            'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
-           'wait', 'clock', 'enable_cancellation', 'disable_cancellation',
+           'clock', 'enable_cancellation', 'disable_cancellation',
            'check_cancellation', 'set_cancellation', 'schedule', 'aside']
 
 class Task(object):
     '''
     The Task class wraps a coroutine and provides some additional attributes
-    related to execution state and debugging.
+    related to execution state and debugging.  Tasks are not normally 
+    instantiated directly. Instead, use spawn().
     '''
     __slots__ = (
-        'id', 'parentid', 'coro', 'daemon', 'name', '_send', '_throw', 'cycles', 'state',
-        'cancel_func', 'future', 'sleep', 'timeout', 'next_value',
-        'next_exc', 'joining', 'cancelled', 'terminated', 'cancel_pending',
-        '_last_io', '_deadlines', 'task_local_storage', 'allow_cancel',
-        '__weakref__', '__dict__'
+        'id', 'parentid', 'coro', 'daemon', 'name', '_send', '_throw',
+        'cycles', 'state', 'cancel_func', 'future', 'sleep',
+        'timeout', 'next_value', 'next_exc', 'joining', 'cancelled',
+        'terminated', 'cancel_pending', '_run_coro', '_last_io',
+        '_deadlines', '_joined', '_taskgroup', 'task_local_storage',
+        'allow_cancel', '__weakref__', '__dict__'
     )
     _lastid = 1
 
@@ -57,11 +60,20 @@ class Task(object):
         self.allow_cancel = True      # Can cancellation exceptions be delivered?
 
         self.task_local_storage = {}  # Task local storage
-        self._last_io = None          # Last I/O operation performed
-        self._send = coro.send        # Bound coroutine methods
-        self._throw = coro.throw
+
+        # Actual execution is wrapped by a supporting coroutine
+        self._run_coro = self._task_runner(self.coro)
+
+        # Last I/O operation performed
+        self._last_io = None          
+
+        # Bound coroutine methods
+        self._send = self._run_coro.send   
+        self._throw = self._run_coro.throw
+
         self._deadlines = []          # Timeout deadlines
         self._joined = False          # Indicate whether task was joined/cancelled
+        self._taskgroup = None        # Set if part of a task group
 
     def __repr__(self):
         return 'Task(id=%r, name=%r, %r, state=%r)' % (self.id, self.name, self.coro, self.state)
@@ -77,20 +89,56 @@ class Task(object):
             elif not self.daemon:
                 log.warning('%r never joined', self)
 
+    async def _task_runner(self, coro):
+        me = await current_task()
+        try:
+            return await coro
+        finally:
+            if self._taskgroup:
+                await self._taskgroup._task_done(me)
+                me._joined = True
+
     async def join(self):
         '''
         Wait for a task to terminate.  Returns the return value (if any)
         or raises a TaskError if the task crashed with an exception.
         '''
-        if not self.terminated:
-            await _scheduler_wait(self.joining, 'TASK_JOIN')
-        self._joined = True
+        await self.wait()
         if self.next_exc:
             raise TaskError('Task crash') from self.next_exc
         else:
             return self.next_value
 
-    async def cancel(self, blocking=True):
+    async def wait(self):
+        '''
+        Wait for a task to terminate. Does not return any value.
+        '''
+        if not self.terminated:
+            await _scheduler_wait(self.joining, 'TASK_JOIN')
+
+        self._joined = True
+        if self._taskgroup:
+            self._taskgroup._task_discard(self)
+        
+    @property
+    def result(self):
+        '''
+        Return the result of a task. The task must be terminated already.
+        '''
+        if not self.terminated:
+            raise RuntimeError('Task not terminated')
+        if self.next_exc:
+            raise self.next_exc
+        else:
+            return self.next_value
+
+    @property
+    def exception(self):
+        if not self.terminated:
+            raise RuntimeError('Task not terminated')
+        return self.next_exc
+
+    async def cancel(self, *, blocking=True):
         '''
         Cancel a task by raising a CancelledError exception.
 
@@ -104,6 +152,7 @@ class Task(object):
         the task was already completed.
         '''
         if self.terminated:
+            self._joined = True
             return False
         await _cancel_task(self)
         if blocking:
@@ -117,6 +166,258 @@ class Task(object):
         import pdb
         if self.next_exc:
             pdb.post_mortem(self.next_exc.__traceback__)
+
+class TaskGroup(object):
+    '''
+    A TaskGroup represents a collection of managed tasks.  A group can
+    be used to ensure that all tasks terminate together, to monitor
+    tasks as they finish, and to manage error handling.  
+
+    A TaskGroup can be created from existing tasks.  For example:
+
+        t1 = await spawn(coro1)
+        t2 = await spawn(coro2)
+        t3 = await spawn(coro3)
+
+        async with TaskGroup([t1,t2,t3]) as g:
+            ...
+
+    Alternatively, tasks can be spawned into a task group.
+
+        async with TaskGroup() as g:
+            await g.spawn(coro1)
+            await g.spawn(coro2)
+            await g.spawn(coro3)
+
+    When used as a context manager, a TaskGroup will wait until
+    all contained tasks successfully exit before moving on.
+
+    If cancelled, all tasks within a TaskGroup are also cancelled.
+
+    If any task exits with an error, all remaining tasks are cancelled
+    and a TaskGroupError exception is raised.  This exception contains
+    more specific information about what happened.  The .errors
+    attribute is a set of all exception types. It may contain multiple
+    values if if multiple failures. The .failed attribute is a list of
+    all tasks that failed.  Here's what exception handling might look
+    like:
+
+        try:
+            async with TaskGroup() as g:
+                ...
+        except TaskGroupError as e:
+            for task in e.failed:
+                # Look at failed task
+                print('FAILED', task, task.exception)
+
+    If tasks are computing results you want to use, you can
+    write this:
+
+        async with TaskGroup() as g:
+            t1 = await g.spawn(coro1)
+            t2 = await g.spawn(coro2)
+            t3 = await g.spawn(coro3)
+
+        # Get results---tasks are guaranteed to be done
+        result1 = t1.result
+        result2 = t2.result
+        result3 = t3.result
+
+    To obtain tasks in the order that they complete, use iteration:
+  
+        async with TaskGroup() as g:
+            await g.spawn(coro1)
+            await g.spawn(coro2)
+            await g.spawn(coro3)
+
+            async for done in g:
+                print('Task done', done, done.result)
+
+    The cancel_remaining() method can be used to cancel all
+    remaining tasks early.  The add_task() method can be
+    used to add an already existing task to a group.  Calling
+    .join() on a task removes it from a group. For example:
+
+         async with TaskGroup() as g:
+             t1 = await g.spawn(coro1)
+             ...
+             await t1.join()        # removes t1 from the group
+
+    Normally, a task group is used as a context manager.  This 
+    doesn't have to be the case.  You could write code like this:
+
+        g = TaskGroup()
+        try:
+            await g.spawn(coro1)
+            await g.spawn(coro2)
+            ...
+        finally:
+            await g.join()
+ 
+    This might be more useful for more persistent or long-lived 
+    task groups.
+    '''
+    def __init__(self, tasks=(), *, name=None):
+        self._name = name
+        self._running = set()
+        self._finished = deque()
+        self._closed = False
+        for task in tasks:
+            assert not task._taskgroup
+            task._taskgroup = self
+            if task.terminated:
+                self._finished.append(task)
+            else:
+                self._running.add(task)
+
+        self._sema = sync.Semaphore(len(self._finished))
+
+    # Triggered on task completion. 
+    async def _task_done(self, task):
+        await self._sema.release()
+        self._finished.append(task)
+        self._running.discard(task)
+
+    # Discards a task from the TaskGroup.  Called implicitly if
+    # if a task is joined while under supervision.
+    def _task_discard(self, task):
+        self._finished.remove(task)
+        task._taskgroup = None
+
+    async def add_task(self, task):
+        '''
+        Add an already existing task to the group.
+        '''
+        if task._taskgroup:
+            raise RuntimeError('Task is already part of a group')
+
+        if self._closed:
+            raise RuntimeError('Task group is closed')
+        task._taskgroup = self
+        if task.terminated:
+            await self._task_done(task)
+        else:
+            self._running.add(task)
+
+    async def spawn(self, coro, *args):
+        '''
+        Spawn a new task into the task group.
+        '''
+        if self._closed:
+            raise RuntimeError('Task group is closed')
+
+        task = await spawn(coro, *args)
+        await self.add_task(task)
+        return task
+
+    async def next_done(self):
+        '''
+        Wait for the next task to finish.
+        '''
+        while not self._finished and self._running:
+            await self._sema.acquire()
+
+        if self._finished:
+            task = self._finished.popleft()
+            task._taskgroup = None
+        else:
+            task = None
+
+        return task
+
+    async def cancel_remaining(self, *, blocking=False):
+        '''
+        Cancel all remaining running tasks
+        '''
+        self._closed = True
+        for task in list(self._running):
+            await task.cancel(blocking=blocking)
+            
+    async def join(self):
+        '''
+        Wait for all tasks in the task group to terminate.  If any task
+        exits with an error or we're cancelled ourself, then all tasks are 
+        cancelled.
+        '''
+        self._closed = True
+
+        # Find all currently finished tasks to collect the ones in error
+        exceptional = [ task for task in self._finished 
+                        if task.next_exc and not isinstance(task.next_exc, TaskCancelled) ]
+
+        self._finished.clear()
+        
+        if exceptional:
+            for task in self._running:
+                await task.cancel(blocking=False)
+
+        # Spin while things are still running and collect results
+        while self._running:
+            try:
+                await self._sema.acquire()
+            except CancelledError:
+                # If we got cancelled ourselves, we cancel everything remaining.
+                # Must bail out by re-raising the CancelledError exception (oh well)
+                for task in list(self._running):
+                    await task.cancel()
+                    task._taskgroup = None
+                raise
+
+            # If we're here and nothing finished, it means that some task
+            # called its join() method.  We're not concerned about that task anymore. Carry on.
+            if not self._finished:
+                continue
+
+            while self._finished:
+                task = self._finished.popleft()
+                # If the task is in error state and nothing else is. Cancel everything else
+                if task.next_exc and not isinstance(task.next_exc, TaskCancelled):
+                    if not exceptional:
+                        for ctask in self._running:
+                            await ctask.cancel(blocking=False)
+                        exceptional.append(task)
+                        exceptional.extend(ftask for ftask in self._finished if ftask.next_exc)
+                task._taskgroup = None
+        
+        # If there are exceptions on any task, we raise a TaskGroupError
+        if exceptional:
+            raise TaskGroupError(exceptional)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, ty, val, tb):
+        if ty:
+            # Exception in the block itself.  Cancel all running children
+            for task in self._running:
+                await task.cancel(blocking=False)
+        else:
+            await self.join()
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        next = await self.next_done()
+        if next is None:
+            raise StopAsyncIteration
+        return next
+
+    # -- Support for use in async threads
+    def __enter__(self):
+        return thread.AWAIT(self.__aenter__())
+
+    def __exit__(self, *args):
+        return thread.AWAIT(self.__aexit__(*args))
+
+    def __iter__(self):
+        return thread.AWAIT(self.__aiter__())
+
+    def __next__(self):
+        try:
+            return thread.AWAIT(self.__anext__())
+        except StopAsyncIteration:
+            raise StopIteration
 
 # ----------------------------------------------------------------------
 # Public-facing task-related functions.  Some of these functions are
@@ -182,7 +483,7 @@ async def gather(tasks, *, return_exceptions=False):
             results.append(await task.join())
         except CancelledError as e:
             for task in tasks:
-                await task.cancel(False)
+                await task.cancel(blocking=False)
             e.results = await gather(tasks, return_exceptions=True)
             raise
         except Exception as e:
@@ -191,120 +492,6 @@ async def gather(tasks, *, return_exceptions=False):
             else:
                 raise
     return results
-
-
-class wait(object):
-    '''
-    Wait for one or more tasks to complete, possibly with cancellation.
-    Suppose you have created some tasks:
-
-         task1 = await spawn(coro())
-         task2 = await spawn(coro())
-         task3 = await spawn(coro())
-
-    wait() allows you to obtain tasks as they complete.  For example:
-
-         w = wait([task1, task2, task3])
-
-    Obtain the next completed task:
-
-         task = await w.next_done()
-         result = await task.join()
-
-    Get all of the completed tasks in completion order:
-
-         async for task in w:
-             result = await task.join()
-
-    All unfinished tasks will be cancelled if you use the result of wait()
-    as a context manager. For example:
-
-         async with wait([task1, task2, task3]) as w:
-             task = await w.next_done()
-             result = await task.join()
-         # All remaining tasks cancelled
-
-    All remaining tasks can also be cancelled using await w.cancel_remaining().
-
-    wait() only returns the complete Task instances, not the results of those
-    tasks.  To get the results, you still call task.join() as before.  wait()
-    ensures that when you call join(), the result is immediately available.
-    '''
-
-    def __init__(self, tasks):
-        self._initial_tasks = tasks
-        self._queue = queue.Queue()
-        self._tasks = None
-
-    async def __aenter__(self):
-        await self._init()
-        return self
-
-    async def __aexit__(self, ty, val, tb):
-        await self.cancel_remaining()
-
-    def __enter__(self):
-        return thread.AWAIT(self.__aenter__())
-
-    def __exit__(self, *args):
-        return thread.AWAIT(self.__aexit__(*args))
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        next = await self.next_done()
-        if next is None:
-            raise StopAsyncIteration
-        return next
-
-    def __iter__(self):
-        return thread.AWAIT(self.__aiter__())
-
-    def __next__(self):
-        try:
-            return thread.AWAIT(self.__anext__())
-        except StopAsyncIteration:
-            raise StopIteration
-
-    async def _wait_runner(self, task):
-        try:
-            await task.join()
-        except Exception:
-            pass
-        await self._queue.put(task)
-
-    async def _init(self):
-        self._tasks = []
-        for task in self._initial_tasks:
-            await spawn(self._wait_runner, task)
-            self._tasks.append(task)
-        self._initial_tasks = []
-
-    async def add_task(self, task):
-        if self._tasks is None:
-            await self._init()
-        await spawn(self._wait_runner, task)
-        self._tasks.append(task)
-
-    async def next_done(self):
-        if self._tasks is None:
-            await self._init()
-        if not self._tasks:
-            return None
-
-        task = await self._queue.get()
-        self._tasks.remove(task)
-        return task
-
-    async def cancel_remaining(self):
-        if self._tasks is None:
-            await self._init()
-
-        for task in self._tasks:
-            await task.cancel()
-
-        self._tasks = []
 
 # Utility functions for controlling cancellation
 class _CancellationManager(object):
@@ -580,6 +767,7 @@ def ignore_after(seconds, coro=None, *args, timeout_result=None):
 
 from . import queue
 from . import thread
+from . import sync
 
 # Highly experimental.  Launches a curio task in a completely isolated
 # subprocess.  As for the name, well, yeah. "async", "await", "abide",

@@ -158,7 +158,7 @@ def test_subprocess_popen(kernel):
 
     kernel.run(main())
 
-def test_task_wait_thread(kernel):
+def test_task_group_thread(kernel):
     results = []
     async def add(x, y):
         return x + y
@@ -167,7 +167,7 @@ def test_task_wait_thread(kernel):
         task1 = AWAIT(spawn(add, 1, 1))
         task2 = AWAIT(spawn(add, 2, 2))
         task3 = AWAIT(spawn(add, 3, 3))
-        w = wait([task1, task2, task3])
+        w = TaskGroup([task1, task2, task3])
         with w:
             for task in w:
                 result = AWAIT(task.join())

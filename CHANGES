@@ -2,6 +2,30 @@ CHANGES
 -------
 Version 0.7 : In Progress
 -------------------------
+03/15/2017 The undocumented wait() function for waiting on multiple
+           tasks has evolved into a more general TaskGroup object.
+           To replicate the old wait(), do this:
+
+              t1 = spawn(coro1, args)
+              t2 = spawn(coro2, args)
+              t3 = spawn(coro3, args)
+
+              async with TaskGroup([t1,t2,t3]) as g:
+                  first_done = await g.next_done()
+                  await g.cancel_remaining()
+
+           TaskGroups have more functionality such as the ability
+           to spawn tasks, report multiple errors and more.
+
+           For example, the above code could also be written as follows:
+
+              async with TaskGroup() as g:
+                  await g.spawn(coro1, args)
+                  await g.spawn(coro2, args)
+                  await g.spawn(coro3, args)
+                  first_done = await g.next_done()
+                  await g.cancel_remaining()
+
 03/12/2017 Added a .cancelled attribute to the context manager used
 	   by the ignore_after() and ignore_at() functions.  It
 	   can be used to determine if a timeout fired.  For example:

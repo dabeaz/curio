@@ -273,76 +273,50 @@ def test_task_cancel_not_blocking(kernel):
 
 
 def test_task_cancel_join(kernel):
-    results = []
-
+    child_evt = Event()
     async def child():
-        results.append('start')
-        await sleep(0.5)
-        results.append('end')
+        await child_evt.wait()
+        assert False
 
     async def main():
         task = await spawn(child)
-        results.append('cancel start')
-        await sleep(0.1)
-        results.append('cancelling')
+        await schedule()
         await task.cancel()
+
         # Try joining with a cancelled task. Should raise a TaskError
         try:
             await task.join()
         except TaskError as e:
-            if isinstance(e.__cause__, CancelledError):
-                results.append('join cancel')
-            else:
-                results.append(str(e.__cause__))
-        results.append('done')
+            assert isinstance(e.__cause__, CancelledError)
+        else:
+            assert False
+        assert True
 
     kernel.run(main)
-    assert results == [
-        'cancel start',
-        'start',
-        'cancelling',
-        'join cancel',
-        'done',
-    ]
-
 
 def test_task_cancel_join_wait(kernel):
-    results = []
+    evt = Event()
 
     async def child():
-        results.append('start')
-        await sleep(0.5)
-        results.append('end')
+        await evt.wait()
 
     async def canceller(task):
-        await sleep(0.1)
-        results.append('cancel')
         await task.cancel()
 
     async def main():
-        task = await spawn(child)
-        results.append('cancel start')
-        await spawn(canceller, task)
+        task1 = await spawn(child)
+        task2 = await spawn(canceller, task1)
+        await task2.join()
+        assert not evt.is_set()
         try:
-            results.append('join')
-            await task.join()     # Should raise TaskError... with CancelledError as cause
+            await task1.join()     # Should raise TaskError... with CancelledError as cause
+            assert False
         except TaskError as e:
-            if isinstance(e.__cause__, CancelledError):
-                results.append('join cancel')
-            else:
-                results.append(str(e.__cause__))
-        results.append('done')
+            assert isinstance(e.__cause__, CancelledError)
+        else:
+            assert False
 
     kernel.run(main)
-    assert results == [
-        'cancel start',
-        'join',
-        'start',
-        'cancel',
-        'join cancel',
-        'done',
-    ]
-
 
 def test_task_child_cancel(kernel):
     results = []
@@ -852,7 +826,8 @@ def test_submit_errors(kernel):
     import types
     @types.coroutine
     def bad_trap():
-        yield (123, "bad")
+        with pytest.raises(IndexError):
+            yield (123, "bad")
 
     async def main():
         await bad_trap()
@@ -860,11 +835,7 @@ def test_submit_errors(kernel):
     with pytest.raises(TypeError):
         kernel.run(abs)
 
-    with pytest.raises(KernelExit):
-        kernel.run(main)
-
-    with pytest.raises(RuntimeError):
-        kernel.run(main)
+    kernel.run(main)
 
     # Repair the kernel (only for testing)
     kernel._crashed = False

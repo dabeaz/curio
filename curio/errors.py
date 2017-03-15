@@ -3,7 +3,7 @@
 # Curio specific exceptions
 
 __all__ = [
-    'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError',
+    'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError', 'TaskGroupError',
     'SyncIOError', 'TaskExit', 'KernelExit',
     'TimeoutCancellationError', 'UncaughtTimeoutError',
     'TaskCancelled', 'AsyncOnlyError',
@@ -56,6 +56,22 @@ class TaskError(CurioError):
     occurred in the task.
     '''
 
+class TaskGroupError(CurioError):
+    '''
+    Raised if one or more tasks in a task group raised an error.
+    The .failed attribute contains a list of all tasks that died.
+    The .errors attribute contains a set of all exceptions raised.
+    '''
+    def __init__(self, failed):
+        self.args = (failed,)
+        self.failed = failed
+        self.errors = { type(task.next_exc) for task in failed }
+
+    def __str__(self):
+        return 'TaskGroupError(%s)' % ', '.join(err.__name__ for err in self.errors)
+
+    def __iter__(self):
+        return self.failed.__iter__()
 
 class SyncIOError(CurioError):
     '''
