@@ -55,7 +55,7 @@ Here is a simple TCP echo server implemented using sockets and curio::
         async with sock:
             while True:
                 client, addr = await sock.accept()
-                await spawn(echo_client(client, addr))
+                await spawn(echo_client, client, addr)
     
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -68,7 +68,7 @@ Here is a simple TCP echo server implemented using sockets and curio::
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(echo_server(('',25000)))
+        run(echo_server, ('',25000))
 
 If you have programmed with threads, you'll find that curio looks similar.
 You'll also find that the above server can handle thousands of simultaneous 
@@ -92,7 +92,7 @@ of the code::
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(tcp_server('', 25000, echo_client))
+        run(tcp_server, '', 25000, echo_client)
 
 This is only a small sample of what's possible.  The `tutorial
 <https://curio.readthedocs.io/en/latest/tutorial.html>`_ is a good
@@ -203,16 +203,14 @@ something that might be added later.
 **Q: How fast is curio?**
 
 A: In rough benchmarking of the simple echo server shown here, Curio
-runs between 75-150% faster than comparable code using coroutines in
-``asyncio``, 5-40% faster than the same coroutines running on
-``uvloop`` (an alternative event-loop for ``asyncio``), and at about
-the same speed as gevent.  This is on OS-X so your mileage might
+runs about 20% faster than comparable code using coroutines in
+``asyncio`` on Python 3.6. This is on OS-X so your mileage might
 vary. Curio is not as fast as servers that utilize threads, low-level
 callback-based event handling (e.g., low-level protocols in
 ``asyncio``), or direct coding in assembly language.  However, those
 approaches also don't involve coroutines (which is the whole point of
 Curio). See the ``examples/benchmark`` directory of the distribution
-for various testing programs.
+for various testing programs.  
 
 **Q: Is curio going to evolve into a framework?**
 

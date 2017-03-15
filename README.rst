@@ -57,7 +57,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
         async with sock:
             while True:
                 client, addr = await sock.accept()
-                await spawn(echo_client(client, addr))
+                await spawn(echo_client, client, addr)
     
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -70,7 +70,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(echo_server(('',25000)))
+        run(echo_server, ('',25000))
 
 If you have programmed with threads, you find that curio looks similar.
 You'll also find that the above server can handle thousands of simultaneous 
@@ -96,7 +96,7 @@ of the code:
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(tcp_server('', 25000, echo_client))
+        run(tcp_server, '', 25000, echo_client)
 
 This is only a small sample of what's possible.  Read the `official documentation
 <https://curio.readthedocs.io>`_ for more in-depth coverage.  The `tutorial 
@@ -123,6 +123,9 @@ Talks Related to Curio
 
 Other Resources
 ---------------
+
+* `Trio <https://github.com/python-trio/trio/>`_ A different I/O library that's been inspired by Curio and
+shares many of its overarching ideas.
 
 * `Some thoughts on asynchronous API design in a post-async/await world <https://vorpus.org/blog/some-thoughts-on-asynchronous-api-design-in-a-post-asyncawait-world/>`_, by Nathaniel Smith.
 

@@ -20,7 +20,7 @@ Here is an example of a simple TCP echo server::
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(tcp_server('', 25000, echo_client))
+        run(tcp_server, '', 25000, echo_client)
 
 This server uses sockets directly.  If you want to a use a file-like streams
 interface, use the ``as_stream()`` method like this::
@@ -38,7 +38,7 @@ interface, use the ``as_stream()`` method like this::
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(tcp_server('', 25000, echo_client))
+        run(tcp_server, '', 25000, echo_client)
 
 How do you write a UDP Server?
 ------------------------------
@@ -57,7 +57,7 @@ Here is an example of a simple UDP echo server using sockets::
             await sock.sendto(data, addr)
 
     if __name__ == '__main__':
-        curio.run(main(('', 26000)))
+        curio.run(main, ('', 26000))
 
 At this time, there are no high-level function (i.e., similar to
 ``tcp_server()``) to run a UDP server. 
@@ -103,7 +103,7 @@ example::
 
     from curio import timeout_after, TaskTimeout
     try:
-         result = await timeout_after(5, coro(args))
+         result = await timeout_after(5, coro, args)
     except TaskTimeout:
          print('Timed out')
 
@@ -112,7 +112,7 @@ which returns ``None`` instead.  For example::
 
     from curio import ignore_after
 
-    result = await ignore_after(5, coro(args))
+    result = await ignore_after(5, coro, args)
     if result is None:
         print('Timed out')
 
@@ -173,13 +173,13 @@ tasks is to use a queue.  For example::
 
     async def main():
         q = curio.Queue()
-        prod_task = await curio.spawn(producer(q))
-        cons_task = await curio.spawn(consumer(q))
+        prod_task = await curio.spawn(producer, q)
+        cons_task = await curio.spawn(consumer, q)
         await prod_task.join()
         await cons_task.cancel()
 
     if __name__ == '__main__':
-        curio.run(main())
+        curio.run(main)
 
 
 How can a task and a thread communicate?
@@ -208,12 +208,12 @@ threads is to use curio's ``UniversalQueue`` class::
     async def main():
         q = curio.UniversalQueue()
         prod_task = threading.Thread(target=producer, args=(q,)).start()
-        cons_task = await curio.spawn(consumer(q))
+        cons_task = await curio.spawn(consumer, q)
         await run_in_thread(prod_task.join)
         await cons_task.cancel()
 
     if __name__ == '__main__':
-        curio.run(main())
+        curio.run(main)
 
 A ``UniversalQueue`` can be used by any combination of threads or
 curio tasks.  The same API is used in both cases.  However,
@@ -308,7 +308,7 @@ For example, you could make a producer program like this::
 
     if __name__ == '__main__':
        ch = Channel(('localhost', 30000))
-       run(producer(ch))
+       run(producer, ch)
 
 Now, make a consumer program::
 
@@ -325,7 +325,7 @@ Now, make a consumer program::
         
     if __name__ == '__main__':
         ch = Channel(('localhost', 30000))
-        run(consumer(ch))
+        run(consumer, ch)
 
 Run each program separately and you should see messages received
 by the consumer program.

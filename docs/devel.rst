@@ -103,7 +103,7 @@ Normally, you wouldn't do this though. Curio provides a high-level
 function that runs a coroutine and returns its final result::
 
     >>> from curio import run
-    >>> run(greeting('Dave'))
+    >>> run(greeting, 'Dave')
     'Hello Dave'
     >>>
 
@@ -122,7 +122,7 @@ with the ``await`` keyword.  For example::
     ...      for name in names:
     ...          print(await greeting(name))
     >>> from curio import run
-    >>> run(main())
+    >>> run(main)
     Hello Dave
     Hello Paula
     Hello Thomas
@@ -156,7 +156,7 @@ context manager::
         async with m:
             print('Hey there!')
 
-    >>> run(main())
+    >>> run(main)
     Entering
     Hey there!
     Exiting
@@ -187,7 +187,7 @@ You can also define an asynchronous iterator::
         async for n in AsyncCountdown(5):
             print('T-minus', n)
 
-    >>> run(main())
+    >>> run(main)
     T-minus 5
     T-minus 4
     T-minus 3
@@ -209,7 +209,7 @@ alternative implementation of an asynchronous iterator::
         async for n in countdown(5):
             print('T-minus', n)
 
-    run(main())
+    run(main)
 
 An asynchronous generator feeds values to an async-for loop.  
 In all of these cases, the essential feature enhancement is that
@@ -582,7 +582,7 @@ Now, here is that same code written with coroutines and Curio::
         async with sock:
             while True:
                 client, addr = await sock.accept()
-                await spawn(echo_client(client, addr))
+                await spawn(echo_client, client, addr)
     
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -595,7 +595,7 @@ Now, here is that same code written with coroutines and Curio::
         print('Connection closed')
 
     if __name__ == '__main__':
-        run(echo_server(('',25000)))
+        run(echo_server, ('',25000))
 
 Both versions of code involve the same statements and have the same
 overall control flow.  The key difference is that the code involving
@@ -767,7 +767,7 @@ coroutine that uses it::
     ...          except BlockingIOError:
     ...              await _read_wait(s)
     ...
-    >>> c, a = run(accept_connection(s))
+    >>> c, a = run(accept_connection, s)
 
 With that code running, try making a connection using ``telnet``, ``nc`` or similar command.
 You should see the ``run()`` function return the result after the connection is made.
@@ -798,7 +798,7 @@ With the newly established connection, write a coroutine that receives some data
     ...         except BlockingIOError:
     ...              await _read_wait(s)
     ... 
-    >>> data = run(read_data(c, 1024))
+    >>> data = run(read_data c, 1024)
 
 Try typing some input into your connection.  You should see that data
 returned.  Notice that the code is basically the same as before.  An
@@ -869,7 +869,7 @@ code starts to look much more normal. For example::
           while True:
                client, addr = await sock.accept()
                print('Connection from', addr)
-               await spawn(echo_client(client))
+               await spawn(echo_client, client)
  
      async def echo_client(sock):
           while True:
@@ -920,7 +920,7 @@ coroutine to the ``run()`` function.  For example::
         print('Starting')
         ...
 
-    curio.run(main())
+    curio.run(main)
 
 That first coroutine becomes the initial task.  If you want to create
 more tasks that execute concurrently, use the ``spawn()`` coroutine. 
@@ -936,16 +936,17 @@ launch more tasks inside ``main()`` like this::
 
     async def main():
         print('Starting')
-        await curio.spawn(child(5))
+        await curio.spawn(child, 5)
 
-    curio.run(main())
+    curio.run(main)
 
-If you want to wait for a task to finish, save the result of ``spawn()`` and use its
-``join()`` method.  For example::
+As a general rule, it's not great style to launch a task and to simply forget about it.
+Instead, you should pick up its result at some point.  Use the ``join()`` method to do that.
+For example::
 
     async def main():
         print('Starting')
-        task = await curio.spawn(child(5))
+        task = await curio.spawn(child, 5)
         await task.join()
         print('Quitting')
 
@@ -968,7 +969,7 @@ The ``task.join()`` method returns the final result of a coroutine.  For example
         return x + y
 
     async def main():
-        task = await curio.spawn(add(2,3))
+        task = await curio.spawn(add, 2,3)
         result = await task.join()
         print('Result ->', result)    # Prints 5
 
@@ -977,7 +978,7 @@ exception.  This is a chained exception where the ``__cause__``
 attribute contains the actual exception that occurred.  For example::
 
     async def main():
-        task = await curio.spawn(add(2, 'Hello'))   # Fails due to TypeError
+        task = await curio.spawn(add, 2, 'Hello')   # Fails due to TypeError
         try:
             result = await task.join()
         except curio.TaskError as err:
@@ -1045,11 +1046,11 @@ Curio allows any task to be cancelled.  Here's an example::
 
     async def main():
         print('Starting')
-        task = await curio.spawn(child(5))
+        task = await curio.spawn(child, 5)
         await time.sleep(1)
         await task.cancel()     # Cancel the child
 
-    curio.run(main())
+    curio.run(main)
 
 Cancellation only occurs on blocking operations involving the
 ``await`` keyword (e.g., the ``curio.sleep()`` call in the child).
@@ -1084,7 +1085,7 @@ For example, consider this code::
         print('Awake again')
 
     async def coro():
-        task = await spawn(sleeper(10))
+        task = await spawn(sleeper, 10)
         try:
             await task.join()
         except CancelledError:
@@ -1092,11 +1093,11 @@ For example, consider this code::
             raise
 
     async def main():
-        task = await spawn(coro())
+        task = await spawn(coro)
         await sleep(1)
         await task.cancel()
 
-    run(main())
+    run(main)
 
 If you run this code, the ``coro()`` coroutine is cancelled, but its
 child task continues to run afterwards.  The output looks like this::
@@ -1108,7 +1109,7 @@ child task continues to run afterwards.  The output looks like this::
 To cancel children, they must be explicitly cancelled.  Rewrite ``coro()`` like this::
 
     async def coro():
-        task = await spawn(sleeper(10))
+        task = await spawn(sleeper, 10)
         try:
             await task.join()
         except CancelledError:
@@ -1133,12 +1134,12 @@ option, you can launch a so-called "daemon" task.  For example::
             await sleep(5)
 
     async def main():
-        await spawn(spinner(), daemon=True)
+        await spawn(spinner, daemon=True)
         await sleep(20)
         print('Main. Goodbye')
 
 
-    run(main())     # Runs until main() returns
+    run(main)     # Runs until main() returns
     
 A daemon task runs in the background, potentially forever.  The
 ``Kernel.run()`` method will execute tasks until all non-daemon tasks
@@ -1166,11 +1167,11 @@ the supplied coroutine. For example::
 
     async def main():
         try:
-            await timeout_after(1, child())
+            await timeout_after(1, child)
         except TaskTimeout:
             print('Timeout')
 
-    run(main())
+    run(main)
 
 After the specified timeout period expires, a ``TaskTimeout``
 exception is raised by whatever blocking operation happens to be in
@@ -1199,25 +1200,23 @@ on. For that, you can use the ``ignore_after()`` function.  It works
 like ``timeout_after()`` except that it doesn't raise an exception.
 For example::
 
-    result = ignore_after(seconds, coro())
+    result = ignore_after(seconds, coro)
     
 In the event of a timeout, the return result is ``None``. So, instead
 of using ``try-except``, you could do this::
 
-    if ignore_after(seconds, coro()) == None:
+    if ignore_after(seconds, coro) == None:
         print('Timeout')
 
 The ``ignore_after()`` function also works as a context-manager. When
-used in this way, a ``result`` attribute is set to ``None`` when a
+used in this way, a ``expired`` attribute is set to ``True`` when a
 timeout occurs. For example::
 
     async with ignore_after(seconds) as t:
         await coro1()
         await coro2()
-        ...
-        t.result = value     # Set a result (optional)
 
-    if t.result == None:
+    if t.expired == None:
         print('Timeout')
 
 Nested Timeouts
@@ -1238,7 +1237,7 @@ surprising at first. To illustrate, consider this bit of code::
 
     async def child():
         try:
-            await timeout_after(50, coro1())
+            await timeout_after(50, coro1)
         except TaskTimeout:
             print('Coro1 Timeout')
 
@@ -1246,7 +1245,7 @@ surprising at first. To illustrate, consider this bit of code::
 
     async def main():
         try:
-            await timeout_after(5, child())
+            await timeout_after(5, child)
         except TaskTimeout:
             print('Parent Timeout')
 
@@ -1290,14 +1289,14 @@ such as this example::
     async def child():
          while True:
               try:
-                   result = await timeout_after(1, coro())
+                   result = await timeout_after(1, coro)
                    ...
               except TaskTimeout:
                    print('Timed out. Retrying')
 
     async def parent():
          try:
-             await timeout_after(5, child())
+             await timeout_after(5, child)
          except TaskTimeout:
              print('Timeout')
 
@@ -1322,7 +1321,7 @@ in code that doesn't use ``timeout_after()``.  For example::
 
     async def parent():
          try:
-             await timeout_after(5, child())
+             await timeout_after(5, child)
          except TaskTimeout:
              print('Timeout')
 
@@ -1346,7 +1345,7 @@ Optional Timeouts
 As a special case, you can also supply ``None`` as a timeout for the
 ``timeout_after()`` and ``ignore_after()`` functions.  For example::
 
-    await timeout_after(None, coro())
+    await timeout_after(None, coro)
 
 When supplied, this leaves any previously set outer timeout in effect.
 If an outer timeout expires, a ``TimeoutCancellationError`` is
@@ -1417,7 +1416,7 @@ If you are trying to shield a single operation, you can also pass a coroutine to
 
     async def coro():
         ...
-        await disable_cancellation(op())
+        await disable_cancellation(op)
         ...
 
 Code that disables cancellation can explicitly poll for the presence
@@ -1504,7 +1503,7 @@ this behavior::
         print('About to deep sleep')
         await sleep(5000)
 
-    run(coro())
+    run(coro)
 
 If you run this code, you'll get output like this::
 
@@ -1534,7 +1533,7 @@ safe for use in subroutines.  For example::
 
          await blocking_op2()
 
-    run(coro1())
+    run(coro1)
 
 If nested, cancellation is reported at the first blocking operation
 that occurs when cancellation is re-enabled.   
@@ -1592,7 +1591,7 @@ killing a helper task, you'll probably want to wrap it in a
 ``try-finally`` block like this::
 
     async def coro():
-        task = await spawn(helper())
+        task = await spawn(helper)
         try:
             ...
         finally:
@@ -1603,7 +1602,7 @@ objects might work as asynchronous context managers.  Prefer to
 use that if available.  For example::
 
     async def coro():
-        task = await spawn(helper())
+        task = await spawn(helper)
         async with task:
             ...
         # task cancelled here
@@ -1647,8 +1646,8 @@ to perform a cleanup action, shield that operation from cancellation like this::
             ...
         except CancelledError:
             ...
-            await disable_cancellation(blocking_op())  # Will not be cancelled
-            other_op()                                 # Will execute
+            await disable_cancellation(blocking_op)  # Will not be cancelled
+            other_op()                               # Will execute
             raise
 
 You might consider writing code that returns partially completed
@@ -1705,50 +1704,35 @@ more advanced ways.  For example, obtaining results one at a time in the order
 that tasks finish.  Or waiting for the first result to come back and cancelling
 the remaining tasks afterwards. 
 
-For these kinds of problems, you can use the ``wait()`` coroutine.
-Here is an example that uses ``wait()`` to obtain results in the order that
-they're completed::
+For these kinds of problems, you can create a ``TaskGroup`` instance.
+Here is an example that obtains results in the order that
+tasks are completed::
 
     async def main():
-        # Create some tasks
-        task1 = await spawn(coro())
-        task2 = await spawn(coro())
-        task3 = await spawn(coro())
+        async with TaskGroup() as g:
+            # Create some tasks
+            await g.spawn(coro1)
+            await g.spawn(coro2)
+            await g.spawn(coro3)
+            async for task in g:
+                 try:
+                     result = await task.join()
+                     print('Success:', result)
+                 except TaskError as e:
+                     print('Failed:', e)
 
-        # Wait for the tasks in completion order
-        async for task in wait([task1, task2, task3]):
-             try:
-                 result = await task.join()
-                 print('Success:', result)
-             except TaskError as e:
-                 print('Failed:', e)
-
-To have remaining tasks cancelled, use ``wait()`` as a context
-manager.  For example, this code obtains the first result completed
-and then cancels all of the remaining tasks::
+To have remaining tasks cancelled, modify the code as follows::
 
     async def main():
-        # Create some tasks
-        task1 = await spawn(coro())
-        task2 = await spawn(coro())
-        task3 = await spawn(coro())
+        async with TaskGroup() as g:
+            # Create some tasks
+            await g.spawn(coro1)
+            await g.spawn(coro2)
+            await g.spawn(coro3)
 
-        # Wait for the first task to complete. Cancel all of the remaining tasks
-        async with wait([task1, task2, task3]) as w:
-             task = await w.next_done()
-             try:
-                 result = await task.join()
-                 print('Success:', result)
-             except TaskError as e:
-                 print('Failed - Reason:', e.__cause__)
-
-One feature of ``wait()`` is that it does not actually return the
-results of completed tasks. Instead, it always produces the associated
-``Task`` instance.  Partly, this is so you can figure which of the
-tasks actually completed.  To get the result, you call ``task.join()``
-and handle it in the usual way.  Just as a reminder, exceptions
-produce a ``TaskError`` exception that wraps around the actual
-exception.
+            first = await g.next_done()
+	    result = await first.join()
+	    await g.cancel_remaining()
 
 Getting a Task Self-Reference
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1756,7 +1740,7 @@ Getting a Task Self-Reference
 When a coroutine is running in Curio, there is always an associated ``Task`` instance.
 It is returned by the ``spawn()`` function. For example::
 
-    task = await spawn(coro())
+    task = await spawn(coro)
 
 The ``Task`` instance is normally only needed for operations
 involving joining or cancellation and typically those steps are performed
@@ -1786,14 +1770,14 @@ time period::
                 if cycles == task.cycles:
                     print('Cancelling', task)
                     await task.cancel()
-        await spawn(watcher())
+        await spawn(watcher)
 
 
    async def coro():
        await watchdog(30)     # Enable a watchdog timer
        await sleep(10000)
 
-   run(coro())
+   run(coro)
 
 In this code, you can see how ``current_task()`` is used to get a Task
 self-reference in the ``watchdog()`` coroutine.  ``watchdog()`` then
@@ -1973,7 +1957,7 @@ all cancelled. Here's an example::
         for i in range(1000):
             await ignore_after(0.01, run_in_thread(time.sleep, 100))
    
-    run(main())
+    run(main)
 
 In this code, Curio would spin up 1000 background worker threads--all
 of which end up as "zombies" just waiting to finish their work (which is
@@ -2000,7 +1984,7 @@ opportunity to perform some kind of cleanup action.  For example::
         await sleep(20)
         print('Goodbye')
 
-    run(main())
+    run(main)
 
 If you run this code, you'll get output like this::
 
@@ -2201,14 +2185,14 @@ can have async worker tasks reading data written by a producer thread::
     async def main():
         q = UniversalQueue()
 
-        t1 = await spawn(consumer(q))
+        t1 = await spawn(consumer, q)
         t2 = threading.Thread(target=producer, args=(q,))
         t2.start()
         await run_in_thread(t2.join)
         await q.put(None)
         await t1.join()
 
-    run(main())
+    run(main)
 
 Or you can flip it around and have a threaded consumer read
 data from async tasks::
@@ -2239,13 +2223,13 @@ data from async tasks::
 
         t1 = threading.Thread(target=consumer, args=(q,))
         t1.start()
-        t2 = await spawn(producer(q))
+        t2 = await spawn(producer, q)
 
         await t2.join()
         await q.put(None)
         await run_in_thread(t1.join)
 
-    run(main())
+    run(main)
 
 Or, if you're feeling particularly diabolical, you can even use a ``UniversalQueue`` to communicate between
 tasks running in two different Curio kernels::
@@ -2276,9 +2260,9 @@ tasks running in two different Curio kernels::
     def main():
         q = UniversalQueue()
 
-        t1 = threading.Thread(target=run, args=(consumer(q),))
+        t1 = threading.Thread(target=run, args=(consumer, q))
         t1.start()
-        t2 = threading.Thread(target=run, args=(producer(q),))
+        t2 = threading.Thread(target=run, args=(producer, q))
         t2.start()
         t2.join()
         q.put(None)
@@ -2306,7 +2290,7 @@ this::
         print('Consumer starting')
         while True:
             try:
-                item = await timeout_after(5, q.get())
+                item = await timeout_after(5, q.get)
 	    except TaskTimeout:
                 print('Timeout!')
 		continue
@@ -2418,7 +2402,7 @@ Now, take that code and only change the ``main()`` function::
 
     if __name__ == '__main__':
         from curio import run
-        run(main())
+        run(main)
 
 Make no other changes and run it in Curio.  You'll get very similar
 output. The scheduling will be a bit different, but you'll get
@@ -2501,7 +2485,7 @@ sharing synchronization primitives.  For example, this code also works fine::
         await t2.start()
 
 	# Launch a normal curio task
-        t3 = await curio.spawn(aworker('larry', s, 8, 0.5))
+        t3 = await curio.spawn(aworker, 'larry', s, 8, 0.5)
 
         await t1.join()
         await t2.join()
@@ -2542,7 +2526,7 @@ you use the ``AWAIT()`` function. For example, consider this code::
         await t.join()
 
     if __name__ == '__main__':
-        curio.run(main())
+        curio.run(main)
 
 Good Guido, what madness is this?  The code creates a Curio ``Queue``
 object that is used from both a task and an asynchronous thread.
@@ -2627,7 +2611,7 @@ fine in a thread.  For example::
         await t.cancel()
 
     if __name__ == '__main__':
-        curio.run(main())
+        curio.run(main)
 
 Here the ``t.cancel()`` cancels the async-thread.  As with normal Curio
 tasks, the cancellation is reported on blocking operations involving ``AWAIT()``.
@@ -2652,7 +2636,7 @@ One way to use it is to apply it to a function directly like this::
                 AWAIT(client.sendall(b'Bark!\n'))
         print('Connection closed')
 
-    run(tcp_server('', 25000, sleeping_dog))
+    run(tcp_server, '', 25000, sleeping_dog)
 
 If you do this, the function becomes a coroutine where any invocation
 automatically launches it into a thread. This is useful if you need to
@@ -2677,7 +2661,7 @@ for launching an asynchronous thread::
 
     async def main():
         q = curio.Queue()
-        t = await spawn(async_thread(consumer)(q))
+        t = await spawn(async_thread(consumer), q)
         ...
         await t.join()
 
@@ -2792,7 +2776,7 @@ producer program using channels::
 
     if __name__ == '__main__':
         ch = Channel(('localhost', 30000))
-        run(producer(ch))
+        run(producer, ch)
 
 Here is a consumer program::
 
@@ -2809,7 +2793,7 @@ Here is a consumer program::
 
     if __name__ == '__main__':
         ch = Channel(('localhost', 30000))
-        run(consumer(ch))
+        run(consumer, ch)
 
 Each of these programs create a corresponding ``Channel`` object.  One
 of the programs must act as a server and accept incoming connections
@@ -2872,7 +2856,7 @@ example::
         await cons.cancel()                 # Cancel consumer process
 
     if __name__ == '__main__':
-        run(main())
+        run(main)
 
 ``aside()`` does nothing more than launch a new Python subprocess and
 invoke ``curio.run()`` on the suppplied coroutine.  Any additional
@@ -2923,9 +2907,10 @@ example, here is an example of a sharded echo server::
                 raise
 
     async def main(nservers):
+        goodbye = SignalEvent(signal.SIGTERM, signal.SIGINT)
         for n in range(nservers):
             await aside(tcp_server, '', 25000, echo_client, reuse_port=True)
-        await SignalSet(signal.SIGTERM, signal.SIGINT).wait()
+        await goodbye.wait()
         print("Goodbye cruel world!")
         raise SystemExit(0)
 
@@ -3009,12 +2994,12 @@ For example, this fails::
         print('Synchronous yow')
         spam()          # Fails  (doesn't run)
         await spam()    # Fails  (syntax error)
-        run(spam()      # Fails  (RuntimeError, only one kernel per thread)
+        run(spam)       # Fails  (RuntimeError, only one kernel per thread)
 
     async def main():
         yow()           # Works
 
-    run(main())
+    run(main)
 
 The reason that it doesn't work is that asynchronous functions 
 require the use of the Curio kernel and once you call a synchronous
@@ -3049,12 +3034,12 @@ this::
         print('Goodbye yow')
 
     async def main():
-        await spawn(worker())
+        await spawn(worker)
         yow()
         await sleep(1)          # <- worker awakened here
         print('Main goodbye')
 	
-    run(main())
+    run(main)
 
 Running this code produces the following output::
 
@@ -3093,7 +3078,7 @@ could do this::
 	for coro in deferred:
             await coro               # spam() runs here
 
-    run(main())
+    run(main)
 
 If you run the above code, the output will look like this::
 
@@ -3121,7 +3106,7 @@ served by creating a ``Kernel`` object and repeatedly using its
     def main():
         with Kernel() as kern:
            for n in range(10):
-               kern.run(coro(n))
+               kern.run(coro, n)
 
     main()
 
@@ -3201,7 +3186,7 @@ Tk-based GUI::
                 await task.cancel()
 
         async def main(self):
-            serv = await spawn(tcp_server('', 25000, self.echo_client))
+            serv = await spawn(tcp_server, '', 25000, self.echo_client)
             while True:
                 self.root.update()
                 for coro in self.pending:
@@ -3211,7 +3196,7 @@ Tk-based GUI::
 
     if __name__ == '__main__':
         app = EchoApp()
-        run(app.main())
+        run(app.main)
 
 If you run this program, it will put up a small GUI window that looks like this:
 
@@ -3317,7 +3302,7 @@ does that::
                 await task.cancel()
 
         async def main(self):
-            serv = await spawn(tcp_server('', 25000, self.echo_client))
+            serv = await spawn(tcp_server, '', 25000, self.echo_client)
             while True:
                 coro = await self.coro_ops.get()
                 await coro

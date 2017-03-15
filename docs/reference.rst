@@ -14,8 +14,8 @@ is a function defined using ``async def``.  For example::
 
 Coroutines call other coroutines using ``await``. For example::
 
-    async def main():
-          s = await hello('Guido')
+    async def main(name):
+          s = await hello(name)
           print(s)
 
 Unlike a normal function, a coroutine can never run all on its own.
@@ -25,7 +25,7 @@ executed by a low-level kernel using the ``run()`` function. For
 example::
 
     import curio
-    curio.run(main())
+    curio.run(main, 'Guido')
 
 When executed by curio, a coroutine is considered to be a "Task."  Whenever
 the word "task" is used, it refers to the execution of a coroutine.
@@ -36,62 +36,80 @@ The Kernel
 All coroutines in curio are executed by an underlying kernel.  Normally, you would
 run a top-level coroutine using the following function:
 
-.. function:: run(coro, *, log_errors=True, selector=None,
-              with_monitor=False,
-              warn_if_task_blocks_for=None, **other_kernel_args)
+.. function:: run(corofunc, *args, debug=None, selector=None,
+              with_monitor=False, timeout=None, **other_kernel_args)
 
-   Run the coroutine *coro* to completion and return its final return
-   value.  If *log_errors* is ``True``, a traceback is written to the
-   log on crash.  If *with_monitor* is ``True``, then the monitor
+   Run the async function *corofunc* to completion and return its
+   final return value.  *args* are the arguments provided to
+   *corofunc*.  If *with_monitor* is ``True``, then the monitor
    debugging task executes in the background.  If *selector* is given,
    it should be an instance of a selector from the :mod:`selectors
-   <python:selectors>` module. If *warn_if_task_blocks_for* is given,
-   then any tasks which blocks the event loop for the given number of
-   seconds will trigger a ``curio.BlockingTaskWarning``.
+   <python:selectors>` module.  *debug* is a list of optional 
+   debugging features.  See the section on debugging for more detail.
+   *timeout* sets an initial timeout on the supplied coroutine.
 
 If you are going to repeatedly run coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
 them using its ``run()`` method as described below:
 
-.. class:: Kernel(selector=None, log_errors=True)
+.. class:: Kernel(selector=None, debug=None):
 
    Create an instance of a curio kernel.  The arguments are the same
    as described above for the :func:`run()` function.
 
 There is only one method that may be used on a :class:`Kernel` outside of coroutines.
 
-.. method:: Kernel.run(coro=None, *, shutdown=False)
+.. method:: Kernel.run(corofunc=None, *args, timeout=None, shutdown=False)
 
    Runs the kernel until all non-daemonic tasks have finished
-   execution.  *coro* is a coroutine to run as a task.  If *shutdown*
+   execution.  *corofunc* is an async function to run as a task.
+   *args* are the arguments given to that function.  *timeout* specified
+   a timeout to put on the initial task.  If *shutdown*
    is ``True``, the kernel will cancel all daemonic tasks and perform
    a clean shutdown once all regular tasks have completed.  Calling
    this method with no coroutine and *shutdown* set to ``True``
    will make the kernel cancel all remaining tasks and perform a
-   clean shut down.
+   clean shut down. 
 
 If submitting multiple tasks, one after another, from synchronous
 code, consider using a kernel as a context manager.  For example::
 
     with Kernel() as kernel:
-        kernel.run(coro1())
-        kernel.run(coro2())
+        kernel.run(corofunc1)
+        kernel.run(corofunc2)
         ...
     # Kernel shuts down here
+
+When submitted a task to the Kernel, you can either provide an async
+function and calling arguments or you can provide an instantiated
+coroutine.  For example::
+
+    async def hello(name):
+        print('hello', name)
+
+    run(hello, 'Guido')    # Preferred
+    run(hello('Guido'))    # Ok
+
+This convention is observed by nearly all other functions that accept
+coroutines (e.g., spawning tasks, waiting for timeouts, etc.).  As a
+general rule, the first form of providing a function and arguments
+should be preferred. This form of calling is required for certain 
+parts of Curio so you're code will be more consistent if you use it.
 
 Tasks
 -----
 
 The following functions are defined to help manage the execution of tasks.
 
-.. asyncfunction:: spawn(coro, daemon=False)
+.. asyncfunction:: spawn(corofunc, *args, daemon=False)
 
-   Create a new task that runs the coroutine *coro*.  Returns a
-   :class:`Task` instance as a result.  The *daemon* option, if
-   supplied, specifies that the new task will run indefinitely in the
-   background.  Curio only runs as long as there are non-daemonic
-   tasks to execute.  Note: a daemonic task will still be cancelled if
-   the underlying kernel is shut down.
+   Create a new task that runs the async function *corofunc*.  *args*
+   are the arguments provided to *corofunc*. Returns a :class:`Task`
+   instance as a result.  The *daemon* option, if supplied, specifies
+   that the new task will run indefinitely in the background.  Curio
+   only runs as long as there are non-daemonic tasks to execute.
+   Note: a daemonic task will still be cancelled if the underlying
+   kernel is shut down.
 
 .. asyncfunction:: current_task()
 
@@ -370,12 +388,12 @@ Timeouts
 Any blocking operation in curio can be cancelled after a timeout.  The following
 functions can be used for this purpose:
 
-.. asyncfunction:: timeout_after(seconds, coro=None)
+.. asyncfunction:: timeout_after(seconds, corofunc=None, *args)
 
    Execute the specified coroutine and return its result. However,
    issue a cancellation request to the calling task after *seconds*
    have elapsed.  When this happens, a :py:exc:`curio.TaskTimeout`
-   exception is raised.  If *coro* is ``None``, the result of this
+   exception is raised.  If *corofunc* is ``None``, the result of this
    function serves as an asynchronous context manager that applies a
    timeout to a block of statements.
 
@@ -387,16 +405,16 @@ functions can be used for this purpose:
    a ``curio.UncaughtTimeoutError`` is raised in the outer
    timeout.
 
-.. asyncfunction:: ignore_after(seconds, coro=None, *, timeout_result=None)
+.. asyncfunction:: ignore_after(seconds, corofunc=None, *args, timeout_result=None)
 
    Execute the specified coroutine and return its result. Issue a
    cancellation request after *seconds* have elapsed.  When a timeout
    occurs, no exception is raised.  Instead, ``None`` or the value of
-   *timeout_result* is returned.  If *coro* is ``None``, the result is
+   *timeout_result* is returned.  If *corofunc* is ``None``, the result is
    an asynchronous context manager that applies a timeout to a block
-   of statements.  For the context manager case, ``result`` attribute
-   of the manager is set to ``None`` or the value of *timeout_result*
-   if the block was cancelled.
+   of statements.  For the context manager case, the resulting 
+   context manager object has an ``expired`` attribute set to ``True`` if time
+   expired.
 
    Note: :func:`ignore_after` may also be composed with other timeout
    operations.  ``curio.TimeoutCancellationError`` and
@@ -407,7 +425,7 @@ Here is an example that shows how these functions can be used::
 
     # Execute coro(args) with a 5 second timeout
     try:
-        result = await timeout_after(5, coro(args))
+        result = await timeout_after(5, coro, args)
     except TaskTimeout as e:
         result = None
 
@@ -426,7 +444,7 @@ the exception handling behavior when time expires.  The latter function
 returns ``None`` instead of raising an exception which might be more
 convenient in certain cases. For example::
 
-    result = await ignore_after(5, coro(args))
+    result = await ignore_after(5, coro, args)
     if result is None:
         # Timeout occurred (if you care)
         ...
@@ -435,10 +453,8 @@ convenient in certain cases. For example::
     async with ignore_after(5) as s:
         await coro1(args)
         await coro2(args)
-        ...
-        s.result = successful_result
 
-    if s.result is None:
+    if s.expired:
         # Timeout occurred
 
 It's important to note that every curio operation can be cancelled by timeout.
@@ -449,7 +465,7 @@ appropriate.
 Cancellation Control
 --------------------
 
-.. function:: disable_cancellation(coro=None)
+.. function:: disable_cancellation(corofunc=None, *args)
 
    Disables the delivery of cancellation-related exceptions to the
    calling task.  Cancellations will be delivered to the first
@@ -457,7 +473,7 @@ Cancellation Control
    reenabled.  This function may be used to shield a single coroutine 
    or used as a context manager (see example below).
    
-.. function:: enable_cancellation(coro=None)
+.. function:: enable_cancellation(corofunc=None, *args)
 
    Reenables the delivery of cancellation-related exceptions.  This
    function is used as a context manager.  It may only be used
@@ -472,7 +488,6 @@ Cancellation Control
    immediately.  If cancellation is not allowed, it returns the
    pending cancellation exception instance (if any).  Returns ``None``
    if no cancellation is pending.
-
 
 Use of these functions is highly specialized and is probably best avoided.
 Here is an example that shows typical usage::
@@ -495,7 +510,7 @@ If you only need to shield a single operation, you can write statements like thi
 
     async def coro():
         ...
-        await disabled_cancellation(some_operation())
+        await disabled_cancellation(some_operation, x, y, z)
         ...
 
 This is shorthand for writing the following::
@@ -503,7 +518,7 @@ This is shorthand for writing the following::
     async def coro():
         ...
         async with disable_cancellation():
-            await some_operation()
+            await some_operation(x, y, z)
         ...
 
 See the section on cancellation in the Curio Developer's Guide for more detailed information.
