@@ -124,8 +124,7 @@ Talks Related to Curio
 Other Resources
 ---------------
 
-* `Trio <https://github.com/python-trio/trio/>`_ A different I/O library that's been inspired by Curio and
-shares many of its overarching ideas.
+* `Trio <https://github.com/python-trio/trio/>`_ A different I/O library that's been inspired by Curio and shares many of its overarching ideas.
 
 * `Some thoughts on asynchronous API design in a post-async/await world <https://vorpus.org/blog/some-thoughts-on-asynchronous-api-design-in-a-post-asyncawait-world/>`_, by Nathaniel Smith.
 
