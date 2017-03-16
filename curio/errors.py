@@ -96,7 +96,7 @@ class ResourceBusy(CurioError):
 
 class TaskExit(BaseException):
     '''
-    Exception that can be raised by user-code to force as task to exit
+    Exception that can be raised by user-code to force a task to exit
     '''
 
 
