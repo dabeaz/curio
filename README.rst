@@ -29,7 +29,8 @@ up APIs.  However, it's mainly just a snapshot that represents the state
 of Curio before it starts utilizing more features of Python 3.6. For the
 best results, you should use Python 3.6 and Curio from github. 
 
-The verion 0.7 version (in progress) requires the use of Python 3.6.
+The verion 0.7 version (in progress) still works on Python 3.5. Eventually,
+Curio will start using Python-3.6 specific features though.
 
 Quick install
 -------------
@@ -241,6 +242,11 @@ A: No.
 A: The complete library currently consists of about 3200 statements
 as reported in coverage tests.
 
+**Q: I see these warnings about not using Curio. What should I do?**
+
+A: Has programming taught you nothing? Warnings are meant to be ignored.
+Of course you should use Curio.
+
 **Q: Can I contribute?**
 
 A: Absolutely. Please use the Github page at
@@ -265,6 +271,7 @@ Contributors
 - Brett Cannon
 - Nathaniel Smith
 - Alexander Zhukov
+- Laura Dickinson
 
 About
 -----

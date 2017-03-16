@@ -154,6 +154,22 @@ Version 0.7 : In Progress
 	   There are better alternatives for doing this.  For example, use a
            UniversalQueue.
 
+03/01/2017 Addition of an asyncio bridge.  You can instantiate a separate
+           asyncio loop and submit tasks to it.  For example:
+
+              async def coro():
+                  # Some coroutine that runs on asyncio
+                  ...
+              async with AsyncioLoop() as loop:
+                  await loop.run_asyncio(coro)
+
+           The same loop can be used by any number of Curio tasks and
+           requests can run concurrently.  The asyncio loop runs in 
+           a separate thread than Curio.
+
+           Original idea contributed by Laura Dickinson and adapted a
+           a bit into the AsyncioLoop class. 
+
 02/26/2017 Modifed the gather() function so that it also cancels all tasks
            if it is cancelled by timeout or other means.  See issue #186.
 	   The resulting exception has a .results attribute set with
