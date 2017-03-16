@@ -208,7 +208,10 @@ class Kernel(object):
                     self._shutdown_funcs = None
 
                 if ret_exc:
-                    raise TaskError('Task Crashed') from ret_exc
+                    if isinstance(ret_exc, TaskError):
+                        raise ret_exc
+                    else:
+                        raise TaskError('Task Crashed') from ret_exc
                 else:
                     return ret_val
 

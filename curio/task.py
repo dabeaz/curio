@@ -96,7 +96,10 @@ class Task(object):
         finally:
             if self._taskgroup:
                 await self._taskgroup._task_done(me)
+                if self.daemon:
+                    self._taskgroup._task_discard(me)
                 me._joined = True
+
 
     async def join(self):
         '''
@@ -299,14 +302,14 @@ class TaskGroup(object):
         else:
             self._running.add(task)
 
-    async def spawn(self, coro, *args):
+    async def spawn(self, coro, *args, daemon=False):
         '''
         Spawn a new task into the task group.
         '''
         if self._closed:
             raise RuntimeError('Task group is closed')
 
-        task = await spawn(coro, *args)
+        task = await spawn(coro, *args, daemon=daemon)
         await self.add_task(task)
         return task
 
@@ -387,6 +390,7 @@ class TaskGroup(object):
         return self
 
     async def __aexit__(self, ty, val, tb):
+        print("EXIT", len(self._running), len(self._finished))
         if ty:
             # Exception in the block itself.  Cancel all running children
             for task in self._running:
