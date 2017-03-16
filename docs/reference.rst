@@ -214,9 +214,14 @@ a ``TaskGroup`` instance.
 
 The following methods are supported on ``TaskGroup`` instances:
 
-.. asyncmethod:: TaskGroup.spawn(corofunc, *args)
+.. asyncmethod:: TaskGroup.spawn(corofunc, *args, daemon=False)
 
    Create a new task that's part of the group.  Returns a ``Task`` instance.
+   The *daemon* flag indicates whether or not the group cares about the 
+   task's final result.  If specified, the result of the task is ignored.
+   The task is still considered part of the group for purposes of cancellation
+   however (i.e., if the task group is cancelled, any running daemonic tasks
+   in the group are also cancelled).   
 
 .. asyncmethod:: TaskGroup.add_task(coro)
 
