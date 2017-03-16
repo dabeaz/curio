@@ -4,7 +4,7 @@
 
 __all__ = [
     'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError', 'TaskGroupError',
-    'SyncIOError', 'TaskExit', 'KernelExit',
+    'SyncIOError', 'TaskExit', 'KernelExit', 'ResourceBusy',
     'TimeoutCancellationError', 'UncaughtTimeoutError',
     'TaskCancelled', 'AsyncOnlyError',
 ]
@@ -86,6 +86,13 @@ class AsyncOnlyError(CurioError):
     properly running in an async-thread.
     '''
 
+
+class ResourceBusy(CurioError):
+    '''
+    Raised by I/O related functions if an operation is requested,
+    but the resource is already busy performing the same operation
+    on behalf of another task.
+    '''
 
 class TaskExit(BaseException):
     '''

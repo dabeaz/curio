@@ -406,14 +406,24 @@ class Kernel(object):
         # I/O Support functions
         #
 
-        def _register_event(fileobj, event, task):
+        def _register_event(fileobj, event, task, priority):
             try:
                 key = selector_getkey(fileobj)
                 mask, (rtask, wtask) = key.events, key.data
+                failed_task = None
                 if event == EVENT_READ and rtask:
-                    raise CurioError("Multiple tasks can't wait to read on the same file descriptor %r" % fileobj)
+                    failed_exc = ResourceBusy("Multiple tasks can't wait to read on the same file descriptor %r" % fileobj)
+                    failed_task = rtask if priority else current
                 if event == EVENT_WRITE and wtask:
-                    raise CurioError("Multiple tasks can't wait to write on the same file descriptor %r" % fileobj)
+                    failed_exc = ResourceBusy("Multiple tasks can't wait to write on the same file descriptor %r" % fileobj)
+                    failed_task = wtask if priority else current
+
+                if failed_task == task:
+                    raise failed_exc
+                elif failed_task:
+                    _reschedule_task(failed_task, exc=failed_exc)
+                    _failed_task._last_io = None
+
                 selector_modify(fileobj, mask | event,
                                 (task, wtask) if event == EVENT_READ else (rtask, task))
             except KeyError:
@@ -445,7 +455,7 @@ class Kernel(object):
 
         # ----------------------------------------
         # Wait for I/O
-        def _trap_io(fileobj, event, state):
+        def _trap_io(fileobj, event, state, priority=False):
             if _check_cancellation():
                 return
 
@@ -457,7 +467,7 @@ class Kernel(object):
                 if current._last_io:
                     _unregister_event(*current._last_io)
                 try:
-                    _register_event(fileobj, event, current)
+                    _register_event(fileobj, event, current, priority)
                 except CurioError as e:
                     current.next_exc = e
                     current.next_value = None

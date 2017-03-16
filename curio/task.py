@@ -390,7 +390,6 @@ class TaskGroup(object):
         return self
 
     async def __aexit__(self, ty, val, tb):
-        print("EXIT", len(self._running), len(self._finished))
         if ty:
             # Exception in the block itself.  Cancel all running children
             for task in self._running:

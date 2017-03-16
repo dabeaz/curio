@@ -916,13 +916,55 @@ def test_io_registration(kernel):
         assert False
 
     async def writer2():
-        with pytest.raises(CurioError):
+        with pytest.raises(ResourceBusy):
             await traps._write_wait(s1.fileno())
 
     async def main():
         t0 = await spawn(reader1)
         t1 = await spawn(writer1)
         t2 = await spawn(writer2)
+        await t2.join()
+        await t1.cancel()
+        s2.send(b'hello')
+        await t0.join()
+        s1.close()
+        s2.close()
+
+    kernel.run(main)
+
+
+def test_io_priority_registration(kernel):
+    # Tests some tricky corner cases of the kernel that are difficult
+    # to get to under normal socket usage
+    import socket
+    s1, s2 = socket.socketpair()
+    s1.setblocking(False)
+    s2.setblocking(False)
+    
+    # Fill the send buffer
+    while True:
+        try:
+            s1.send(b'x'*100000)
+        except BlockingIOError:
+            break
+
+    async def reader1():
+        await traps._read_wait(s1.fileno())
+        data = s1.recv(100)
+        assert data == b'hello'
+
+    async def writer1():
+        await traps._write_wait(s1.fileno(), priority=True)
+        assert False
+
+    async def writer2():
+        with pytest.raises(ResourceBusy):
+            await traps._write_wait(s1.fileno())
+
+    async def main():
+        t0 = await spawn(reader1)
+        t2 = await spawn(writer2)
+        t1 = await spawn(writer1)
         await t2.join()
         await t1.cancel()
         s2.send(b'hello')
