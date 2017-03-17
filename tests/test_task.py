@@ -93,6 +93,54 @@ def test_task_group_existing(kernel):
 
     kernel.run(main())
 
+def test_task_any_cancel(kernel):
+    evt = Event()
+    async def child(x, y):
+        return x + y
+
+    async def child2(x, y):
+        await evt.wait()
+        return x + y
+
+    async def main():
+        async with TaskGroup(wait=any) as g:
+            t1 = await g.spawn(child, 1, 1)
+            t2 = await g.spawn(child2, 2, 2)
+            t3 = await g.spawn(child2, 3, 3)
+
+        assert t1.result == 2
+        assert t1 == g.completed
+        assert t2.cancelled
+        assert t3.cancelled
+
+    kernel.run(main())
+
+
+def test_task_any_error(kernel):
+    evt = Event()
+    async def child(x, y):
+        return x + y
+
+    async def child2(x, y):
+        await evt.wait()
+        return x + y
+
+    async def main():
+        try:
+            async with TaskGroup(wait=any) as g:
+                t1 = await g.spawn(child, 1, '1')
+                t2 = await g.spawn(child2, 2, 2)
+                t3 = await g.spawn(child2, 3, 3)
+        except TaskGroupError as e:
+            assert e.failed == [t1]
+        else:
+            assert False
+        assert t2.cancelled
+        assert t3.cancelled
+
+    kernel.run(main())
+
+
 def test_task_group_iter(kernel):
     async def child(x, y):
         return x + y

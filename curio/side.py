@@ -20,6 +20,7 @@ goodbye = SignalEvent(signal.SIGTERM)
 # Signal handling task in the child process
 async def _aside_term(task):
     await goodbye.wait()
+    await task.cancel()
     raise SystemExit(1)
 
 # Task that runs the requested coroutine

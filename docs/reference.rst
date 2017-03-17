@@ -206,44 +206,56 @@ execution.  This includes cancelling tasks as a group, waiting for tasks
 to finish, or watching a group of tasks as they finish.   To do this, create
 a ``TaskGroup`` instance.
 
-.. class:: TaskGroup(tasks=(), *, name=None)
+.. class:: TaskGroup(tasks=(), *, wait=all, name=None)
 
    A class representing a group of executing tasks.  *tasks* is an
    optional set of existing tasks to put into the group.  New tasks
-   can later be added using the ``spawn()`` method below.
+   can later be added using the ``spawn()`` method below. *wait*
+   specifies the policy used for waiting for tasks.  See the ``join()``
+   method below.
 
 The following methods are supported on ``TaskGroup`` instances:
 
-.. asyncmethod:: TaskGroup.spawn(corofunc, *args, daemon=False)
+.. asyncmethod:: TaskGroup.spawn(corofunc, *args, ignore_result=False)
 
    Create a new task that's part of the group.  Returns a ``Task`` instance.
-   The *daemon* flag indicates whether or not the group cares about the 
+   The *ignore_result* flag indicates whether or not the group cares about the 
    task's final result.  If specified, the result of the task is ignored.
    The task is still considered part of the group for purposes of cancellation
-   however (i.e., if the task group is cancelled, any running daemonic tasks
+   however (i.e., if the task group is cancelled, any running tasks with an ignored result
    in the group are also cancelled).   
 
 .. asyncmethod:: TaskGroup.add_task(coro)
 
    Adds an already existing task to the task group. 
 
-.. asyncmethod:: TaskGroup.next_done()
+.. asyncmethod:: TaskGroup.next_done(*, cancel_remaining=False)
 
    Returns the next completed task.  Returns ``None`` if no more tasks remain.
-   A ``TaskGroup`` may also be used as an asynchronous iterator.
+   A ``TaskGroup`` may also be used as an asynchronous iterator. If the
+   *cancel_remaining* option is given, all remaining tasks are cancelled.
 
-.. asyncmethod:: TaskGroup.join()
+.. asyncmethod:: TaskGroup.join(*, wait=all)
 
-   Wait for all tasks in the group to terminate.  If any task returns
-   with an error, then all remaining tasks are immediately cancelled
-   and a ``TaskGroupError`` exception is raised.  If the ``join()``
-   operation itself is cancelled, all remaining tasks in the group are
-   also cancelled.   If a ``TaskGroup`` is used as a context manager,
-   the ``join()`` method is called on context-exit.
+   Wait for tasks in the group to terminate.  If *wait* is `all`, then
+   wait for all tasks to completee.  If *wait* is `any` then wait for
+   any task to complete and cancel any remaining tasks. 
+   If any task returns with an error, then all remaining tasks are
+   immediately cancelled and a ``TaskGroupError`` exception is raised.
+   If the ``join()`` operation itself is cancelled, all remaining
+   tasks in the group are also cancelled.  If a ``TaskGroup`` is used
+   as a context manager, the ``join()`` method is called on
+   context-exit.
 
 .. asyncmethod:: TaskGroup.cancel_remaining()
 
    Cancel all remaining tasks.
+
+.. attribute:: TaskGroup.completed
+
+   The first task that completed in the group.  Useful when used in
+   combination with the ``wait=any`` option on ``join()``.   
+
 
 The preferred way to use a ``TaskGroup`` is as a context manager.  For
 example, here is how you can create a group of tasks, wait for them
@@ -259,8 +271,8 @@ to finish, and collect their results::
     print('t2 got', t2.result)
     print('t3 got', t3.result)
 
-Here is how you would launch tasks and collect their results as
-as they complete::
+Here is how you would launch tasks and collect their results in the
+order that they complete::
 
     async with TaskGroup() as g:
         t1 = await g.spawn(func1)
@@ -270,16 +282,14 @@ as they complete::
             print(task, 'completed.', task.result)
 
 If you wanted to launch tasks and exit when the first one has finished,
-use the ``cancel_remaining()`` method like this::
+use the ``wait=any`` option like this::
 
-    async with TaskGroup() as g:
-        t1 = await g.spawn(func1)
-        t2 = await g.spawn(func2)
-        t3 = await g.spawn(func3)
-        async for task in g:
-            result = task.result
-            break
-	await g.cancel_remaining()
+    async with TaskGroup(wait=any) as g:
+        await g.spawn(func1)
+        await g.spawn(func2)
+        await g.spawn(func3)
+
+    result = g.completed.result    # First completed task
 
 If any exception is raised inside the task group context, all launched
 tasks are cancelled and the exception is reraised.  For example::

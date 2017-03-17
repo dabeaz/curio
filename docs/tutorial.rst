@@ -832,7 +832,7 @@ to a Unix signal and restarts::
             async with sock:
                 while True:
                     client_sock, addr = await sock.accept()
-                    await clients.spawn(handler, client_sock, addr, daemon=True)
+                    await clients.spawn(handler, client_sock, addr, ignore_result=True)
 
     async def main(host, port):
         restart = SignalEvent(signal.SIGHUP)

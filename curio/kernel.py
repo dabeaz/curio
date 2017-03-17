@@ -515,7 +515,7 @@ class Kernel(object):
         # ----------------------------------------
         # Add a new task to the kernel
         def _trap_spawn(coro, daemon):
-            task = _new_task(coro, daemon | current.daemon)    # Inherits daemonic status from parent
+            task = _new_task(coro, daemon)
             task.parentid = current.id
             current.next_value = task
 
