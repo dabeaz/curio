@@ -1,7 +1,8 @@
 CHANGES
 -------
-Version 0.7 : In Progress
--------------------------
+Version 0.7 : March 17, 2017
+----------------------------
+
 03/15/2017 The undocumented wait() function for waiting on multiple
            tasks has evolved into a more general TaskGroup object.
            To replicate the old wait(), do this:
