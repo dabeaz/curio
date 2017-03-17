@@ -880,7 +880,3 @@ def run(corofunc, *args, with_monitor=False, selector=None,
 
     with kernel:
         return kernel.run(corofunc, *args, timeout=timeout)
-
-
-from .monitor import Monitor
-

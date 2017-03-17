@@ -1721,18 +1721,59 @@ tasks are completed::
                  except TaskError as e:
                      print('Failed:', e)
 
-To have remaining tasks cancelled, modify the code as follows::
+To wait for any task to complete and to have remaining tasks
+cancelled, modify the code as follows::
 
     async def main():
-        async with TaskGroup() as g:
+        async with TaskGroup(wait=any) as g:
             # Create some tasks
             await g.spawn(coro1)
             await g.spawn(coro2)
             await g.spawn(coro3)
 
-            first = await g.next_done()
-	    result = await first.join()
-	    await g.cancel_remaining()
+        # Get result on first completed task
+        result = g.completed.result()
+
+If any task in a task group fails with an unexpected exception, all of
+the tasks in the group are cancelled and a ``TaskGroupError``
+exception is raised.  This exception contains more information 
+about what happened including all of the tasks that failed.  For
+example::
+
+    async def bad1():
+        raise ValueError('Bad value')
+
+    async def bad2():
+        raise RuntimeError('Whoa!')
+
+    async def main():
+        try:
+            async with TaskGroup() as g:
+                await g.spawn(bad1)
+                await g.spawn(bad2)
+        except TaskGroupError as e:
+            print(e.errors)   # The set { ValueError, RuntimeError }
+
+            # Iterate over all failed tasks and print their exception
+            for task in e:
+                print(task, e)  
+
+If a taskgroup is cancelled while waiting, all tasks in the group are
+also cancelled. 
+
+Sometimes you might want to launch a task where the result is discarded.
+To do that, use the ``ignore_result`` option to ``spawn()`` like this::
+
+    async def main():
+        async with TaskGroup() as g:
+            await g.spawn(sometask, ignore_result=True)
+            ...
+
+When this is used, the task is still managed by the group in the usual
+way with respect to waiting and cancellation.  However, the final result
+of the task is never inspected--even if the task aborts with an error.
+This option is useful in contexts when a task group might be long-lived,
+such as use in a server. 
 
 Getting a Task Self-Reference
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
