@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 from . import socket
 from . import ssl as curiossl
-from .task import spawn
+from .task import TaskGroup
 from .io import Socket
 
 
@@ -105,14 +105,15 @@ async def run_server(sock, client_connected_task, ssl=None):
             await client_connected_task(client, addr)
 
     async with sock:
-        while True:
-            client, addr = await sock.accept()
-            if ssl:
-                client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
-                if not isinstance(client, Socket):
-                    client = Socket(client)
-            await spawn(run_client, client, addr)
-            del client
+        async with TaskGroup() as client_group:
+            while True:
+                client, addr = await sock.accept()
+                if ssl:
+                    client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
+                    if not isinstance(client, Socket):
+                        client = Socket(client)
+                await client_group.spawn(run_client, client, addr, ignore_result=True)
+                del client
 
 def tcp_server_socket(host, port, family=socket.AF_INET, backlog=100,
                       reuse_address=True, reuse_port=False):

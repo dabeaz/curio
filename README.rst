@@ -24,13 +24,9 @@ vary.
 
 News
 ----
-The version 0.6 "release" of curio has a lot of improvements and cleaned
-up APIs.  However, it's mainly just a snapshot that represents the state
-of Curio before it starts utilizing more features of Python 3.6. For the
-best results, you should use Python 3.6 and Curio from github. 
-
-The verion 0.7 version (in progress) still works on Python 3.5. Eventually,
-Curio will start using Python-3.6 specific features though.
+The version 0.7 "release" of curio has a lot of improvements, cleaned up
+APIs, and new features.   For now, it still works on Python 3.5.  However,
+new versions of Curio may start to use Python-3.6 features.  
 
 Quick install
 -------------

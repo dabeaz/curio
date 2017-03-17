@@ -755,7 +755,8 @@ using ``tcp_server()`` like this::
 The ``tcp_server()`` coroutine takes care of a few low-level details 
 such as creating the server socket and binding it to an address.  It
 also takes care of properly closing the client socket so you no longer
-need the extra ``async with client`` statement from before.
+need the extra ``async with client`` statement from before.  Clients
+are also launched into a proper task group so cancellation shuts everything down.
 
 A Stream-Based Echo Server
 --------------------------
@@ -803,61 +804,187 @@ A Managed Echo Server
 ---------------------
 
 Let's make a slightly more sophisticated echo server that responds
-to a Unix signal and restarts::
+to a Unix signal and gracefully restarts::
 
     import signal
-    from curio import run, spawn, SignalEvent, CancelledError, TaskGroup
+    from curio import run, spawn, SignalQueue, CancelledError, tcp_server
     from curio.socket import *
 
     async def echo_client(client, addr):
         print('Connection from', addr)
-        async with client:
-            try:
-                while True:
-                    data = await client.recv(1000)
-                    if not data:
-                        break
-                    await client.sendall(data)
-                print('Connection closed')
-            except CancelledError:
-                await client.sendall(b'Server going away\n')
-                raise
-
-    async def tcp_server(address, handler):
-        async with TaskGroup() as clients:
-            sock = socket(AF_INET, SOCK_STREAM)
-            sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
-            sock.bind(address)
-            sock.listen(1)
-            async with sock:
-                while True:
-                    client_sock, addr = await sock.accept()
-                    await clients.spawn(handler, client_sock, addr, ignore_result=True)
+        s = client.as_stream()
+        try:
+            async for line in s:
+                await s.write(line)
+        except CancelledError:
+            await s.write(b'SERVER IS GOING DOWN!\n')
+            raise
+	print('Connection closed')
 
     async def main(host, port):
-        restart = SignalEvent(signal.SIGHUP)
-        while True:
-            print('Starting the server')
-            serv_task = await spawn(tcp_server, (host, port), echo_client)
-            await restart.wait()
-            restart.clear()
-            print('Server shutting down')
-            await serv_task.cancel()
+        async with SignalQueue(signal.SIGHUP) as restart:
+            while True:
+                print('Starting the server')
+                serv_task = await spawn(tcp_server, host, port, echo_client)
+                await restart.get()
+                print('Server shutting down')
+                await serv_task.cancel()
 
     if __name__ == '__main__':
         run(main('', 25000))
 
-
 In this code, the ``main()`` coroutine launches the server, but then
 waits for the arrival of a ``SIGHUP`` signal.  When received, it
-cancels the server.  Because the server is spawning all children into
+cancels the server.  Behinds the scenes, the server has spawned all children into
 a task group, all active children also get cancelled and print a
-"server going away" message back to their clients. Just to be clear,
+"server is going down" message back to their clients. Just to be clear,
 if there were a 1000 connected clients at the time the restart occurs,
 the server would drop all 1000 clients at once and start fresh with no
 active connections.
 
-Task-local storage
+Intertask Communication
+-----------------------
+
+If you have multiple tasks and want them to communicate, use a ``Queue``.
+For example, here's a program that builds a little publish-subscribe service
+out of a queue, a dispatcher task, and publish function::
+
+
+    from curio import run, TaskGroup, Queue, sleep
+
+    messages = Queue()
+    subscribers = set()
+
+    # Dispatch task that forwards incoming messages to subscribers
+    async def dispatcher():
+        async for msg in messages:
+            for q in list(subscribers):
+                await q.put(msg)
+
+    # Publish a message
+    async def publish(msg):
+        await messages.put(msg)
+
+    # A sample subscriber
+    async def subscriber(name):
+        queue = Queue()
+        subscribers.add(queue)
+        try:
+            async for msg in queue:
+                print(name, 'got', msg)
+        finally:
+            subscribers.discard(queue)
+
+    # A sample producer
+    async def producer():
+        for i in range(10):
+            await publish(i)
+            await sleep(0.1)
+
+    async def main():
+        async with TaskGroup() as g:
+            await g.spawn(dispatcher)
+            await g.spawn(subscriber, 'child1')
+            await g.spawn(subscriber, 'child2')
+            await g.spawn(subscriber, 'child3')
+            ptask = await g.spawn(producer)
+            await ptask.join()
+            await g.cancel_remaining()
+
+    if __name__ == '__main__':
+        run(main)
+
+Curio provides the same synchronization primitives as found in the built-in
+``threading`` module.  The same techniques used by threads can be used with
+curio.  All things equal though, prefer to use queues if you can.
+
+A Chat Server
+-------------
+
+Let's put more of our tools into practice and implement a chat server.  This
+server combines a bit of network programming with the publish-subscribe
+system you just built.  Here it is::
+
+    # chat.py
+
+    import signal
+    from curio import run, spawn, SignalQueue, TaskGroup, Queue, tcp_server, CancelledError
+    from curio.socket import *
+
+    messages = Queue()
+    subscribers = set()
+
+    async def dispatcher():
+        async for msg in messages:
+            for q in subscribers:
+                await q.put(msg)
+
+    async def publish(msg):
+        await messages.put(msg)
+
+    async def outgoing(client_stream):
+        queue = Queue()
+        try:
+            subscribers.add(queue)
+            async for name, msg in queue:
+                await client_stream.write(name + b':' + msg)
+        finally:
+            subscribers.discard(queue)
+
+    async def incoming(client_stream, name):
+        try:
+            async for line in client_stream:
+                await publish((name, line))
+        except CancelledError:
+            await client_stream.write(b'SERVER IS GOING DOWN!\n')
+            raise
+
+    async def chat_handler(client, addr):
+        print('Connection from', addr) 
+        async with client:
+            client_stream = client.as_stream()
+            await client_stream.write(b'Your name: ')
+            name = (await client_stream.readline()).strip()
+            await publish((name, b'joined\n'))
+
+            async with TaskGroup(wait=any) as workers:
+                await workers.spawn(outgoing, client_stream)
+                await workers.spawn(incoming, client_stream, name)
+
+            await publish((name, b'has gone away\n'))
+
+        print('Connection closed')
+
+    async def chat_server(host, port):
+        async with TaskGroup() as g:
+            await g.spawn(dispatcher)
+            await g.spawn(tcp_server, host, port, chat_handler)
+
+    async def main(host, port):
+        async with SignalQueue(signal.SIGHUP) as restart:
+            while True:
+                print('Starting the server')
+                serv_task = await spawn(chat_server, host, port)
+                await restart.get()
+                print('Server shutting down')
+                await serv_task.cancel()
+
+    if __name__ == '__main__':
+        run(main('', 25000))
+
+This one might take a bit to digest, but here are some important bits.
+Each connection results into two tasks being spawned (``incoming`` and 
+``outgoing``).  The ``incoming`` task reads incoming lines and publishes
+them.  The ``outgoing`` task subscribes to the feed and sends outgoing
+messages.   The ``workers`` task group supervises these two tasks. If any
+one of them terminates, the other task will be cancelled automatically.
+
+The ``chat_server`` task launches both the ``dispatcher`` and a ``tcp_server``
+task and watches them.  If cancelled, both of those tasks will be shut down.
+This includes all active client connections (each of which will get a 
+"server is going down" message).  It's neat.
+
+Task Local Storage
 ------------------
 
 Sometimes it happens that you want to store some data that is specific
@@ -868,74 +995,80 @@ request a unique tag, and then make sure to include that unique tag in
 all log messages generated while handling the request. If we were
 using threads, the solution would be thread-local storage implemented
 with :py:class:`threading.local`. In Curio, we use task-local storage,
-implemented by ``curio.Local``. For example::
+implemented by ``curio.Local``. For example, here is a modified
+version of the chat server with logging and a task-local address::
 
-    # local-example.py
+    import signal
+    from curio import run, spawn, SignalQueue, TaskGroup, Queue, tcp_server, CancelledError, Local
+    from curio.socket import *
 
-    import curio
+    import logging
+    log = logging.getLogger(__name__)
 
-    import random
-    r = random.Random(0)
+    messages = Queue()
+    subscribers = set()
+    local = Local()
 
-    request_info = curio.Local()
+    async def dispatcher():
+        async for msg in messages:
+            for q in subscribers:
+                await q.put(msg)
 
-    # Example logging function that tags each line with the request identifier.
-    def log(msg):
-        # Read from task-local storage:
-        request_tag = request_info.tag
+    async def publish(msg):
+        log.info('%r published %r', local.address, msg)   # Note: task local storage
+        await messages.put(msg)
 
-        print("request {}: {}".format(request_tag, msg))
+    async def outgoing(client_stream):
+        queue = Queue()
+        try:
+            subscribers.add(queue)
+            async for name, msg in queue:
+                await client_stream.write(name + b':' + msg)
+        finally:
+            subscribers.discard(queue)
 
-    async def concurrent_helper(job):
-        log("running helper task {}".format(job))
-        await curio.sleep(r.random())
-        log("finished helper task {}".format(job))
+    async def incoming(client_stream, name):
+        try:
+            async for line in client_stream:
+                await publish((name, line))
+        except CancelledError:
+            await client_stream.write(b'SERVER IS GOING DOWN!\n')
+            raise
 
-    async def handle_request(tag):
-        # Write to task-local storage:
-        request_info.tag = tag
+    async def chat_handler(client, addr):
+        log.info('Connection from %r', addr) 
+        local.address = addr     # Setting task local storage
+        async with client:
+            client_stream = client.as_stream()
+            await client_stream.write(b'Your name: ')
+            name = (await client_stream.readline()).strip()
+            await publish((name, b'joined\n'))
 
-        log("Request received")
-        await curio.sleep(r.random())
-        helpers = [
-            await curio.spawn(concurrent_helper, 1),
-            await curio.spawn(concurrent_helper, 2),
-        ]
-        for helper in helpers:
-            await helper.join()
-        await curio.sleep(r.random())
-        log("Request complete")
+            async with TaskGroup(wait=any) as workers:
+                await workers.spawn(outgoing, client_stream)
+                await workers.spawn(incoming, client_stream, name)
 
-    async def main():
-        tasks = []
-        for i in range(3):
-            tasks.append(await curio.spawn(handle_request, i))
-        for task in tasks:
-            await task.join()
+            await publish((name, b'has gone away\n'))
 
-    if __name__ == "__main__":
-        curio.run(main)
+        log.info('%r connection closed', local.address)
 
-which produces output like::
+    async def chat_server(host, port):
+        async with TaskGroup() as g:
+            await g.spawn(dispatcher)
+            await g.spawn(tcp_server, host, port, chat_handler)
 
-    request 0: Request received
-    request 1: Request received
-    request 2: Request received
-    request 2: running helper task 1
-    request 2: running helper task 2
-    request 2: finished helper task 1
-    request 1: running helper task 1
-    request 1: running helper task 2
-    request 0: running helper task 1
-    request 0: running helper task 2
-    request 2: finished helper task 2
-    request 0: finished helper task 1
-    request 1: finished helper task 1
-    request 0: finished helper task 2
-    request 2: Request complete
-    request 1: finished helper task 2
-    request 1: Request complete
-    request 0: Request complete
+    async def main(host, port):
+        async with SignalQueue(signal.SIGHUP) as restart:
+            while True:
+                print('Starting the server')
+                serv_task = await spawn(chat_server, host, port)
+                await restart.get()
+                print('Server shutting down')
+                await serv_task.cancel()
+
+    if __name__ == '__main__':
+        logging.basicConfig(level=logging.INFO)
+        run(main('', 25000))
 
 Notice two features in particular:
 
@@ -950,41 +1083,6 @@ Notice two features in particular:
   *inherited*. Notice how in our example above, the logs from
   ``concurrent_helper`` are tagged with the appropriate request.
 
-Intertask Communication
------------------------
-
-If you have multiple tasks and want them to communicate, use a ``Queue``.
-For example::
-
-    # prodcons.py
-
-    import curio
-
-    async def producer(queue):
-        for n in range(10):
-            await queue.put(n)
-        await queue.join()
-        print('Producer done')
-
-    async def consumer(queue):
-        while True:
-            item = await queue.get()
-            print('Consumer got', item)
-            await queue.task_done()
-
-    async def main():
-        q = curio.Queue()
-        prod_task = await curio.spawn(producer, q)
-        cons_task = await curio.spawn(consumer, q)
-        await prod_task.join()
-        await cons_task.cancel()
-
-    if __name__ == '__main__':
-        curio.run(main)
-
-Curio provides the same synchronization primitives as found in the built-in
-``threading`` module.  The same techniques used by threads can be used with
-curio.
 
 Programming Advice
 ------------------

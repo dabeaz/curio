@@ -10,6 +10,8 @@ def test_socket_blocking(kernel):
     '''
     Test of exposing a socket in blocking mode
     '''
+    done = Event()
+
     results = []
 
     def sync_client(sock):
@@ -24,6 +26,7 @@ def test_socket_blocking(kernel):
         with client.blocking() as s:
             await run_in_thread(sync_client, s)
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -32,11 +35,13 @@ def test_socket_blocking(kernel):
         await sock.send(b'Message')
         data = await sock.recv(8192)
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
+
 
     kernel.run(main())
 
@@ -51,6 +56,7 @@ def test_socketstream_blocking(kernel):
     '''
     Test of exposing a socket stream in blocking mode
     '''
+    done = Event()
     results = []
 
     def sync_client(f):
@@ -66,6 +72,7 @@ def test_socketstream_blocking(kernel):
         with s.blocking() as f:
             await run_in_thread(sync_client, f)
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -74,11 +81,12 @@ def test_socketstream_blocking(kernel):
         await sock.send(b'Message')
         data = await sock.recv(8192)
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -93,6 +101,7 @@ def test_filestream_blocking(kernel):
     '''
     Test of exposing a socket in blocking mode
     '''
+    done = Event()
     results = []
 
     def sync_client(f):
@@ -108,6 +117,7 @@ def test_filestream_blocking(kernel):
         with s.blocking() as f:
             await run_in_thread(sync_client, f)
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -116,11 +126,12 @@ def test_filestream_blocking(kernel):
         await sock.send(b'Message')
         data = await sock.recv(8192)
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -132,6 +143,7 @@ def test_filestream_blocking(kernel):
 
 
 def test_readall(kernel):
+    done = Event()
     results = []
 
     async def handler(client, addr):
@@ -141,6 +153,7 @@ def test_readall(kernel):
         data = await s.readall()
         results.append(data)
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -153,11 +166,13 @@ def test_readall(kernel):
         await sock.send(b'Msg3\n')
         await sleep(0.1)
         await sock.close()
-        await serv.cancel()
+
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -169,6 +184,7 @@ def test_readall(kernel):
 
 
 def test_readall_timeout(kernel):
+    done = Event()
     results = []
 
     async def handler(client, addr):
@@ -180,6 +196,7 @@ def test_readall_timeout(kernel):
         except TaskTimeout as e:
             results.append(e.bytes_read)
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -189,11 +206,12 @@ def test_readall_timeout(kernel):
         await sleep(1)
         await sock.send(b'Msg2\n')
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -205,6 +223,7 @@ def test_readall_timeout(kernel):
 
 
 def test_read_exactly(kernel):
+    done = Event()
     results = []
 
     async def handler(client, addr):
@@ -214,6 +233,7 @@ def test_read_exactly(kernel):
         for n in range(3):
             results.append(await s.read_exactly(5))
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -221,11 +241,12 @@ def test_read_exactly(kernel):
         await sock.recv(8)
         await sock.send(b'Msg1\nMsg2\nMsg3\n')
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -239,6 +260,7 @@ def test_read_exactly(kernel):
 
 
 def test_read_exactly_timeout(kernel):
+    done = Event()
     results = []
 
     async def handler(client, addr):
@@ -251,6 +273,7 @@ def test_read_exactly_timeout(kernel):
         except TaskTimeout as e:
             results.append(e.bytes_read)
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -260,11 +283,13 @@ def test_read_exactly_timeout(kernel):
         await sleep(1)
         await sock.send(b'Msg2\n')
         await sock.close()
-        await serv.cancel()
+
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -277,6 +302,7 @@ def test_read_exactly_timeout(kernel):
 
 
 def test_readline(kernel):
+    done = Event()
     results = []
 
     async def handler(client, addr):
@@ -286,6 +312,7 @@ def test_readline(kernel):
         for n in range(3):
             results.append(await s.readline())
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -293,11 +320,12 @@ def test_readline(kernel):
         await sock.recv(8)
         await sock.send(b'Msg1\nMsg2\nMsg3\n')
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -311,6 +339,7 @@ def test_readline(kernel):
 
 
 def test_readlines(kernel):
+    done = Event()
     results = []
 
     async def handler(client, addr):
@@ -319,6 +348,7 @@ def test_readlines(kernel):
         s = client.as_stream()
         results.extend(await s.readlines())
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -326,11 +356,12 @@ def test_readlines(kernel):
         await sock.recv(8)
         await sock.send(b'Msg1\nMsg2\nMsg3\n')
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -344,6 +375,7 @@ def test_readlines(kernel):
 
 
 def test_readlines_timeout(kernel):
+    done = Event()
     results = []
 
     async def handler(client, addr):
@@ -355,6 +387,7 @@ def test_readlines_timeout(kernel):
         except TaskTimeout as e:
             results.extend(e.lines_read)
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -364,11 +397,13 @@ def test_readlines_timeout(kernel):
         await sleep(1)
         await sock.send(b'Msg3\n')
         await sock.close()
-        await serv.cancel()
+
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -381,6 +416,7 @@ def test_readlines_timeout(kernel):
 
 
 def test_writelines(kernel):
+    done = Event()
     results = []
 
     async def handler(client, addr):
@@ -389,6 +425,7 @@ def test_writelines(kernel):
         s = client.as_stream()
         results.append(await s.readall())
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -397,11 +434,12 @@ def test_writelines(kernel):
         s = sock.as_stream()
         await s.writelines([b'Msg1\n', b'Msg2\n', b'Msg3\n'])
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -413,12 +451,14 @@ def test_writelines(kernel):
 
 
 def test_writelines_timeout(kernel):
+    done = Event()
     results = []
     async def handler(client, addr):
         await client.send(b'OK')
         s = client.as_stream()
         await sleep(1)
         results.append(await s.readall())
+        await done.set()
 
     def line_generator():
         n = 0
@@ -436,11 +476,12 @@ def test_writelines_timeout(kernel):
         except TaskTimeout as e:
             results.append(e.bytes_written)
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -448,12 +489,14 @@ def test_writelines_timeout(kernel):
 
 
 def test_write_timeout(kernel):
+    done = Event()
     results = []
     async def handler(client, addr):
         await client.send(b'OK')
         s = client.as_stream()
         await sleep(1)
         results.append(await s.readall())
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -466,11 +509,12 @@ def test_write_timeout(kernel):
         except TaskTimeout as e:
             results.append(e.bytes_written)
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
@@ -511,6 +555,7 @@ def test_iterline(kernel):
 
 
 def test_double_recv(kernel):
+    done = Event()
     results = []
 
     async def bad_handler(client):
@@ -529,6 +574,7 @@ def test_double_recv(kernel):
         data = await client.recv(1000)
         results.append(data)
         results.append('handler done')
+        await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -537,11 +583,12 @@ def test_double_recv(kernel):
         await sleep(1)
         await sock.send(b'Msg')
         await sock.close()
-        await serv.cancel()
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
         await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
 
     kernel.run(main())
 
