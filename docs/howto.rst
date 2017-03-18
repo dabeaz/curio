@@ -62,6 +62,124 @@ Here is an example of a simple UDP echo server using sockets::
 At this time, there are no high-level function (i.e., similar to
 ``tcp_server()``) to run a UDP server. 
 
+
+How do you make an outgoing connection?
+---------------------------------------
+
+Curio provides some high-level functions for making outgoing connections.
+For example, here is a task that makes a connection to ``www.python.org``::
+
+    import curio
+
+    async def main():
+        sock = await curio.open_connection('www.python.org', 80)
+        async with sock:
+            await sock.sendall(b'GET / HTTP/1.0\r\nHost: www.python.org\r\n\r\n')
+            chunks = []
+            while True:
+                chunk = await sock.recv(10000)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+
+        response = b''.join(chunks)
+        print(response.decode('latin-1'))
+
+    if __name__ == '__main__':
+        curio.run(main)
+
+If you run this, you should get some output that looks similar to this::
+
+    HTTP/1.1 301 Moved Permanently
+    Server: Varnish
+    Retry-After: 0
+    Location: https://www.python.org/
+    Content-Length: 0
+    Accept-Ranges: bytes
+    Date: Fri, 30 Oct 2015 17:33:34 GMT
+    Via: 1.1 varnish
+    Connection: close
+    X-Served-By: cache-dfw1826-DFW
+    X-Cache: HIT
+    X-Cache-Hits: 0
+    Strict-Transport-Security: max-age=63072000; includeSubDomains
+
+Ah, a redirect to HTTPS.  Let's make a connection with SSL applied to it::
+
+    import curio
+
+    async def main():
+        sock = await curio.open_connection('www.python.org', 443, 
+	                                   ssl=True, 
+					   server_hostname='www.python.org')
+        async with sock:
+            await sock.sendall(b'GET / HTTP/1.0\r\nHost: www.python.org\r\n\r\n')
+            chunks = []
+            while True:
+                chunk = await sock.recv(10000)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+
+        response = b''.join(chunks)
+        print(response.decode('latin-1'))
+
+    if __name__ == '__main__':
+        curio.run(main)
+
+It's worth noting that the primary purpose of curio is
+merely concurrency and I/O.  You can create sockets and you can apply
+things such as SSL to them. However, curio doesn't implement any
+application-level protocols such as HTTP.  Think of curio as a base-layer
+for doing that.
+
+How do you write an SSL-enabled server?
+---------------------------------------
+
+Here's an example of a server that speaks SSL::
+
+    import curio
+    from curio import ssl
+    import time
+
+    KEYFILE = 'privkey_rsa'       # Private key
+    CERTFILE = 'certificate.crt'  # Server certificate
+ 
+    async def handler(client, addr):
+        client_f = client.as_stream()
+
+	# Read the HTTP request
+        async for line in client_f:
+           line = line.strip()
+           if not line:
+               break
+           print(line)
+
+	# Send a response
+        await client_f.write(
+    b'''HTTP/1.0 200 OK\r
+    Content-type: text/plain\r
+    \r
+    If you're seeing this, it probably worked. Yay!
+    ''')
+        await client_f.write(time.asctime().encode('ascii'))
+	await client.close()
+
+    if __name__ == '__main__':
+        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
+        curio.run(curio.tcp_server, '', 10000, handler, ssl=ssl_context)
+
+The ``curio.ssl`` submodule is a wrapper around the ``ssl`` module in the standard
+library.  It has been modified slightly so that functions responsible for wrapping
+sockets return a socket compatible with curio.  Otherwise, you'd use it the same
+way as the normal ``ssl`` module.
+
+To test this out, point a browser at ``https://localhost:10000`` and see if you
+get a readable response.  The browser might yell at you with some warnings
+about the certificate if it's self-signed or misconfigured in some way. However, the
+example shows the basic steps involved in using SSL with curio.
+
 How do you perform a blocking operation?
 ----------------------------------------
 
@@ -268,6 +386,7 @@ The ``check_output()`` function takes the same arguments and raises the
 same exceptions as its standard library counterpart.  The underlying 
 implementation is built entirely using the async I/O primitives of curio.
 It's fast and no backing threads are used. 
+
 
 How can you communicate with a subprocess over a pipe?
 ------------------------------------------------------

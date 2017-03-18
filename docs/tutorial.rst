@@ -6,8 +6,9 @@ Python coroutines and the explicit async/await syntax introduced in
 Python 3.5.  Its programming model is based on cooperative
 multitasking and common system programming abstractions such as
 threads, sockets, files, subprocesses, locks, and queues.  However,
-under the covers it is based on task model provides for advanced
-handling of cancellation, threads, processes, and much more.
+under the covers it is based on a task model that provides for advanced
+handling of cancellation, interesting interactions between threads and
+processes, and much more.  It's fun. 
 
 This tutorial will take you through the basics of creating and
 managing tasks in curio as well as some useful debugging features.
@@ -48,7 +49,8 @@ lot like threads.  For example, here is a simple echo server::
 This server can handle thousands of concurrent clients.   It does
 not use threads.   However, this example really doesn't do Curio
 justice.  In the rest of this tutorial, we'll start with the
-basics and work our way back to this. 
+basics and work our way back to this before jumping off the deep end into
+something more advanced. 
 
 Getting Started
 ---------------
@@ -362,7 +364,7 @@ the defining feature of a ``TaskGroup``. You can spawn tasks into a group and
 they will either all complete or they'll all get cancelled if any kind of error
 occurs. Either way, none of those tasks are executing when control-flow leaves the
 with-block.  In this case, the cancellation of ``child()`` causes a cancellation 
-to propagate to all of those friend tasks.  Problem solved.
+to propagate to all of those friend tasks who promptly leave.  Again, problem solved.
 
 Task Synchronization
 --------------------
@@ -447,10 +449,12 @@ repeatedly nag like this::
 Signals
 -------
 
-What kind of helicopter parent lets their child and friends play Minecraft for a measly 5
-seconds?  Instead, let's have the parent allow the child to play as
-much as they want until a Unix signal arrives, indicating that it's
-time to go.  Modify the code to wait on a ``SignalEvent`` like this::
+What kind of screen-time obsessed helicopter parent lets their child
+and friends play Minecraft for a measly 5 seconds?  Instead, let's
+have the parent allow the child to play as much as they want until a
+Unix signal arrives, indicating that it's time to go.  Modify the code
+to wait for Control-C or a ``SIGTERM`` using a ``SignalEvent`` like
+this::
 
     import signal
 
@@ -512,16 +516,17 @@ usual shutdown sequence::
     Leaving!
 
 In either case, you'll see the parent wake up, do the countdown and
-proceed to cancel the child.  Very good.
+proceed to cancel the child.  All the friends go home. Very good.
 
 Signals are a weird affair though.   Suppose that the parent discovers
-that the house is on fire and wants to get the kids out of there.  As
+that the house is on fire and wants to get the kids out of there fast.  As
 written, a ``SignalEvent`` captures the appropriate signal and sets 
 a sticky flag.  If the same signal comes in again, nothing much happens.
 In this code, the shutdown sequence would run to completion no matter
-how many times you hit Control-C.  Everyone dies.
+how many times you hit Control-C.  Everyone dies. Sadness.
 
-This problem is easily solved--just delete the event.  Like this::
+This problem is easily solved--just delete the event after you're done with it.  
+Like this::
 
     async def parent():
         goodbye = curio.SignalEvent(signal.SIGINT, signal.SIGTERM)
@@ -630,8 +635,11 @@ The problem of blocking might also apply to other operations involving
 I/O.  For example, accessing a database or calling out to other
 libraries.  In fact, any I/O operation not preceded by an explicit
 ``await`` might block.  If you know that blocking is possible, use the
-``curio.run_in_thread()`` coroutine.  This arranges to have the
-computation carried out in a separate thread. For example::
+``curio.run_in_thread()`` coroutine.  For example, in this modified code,
+the kid decides to take a rest after computing each Fibonacci number.
+For reasons unknown, the kid is calling the blocking ``time.sleep()``.
+To keep it from blocking all tasks and the entire kernel, you've got to
+constantly remind the kid to do it in a separate thread::
 
     import time
 
@@ -659,9 +667,11 @@ computation carried out in a separate thread. For example::
                 print('Fine. Saving my work.')
                 raise
     
-Note: ``time.sleep()`` has only been used to illustrate blocking in an outside
-library. ``curio`` already has its own sleep function so if you really need to
-sleep, use that instead.
+Note: ``time.sleep()`` has only been used to illustrate blocking in an
+outside library.  Presumably the kid would be doing some more useful
+here such as watching a famous Fibonacci YouTuber blather on about
+their pet pugs or something.  Curio already has its own sleep
+function so if you really need to sleep, use that instead.
 
 A Simple Echo Server
 --------------------
@@ -713,7 +723,7 @@ connections perfectly well::
 If you've written a similar program using sockets and threads, you'll
 find that this program looks nearly identical except for the use of
 ``async`` and ``await``.  Any operation that involves I/O, blocking, or
-the services of the kernel is prefaced by ``await``.  
+the services of Curio is prefaced by ``await``.  
 
 Carefully notice that we are using the module ``curio.socket`` instead
 of the built-in ``socket`` module here.  Under the covers, ``curio.socket``
@@ -756,7 +766,8 @@ The ``tcp_server()`` coroutine takes care of a few low-level details
 such as creating the server socket and binding it to an address.  It
 also takes care of properly closing the client socket so you no longer
 need the extra ``async with client`` statement from before.  Clients
-are also launched into a proper task group so cancellation shuts everything down.
+are also launched into a proper task group so cancellation of the server shuts everything down
+just like the kid's friends in the earlier example.
 
 A Stream-Based Echo Server
 --------------------------
@@ -817,7 +828,7 @@ to a Unix signal and gracefully restarts::
             async for line in s:
                 await s.write(line)
         except CancelledError:
-            await s.write(b'SERVER IS GOING DOWN!\n')
+            await s.write(b'SERVER IS GOING AWAY!\n')
             raise
 	print('Connection closed')
 
@@ -837,10 +848,15 @@ In this code, the ``main()`` coroutine launches the server, but then
 waits for the arrival of a ``SIGHUP`` signal.  When received, it
 cancels the server.  Behinds the scenes, the server has spawned all children into
 a task group, all active children also get cancelled and print a
-"server is going down" message back to their clients. Just to be clear,
+"server is going away" message back to their clients. Just to be clear,
 if there were a 1000 connected clients at the time the restart occurs,
 the server would drop all 1000 clients at once and start fresh with no
 active connections.
+
+The use of a ``SignalQueue`` here is useful if you want to respond to
+a signal more than once. Instead of merely setting a flag like an event,
+each occurrence of a signal is queued.  Use the ``get()`` method to get the
+signals as they arrive.
 
 Intertask Communication
 -----------------------
@@ -865,7 +881,7 @@ out of a queue, a dispatcher task, and publish function::
     async def publish(msg):
         await messages.put(msg)
 
-    # A sample subscriber
+    # A sample subscriber task
     async def subscriber(name):
         queue = Queue()
         subscribers.add(queue)
@@ -875,7 +891,7 @@ out of a queue, a dispatcher task, and publish function::
         finally:
             subscribers.discard(queue)
 
-    # A sample producer
+    # A sample producer task
     async def producer():
         for i in range(10):
             await publish(i)
@@ -922,6 +938,7 @@ system you just built.  Here it is::
     async def publish(msg):
         await messages.put(msg)
 
+    # Task that writes chat messages to clients
     async def outgoing(client_stream):
         queue = Queue()
         try:
@@ -931,14 +948,16 @@ system you just built.  Here it is::
         finally:
             subscribers.discard(queue)
 
+    # Task that reads chat messages and publishes them
     async def incoming(client_stream, name):
         try:
             async for line in client_stream:
                 await publish((name, line))
         except CancelledError:
-            await client_stream.write(b'SERVER IS GOING DOWN!\n')
+            await client_stream.write(b'SERVER IS GOING AWAY!\n')
             raise
 
+    # Supervisor task for each connection
     async def chat_handler(client, addr):
         print('Connection from', addr) 
         async with client:
@@ -972,17 +991,21 @@ system you just built.  Here it is::
     if __name__ == '__main__':
         run(main('', 25000))
 
-This one might take a bit to digest, but here are some important bits.
+This code might take a bit to digest, but here are some important bits.
 Each connection results into two tasks being spawned (``incoming`` and 
 ``outgoing``).  The ``incoming`` task reads incoming lines and publishes
 them.  The ``outgoing`` task subscribes to the feed and sends outgoing
 messages.   The ``workers`` task group supervises these two tasks. If any
-one of them terminates, the other task will be cancelled automatically.
+one of them terminates, the other task is cancelled right away.
 
 The ``chat_server`` task launches both the ``dispatcher`` and a ``tcp_server``
 task and watches them.  If cancelled, both of those tasks will be shut down.
 This includes all active client connections (each of which will get a 
-"server is going down" message).  It's neat.
+"server is going away" message).  
+
+Spend some time to play with this code.   Allow clients to come and go.
+Send the server a ``SIGHUP`` and watch it drop all of its clients.
+It's neat.
 
 Task Local Storage
 ------------------
@@ -1073,15 +1096,16 @@ version of the chat server with logging and a task-local address::
 Notice two features in particular:
 
 - Unlike almost all other APIs in curio, accessing task-local storage
-  does *not* use ``await``. As an example of why this is useful,
-  imagine you wanted to capture logs written via the standard library
-  :py:mod:`logging` module, and annotate them with request
-  identifiers. Because :py:mod:`logging` is synchronous, this would be
+  does *not* use ``await``.  Although Curio is primarily concerned with
+  asynchronous functions, code can still freely access synchronous
+  code.  That code may want to access the locals for the purposes of
+  logging or other similar features.  This would be
   impossible if accessing task-local storage required ``await``.
 
 - Unlike :py:class:`threading.local`, Curio task-local variables are
-  *inherited*. Notice how in our example above, the logs from
-  ``concurrent_helper`` are tagged with the appropriate request.
+  *inherited*. Notice how in our example above, the logs from the 
+  ``publish()`` function access a task local variable even though that
+  function is actually being called by a child task of ``chat_handler()``.
 
 
 Programming Advice
@@ -1122,17 +1146,6 @@ This will usually result in a warning message::
    
     example.py:8: RuntimeWarning: coroutine 'sleep' was never awaited
 
-Another possible source of failure involves attempts to use curio-wrapped sockets
-and files with existing synchronous code.  Doing so might result in a ``TypeError`` or
-some kind of problem related to non-blocking behavior.   If you need
-to interoperate with external code, make sure you use the ``blocking()`` method
-to expose the raw socket or file being used behind the scenes. For example::
-
-    # sock is a curio socket
-    with sock.blocking() as _sock:
-        external_function(_sock)       # Pass to external function
-        ...
-
 For debugging a program that is otherwise running, but you're not
 exactly sure what it might be doing (perhaps it's hung or deadlocked),
 consider the use of the curio monitor.  For example::
@@ -1144,6 +1157,23 @@ consider the use of the curio monitor.  For example::
 The monitor can show you the state of each task and you can get stack 
 traces. Remember that you enter the monitor by running ``python3 -m curio.monitor``
 in a separate window.
+
+You can also turn on scheduler tracing with code like this::
+
+    from curio.debug import schedtrace
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    run(..., debug=schedtrace)
+
+This will write log information about the scheduling of tasks.  If you want even
+more fine-grained information, you can enable trap tracing using this::
+
+    from curio.debug import traptrace
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    run(..., debug=traptrace)
+
+This will write a log of every low-level operation being performed by the kernel.
 
 More Information
 ----------------
