@@ -7,7 +7,6 @@ import curio
 from curio import ssl
 from curio import network
 
-
 KEYFILE = 'ssl_test_rsa'    # Private key
 # Certificate (self-signed)
 CERTFILE = 'ssl_test.crt'
@@ -27,6 +26,6 @@ if __name__ == '__main__':
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
     try:
-        curio.run(network.tcp_server, '', 10000, handle, ssl=ssl_context)
+        curio.run(network.tcp_server('', 10000, handle, ssl=ssl_context))
     except KeyboardInterrupt:
         pass
