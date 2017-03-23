@@ -84,7 +84,7 @@ class Task(object):
 
     def __del__(self):
         self.coro.close()
-        if not self._joined and not self.cancelled:
+        if not self._joined and not self.cancelled and not self.daemon:
             if self.next_exc:
                 log.error('Exception in unjoined task %r', self, exc_info=self.next_exc)
             elif not self.daemon:

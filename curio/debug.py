@@ -51,7 +51,7 @@ class logcrash(DebugBase):
 
     def suspended(self, task, exc):
         if exc and self.check_filter(task):
-            if not isinstance(exc, (StopIteration, TaskCancelled)):
+            if not isinstance(exc, (StopIteration, TaskCancelled, KeyboardInterrupt, SystemExit)):
                 log.log(self.level, 'Task %r crashed', task.id, exc_info=exc)
 
 class schedtrace(DebugBase):

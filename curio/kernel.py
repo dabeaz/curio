@@ -853,6 +853,10 @@ class Kernel(object):
                 except Exception as e:
                     current.next_exc = e
 
+                except BaseException as e:
+                    current.next_exc = e
+                    raise
+
 def run(corofunc, *args, with_monitor=False, selector=None,
         debug=(logcrash,), activations=None, timeout=None, **extra):
     '''
