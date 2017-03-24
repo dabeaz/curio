@@ -27,6 +27,7 @@ from .task import spawn, sleep
 from .errors import CancelledError
 from .io import FileStream
 from . import thread
+from .workers import run_in_thread
 
 class Popen(object):
     '''
@@ -65,11 +66,10 @@ class Popen(object):
         return getattr(self._popen, name)
 
     async def wait(self):
-        while True:
-            retcode = self._popen.poll()
-            if retcode is not None:
-                return retcode
-            await sleep(0.0005)
+        retcode = self._popen.poll()
+        if retcode is None:
+            retcode = await run_in_thread(self._popen.wait)
+        return retcode
 
     async def communicate(self, input=b''):
         '''
