@@ -422,7 +422,7 @@ class Kernel(object):
                     raise failed_exc
                 elif failed_task:
                     _reschedule_task(failed_task, exc=failed_exc)
-                    _failed_task._last_io = None
+                    failed_task._last_io = None
 
                 selector_modify(fileobj, mask | event,
                                 (task, wtask) if event == EVENT_READ else (rtask, task))

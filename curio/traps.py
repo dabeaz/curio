@@ -55,7 +55,6 @@ def _read_wait(fileobj, priority=False):
     '''
     yield (_trap_io, fileobj, EVENT_READ, 'READ_WAIT', priority)
 
-
 @coroutine
 def _write_wait(fileobj, priority=False):
     '''
