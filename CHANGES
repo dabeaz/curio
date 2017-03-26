@@ -1,5 +1,13 @@
 CHANGES
 -------
+03/26/2017 Added a Task.interrupt() method.  Cancels the task's current
+	   blocking operation with an 'TaskInterrupted' exception.
+	   This is really just a more nuanced form of cancellation,
+	   similar to a timeout.  However, it's understood that an 
+	   interrupted operation doesn't necessarily mean that the
+	   task should quit.   Instead, the task might coordinate with 
+	   other tasks in some way and retry later. 
+
 Version 0.7 : March 17, 2017
 ----------------------------
 

@@ -869,6 +869,24 @@ def test_pending_cancellation(kernel):
             
     kernel.run(main)
 
+def test_interruption(kernel):
+    evt = Event()
+    async def child():
+        try:
+            await evt.wait()
+        except TaskInterrupted:
+            assert True
+        else:
+            assert False
+        return True
+
+    async def main():
+        t = await spawn(child)
+        await t.interrupt()
+        assert await t.join()
+
+    kernel.run(main)
+
 from functools import partial
 
 def test_single_stepping(kernel):

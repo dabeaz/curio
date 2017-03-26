@@ -94,6 +94,7 @@ def _spawn(coro, daemon):
 def _cancel_task(task, exc=errors.TaskCancelled, val=None):
     '''
     Cancel a task. Causes a CancelledError exception to raise in the task.
+    Set the exc and val arguments to change the exception.
     '''
     yield (_trap_cancel_task, task, exc, val)
 

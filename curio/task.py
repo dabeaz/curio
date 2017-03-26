@@ -163,6 +163,14 @@ class Task(object):
             await _scheduler_wait(self.joining, 'TASK_JOIN')
         return True
 
+    async def interrupt(self):
+        '''
+        Interrupt the task by raising an TaskInterrupted exception.  This
+        is a special form of cancellation.  The task can respond by retrying
+        the current operation.  The task does not need to terminate.
+        '''
+        await _cancel_task(self, exc=TaskInterrupted)
+
     def pdb(self):      # pragma: no cover
         '''
         Run a pdb post-mortem on any pending exception information
