@@ -150,7 +150,7 @@ class Socket(object):
             except WantRead:
                 await _read_wait(self._fileno)
             except WantWrite:     # pragma: no cover
-                await _write_wait(self._fileno, priority=True)
+                await _write_wait(self._fileno)
 
     async def recv_into(self, buffer, nbytes=0, flags=0):
         while True:
@@ -159,7 +159,7 @@ class Socket(object):
             except WantRead:
                 await _read_wait(self._fileno)
             except WantWrite:     # pragma: no cover
-                await _write_wait(self._fileno, priority=True)
+                await _write_wait(self._fileno)
 
     async def send(self, data, flags=0):
         while True:
@@ -168,7 +168,7 @@ class Socket(object):
             except WantWrite:
                 await _write_wait(self._fileno)
             except WantRead:      # pragma: no cover
-                await _read_wait(self._fileno, priority=True)
+                await _read_wait(self._fileno)
 
     async def sendall(self, data, flags=0):
         buffer = memoryview(data).cast('b')
@@ -182,7 +182,7 @@ class Socket(object):
                 except WantWrite:
                     await _write_wait(self._fileno)
                 except WantRead:   # pragma: no cover
-                    await _read_wait(self._fileno, priority=True)
+                    await _read_wait(self._fileno)
         except errors.CancelledError as e:
             e.bytes_sent = total_sent
             raise
@@ -229,7 +229,7 @@ class Socket(object):
             except WantRead:
                 await _read_wait(self._fileno)
             except WantWrite:       # pragma: no cover
-                await _write_wait(self._fileno, priority=True)
+                await _write_wait(self._fileno)
 
     async def recvfrom_into(self, buffer, bytes=0, flags=0):
         while True:
@@ -238,7 +238,7 @@ class Socket(object):
             except WantRead:
                 await _read_wait(self._fileno)
             except WantWrite:       # pragma: no cover
-                await _write_wait(self._fileno, priority=True)
+                await _write_wait(self._fileno)
 
     async def sendto(self, bytes, flags_or_address, address=None):
         if address:
@@ -252,7 +252,7 @@ class Socket(object):
             except WantWrite:
                 await _write_wait(self._fileno)
             except WantRead:      # pragma: no cover
-                await _read_wait(self._fileno, priority=True)
+                await _read_wait(self._fileno)
 
     async def recvmsg(self, bufsize, ancbufsize=0, flags=0):
         while True:

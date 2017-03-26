@@ -46,24 +46,21 @@ globals().update((trap.name, trap) for trap in Traps)
 
 
 @coroutine
-def _read_wait(fileobj, priority=False):
+def _read_wait(fileobj):
     '''
     Wait until reading can be performed.  If another task is waiting
-    on the same file, a ResourceBusy exception is raised. priority
-    specifies who gets the exception. If set, the other task is kicked
-    off and we take over.
+    on the same file, a ResourceBusy exception is raised. 
     '''
-    yield (_trap_io, fileobj, EVENT_READ, 'READ_WAIT', priority)
+    yield (_trap_io, fileobj, EVENT_READ, 'READ_WAIT')
+
 
 @coroutine
-def _write_wait(fileobj, priority=False):
+def _write_wait(fileobj):
     '''
     Wait until writing can be performed. If another task is waiting
     to write on the same file, a ResourceBusy exception is raised.
-    priority specifies who gets the exception. If set, the other task
-    is kicked off and we take over.
     '''
-    yield (_trap_io, fileobj, EVENT_WRITE, 'WRITE_WAIT', priority)
+    yield (_trap_io, fileobj, EVENT_WRITE, 'WRITE_WAIT')
 
 
 @coroutine
