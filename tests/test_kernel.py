@@ -916,7 +916,7 @@ def test_io_registration(kernel):
         assert False
 
     async def writer2():
-        with pytest.raises(ResourceBusy):
+        with pytest.raises(WriteResourceBusy):
             await traps._write_wait(s1.fileno())
 
     async def main():

@@ -564,7 +564,7 @@ def test_double_recv(kernel):
         try:
             await client.recv(1000)   # <- This needs to fail. Task already reading on the socket
             results.append('why am I here?')
-        except CurioError as e:
+        except ReadResourceBusy as e:
             results.append('good handler')
 
     async def handler(client, addr):

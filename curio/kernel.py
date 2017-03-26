@@ -411,9 +411,9 @@ class Kernel(object):
                 key = selector_getkey(fileobj)
                 mask, (rtask, wtask) = key.events, key.data
                 if event == EVENT_READ and rtask:
-                    raise ResourceBusy("Multiple tasks can't wait to read on the same file descriptor %r" % fileobj)
+                    raise ReadResourceBusy("Multiple tasks can't wait to read on the same file descriptor %r" % fileobj)
                 if event == EVENT_WRITE and wtask:
-                    raise ResourceBusy("Multiple tasks can't wait to write on the same file descriptor %r" % fileobj)
+                    raise WriteResourceBusy("Multiple tasks can't wait to write on the same file descriptor %r" % fileobj)
 
                 selector_modify(fileobj, mask | event,
                                 (task, wtask) if event == EVENT_READ else (rtask, task))

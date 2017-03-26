@@ -3,9 +3,10 @@
 # Curio specific exceptions
 
 __all__ = [
-    'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError', 'TaskGroupError',
-    'SyncIOError', 'TaskExit', 'KernelExit', 'ResourceBusy', 'GroupExit',
-    'TimeoutCancellationError', 'UncaughtTimeoutError',
+    'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError',
+    'TaskGroupError', 'SyncIOError', 'TaskExit', 'KernelExit',
+    'ResourceBusy', 'ReadResourceBusy', 'WriteResourceBusy',
+    'GroupExit', 'TimeoutCancellationError', 'UncaughtTimeoutError',
     'TaskCancelled', 'AsyncOnlyError',
 ]
 
@@ -105,6 +106,11 @@ class ResourceBusy(CurioError):
     on behalf of another task.
     '''
 
+class ReadResourceBusy(ResourceBusy):
+    pass
+
+class WriteResourceBusy(ResourceBusy):
+    pass
 
 class KernelExit(BaseException):
     '''
