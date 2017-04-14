@@ -1,5 +1,9 @@
 CHANGES
 -------
+04/14/2017 Refinement to SignalEvent to make it work better on Windows.
+           It's now triggered via the same file descriptor used for SignalQueue
+           objects.
+
 03/26/2017 Added a Task.interrupt() method.  Cancels the task's current
 	   blocking operation with an 'TaskInterrupted' exception.
 	   This is really just a more nuanced form of cancellation,

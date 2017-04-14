@@ -85,14 +85,17 @@ class _SignalHandler(object):
             for signo in received_sigs:
                 for q in list(cls._signal_queues[signo]):
                     q.put(signo)
+                    del q
+                for evtref in list(cls._event_handlers[signo]):
+                    evt = evtref()
+                    if evt:
+                        evt.set()
+                    del evt
 
     # Signal handler that gets installed for handling SignalEvent
     @classmethod
     def _handler(cls, signo, frame):
-        for evtref in cls._event_handlers[signo]:
-            evt = evtref()
-            if evt:
-                evt.set()
+        return
 
     # Watch specified signal numbers with an queue or event
     @classmethod
@@ -164,6 +167,7 @@ class SignalEvent(sync.UniversalEvent):
         super().__init__()
         self._signos = signos
         _SignalHandler.watch(signos, self)
+        _SignalHandler._init_queuing()
              
     def __del__(self):
         try:
