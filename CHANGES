@@ -1,5 +1,10 @@
 CHANGES
 -------
+04/23/2017 Change to ssl.wrap_socket() function and method to make it an
+           async method.   If applied to an already connected socket, it
+           needs to run the handshake--which needs to be async.  See
+	   Issue #206.
+
 04/14/2017 Refinement to SignalEvent to make it work better on Windows.
            It's now triggered via the same file descriptor used for SignalQueue
            objects.

@@ -28,13 +28,15 @@ from .io import Socket
 
 if _ssl:
     @wraps(_ssl.wrap_socket)
-    def wrap_socket(sock, *args, do_handshake_on_connect=True, **kwargs):
+    async def wrap_socket(sock, *args, do_handshake_on_connect=True, **kwargs):
         if isinstance(sock, Socket):
             sock = sock._socket
 
         ssl_sock = _ssl.wrap_socket(sock, *args, do_handshake_on_connect=False, **kwargs)
         cssl_sock = Socket(ssl_sock)
         cssl_sock.do_handshake_on_connect = do_handshake_on_connect
+        if do_handshake_on_connect and ssl_sock._connected:
+            await cssl_sock.do_handshake()
         return cssl_sock
 
     @wraps(_ssl.get_server_certificate)
@@ -50,11 +52,13 @@ if _ssl:
         def __getattr__(self, name):
             return getattr(self._context, name)
 
-        def wrap_socket(self, sock, *args, do_handshake_on_connect=True, **kwargs):
+        async def wrap_socket(self, sock, *args, do_handshake_on_connect=True, **kwargs):
             sock = self._context.wrap_socket(
                 sock._socket, *args, do_handshake_on_connect=False, **kwargs)
             csock = Socket(sock)
             csock.do_handshake_on_connect = do_handshake_on_connect
+            if do_handshake_on_connect and sock._connected:
+                await csock.do_handshake()
             return csock
 
         def __setattr__(self, name, value):

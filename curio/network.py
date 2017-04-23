@@ -49,7 +49,7 @@ async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
         # this code can be simplified to just the else case below.
         #
         if isinstance(sslcontext, curiossl.CurioSSLContext):
-            sock = sslcontext.wrap_socket(sock, **extra_args)
+            sock = await sslcontext.wrap_socket(sock, do_handshake_on_connect=False, **extra_args)
         else:
             # do_handshake_on_connect should not be specified for
             # non-blocking sockets
@@ -109,7 +109,10 @@ async def run_server(sock, client_connected_task, ssl=None):
             while True:
                 client, addr = await sock.accept()
                 if ssl:
-                    client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
+                    if isinstance(ssl, curiossl.CurioSSLContext):
+                        client = await ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
+                    else:
+                        client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
                     if not isinstance(client, Socket):
                         client = Socket(client)
                 await client_group.spawn(run_client, client, addr, ignore_result=True)

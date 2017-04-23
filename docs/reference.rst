@@ -886,7 +886,7 @@ The :mod:`curio.ssl` module provides curio-compatible functions for creating an 
 layer around curio sockets.  The following functions are redefined (and have the same
 calling signature as their counterparts in the standard :mod:`ssl` module:
 
-.. function:: wrap_socket(*args, **kwargs)
+.. asyncfunction:: wrap_socket(*args, **kwargs)
 
 .. asyncfunction:: get_server_certificate(*args, **kwargs)
 
