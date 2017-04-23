@@ -146,3 +146,52 @@ def test_ssl_wrapping(kernel):
         await server_task.cancel()
 
     kernel.run(main())
+
+
+def test_ssl_manual_wrapping(kernel):
+
+    async def client(host, port, context):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect((host, port))
+        ssl_sock = await context.wrap_socket(sock, server_hostname=host)
+        await ssl_sock.sendall(b'Hello, world!')
+        resp = await ssl_sock.recv(4096)
+        return resp
+
+    async def handler(client_sock, addr):
+        data = await client_sock.recv(1000)
+        assert data == b'Hello, world!'
+        await client_sock.send(b'Back atcha: ' + data)
+
+    def server(host, port, context):
+        sock = socket(AF_INET, SOCK_STREAM)
+        try:
+            sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
+            sock.bind((host, port))
+            sock.listen(5)
+            return network.run_server(sock, handler, context)
+        except Exception:
+            sock._socket.close()
+            raise
+        
+    async def main():
+        # It might be desirable to move these out of the examples
+        # directory, as this test are now relying on them being around
+        file_path = join(dirname(dirname(__file__)), 'examples')
+        cert_file = join(file_path, 'ssl_test.crt')
+        key_file = join(file_path, 'ssl_test_rsa')
+
+        server_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        server_context.load_cert_chain(certfile=cert_file, keyfile=key_file)
+
+        curio_client_context = curiossl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        server_task = await spawn(server, 'localhost', 10000, server_context)
+
+        curio_client_context.check_hostname = False
+        curio_client_context.verify_mode = ssl.CERT_NONE
+        resp = await client('localhost', 10000, curio_client_context)
+        assert resp == b'Back atcha: Hello, world!'
+
+        await server_task.cancel()
+
+    kernel.run(main())
