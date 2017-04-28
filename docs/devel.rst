@@ -1200,12 +1200,12 @@ on. For that, you can use the ``ignore_after()`` function.  It works
 like ``timeout_after()`` except that it doesn't raise an exception.
 For example::
 
-    result = ignore_after(seconds, coro)
+    result = await ignore_after(seconds, coro)
     
 In the event of a timeout, the return result is ``None``. So, instead
 of using ``try-except``, you could do this::
 
-    if ignore_after(seconds, coro) == None:
+    if await ignore_after(seconds, coro) == None:
         print('Timeout')
 
 The ``ignore_after()`` function also works as a context-manager. When
@@ -1216,7 +1216,7 @@ timeout occurs. For example::
         await coro1()
         await coro2()
 
-    if t.expired == None:
+    if t.expired:
         print('Timeout')
 
 Nested Timeouts
