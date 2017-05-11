@@ -131,6 +131,7 @@ class Task(object):
         '''
         if not self.terminated:
             raise RuntimeError('Task not terminated')
+        self._joined = True
         if self.next_exc:
             raise self.next_exc
         else:
@@ -142,7 +143,7 @@ class Task(object):
             raise RuntimeError('Task not terminated')
         return self.next_exc
 
-    async def cancel(self, *, blocking=True):
+    async def cancel(self, *, exc=TaskCancelled, blocking=True):
         '''
         Cancel a task by raising a CancelledError exception.
 
@@ -158,7 +159,7 @@ class Task(object):
         if self.terminated:
             self._joined = True
             return False
-        await _cancel_task(self)
+        await _cancel_task(self, exc=exc)
         if blocking:
             await _scheduler_wait(self.joining, 'TASK_JOIN')
         return True

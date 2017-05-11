@@ -1,5 +1,16 @@
 CHANGES
 -------
+05/11/2017 Fixed Issue #212, "never joined" message when add terminated
+           tasks to a task group and using task.result to obtain the 
+           result.
+
+05/11/2017 Added a new keyword argument to Task.cancel() to allow a different
+           exception to be raised.  For example:
+
+              t.cancel(exc=SomeException)
+
+           The default exception is still TaskCancelled.
+
 04/23/2017 Change to ssl.wrap_socket() function and method to make it an
            async method.   If applied to an already connected socket, it
            needs to run the handshake--which needs to be async.  See

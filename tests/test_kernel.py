@@ -981,6 +981,27 @@ def test_coro_partial(kernel):
 
     kernel.run(main)
 
+def test_custom_cancel(kernel):
+    class CustomCancelled(CancelledError):
+        pass
+
+    evt = Event()
+    async def child():
+        try:
+            await evt.wait()
+        except CustomCancelled:
+            assert True
+        except:
+            assert False
+        else:
+            assert False
+
+    async def main():
+        t = await spawn(child)
+        await t.cancel(exc=CustomCancelled)
+    
+    kernel.run(main)
+
         
 
 
