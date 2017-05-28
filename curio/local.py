@@ -105,23 +105,22 @@ def _local_dict(local):
     return _current_task_local_storage.value.setdefault(local, {})
 
 
-# make self.__dict__ point to the current task local storage
-def _patch_magic_dict(self):
-    object.__setattr__(self, '__dict__', _local_dict(self))
-
-
 class Local:
-
-    __slots__ = '__dict__',
-
+    __slots__ = ()
     def __getattribute__(self, name):
-        _patch_magic_dict(self)
-        return object.__getattribute__(self, name)
+        if name == '__dict__':
+            return _local_dict(self)
+        else:
+            try:
+                return _local_dict(self)[name]
+            except KeyError:
+                raise AttributeError('No attribute %s' % name) from None
 
     def __setattr__(self, name, value):
-        _patch_magic_dict(self)
-        object.__setattr__(self, name, value)
+        _local_dict(self)[name] = value
 
     def __delattr__(self, name):
-        _patch_magic_dict(self)
-        return object.__delattr__(self, name)
+        try:
+            del _local_dict(self)[name]
+        except KeyError:
+            raise AttributeError('No attribute %s' % name) from None
