@@ -31,6 +31,7 @@ def test_smoketest():
         assert local.a == 1
         assert local.__dict__ == {"a": 1}
         assert vars(local) == {"a": 1}
+        assert dir(local) == ['a']
         del local.a
         with pytest.raises(AttributeError):
             local.a

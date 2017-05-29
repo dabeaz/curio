@@ -124,3 +124,22 @@ class Local:
             del _local_dict(self)[name]
         except KeyError:
             raise AttributeError('No attribute %s' % name) from None
+
+    def __dir__(self):
+        return list(_local_dict(self))
+
+    # Allow pickling support. This only applies to the task-local data
+    # of whatever task calls pickle (it doesn't cover data stored for
+    # all tasks).  Likewise, unpickling creates a new Local object,
+    # but its data is only going to be set for the task that did the
+    # unpickling.  Main use of this is allowing task-local data to be
+    # carried along to subprocesses (if desired).  Naturally the
+    # data stored would have to be compatible.
+    def __getstate__(self):
+        return _local_dict(self)
+
+    def __setstate__(self, state):
+        d = _local_dict(self)
+        d.clear()
+        d.update(state)
+
