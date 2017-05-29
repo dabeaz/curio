@@ -106,21 +106,33 @@ def _local_dict(local):
 
 
 class Local:
-    __slots__ = ()
+    __slots__ = ('_local_lock', )
+
+    def __new__(cls, *args, **kwargs):
+        self = object.__new__(cls)
+
+        # this is to protect from race conditions when two different threads attempt to mutate
+        # the same curio.Local instance
+        object.__setattr__(self, '_local_lock', threading.RLock())
+        return self
+
     def __getattribute__(self, name):
-        if name == '__dict__':
-            return _local_dict(self)
-        else:
-            try:
-                return _local_dict(self)[name]
-            except KeyError:
-                raise AttributeError('No attribute %s' % name) from None
+        with object.__getattribute__(self, '_local_lock'):
+            if name == '__dict__':
+                return _local_dict(self)
+            else:
+                try:
+                    return _local_dict(self)[name]
+                except KeyError:
+                    raise AttributeError('No attribute %s' % name) from None
 
     def __setattr__(self, name, value):
-        _local_dict(self)[name] = value
+        with object.__getattribute__(self, '_local_lock'):
+            _local_dict(self)[name] = value
 
     def __delattr__(self, name):
-        try:
-            del _local_dict(self)[name]
-        except KeyError:
-            raise AttributeError('No attribute %s' % name) from None
+        with object.__getattribute__(self, '_local_lock'):
+            try:
+                del _local_dict(self)[name]
+            except KeyError:
+                raise AttributeError('No attribute %s' % name) from None
