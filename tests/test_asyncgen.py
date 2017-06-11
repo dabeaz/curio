@@ -2,7 +2,7 @@
 
 import pytest
 from curio import *
-from curio.meta import finalize, awaitable, safe_generator
+from curio.meta import finalize, awaitable, safe_generator, AsyncABC, abstractmethod
 
 
 # Test to make sure a simple async generator runs
@@ -193,6 +193,13 @@ def test_agen_safe_override(kernel):
 
     kernel.run(main())
 
+def test_asyncapc_generator_function():
+    class Parent(AsyncABC):
+        @abstractmethod
+        async def foo(self):
+            raise NotImplementedError
 
-
-
+    class Child(Parent):
+        async def foo(self):
+            yield 1
+            return

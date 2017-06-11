@@ -70,18 +70,6 @@ def test_async_abc():
             pass
 
 
-def test_async_abstractmethod():
-    class Parent(meta.AsyncABC):
-        @meta.abstractmethod
-        async def foo(self):
-            raise NotImplementedError
-
-    class Child(Parent):
-        async def foo(self):
-            yield 1
-            return
-
-
 def test_sync_only(kernel):
     @meta.sync_only
     def func():
