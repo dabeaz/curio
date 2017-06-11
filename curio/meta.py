@@ -81,7 +81,7 @@ def iscoroutinefunction(func):
         return iscoroutinefunction(func.func)
     if hasattr(func, '__func__'):
         return iscoroutinefunction(func.__func__)
-    return inspect.iscoroutinefunction(func) or hasattr(func, '_awaitable')
+    return inspect.iscoroutinefunction(func) or hasattr(func, '_awaitable') or inspect.isasyncgenfunction(func)
 
 def instantiate_coroutine(corofunc, *args, **kwargs):
     '''
@@ -248,10 +248,10 @@ class AsyncABCMeta(ABCMeta):
         coros = {}
         for base in reversed(cls.__mro__):
             coros.update((name, val) for name, val in vars(base).items()
-                         if inspect.iscoroutinefunction(val))
+                         if iscoroutinefunction(val))
 
         for name, val in vars(cls).items():
-            if name in coros and not inspect.iscoroutinefunction(val):
+            if name in coros and not iscoroutinefunction(val):
                 raise TypeError('Must use async def %s%s' % (name, inspect.signature(val)))
         super().__init__(name, bases, methods)
 
