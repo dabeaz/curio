@@ -8,6 +8,7 @@ __all__ = [
     'KernelExit', 'ResourceBusy', 'ReadResourceBusy',
     'WriteResourceBusy', 'GroupExit', 'TimeoutCancellationError',
     'UncaughtTimeoutError', 'TaskCancelled', 'AsyncOnlyError',
+    'HttpError',
 ]
 
 
@@ -35,10 +36,12 @@ class GroupExit(TaskCancelled):
     all tasks in its task group.
     '''
 
+
 class TaskExit(TaskCancelled):
     '''
     Exception that can be raised to directly cancel itself.
     '''
+
 
 class TimeoutCancellationError(CancelledError):
     '''
@@ -52,12 +55,14 @@ class TaskTimeout(CancelledError):
     Exception raised if task is cancelled due to timeout.
     '''
 
+
 class TaskInterrupted(CancelledError):
     '''
     Raised if the current operation is interrupted for some
     reason. It's implied that the task would catch this and
     retry the operation.
     '''
+
 
 class UncaughtTimeoutError(CurioError):
     '''
@@ -73,6 +78,7 @@ class TaskError(CurioError):
     The __cause__ attribute contains the actual exception that
     occurred in the task.
     '''
+
 
 class TaskGroupError(CurioError):
     '''
@@ -90,6 +96,7 @@ class TaskGroupError(CurioError):
 
     def __iter__(self):
         return self.failed.__iter__()
+
 
 class SyncIOError(CurioError):
     '''
@@ -112,11 +119,20 @@ class ResourceBusy(CurioError):
     on behalf of another task.
     '''
 
+
 class ReadResourceBusy(ResourceBusy):
     pass
 
+
 class WriteResourceBusy(ResourceBusy):
     pass
+
+
+class HttpError(CurioError):
+    """
+    Curio HTTP Protocol Base Error.
+    """
+
 
 class KernelExit(BaseException):
     '''
