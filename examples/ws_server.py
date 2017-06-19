@@ -3,7 +3,7 @@
 pip install wsproto before running this.
 
 """
-from curio import Queue, run, spawn, wait
+from curio import Queue, run, spawn, TaskGroup
 from curio.socket import IPPROTO_TCP, TCP_NODELAY
 from wsproto.connection import WSConnection, SERVER
 from wsproto.events import (ConnectionClosed, ConnectionRequested, TextReceived,
@@ -21,9 +21,11 @@ async def ws_adapter(in_q, out_q, client, _):
     while not closed:
         wstask = await spawn(client.recv, 65535)
         outqtask = await spawn(out_q.get)
-        async with wait((wstask, outqtask)) as w:
-            task = await w.next_done()
+
+        async with TaskGroup([wstask, outqtask]) as g:
+            task = await g.next_done()
             result = await task.join()
+            await g.cancel_remaining()
 
         if task is wstask:
             wsconn.receive_bytes(result)
