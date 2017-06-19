@@ -1,6 +1,5 @@
 from curio import meta
 from curio import *
-import time
 from functools import partial
 import pytest
 
@@ -93,8 +92,6 @@ def test_bad_awaitable():
         def spam(x, y, z):
             pass
 
-
-from functools import partial
 
 def test_awaitable_partial(kernel):
     def func(x, y, z):

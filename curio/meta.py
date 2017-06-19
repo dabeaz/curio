@@ -52,6 +52,12 @@ _CO_ITERABLE_COROUTINE = 0x0100
 _CO_ASYNC_GENERATOR = 0x0200
 _CO_FROM_COROUTINE = _CO_COROUTINE | _CO_ITERABLE_COROUTINE | _CO_ASYNC_GENERATOR
 
+try:
+    _isasyncgenfunction = inspect.isasyncgenfunction
+except AttributeError:
+    # Not supported in python 3.5
+    _isasyncgenfunction = lambda func: False
+
 def _from_coroutine(level=2):
     f_code = _getframe(level).f_code
     if f_code.co_flags & _CO_FROM_COROUTINE:
@@ -81,7 +87,7 @@ def iscoroutinefunction(func):
         return iscoroutinefunction(func.func)
     if hasattr(func, '__func__'):
         return iscoroutinefunction(func.__func__)
-    return inspect.iscoroutinefunction(func) or hasattr(func, '_awaitable')
+    return inspect.iscoroutinefunction(func) or hasattr(func, '_awaitable') or _isasyncgenfunction(func)
 
 def instantiate_coroutine(corofunc, *args, **kwargs):
     '''
@@ -248,10 +254,10 @@ class AsyncABCMeta(ABCMeta):
         coros = {}
         for base in reversed(cls.__mro__):
             coros.update((name, val) for name, val in vars(base).items()
-                         if inspect.iscoroutinefunction(val))
+                         if iscoroutinefunction(val))
 
         for name, val in vars(cls).items():
-            if name in coros and not inspect.iscoroutinefunction(val):
+            if name in coros and not iscoroutinefunction(val):
                 raise TypeError('Must use async def %s%s' % (name, inspect.signature(val)))
         super().__init__(name, bases, methods)
 
