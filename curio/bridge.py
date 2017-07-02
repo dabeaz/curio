@@ -4,16 +4,17 @@
 # The curio->asyncio bridge runs a separate asyncio event loop in a different thread,
 # which has coroutines submitted to it over the course of the kernel's lifetime.
 
-__all__ = [ 'AsyncioLoop' ]
+__all__ = [ 'AsyncioLoop', 'asyncio_coroutine' ]
 
 # -- Standard library
 
 import asyncio
+import functools
 import threading
 
 # -- Curio
 
-from .traps import _get_kernel, _future_wait
+from .traps import _future_wait
 from .sync import Event
 from . import task
 from . import workers
@@ -68,12 +69,17 @@ class AsyncioLoop(object):
     async def __aexit__(self, ty, val, tb):
         await self.shutdown()
 
-    
-    
-        
-        
 
-            
-            
-        
-        
+def asyncio_coroutine(loop):
+    '''
+    Marks a coroutine as an asyncio coroutine. This will run it inside the specified loop
+    automatically.
+    '''
+    def inner(func):
+        @functools.wraps(func)
+        def wrapper(*args):
+            return loop.run_asyncio(func, *args)
+
+        return wrapper
+
+    return inner
