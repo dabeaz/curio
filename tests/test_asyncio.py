@@ -15,7 +15,25 @@ def test_asyncio_simple(kernel):
         async with AsyncioLoop() as loop:
             r = await loop.run_asyncio(aio_child, 2, 3)
             assert r == 5
+
+            r2 = await loop.run_asyncio(aio_child(2, 5))
+            assert r2 == 7
+
             with pytest.raises(TypeError):
                 await loop.run_asyncio(aio_child, 2, '3')
                 
+    kernel.run(main)
+
+
+def test_asyncio_wrapper(kernel):
+    loop = AsyncioLoop()
+
+    @asyncio_coroutine(loop)
+    async def aio_child(x, y):
+        return x ** y
+
+    async def main():
+        result = await aio_child(2, 2)
+        assert result == 4
+
     kernel.run(main)
