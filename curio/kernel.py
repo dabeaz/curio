@@ -46,7 +46,6 @@ __all__ = ['Kernel', 'run' ]
 # -- Standard Library
 
 import socket
-import heapq
 import time
 import os
 import sys
@@ -66,6 +65,7 @@ from .traps import _read_wait, Traps
 from .local import LocalsActivation
 from . import meta
 from .debug import _create_debuggers, logcrash
+from .timequeue import TimeQueue
 
 # ----------------------------------------------------------------------
 # Underlying kernel that drives everything
@@ -111,7 +111,7 @@ class Kernel(object):
         self._wake_queue = deque()
 
         # Sleeping task queue
-        self._sleeping = []
+        self._sleepq = TimeQueue()
 
         # Activations
         self._activations = activations if activations else []
@@ -246,7 +246,7 @@ class Kernel(object):
         selector = kernel._selector             # Event selector
         ready = kernel._ready                   # Ready queue
         tasks = kernel._tasks                   # Task table
-        sleeping = kernel._sleeping             # Sleeping task queue
+        sleepq = kernel._sleepq                 # Sleeping task queue
         wake_queue = kernel._wake_queue         # External wake queue
 
         # ---- Bound methods
@@ -398,8 +398,10 @@ class Kernel(object):
 
         # Set a timeout or sleep event on the current task
         def _set_timeout(clock, sleep_type='timeout'):
-            item = (clock, current.id, sleep_type)
-            heapq.heappush(sleeping, item)
+            if clock is None:
+                sleepq.cancel((current.id, sleep_type), getattr(current, sleep_type))
+            else:
+                sleepq.push((current.id, sleep_type), clock)
             setattr(current, sleep_type, clock)
 
         # ------------------------------------------------------------
@@ -615,6 +617,7 @@ class Kernel(object):
                 # Perhaps create a TaskTimeout pending exception here.
                 _set_timeout(previous)
             else:
+                _set_timeout(previous)
                 current.timeout = previous
                 # But there's one other evil corner case.  It's possible that
                 # a timeout could be reset while a TaskTimeout exception
@@ -727,13 +730,13 @@ class Kernel(object):
 
             if ready:
                 timeout = 0
-            elif sleeping:
-                timeout = sleeping[0][0] - time_monotonic()
+            else:
+                current_time = time.monotonic()
+                timeout = sleepq.next_deadline(current_time + 1.0) - current_time
+                if timeout < 0:
+                    timeout = 0
                 if poll_timeout is not None and timeout > poll_timeout:
                     timeout = poll_timeout
-            else:
-                timeout = None if njobs else poll_timeout
-
             try:
                 events = selector_select(timeout)
             except OSError as e:     # pragma: no cover
@@ -786,10 +789,9 @@ class Kernel(object):
             # Time handling (sleep/timeouts
             # ------------------------------------------------------------
 
-            if sleeping:
+            if True:
                 current_time = time_monotonic()
-                while sleeping and sleeping[0][0] <= current_time:
-                    tm, taskid, sleep_type = heapq.heappop(sleeping)
+                for tm, (taskid, sleep_type) in sleepq.expired(current_time):
                     # When a task wakes, verify that the timeout value matches that stored
                     # on the task. If it differs, it means that the task completed its
                     # operation, was cancelled, or is no longer concerned with this

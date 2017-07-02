@@ -1,5 +1,8 @@
 CHANGES
 -------
+07/01/2017 New time queue implementation. For timeout handling, it's
+           faster and far more space efficient.
+
 05/11/2017 Fixed Issue #212, "never joined" message when add terminated
            tasks to a task group and using task.result to obtain the 
            result.
