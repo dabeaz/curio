@@ -4,16 +4,18 @@
 # The curio->asyncio bridge runs a separate asyncio event loop in a different thread,
 # which has coroutines submitted to it over the course of the kernel's lifetime.
 
-__all__ = [ 'AsyncioLoop' ]
+__all__ = [ 'AsyncioLoop', 'asyncio_coroutine' ]
 
 # -- Standard library
 
 import asyncio
+import functools
+import inspect
 import threading
 
 # -- Curio
 
-from .traps import _get_kernel, _future_wait
+from .traps import _future_wait
 from .sync import Event
 from . import task
 from . import workers
@@ -45,9 +47,9 @@ class AsyncioLoop(object):
             await workers.run_in_thread(self._thread.join)
             self._thread = None
 
-    async def run_asyncio(self, corofunc, *args):
+    async def run_asyncio(self, corofunc, *args, **kwargs):
         '''
-        Run an asyncio compatible coroutine corofunc(*args) to completion, 
+        Run an asyncio compatible coroutine corofunc(*args, **kwargs) to completion,
         returning its result
         '''
         if self._thread is None:
@@ -55,7 +57,12 @@ class AsyncioLoop(object):
             self._thread.start()
             await task.spawn(self._asyncio_task, daemon=True)
 
-        fut  = asyncio.run_coroutine_threadsafe(corofunc(*args), self.loop)
+        if inspect.iscoroutinefunction(corofunc):
+            coro = corofunc(*args, **kwargs)
+        else:
+            coro = corofunc
+
+        fut  = asyncio.run_coroutine_threadsafe(coro, self.loop)
         await _future_wait(fut)
         return fut.result()
 
@@ -68,12 +75,17 @@ class AsyncioLoop(object):
     async def __aexit__(self, ty, val, tb):
         await self.shutdown()
 
-    
-    
-        
-        
 
-            
-            
-        
-        
+def asyncio_coroutine(loop):
+    '''
+    Marks a coroutine as an asyncio coroutine. This will run it inside the specified loop
+    automatically.
+    '''
+    def inner(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            return loop.run_asyncio(func, *args, **kwargs)
+
+        return wrapper
+
+    return inner
