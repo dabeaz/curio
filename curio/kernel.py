@@ -732,9 +732,7 @@ class Kernel(object):
                 timeout = 0
             else:
                 current_time = time.monotonic()
-                timeout = sleepq.next_deadline(current_time + 1.0) - current_time
-                if timeout < 0:
-                    timeout = 0
+                timeout = sleepq.next_deadline(current_time)
                 if poll_timeout is not None and timeout > poll_timeout:
                     timeout = poll_timeout
             try:

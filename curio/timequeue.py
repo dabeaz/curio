@@ -32,16 +32,26 @@
 # similar thing might the implementation of Timing Wheels (e.g., as
 # used in the Linux kernel).
 #
-# Note: This is still a work in progress.
+# One unusual aspect to the implementation is that to better manage
+# timeouts, it's better to allow time to more slowly creep along in an
+# incremental manner than to make large jumps.  For example, suppose a
+# collection of tasks have all set timeouts 5 minutes into the future.
+# When polling for I/O, you might be inclined to find the nearest
+# deadline and pass that to select() (something close to 5 minutes).
+# The only problem with this approach is that you'll have to sort all
+# of the deadlines to figure it out (which kind of defeats the
+# purpose).  Instead of doing that, it's better to operate with a more
+# narrow window.  For example, are there any deadlines that expire in
+# the next second?  If so, go ahead and use them.  Otherwise, just 
+# put a one-second timeout on select(). 
 
 import heapq
 from math import log2
 
-TIMESLICE = 1.0
-
 class TimeQueue:
-    def __init__(self):
+    def __init__(self, timeslice=1.0):
         self.near_deadline = 0.0
+        self.timeslice = timeslice
         self.near = []
 
         # Set of buckets for timeouts occurring 4, 16, 64s, 256s, etc. in the future (from deadline)
@@ -50,10 +60,10 @@ class TimeQueue:
 
     def _advance(self, deadline):
         # Sets a new near deadline and adjusts the buckets if necessary
-        if deadline - self.near_deadline >= TIMESLICE:
+        if deadline - self.near_deadline >= self.timeslice:
             self.near_deadline = deadline
         else:
-            self.near_deadline += TIMESLICE
+            self.near_deadline += self.timeslice
 
         # Scan through the buckets and replace items as necessary.  
         # There are two rules:
@@ -86,20 +96,22 @@ class TimeQueue:
             else:
                 break
 
-    def next_deadline(self, max_deadline):
+    def next_deadline(self, current_clock):
         '''
-        Return the next deadline stored up to max_deadline. If there are
-        no deadlines stored, max_deadline is returned
+        Returns the number of seconds to delay.  current_clock is the
+        current clock value.
         '''
+        max_deadline = current_clock + self.timeslice
         if not self.near:
             # If nothing is stored in the near queue. We'll advance the deadline
             # to the new deadline
             self._advance(max_deadline)
 
         if self.near and self.near[0][0] < max_deadline:
-            return self.near[0][0]
+            delta = self.near[0][0] - current_clock
+            return delta if delta > 0 else 0
         else:
-            return max_deadline
+            return self.timeslice
 
     def push(self, item, expires):
         '''
@@ -124,7 +136,7 @@ class TimeQueue:
 
     def expired(self, deadline):
         '''
-        An iterator that returns all items that have expired up to max_deadline
+        An iterator that returns all items that have expired up to deadline
         '''
         if deadline >= self.near_deadline:
             self._advance(deadline)
