@@ -24,16 +24,19 @@ def test_asyncio_simple(kernel):
                 
     kernel.run(main)
 
-
 def test_asyncio_wrapper(kernel):
     loop = AsyncioLoop()
 
     @asyncio_coroutine(loop)
     async def aio_child(x, y):
+        print("AIO_CHILD:", x,  y)
         return x ** y
 
     async def main():
         result = await aio_child(2, 2)
         assert result == 4
+
+        # CRITICAL. Must shut down the loop
+        await loop.shutdown()
 
     kernel.run(main)

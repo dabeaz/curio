@@ -19,6 +19,8 @@ from .traps import _future_wait
 from .sync import Event
 from . import task
 from . import workers
+from . import meta
+
 
 class AsyncioLoop(object):
     '''
@@ -47,9 +49,9 @@ class AsyncioLoop(object):
             await workers.run_in_thread(self._thread.join)
             self._thread = None
 
-    async def run_asyncio(self, corofunc, *args, **kwargs):
+    async def run_asyncio(self, corofunc, *args):
         '''
-        Run an asyncio compatible coroutine corofunc(*args, **kwargs) to completion,
+        Run an asyncio compatible coroutine corofunc(*args) to completion,
         returning its result
         '''
         if self._thread is None:
@@ -57,11 +59,7 @@ class AsyncioLoop(object):
             self._thread.start()
             await task.spawn(self._asyncio_task, daemon=True)
 
-        if inspect.iscoroutinefunction(corofunc):
-            coro = corofunc(*args, **kwargs)
-        else:
-            coro = corofunc
-
+        coro = meta.instantiate_coroutine(corofunc, *args)
         fut  = asyncio.run_coroutine_threadsafe(coro, self.loop)
         await _future_wait(fut)
         return fut.result()
@@ -84,7 +82,7 @@ def asyncio_coroutine(loop):
     def inner(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            return loop.run_asyncio(func, *args, **kwargs)
+            return loop.run_asyncio(functools.partial(func, *args, **kwargs))
 
         return wrapper
 
