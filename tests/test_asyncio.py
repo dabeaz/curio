@@ -29,7 +29,6 @@ def test_asyncio_wrapper(kernel):
 
     @asyncio_coroutine(loop)
     async def aio_child(x, y):
-        print("AIO_CHILD:", x,  y)
         return x ** y
 
     async def main():
