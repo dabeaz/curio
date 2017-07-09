@@ -101,7 +101,7 @@ def _create_debuggers(debug):
     '''
     Create debugger objects.  Called by the kernel to instantiate the objects.
     '''
-    if debug is None:
+    if debug is None or debug is False:
         return []
 
     if debug is True:
