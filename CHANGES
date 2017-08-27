@@ -1,5 +1,8 @@
 CHANGES
 -------
+
+Version 0.8 : August 27, 2017
+-----------------------------
 07/01/2017 New time queue implementation. For timeout handling, it's
            faster and far more space efficient.
 
