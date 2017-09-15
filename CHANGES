@@ -1,6 +1,17 @@
 CHANGES
 -------
 
+Version 0.9 : In Progress
+-------------------------
+09/15/2017 Added the .readinto() method onto async files.
+
+09/15/2017 Made the @async_thread decorator return the actual
+           exception that gets raised in the event of a failure.
+	   This makes it more like a normal function call.  Previously,
+	   it was returning a TaskError exception for any crash.
+           That's a bit weird since the use of threads or spawning
+           of an external task is meant to be more implicit.
+
 Version 0.8 : August 27, 2017
 -----------------------------
 07/01/2017 New time queue implementation. For timeout handling, it's
