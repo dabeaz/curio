@@ -2,7 +2,7 @@
 #
 # Not your parent's threading
 
-__all__ = [ 'AWAIT', 'async_thread', 'async_context', 'async_iter', 'AsyncThread' ]
+__all__ = [ 'AWAIT', 'async_thread', 'async_context', 'async_iter', 'AsyncThread', 'is_async_thread' ]
 
 # -- Standard Library
 
@@ -76,7 +76,7 @@ class AsyncThread(object):
         self._terminate_evt.set()
 
     async def start(self):
-        self._task = await spawn(self._coro_runner, daemon=self.daemon)
+        self._task = await spawn(self._coro_runner, daemon=True)
         self._thread = threading.Thread(target=self._func_runner, daemon=True)
         self._thread.start()
 
@@ -127,5 +127,10 @@ def async_thread(func=None, *, daemon=False):
         except errors.CancelledError as e:
             await t.cancel()
             raise
+        except errors.TaskError as e:
+            raise e.__cause__ from None
     return runner
+
+def is_async_thread():
+    return hasattr(_locals, 'thread')
 

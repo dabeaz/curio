@@ -390,6 +390,9 @@ class StreamBase(object):
             nbytes -= len(chunk)
         return b''.join(chunks)
 
+    async def readinto(self, memory):    # pragma: no cover
+        raise NotImplemented()
+        
     async def readline(self):
         while True:
             nl_index = self._buffer.find(b'\n')
@@ -482,6 +485,7 @@ class FileStream(StreamBase):
 
         # Common bound methods
         self._file_read = fileobj.read
+        self._file_readinto = getattr(fileobj, 'readinto', None)
         self._file_write = fileobj.write
 
     @contextmanager
@@ -511,6 +515,39 @@ class FileStream(StreamBase):
                 await _read_wait(self._fileno)
             except WantWrite:  # pragma: no cover
                 await _write_wait(self._fileno)
+
+    async def readinto(self, memory):
+        view = memoryview(memory)
+        remaining = len(view)
+        total_read = 0
+
+        # It's possible that there is data already buffered on this stream. 
+        # If so, we have to copy into the memory buffer first.
+        buffered = len(self._buffer)
+        tocopy = remaining if (remaining < buffered) else buffered
+        if tocopy:
+            view[:tocopy] = self._buffer[:tocopy]
+            del self._buffer[:tocopy]
+            remaining -= tocopy
+            total_read += tocopy
+
+        # To emulate behavior of synchronous readinto(), we read all available
+        # bytes up to the buffer size.
+        while remaining > 0:
+            try:
+                nrecv = self._file_readinto(view[total_read:total_read+remaining])
+                if nrecv is None:
+                    await _read_wait(self._fileno)
+                elif nrecv == 0:
+                    break
+                else:
+                    total_read += nrecv
+                    remaining -= nrecv
+            except WantRead:
+                await _read_wait(self._fileno)
+            except WantWrite:
+                await _write_wait(self._fileno)
+        return total_read
 
     async def write(self, data):
         nwritten = 0
@@ -559,6 +596,7 @@ class SocketStream(StreamBase):
 
         # Common bound methods
         self._socket_recv = sock.recv
+        self._socket_recv_into = sock.recv_into
         self._socket_send = sock.send
 
     @contextmanager
@@ -583,6 +621,37 @@ class SocketStream(StreamBase):
                 await _read_wait(self._fileno)
             except WantWrite:        # pragma: no cover
                 await _write_wait(self._fileno)
+
+    async def readinto(self, memory):
+        view = memoryview(memory)
+        remaining = len(view)
+        total_read = 0
+
+        # It's possible that there is data already buffered on this stream. 
+        # If so, we have to copy into the memory buffer first.
+        buffered = len(self._buffer)
+        tocopy = remaining if (remaining < buffered) else buffered
+        if tocopy:
+            view[:tocopy] = self._buffer[:tocopy]
+            del self._buffer[:tocopy]
+            remaining -= tocopy
+            total_read += tocopy
+
+        # To emulate behavior of synchronous readinto(), we read all available
+        # bytes up to the buffer size.
+        while remaining > 0:
+            try:
+                nrecv = self._sock_recv_into(view[total_read:total_read+remaining])
+                if nrecv == 0:
+                    break
+                else:
+                    total_read += nrecv
+                    remaining -= nrecv
+            except WantRead:
+                await _read_wait(self._fileno)
+            except WantWrite:
+                await _write_wait(self._fileno)
+        return total_read
 
     async def write(self, data):
         nwritten = 0
