@@ -346,7 +346,7 @@ coroutines is that they can suspend their execution.  When a coroutine
 suspends, there's no reason why the ``run()`` function needs to wait
 around doing nothing.  In fact, it could switch to a different coroutine
 and run it instead.   This is a form of multitasking.  Let's write
-a slightly different varient of the ``run()`` function::
+a slightly different variant of the ``run()`` function::
 
     from collections import deque
     from types import coroutine
@@ -880,7 +880,7 @@ code starts to look much more normal. For example::
 
 This is exactly what's happening with sockets in Curio.  It provides a
 coroutine wrapper around a normal socket and let's you write
-normal-looking socket code.   It doesn't the behavior or semantics of
+normal-looking socket code.   It doesn't change the behavior or semantics of
 how sockets work.
 
 It's important to emphasize that a proxy doesn't change how you
