@@ -2989,7 +2989,7 @@ folder on your laptop.
 Files present a special problem for asynchronous I/O.  Yes, you can
 use Python's built-in ``open()`` function to open a file and yes you
 can obtain a low-level integer file descriptor for it.  You might even
-be able to wrap it with a Curo ``FileStream()`` instance.  However,
+be able to wrap it with a Curio ``FileStream()`` instance.  However,
 under the covers, it's hard to say if it is going to operate in an
 async-friendly manner.  Support for asynchronous file I/O has always
 been a bit dicey in most operating systems. Often it is nonexistent
