@@ -3069,7 +3069,7 @@ this::
         item = await q.get()
         print('Got:', item)
 
-    def yow():
+    def yLazyow():
         print('Synchronous yow')
         q.put('yow')      # Works (note: there is no await)
         print('Goodbye yow')
@@ -3130,7 +3130,7 @@ If you run the above code, the output will look like this::
 Notice how the asynchronous operation has been deferred until control
 returns back to the ``main()`` coroutine and the coroutine is properly awaited.
 
-Executing Coroutines on Behalf on Synchronous Code
+Executing Coroutines on Behalf of Synchronous Code
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you are in synchronous code and need to execute a coroutine, you
