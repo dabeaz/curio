@@ -3127,7 +3127,7 @@ If you run the above code, the output will look like this::
     Goodbye yow
     Asynchronous spam
 
-Notice how how the asynchronous operation has been deferred until control
+Notice how the asynchronous operation has been deferred until control
 returns back to the ``main()`` coroutine and the coroutine is properly awaited.
 
 Executing Coroutines on Behalf on Synchronous Code
