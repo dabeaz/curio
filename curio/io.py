@@ -299,7 +299,8 @@ class Socket(object):
 
     # This is declared as async for the same reason as close()
     async def shutdown(self, how):
-        self._socket.shutdown(how)
+        if self._socket:
+            self._socket.shutdown(how)
 
     async def __aenter__(self):
         self._socket.__enter__()
