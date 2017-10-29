@@ -338,10 +338,10 @@ class StreamBase(object):
 
     # ---- Methods that must be implemented in child classes
     async def _read(self, maxbytes=-1):     # pragma: no cover
-        raise NotImplemented()
+        raise NotImplementedError()
 
     async def write(self, data):            # pragma: no cover
-        raise NotImplemented()
+        raise NotImplementedError()
 
     # ---- General I/O methods for streams
     async def read(self, maxbytes=-1):
@@ -392,7 +392,7 @@ class StreamBase(object):
         return b''.join(chunks)
 
     async def readinto(self, memory):    # pragma: no cover
-        raise NotImplemented()
+        raise NotImplementedError()
         
     async def readline(self):
         while True:
