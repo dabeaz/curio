@@ -642,7 +642,7 @@ class SocketStream(StreamBase):
         # bytes up to the buffer size.
         while remaining > 0:
             try:
-                nrecv = self._sock_recv_into(view[total_read:total_read+remaining])
+                nrecv = self._socket_recv_into(view[total_read:total_read+remaining])
                 if nrecv == 0:
                     break
                 else:
