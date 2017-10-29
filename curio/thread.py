@@ -2,7 +2,7 @@
 #
 # Not your parent's threading
 
-__all__ = [ 'AWAIT', 'async_thread', 'async_context', 'async_iter', 'AsyncThread', 'is_async_thread' ]
+__all__ = [ 'AWAIT', 'async_thread', 'AsyncThread', 'is_async_thread' ]
 
 # -- Standard Library
 
