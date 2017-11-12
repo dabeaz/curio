@@ -368,6 +368,38 @@ example::
 curio.  If given a thread-lock, the various locking operations
 are executed in threads to avoid blocking other curio tasks. 
 
+How can synchronous code set an asynchronous event?
+---------------------------------------------------
+
+If you need to coordinate events between async and synchronous code, use
+a ``UniversalEvent`` object.  For example::
+
+    from curio import UniversalEvent
+
+    evt = UniversalEvent()
+
+    def sync_func():
+        ...
+        evt.set()
+
+    async def async_func():
+        await evt.wait()
+        ...
+
+A ``UniversalEvent`` allows setting and waiting in both synchronous and asynchronous
+code.  You can flip the roles around as well::
+
+    def sync_func():
+        evt.wait()
+        ...
+
+    async def async_func():
+        ...
+        await evt.set()
+
+Note: Waiting on an event in a synchronous function should take place in a separate
+thread to avoid blocking the kernel loop.
+
 How do you run external commands in a subprocess?
 -------------------------------------------------
 
