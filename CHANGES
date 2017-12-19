@@ -3,6 +3,9 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+12/19/2017 Slight change to Task Groups that allow tasks to spawn
+           other tasks into the same group.  See Issue #239.
+
 09/15/2017 Added the .readinto() method onto async files.
 
 09/15/2017 Made the @async_thread decorator return the actual

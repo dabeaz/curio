@@ -379,7 +379,7 @@ class TaskGroup(object):
         operation is cancelled, all remaining tasks are cancelled and the
         cancellation exception is reraised. 
         '''
-        self._closed = True
+        # self._closed = True
 
         # Find all currently finished tasks to collect the ones in error
         exceptional = [ task for task in self._finished if task.next_exc ]
@@ -388,7 +388,8 @@ class TaskGroup(object):
         # cancellation of remaining tasks, cancel them
 
         if exceptional or (wait is None) or (wait is any and self.completed):
-            for task in self._running:
+            while self._running:
+                task = self._running.pop()
                 await task.cancel(blocking=False)
 
         self._finished.clear()
@@ -400,13 +401,14 @@ class TaskGroup(object):
             except CancelledError:
                 # If we got cancelled ourselves, we cancel everything remaining.
                 # Must bail out by re-raising the CancelledError exception (oh well)
-                for task in list(self._running):
+                while self._running:
+                    task = self._running.pop()
                     await task.cancel()
                     task._taskgroup = None
                 raise
 
             # If we're here and nothing finished, it means that some task
-            # called its join() method.  We're not concerned about that task anymore. Carry on.
+            # called its join() method.  We're not concerned about that task anymore.  Carry on.
             if not self._finished:
                 continue
 
@@ -424,8 +426,11 @@ class TaskGroup(object):
                     cancel_remaining = True
 
                 if cancel_remaining:
-                    for ctask in self._running:
+                    while self._running:
+                        ctask = self._running.pop()
                         await ctask.cancel(blocking=False)
+
+        self._closed = True
 
         # We remove any task that was directly cancelled
         exceptional = [task for task in exceptional if not isinstance(task.next_exc, TaskCancelled) ]
