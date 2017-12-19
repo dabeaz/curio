@@ -193,6 +193,12 @@ class Socket(object):
         '''
         await _write_wait(self._fileno)
 
+    async def readable(self):
+        '''
+        Waits until the socket is readable.
+        '''
+        await _read_wait(self._fileno)
+
     async def accept(self):
         while True:
             try:
