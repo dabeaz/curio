@@ -27,7 +27,6 @@ def test_tcp_echo(kernel):
             if not data:
                 break
             results.append(('handler', data))
-            await client.writeable()
             await client.sendall(data)
         results.append('handler done')
         await client.close()

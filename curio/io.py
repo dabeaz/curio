@@ -187,12 +187,6 @@ class Socket(object):
             e.bytes_sent = total_sent
             raise
 
-    async def writeable(self):
-        '''
-        Waits until the socket is writeable.
-        '''
-        await _write_wait(self._fileno)
-
     async def accept(self):
         while True:
             try:

@@ -3,6 +3,11 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+12/22/2017 writeable() method of Socket removed.  Use of this was highly
+           specialized and potentially confusing since it's not normally
+           needed.   Use await _write_wait(sock) if you need to wait
+           for a socket to be writable before calling send().
+
 12/19/2017 Slight change to Task Groups that allow tasks to spawn
            other tasks into the same group.  See Issue #239.
 

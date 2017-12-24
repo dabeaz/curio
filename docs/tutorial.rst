@@ -6,7 +6,7 @@ Python coroutines and the explicit async/await syntax introduced in
 Python 3.5.  Its programming model is based on cooperative
 multitasking and common system programming abstractions such as
 threads, sockets, files, subprocesses, locks, and queues.  However,
-under the covers it is based on a task model that provides for advanced
+under the hood it is based on a task model that provides for advanced
 handling of cancellation, interesting interactions between threads and
 processes, and much more.  It's fun. 
 
@@ -726,7 +726,7 @@ find that this program looks nearly identical except for the use of
 the services of Curio is prefaced by ``await``.  
 
 Carefully notice that we are using the module ``curio.socket`` instead
-of the built-in ``socket`` module here.  Under the covers, ``curio.socket``
+of the built-in ``socket`` module here.  ``curio.socket``
 is a wrapper around the existing ``socket`` module.  All
 of the existing functionality of ``socket`` is available, but all of the
 operations that might block have been replaced by coroutines and must be

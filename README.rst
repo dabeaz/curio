@@ -71,7 +71,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
 
 If you have programmed with threads, you find that curio looks similar.
 You'll also find that the above server can handle thousands of simultaneous 
-client connections even though no threads are being used under the covers.
+client connections even though no threads are being used under the hood.
 
 Of course, if you prefer something a little higher level, you can have
 curio take care of the fiddly bits related to setting up the server portion

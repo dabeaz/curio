@@ -5,7 +5,7 @@ Developing with Curio
 
 So, you want to write a larger application or library that depends on
 Curio? This document describes the overall philosophy behind Curio,
-how it works under the covers, and how you might approach software
+how it works internally, and how you might approach software
 development using it.
 
 Please, Don't Use Curio!
@@ -243,7 +243,7 @@ consider this function::
 If you call this function, you'll see a message and the program will
 go to sleep for awhile.  While it's sleeping, nothing is happening
 at all.  If you look at the CPU usage, it will show 0%. 
-Under the covers, the program has made a "system call" to the 
+Under the hood, the program has made a "system call" to the 
 operating system which has suspended the program.  At some point
 the timer will expire and the operating system will reschedule the
 program to run again.   Just to emphasize, the ``time.sleep()``
@@ -1876,7 +1876,7 @@ In this code, the execution of ``gethostbyaddr()`` takes place in its
 own thread, freeing the Curio kernel loop to work on other tasks in
 the meantime.
 
-Under the covers, Curio maintains a pool of preallocated threads
+Internally, Curio maintains a pool of preallocated threads
 dedicated for performing synchronous operations like this (by default
 the pool consists of 64 worker threads). The ``run_in_thread()``
 function uses this pool. You're not really supposed to worry about
@@ -2092,7 +2092,7 @@ use the ``abide()`` function.  For example::
             ...
         
 ``abide()`` adapts a foreign lock to an asynchronous context-manager
-and guides its execution using a backing thread.  Under the covers,
+and guides its execution using a backing thread.  Internally,
 ``abide()`` is using an asynchronous context manager that is roughly
 equivalent to this::
 
@@ -2974,7 +2974,7 @@ horrors.  Yes, those things are an issue, but if you use ``aside()``
 to launch tasks, you should just manage those tasks in the usual Curio
 way.  For example, if you want to explicitly cancel one of them, use
 its ``cancel()`` method.  Or if you want to quit altogether, raise
-``SystemExit`` as shown.  Under the covers, Curio is tracking the
+``SystemExit`` as shown.  Internally, Curio is tracking the
 associated subprocesses and will manage their lifetime appropriately.
 As long as you let Curio do its thing and you shut things down
 cleanly, it should all work.
@@ -2990,7 +2990,7 @@ Files present a special problem for asynchronous I/O.  Yes, you can
 use Python's built-in ``open()`` function to open a file and yes you
 can obtain a low-level integer file descriptor for it.  You might even
 be able to wrap it with a Curio ``FileStream()`` instance.  However,
-under the covers, it's hard to say if it is going to operate in an
+under the hood, it's hard to say if it is going to operate in an
 async-friendly manner.  Support for asynchronous file I/O has always
 been a bit dicey in most operating systems. Often it is nonexistent
 unless you resort to very specialized APIs such as the POSIX ``aio_*``

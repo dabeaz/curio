@@ -700,10 +700,6 @@ exception.
 
    Make a connection and return an error code instead of raising an exception.
 
-.. asyncmethod:: Socket.writeable()
-
-   Waits until the socket is writeable.
-
 .. asyncmethod:: Socket.close()
 
    Close the connection.  This method is not called on garbage collection.
@@ -1265,7 +1261,7 @@ file wrapper module
 
 One problem concerning coroutines and async concerns access to files on the
 normal file system.  Yes, you can use the built-in ``open()`` function, but
-what happens afterwards is hard to predict.  Under the covers, the operating
+what happens afterwards is hard to predict.  Internally, the operating
 system might have to access a disk drive or perform networking of its own.
 Either way, the operation might take a long time to complete and while it does,
 the whole Curio kernel will be blocked.  You really don't want that--especially
