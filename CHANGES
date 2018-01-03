@@ -3,6 +3,14 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+01/03/2017 The Local() object has been officially deprecated in the 
+           documentation and will be removed at some point.
+           Implementating task-level locals is much more complicated
+           than it seems at first glance and there is discussion of a
+           more general solution in PEP 567.   If you need this kind
+           of functionality, you should copy the task local code into
+           your own application.
+
 12/22/2017 writeable() method of Socket removed.  Use of this was highly
            specialized and potentially confusing since it's not normally
            needed.   Use await _write_wait(sock) if you need to wait

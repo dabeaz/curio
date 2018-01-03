@@ -1007,107 +1007,6 @@ Spend some time to play with this code.   Allow clients to come and go.
 Send the server a ``SIGHUP`` and watch it drop all of its clients.
 It's neat.
 
-Task Local Storage
-------------------
-
-Sometimes it happens that you want to store some data that is specific
-to a particular Task in a place where it can be reached from anywhere,
-without having to pass it around everywhere. For example, in a server
-that responds to network requests, you might want to assign each
-request a unique tag, and then make sure to include that unique tag in
-all log messages generated while handling the request. If we were
-using threads, the solution would be thread-local storage implemented
-with :py:class:`threading.local`. In Curio, we use task-local storage,
-implemented by ``curio.Local``. For example, here is a modified
-version of the chat server with logging and a task-local address::
-
-    import signal
-    from curio import run, spawn, SignalQueue, TaskGroup, Queue, tcp_server, CancelledError, Local
-    from curio.socket import *
-
-    import logging
-    log = logging.getLogger(__name__)
-
-    messages = Queue()
-    subscribers = set()
-    local = Local()
-
-    async def dispatcher():
-        async for msg in messages:
-            for q in subscribers:
-                await q.put(msg)
-
-    async def publish(msg):
-        log.info('%r published %r', local.address, msg)   # Note: task local storage
-        await messages.put(msg)
-
-    async def outgoing(client_stream):
-        queue = Queue()
-        try:
-            subscribers.add(queue)
-            async for name, msg in queue:
-                await client_stream.write(name + b':' + msg)
-        finally:
-            subscribers.discard(queue)
-
-    async def incoming(client_stream, name):
-        try:
-            async for line in client_stream:
-                await publish((name, line))
-        except CancelledError:
-            await client_stream.write(b'SERVER IS GOING DOWN!\n')
-            raise
-
-    async def chat_handler(client, addr):
-        log.info('Connection from %r', addr) 
-        local.address = addr     # Setting task local storage
-        async with client:
-            client_stream = client.as_stream()
-            await client_stream.write(b'Your name: ')
-            name = (await client_stream.readline()).strip()
-            await publish((name, b'joined\n'))
-
-            async with TaskGroup(wait=any) as workers:
-                await workers.spawn(outgoing, client_stream)
-                await workers.spawn(incoming, client_stream, name)
-
-            await publish((name, b'has gone away\n'))
-
-        log.info('%r connection closed', local.address)
-
-    async def chat_server(host, port):
-        async with TaskGroup() as g:
-            await g.spawn(dispatcher)
-            await g.spawn(tcp_server, host, port, chat_handler)
-
-    async def main(host, port):
-        async with SignalQueue(signal.SIGHUP) as restart:
-            while True:
-                print('Starting the server')
-                serv_task = await spawn(chat_server, host, port)
-                await restart.get()
-                print('Server shutting down')
-                await serv_task.cancel()
-
-    if __name__ == '__main__':
-        logging.basicConfig(level=logging.INFO)
-        run(main('', 25000))
-
-Notice two features in particular:
-
-- Unlike almost all other APIs in curio, accessing task-local storage
-  does *not* use ``await``.  Although Curio is primarily concerned with
-  asynchronous functions, code can still freely access synchronous
-  code.  That code may want to access the locals for the purposes of
-  logging or other similar features.  This would be
-  impossible if accessing task-local storage required ``await``.
-
-- Unlike :py:class:`threading.local`, Curio task-local variables are
-  *inherited*. Notice how in our example above, the logs from the 
-  ``publish()`` function access a task local variable even though that
-  function is actually being called by a child task of ``chat_handler()``.
-
-
 Programming Advice
 ------------------
 
@@ -1187,6 +1086,7 @@ A more detailed developer's guide can be found at https://curio.readthedocs.io/e
 
 See the HowTo guide at https://curio.readthedocs.io/en/latest/howto.html for more tips and
 techniques.
+
 
 
 

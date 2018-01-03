@@ -356,25 +356,6 @@ To get more specific information, you can iterate over the exception (or look at
 ``task.exception`` attribute can be used to get specific exception information 
 for that task.
 
-Task local storage
-------------------
-
-Curio supports "task local storage". The API is modeled after the
-"thread local storage" provided by :py:class:`threading.local`.
-
-.. class:: Local
-
-   A class representing a bundle of task-local values. Objects of this
-   class have no particular attributes or methods. Instead, they serve
-   as a blank slate to which you can add whatever attributes you
-   like. Modifications made from within one task will only be visible
-   to that task -- with one exception: when you create a new task
-   using ``curio.spawn``, then any values assigned to
-   :py:class:`Local` objects in the parent task will be inherited by
-   the child. This inheritance takes the form of a shallow copy --
-   further changes in the parent won't affect the child, and further
-   changes in the child won't affect the parent.
-
 Time
 ----
 
