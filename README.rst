@@ -216,13 +216,14 @@ for various testing programs.
 
 **Q: Is curio going to evolve into a framework?**
 
-A: Unclear. The current goal is merely to provide a small, simple library
-for performing concurrent I/O, task synchronization, and common
-systems operations involving interprocess communication and
-subprocesses. It is not anticipated that curio itself would evolve
-into a giant framework for implementing application level protocols such as
-HTTP.  However, it might serve as a foundation for other packages that
-want to provide that kind of functionality.
+A: No, because evolving into a framework would mean modifying Curio to
+actually do something.  If it actually did something, then people
+would start using it to do things.  And then all of those things would
+have to be documented, tested, and supported.  People would start
+complaining about how all the things related to the various provided
+things should have new things added to do some crazy thing.  No forget
+that, Curio remains committed to not doing much of anything the best
+it can.  This includes not implementing HTTP.
 
 **Q: What are future plans?**
 
