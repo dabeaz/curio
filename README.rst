@@ -24,9 +24,8 @@ vary.
 
 News
 ----
-The version 0.7 "release" of curio has a lot of improvements, cleaned up
-APIs, and new features.   For now, it still works on Python 3.5.  However,
-new versions of Curio may start to use Python-3.6 features.  
+The version 0.9 "release" of curio has a few small improvements to
+sockets and some cleanup.
 
 Quick install
 -------------
