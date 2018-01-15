@@ -36,17 +36,22 @@ The Kernel
 All coroutines in curio are executed by an underlying kernel.  Normally, you would
 run a top-level coroutine using the following function:
 
-.. function:: run(corofunc, *args, debug=None, selector=None,
+.. function:: run(corofunc, *args, debug=[logcrash], selector=None,
               with_monitor=False, timeout=None, **other_kernel_args)
 
    Run the async function *corofunc* to completion and return its
-   final return value.  *args* are the arguments provided to
-   *corofunc*.  If *with_monitor* is ``True``, then the monitor
-   debugging task executes in the background.  If *selector* is given,
-   it should be an instance of a selector from the :mod:`selectors
-   <python:selectors>` module.  *debug* is a list of optional 
-   debugging features.  See the section on debugging for more detail.
-   *timeout* sets an initial timeout on the supplied coroutine.
+   final return value.  If the supplied coroutine crashes with an
+   exception, a ``TaskError`` exception is raised.  This is chained
+   exception--look at the ``__cause__`` attribute to get more
+   information.  *args* are the arguments provided to *corofunc*.  If
+   *with_monitor* is ``True``, then the monitor debugging task
+   executes in the background.  If *selector* is given, it should be
+   an instance of a selector from the :mod:`selectors
+   <python:selectors>` module.  *debug* is a list of optional
+   debugging features. By default, uncaught crashes in tasks will be
+   shown on standard error.  If you don't want that, set *debug* to
+   ``None``.  See the section on debugging for more detail.  *timeout*
+   sets an initial timeout on the supplied coroutine.
 
 If you are going to repeatedly run coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
@@ -55,15 +60,17 @@ them using its ``run()`` method as described below:
 .. class:: Kernel(selector=None, debug=None):
 
    Create an instance of a curio kernel.  The arguments are the same
-   as described above for the :func:`run()` function.
+   as described above for the :func:`run()` function.  
 
 There is only one method that may be used on a :class:`Kernel` outside of coroutines.
 
 .. method:: Kernel.run(corofunc=None, *args, timeout=None, shutdown=False)
 
    Runs the kernel until all non-daemonic tasks have finished
-   execution.  *corofunc* is an async function to run as a task.
-   *args* are the arguments given to that function.  *timeout* specified
+   execution.  *corofunc* is an async function to run as a task.  The
+   final result of this function, if supplied, is returned.  If an
+   exception occurs, it is wrapped in a ``TaskError`` exception.
+   *args* are the arguments given to *corofunc*.  *timeout* specified
    a timeout to put on the initial task.  If *shutdown*
    is ``True``, the kernel will cancel all daemonic tasks and perform
    a clean shutdown once all regular tasks have completed.  Calling
@@ -109,7 +116,11 @@ The following functions are defined to help manage the execution of tasks.
    that the new task will run indefinitely in the background.  Curio
    only runs as long as there are non-daemonic tasks to execute.
    Note: a daemonic task will still be cancelled if the underlying
-   kernel is shut down.
+   kernel is shut down.  
+
+   Note: ``spawn()`` creates a completely independent task.  The resulting task
+   is not placed into any kind of task group as might be managed by :class:`TaskGroup`
+   instances described later.
 
 .. asyncfunction:: current_task()
 
@@ -212,7 +223,9 @@ a ``TaskGroup`` instance.
    optional set of existing tasks to put into the group.  New tasks
    can later be added using the ``spawn()`` method below. *wait*
    specifies the policy used for waiting for tasks.  See the ``join()``
-   method below.
+   method below.  Each ``TaskGroup`` is an independent entity.
+   Task groups do not form a hierarchy or any kind of relationship to
+   other previously created task groups or tasks.
 
 The following methods are supported on ``TaskGroup`` instances:
 
