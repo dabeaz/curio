@@ -113,7 +113,7 @@ code.
 Talks Related to Curio
 ----------------------
 
-* `The Other Async (Threads + Asyncio = Love)` <https://https://www.youtube.com/watch?v=x1ndXuw7S0s>, Keynote talk
+* `The Other Async (Threads + Asyncio = Love)` <https://www.youtube.com/watch?v=x1ndXuw7S0s>, Keynote talk
 by David Beazley at PyGotham, 2017.
 
 * `Fear and Awaiting in Async <https://www.youtube.com/watch?v=E-1Y4kSsAFc>`_, Keynote talk by David Beazley at PyOhio 2016.
