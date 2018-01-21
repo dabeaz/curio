@@ -4,7 +4,8 @@
 # based on their similar counterparts in the asyncio library. Some of the
 # fiddly low-level bits are borrowed.
 
-__all__ = [ 'open_connection', 'tcp_server', 'open_unix_connection', 'unix_server' ]
+__all__ = [ 'open_connection', 'tcp_server', 'tcp_server_socket',
+            'open_unix_connection', 'unix_server', 'unix_server_socket' ]
 
 # -- Standard library
 
