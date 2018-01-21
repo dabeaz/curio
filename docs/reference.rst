@@ -51,7 +51,8 @@ run a top-level coroutine using the following function:
    debugging features. By default, uncaught crashes in tasks will be
    shown on standard error.  If you don't want that, set *debug* to
    ``None``.  See the section on debugging for more detail.  *timeout*
-   sets an initial timeout on the supplied coroutine.
+   sets an initial timeout on the supplied coroutine.   A ``RuntimeError``
+   is raised if ``run()`` is invoked more than once from the same thread.
 
 If you are going to repeatedly run coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
@@ -76,7 +77,9 @@ There is only one method that may be used on a :class:`Kernel` outside of corout
    a clean shutdown once all regular tasks have completed.  Calling
    this method with no coroutine and *shutdown* set to ``True``
    will make the kernel cancel all remaining tasks and perform a
-   clean shut down. 
+   clean shut down.   Raise a `RuntimeError` if a task is submitted to an
+   already running kernel or if an attempt is made to run more than one
+   kernel in a thread.
 
 If submitting multiple tasks, one after another, from synchronous
 code, consider using a kernel as a context manager.  For example::
