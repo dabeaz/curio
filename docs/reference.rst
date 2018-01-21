@@ -228,7 +228,10 @@ a ``TaskGroup`` instance.
    specifies the policy used for waiting for tasks.  See the ``join()``
    method below.  Each ``TaskGroup`` is an independent entity.
    Task groups do not form a hierarchy or any kind of relationship to
-   other previously created task groups or tasks.
+   other previously created task groups or tasks.  Moreover, Tasks created by
+   the top level ``spawn()`` function are not placed into any task group.
+   To create a task in a group, it should be created using ``TaskGroup.spawn()``
+   or explicitly added using ``TaskGroup.add_task()``.
 
 The following methods are supported on ``TaskGroup`` instances:
 
