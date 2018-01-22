@@ -3,6 +3,11 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+01/22/2017 Semaphore and BoundedSemaphore now exposes a read-only
+	   property ".value" that gives the current Semaphore value.
+           BoundedSemaphore objects expose a ".bound" property that
+           gives the upper bound.
+           
 01/03/2017 The Local() object has been officially deprecated in the 
            documentation and will be removed at some point.
            Implementating task-level locals is much more complicated

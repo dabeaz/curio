@@ -203,6 +203,10 @@ class Semaphore(_LockBase):
         return '<{} [{},value:{},waiters:{}]>'.format(
             res[1:-1], extra, self._value, len(self._waiting))
 
+    @property
+    def value(self):
+        return self._value
+
     async def acquire(self):
         if self._value <= 0:
             await _scheduler_wait(self._waiting, 'SEMA_ACQUIRE')
@@ -222,14 +226,18 @@ class Semaphore(_LockBase):
 
 class BoundedSemaphore(Semaphore):
 
-    __slots__ = ('_bound_value',)
+    __slots__ = ('_bound',)
 
     def __init__(self, value=1):
-        self._bound_value = value
+        self._bound = value
         super().__init__(value)
 
+    @property
+    def bound(self):
+        return self._bound
+
     async def release(self):
-        if self._value >= self._bound_value:
+        if self._value >= self._bound:
             raise ValueError('BoundedSemaphore released too many times')
         await super().release()
 

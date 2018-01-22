@@ -355,6 +355,7 @@ class TestSemaphore:
             results.append(label + ' wait')
             results.append(sema.locked())
             async with sema:
+                assert sema.value == 0
                 results.append(label + ' acquire')
                 await sleep(0.25)
             results.append(label + ' release')
@@ -482,6 +483,7 @@ class TestSemaphore:
         results = []
         async def task():
             sema = BoundedSemaphore(1)
+            assert sema.bound == 1
             await sema.acquire()
             await sema.release()
             try:
