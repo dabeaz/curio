@@ -1477,6 +1477,14 @@ Semaphores support the following methods:
 
    Return ``True`` if the Semaphore is locked.
 
+.. attribute:: Semaphore.value
+
+   A read-only property giving the current value of the semaphore.
+
+.. attribute:: BoundedSemaphore.bound
+
+   A read-only property giving the upper bound of a bounded semaphore.
+
 Like locks, semaphores support the async-with statement.  A common use of semaphores is to
 limit the number of tasks performing an operation.  For example::
 
