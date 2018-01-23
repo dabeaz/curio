@@ -64,7 +64,7 @@ from .task import Task
 from .traps import _read_wait, Traps
 from .local import LocalsActivation
 from . import meta
-from .debug import _create_debuggers, logcrash
+from .debug import _create_debuggers
 from .timequeue import TimeQueue
 
 # ----------------------------------------------------------------------
@@ -849,7 +849,7 @@ class Kernel(object):
                     raise
 
 def run(corofunc, *args, with_monitor=False, selector=None,
-        debug=(logcrash,), activations=None, timeout=None, **extra):
+        debug=None, activations=None, timeout=None, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This

@@ -3,12 +3,19 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
-01/22/2017 Semaphore and BoundedSemaphore now exposes a read-only
+01/23/2018 A refinement in task crash reporting.  Previously, all 
+           task crashes were logged.  However, Curio was also logging
+           crashes in all unjoined tasks.  Sometimes this would result
+           in duplicate tracebacks.  It's been modified to now only report
+           crashes in unjoined tasks.  If joining, it's assumed that the
+           exception would be noticed there.
+
+01/22/2018 Semaphore and BoundedSemaphore now exposes a read-only
 	   property ".value" that gives the current Semaphore value.
            BoundedSemaphore objects expose a ".bound" property that
            gives the upper bound.
            
-01/03/2017 The Local() object has been officially deprecated in the 
+01/03/2018 The Local() object has been officially deprecated in the 
            documentation and will be removed at some point.
            Implementating task-level locals is much more complicated
            than it seems at first glance and there is discussion of a

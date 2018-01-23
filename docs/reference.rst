@@ -36,7 +36,7 @@ The Kernel
 All coroutines in curio are executed by an underlying kernel.  Normally, you would
 run a top-level coroutine using the following function:
 
-.. function:: run(corofunc, *args, debug=[logcrash], selector=None,
+.. function:: run(corofunc, *args, debug=None, selector=None,
               with_monitor=False, timeout=None, **other_kernel_args)
 
    Run the async function *corofunc* to completion and return its
@@ -48,9 +48,7 @@ run a top-level coroutine using the following function:
    executes in the background.  If *selector* is given, it should be
    an instance of a selector from the :mod:`selectors
    <python:selectors>` module.  *debug* is a list of optional
-   debugging features. By default, uncaught crashes in tasks will be
-   shown on standard error.  If you don't want that, set *debug* to
-   ``None``.  See the section on debugging for more detail.  *timeout*
+   debugging features. See the section on debugging for more detail.  *timeout*
    sets an initial timeout on the supplied coroutine.   A ``RuntimeError``
    is raised if ``run()`` is invoked more than once from the same thread.
 
