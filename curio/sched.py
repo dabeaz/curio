@@ -1,11 +1,11 @@
 # curio/sched.py
 #
-# Implementation of kernel-level scheduling primitives.   These are used
-# to implement low-level task scheduling operations and are the basis
-# upon which higher-level synchronization primitives such as Events, Locks,
-# and Semaphores are built.   End-users of Curio would not use these
-# primitives directly--they would use higher level functionality such
-# as that in the curio/sync.py file.
+# Implementation of kernel-level scheduling primitives.  These are
+# used to implement low-level task scheduling operations and are the
+# basis upon which higher-level synchronization primitives such as
+# Events, Locks, and Semaphores are built.  End-users of Curio should
+# not use these primitives directly--they would use higher level
+# functionality such as that in the curio/sync.py file.  
 
 # -- Standard Library
 
@@ -20,23 +20,20 @@ class SchedBase(ABC):     # pragma: no cover
 
     @abstractmethod
     def add(self, task):
-        '''
-        Adds a new task.  This method *must* return a zero-argument
-        callable that can be used to remove the just added task
-        '''
+        # Adds a new task.  This method *must* return a zero-argument
+        # callable that removes the just added task.
         pass
 
     @abstractmethod
     def pop(self, ntasks=1):
-        '''
-        Pop one or more task.  Returns a list of the removed tasks.
-        '''
+        # Remove one or more task.  Returns a list of the removed tasks
         pass
 
 
-# Scheduler FIFO queue with soft-delete on task cancellation.
-# On cancellation, a placeholder is left in the queue, but it will
-# be removed on subsequent pop operations.
+# Scheduler FIFO queue.  This is used to implement locks and queues.
+# Task cancellation results in a soft-delete where a placeholder is
+# left on the queue, but is removed when encountered on subsequent pop
+# operations.
 
 class SchedFIFO(SchedBase):
 
@@ -44,10 +41,14 @@ class SchedFIFO(SchedBase):
         self._queue = deque()
         self._actual_len = 0
 
+
     def __len__(self):
         return self._actual_len
 
     def add(self, task):
+        # The task is placed inside a 1-item list.  If cancelled, the
+        # task is replaced by None, but the list remains on the queue
+        # until later pop operations discard it
         item = [task]
         self._queue.append(item)
         self._actual_len += 1
@@ -68,9 +69,9 @@ class SchedFIFO(SchedBase):
         return tasks
 
 
-# Scheduler Barrier.  Keeps an unordered set of waiting tasks. Cancellation
-# removes a task from the set.  Rescheduling removes an arbitrary task
-# and reschedules it.
+# Scheduler Barrier.  This is used to implement Events.  Keeps an
+# unordered set of waiting tasks. Cancellation removes a task from the
+# set.  Popping removes an arbitrary task and reschedules it.
 
 class SchedBarrier(SchedBase):
 

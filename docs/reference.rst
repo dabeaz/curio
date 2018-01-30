@@ -1425,6 +1425,20 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
 
     curio.run(main())
 
+Note that due to the asynchronous nature of the context manager, the
+lock could be acquired by another waiter before the current task
+executes the first line after the context, which might surprise a user::
+
+    lck = Lock()
+    async def foo():
+        async with lck:
+            print('locked')
+            # since the actual call to lck.release() will be done before
+            # exiting the context, some other waiter coroutine could be
+            # scheduled to run before we actually exit the context
+        print('This line might be executed after'
+              'another coroutine acquires this lock')
+
 .. class:: RLock()
 
    This class provides a recursive lock funtionality, that could be acquired multiple times
@@ -1434,21 +1448,20 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
 
 :class:`RLock` instances support the following methods:
 
-.. asyncmethod:: Lock.acquire()
+.. asyncmethod:: RLock.acquire()
 
    Acquire the lock, incrementing the recursion by 1. Can be used multiple times within
    the same task, that owns this lock.
 
-.. asyncmethod:: Lock.release()
+.. asyncmethod:: RLock.release()
 
    Release the lock, decrementing the recursion level by 1. If recursion level reaches 0,
    the lock is unlocked. Raises ``RuntimeError`` if called not by the owner or if lock
    is not locked.
 
-.. method:: Lock.locked()
+.. method:: RLock.locked()
 
    Return ``True`` if the lock is currently held, i.e. recursion level is greater than 0.
-
 
 .. class:: Semaphore(value=1)
 

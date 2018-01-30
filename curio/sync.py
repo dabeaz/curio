@@ -2,18 +2,17 @@
 #
 # Implementation of common task synchronization primitives such as
 # events, locks, semaphores, and condition variables. These primitives
-# are only safe to use in the curio framework--they are not thread safe.
+# are only safe to use in the curio framework--they are not thread safe
+# unless otherwise indicated.
 #
 # The general implementation strategy is based on task scheduling.
 # For example, if a task needs to wait on a lock, it goes to sleep.
 # When a task releases a lock, it wakes a sleeping task. 
 #
-# Internally, there are a few kernel-level sychronization primitives
-# used to coordinate tasks (KSyncQueue, and KSyncEvent).  KSyncQueue
-# is used for queue-based coordination.  KSyncEvent is used for
-# barrier synchronization.  The _scheduler_wait() and _scheduler_wake()
-# traps are used to coordinate synchronization with the underlying Kernel.
-
+# Internally, task scheduling is provided by the SchedFIFO and
+# SchedBarrier classes in sched.py.   These are never manipulated
+# directly.  Instead the _scheduler_wait() and _scheduler_wake()
+# functions must be used.
 
 __all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide']
 
@@ -85,6 +84,8 @@ class UniversalEvent(object):
     async def set(self):
         self._evt.set()
 
+# Base class for all synchronization primitives that operate as context managers.
+
 class _LockBase(object):
 
     async def __aenter__(self):
@@ -101,7 +102,6 @@ class _LockBase(object):
         return thread.AWAIT(self.__aexit__(*args))
 
 class Lock(_LockBase):
-
     __slots__ = ('_acquired', '_waiting')
 
     def __init__(self):
@@ -131,7 +131,6 @@ class Lock(_LockBase):
 
 
 class RLock(_LockBase):
-
     __slots__ = ('_lock', '_owner', '_count')
 
     def __init__(self):
@@ -156,26 +155,6 @@ class RLock(_LockBase):
         return True
 
     async def release(self):
-        """Release the lock
-
-        If the acquisitions count reaches 0, release the underlying
-        lock. Only the owner of the lock can release it.
-
-        Note, that due to the asynchronous nature of the _LocBase.__aexit__(),
-        this lock could be acquired by another waiter before the current owner
-        executes the first line after the context, which might surprise a user:
-
-        >>>lck = RLock()
-        >>>async def foo():
-        >>>    async with lck:
-        >>>        print('locked')
-        >>>        # since the actual call to lck.release() will be done before
-        >>>        # exiting the context, some other waiter coroutine could be
-        >>>        # scheduled to run before we actually exit the context
-        >>>    print('This line might be executed after'
-        >>>          'another coroutine acquires this lock')
-
-        """
         if not self.locked():
             raise RuntimeError('RLock is not locked')
         if not await current_task() is self._owner:
@@ -190,7 +169,6 @@ class RLock(_LockBase):
 
 
 class Semaphore(_LockBase):
-
     __slots__ = ('_value', '_waiting')
 
     def __init__(self, value=1):
@@ -291,6 +269,7 @@ class Condition(_LockBase):
     async def notify_all(self):
         await self.notify(len(self._waiting))
 
+
 # Class that adapts a synchronous context-manager to an asynchronous manager
 
 class _contextadapt_basic(object):
@@ -304,9 +283,9 @@ class _contextadapt_basic(object):
     async def __aexit__(self, *args):
         return await workers.run_in_thread(self._manager.__exit__, *args)
 
-# Adapt a synchronous context-manager to an asynchronous manager, but 
-# with a reserved backing thread (the same thread used for the duration of the 
-# context manager)
+# Adapt a synchronous context-manager to an asynchronous manager, but
+# with a reserved backing thread (the same thread is used for the
+# duration of the context manager)
 
 class _contextadapt_reserve(object):
     def __init__(self, manager):
