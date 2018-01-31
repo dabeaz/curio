@@ -129,8 +129,9 @@ class Kernel(object):
     def __enter__(self):
         return self
 
-    def __exit__(self, *args):
-        self.run(shutdown=True)
+    def __exit__(self, ty, val, tb):
+        if not ty:
+            self.run(shutdown=True)
 
     def _call_at_shutdown(self, func):
         self._shutdown_funcs.append(func)
@@ -194,7 +195,8 @@ class Kernel(object):
                         if self._kernel_task_id:
                             tocancel.append(self._tasks[self._kernel_task_id])
                         for task in tocancel:
-                            task.daemon = True
+                            # task.daemon = True
+                            pass
                         self._runner.send((_shutdown_tasks(tocancel), None))
                         self._kernel_task_id = None
                     self._runner.close()
@@ -713,7 +715,7 @@ class Kernel(object):
             # Wait for work if nothing to run
             # ------------------------------------------------------------
 
-            if njobs == 0:
+            if njobs == 0 or (main_task and main_task.next_exc):
                 if main_task:
                     main_task._joined = True
                 coro, poll_timeout = (yield (main_task.next_value, main_task.next_exc)) if main_task else (yield (None, None))

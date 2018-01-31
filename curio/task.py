@@ -7,6 +7,9 @@
 import warnings
 import logging
 from collections import deque
+import linecache
+import traceback
+import os.path
 
 log = logging.getLogger(__name__)
 
@@ -17,10 +20,62 @@ from .traps import *
 from .sched import SchedBarrier
 from . import meta
 
-__all__ = ['Task', 'TaskGroup', 'sleep', 'wake_at', 'current_task', 'spawn', 'gather',
-           'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
-           'clock', 'enable_cancellation', 'disable_cancellation',
-           'check_cancellation', 'set_cancellation', 'schedule', 'aside']
+__all__ = ['Task', 'TaskGroup', 'sleep', 'wake_at', 'current_task',
+           'spawn', 'gather', 'timeout_after', 'timeout_at',
+           'ignore_after', 'ignore_at', 'clock', 'aside', 'schedule',
+           'enable_cancellation', 'disable_cancellation',
+           'check_cancellation', 'set_cancellation' ]
+
+# Internal functions used for debugging/diagnostics
+def _get_stack(task):
+    '''
+    Extracts a list of stack frames from a chain of generator/coroutine calls
+    '''
+    frames = []
+    coro = task.coro
+    while coro:
+        f = coro.cr_frame if hasattr(coro, 'cr_frame') else coro.gi_frame
+        if f is not None:
+            frames.append(f)
+        coro = coro.cr_await if hasattr(coro, 'cr_await') else coro.gi_yieldfrom
+    return frames
+
+# Create a stack traceback for a task
+def _format_stack(task):
+    '''
+    Formats a traceback from a stack of coroutines/generators
+    '''
+    extracted_list = []
+    checked = set()
+    for f in _get_stack(task):
+        lineno = f.f_lineno
+        co = f.f_code
+        filename = co.co_filename
+        name = co.co_name
+        if filename not in checked:
+            checked.add(filename)
+            linecache.checkcache(filename)
+        line = linecache.getline(filename, lineno, f.f_globals)
+        extracted_list.append((filename, lineno, name, line))
+    if not extracted_list:
+        resp = 'No stack for %r' % task
+    else:
+        resp = 'Stack for %r (most recent call last):\n' % task
+        resp += ''.join(traceback.format_list(extracted_list))
+    return resp
+
+# Return the (filename, lineno) where a task is currently executing
+def _where(task):
+    basename = os.path.basename(__file__)
+    for f in _get_stack(task):
+        lineno = f.f_lineno
+        co = f.f_code
+        filename = co.co_filename
+        name = co.co_name
+        if os.path.basename(filename) == basename:
+            continue
+        return filename, lineno
+    return None, None
 
 class Task(object):
     '''
@@ -80,7 +135,11 @@ class Task(object):
         return 'Task(id=%r, name=%r, %r, state=%r)' % (self.id, self.name, self.coro, self.state)
 
     def __str__(self):
-        return self.name
+        filename, lineno = _where(self)
+        if filename:
+            return '%r at %s:%s' % (self, filename, lineno)
+        else:
+            return repr(self)
 
     def __del__(self):
         self.coro.close()
@@ -179,6 +238,10 @@ class Task(object):
         import pdb
         if self.next_exc:
             pdb.post_mortem(self.next_exc.__traceback__)
+
+    @property
+    def traceback(self):    # pragma: no cover
+        return _format_stack(self)
 
 class TaskGroup(object):
     '''

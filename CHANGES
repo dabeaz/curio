@@ -3,6 +3,18 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+01/31/2018 If the main task crashes with an exception, the kernel
+           now returns immediately--even if child tasks are still
+           in progress.   This prevents a problem where the main task
+           crashes, but it's not reported for an extended period due
+           to child tasks continuing to run.  In addition, if the
+           main task crashes, the kernel does not perform a shutdown--
+           leaving tasks as they were at the time of the crash.  This
+           might facilitate debugging.
+
+01/31/2018 Printing a Task object will now show the file and line number
+           of where it's currently waiting.
+
 01/23/2018 A refinement in task crash reporting.  Previously, all 
            task crashes were logged.  However, Curio was also logging
            crashes in all unjoined tasks.  Sometimes this would result

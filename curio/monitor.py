@@ -49,8 +49,6 @@
 # cancellation requests and perform other kernel-related actions.
 
 import os
-import traceback
-import linecache
 import signal
 import time
 import socket
@@ -68,45 +66,6 @@ log = logging.getLogger(__name__)
 
 MONITOR_HOST = '127.0.0.1'
 MONITOR_PORT = 48802
-
-
-def _get_stack(task):
-    '''
-    Extracts a list of stack frames from a chain of generator/coroutine calls
-    '''
-    frames = []
-    coro = task.coro
-    while coro:
-        f = coro.cr_frame if hasattr(coro, 'cr_frame') else coro.gi_frame
-        if f is not None:
-            frames.append(f)
-        coro = coro.cr_await if hasattr(coro, 'cr_await') else coro.gi_yieldfrom
-    return frames
-
-
-def _format_stack(task):
-    '''
-    Formats a traceback from a stack of coroutines/generators
-    '''
-    extracted_list = []
-    checked = set()
-    for f in _get_stack(task):
-        lineno = f.f_lineno
-        co = f.f_code
-        filename = co.co_filename
-        name = co.co_name
-        if filename not in checked:
-            checked.add(filename)
-            linecache.checkcache(filename)
-        line = linecache.getline(filename, lineno, f.f_globals)
-        extracted_list.append((filename, lineno, name, line))
-    if not extracted_list:
-        resp = 'No stack for %r' % task
-    else:
-        resp = 'Stack for %r (most recent call last):\n' % task
-        resp += ''.join(traceback.format_list(extracted_list))
-    return resp
-
 
 class Monitor(object):
     '''
@@ -263,13 +222,12 @@ class Monitor(object):
                                                            widths[1], task.state,
                                                            widths[2], task.cycles,
                                                            widths[3], remaining,
-                                                           widths[4], task))
+                                                           widths[4], task.name))
 
     def command_where(self, sout, taskid):
         task = self.kernel._tasks.get(taskid)
         if task:
-            stack = _format_stack(task)
-            sout.write(stack + '\n')
+            sout.write(task.traceback + '\n')
         else:
             sout.write('No task %d\n' % taskid)
 
@@ -289,7 +247,7 @@ class Monitor(object):
         while taskid:
             task = self.kernel._tasks.get(taskid)
             if task:
-                sout.write('%-6d %12s %s\n' % (task.id, task.state, task))
+                sout.write('%-6d %12s %s\n' % (task.id, task.state, task.name))
                 taskid = task.parentid
             else:
                 break
