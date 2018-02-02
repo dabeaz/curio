@@ -39,8 +39,9 @@ def test_tcp_echo(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server, '', 25000, handler)
-        await spawn(client, ('localhost', 25000), serv)
+        async with TaskGroup() as g:
+            serv = await g.spawn(tcp_server, '', 25000, handler)
+            await g.spawn(client, ('localhost', 25000), serv)
 
     kernel.run(main())
 

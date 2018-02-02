@@ -37,7 +37,7 @@
 # No part of Curio has direct linkage to the Kernel class (it's
 # not imported or used anywhere in the code base).   If you want,
 # you can make a completely custom Kernel object and have the
-# rest of Curio run on it.  You need to make sure you implement
+# rest of Curio run on it.  You just need to make sure you implement
 # the required traps.
 
 
@@ -48,11 +48,9 @@ __all__ = ['Kernel', 'run' ]
 import socket
 import time
 import os
-import sys
 import logging
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
-from collections import deque, defaultdict
-import threading
+from collections import deque
 
 # Logger where uncaught exceptions from crashed tasks are logged
 log = logging.getLogger(__name__)
@@ -140,7 +138,7 @@ class Kernel(object):
     # ----------
     # Submit a new task to the kernel
 
-    def run(self, corofunc=None, *args, shutdown=False, timeout=None):
+    def run(self, corofunc=None, *args, shutdown=False):
         if self._running:
             raise RuntimeError('Curio kernel already running')
 
@@ -150,10 +148,7 @@ class Kernel(object):
         if corofunc and self._crashed:
             raise RuntimeError("Can't submit further tasks to a crashed kernel.")
 
-        if corofunc:
-            coro = meta.instantiate_coroutine(corofunc, *args)
-        else:
-            coro = None
+        coro = meta.instantiate_coroutine(corofunc, *args) if corofunc else None
 
         with meta.asyncgen_manager():
             meta.set_running_flag(True)
@@ -166,13 +161,13 @@ class Kernel(object):
                 # Submit the given coroutine (if any)
                 try:
                     if coro or not shutdown:
-                        ret_val, ret_exc = self._runner.send((coro, timeout))
+                        ret_val, ret_exc = self._runner.send(coro)
                     else:
                         ret_val = ret_exc = None
                 except BaseException as e:
                     # If the underlying runner coroutine died for some reason,
                     # then something bad happened.  Maybe a KeyboardInterrupt
-                    # an internal programming program.  We'll remove it and
+                    # or an internal programming problem.  We'll remove it and
                     # mark the kernel as crashed.   It's still possible that someone
                     # will attempt a kernel shutdown later.
                     self._runner = None
@@ -194,10 +189,7 @@ class Kernel(object):
                         tocancel.sort(key=lambda t: t.id)
                         if self._kernel_task_id:
                             tocancel.append(self._tasks[self._kernel_task_id])
-                        for task in tocancel:
-                            # task.daemon = True
-                            pass
-                        self._runner.send((_shutdown_tasks(tocancel), None))
+                        self._runner.send(_shutdown_tasks(tocancel))
                         self._kernel_task_id = None
                     self._runner.close()
                     del self._runner
@@ -210,10 +202,7 @@ class Kernel(object):
                     self._shutdown_funcs = None
 
                 if ret_exc:
-                    if isinstance(ret_exc, TaskError):
-                        raise ret_exc
-                    else:
-                        raise TaskError('Task Crashed') from ret_exc
+                    raise ret_exc
                 else:
                     return ret_val
 
@@ -240,8 +229,6 @@ class Kernel(object):
     def _run_coro(kernel):
 
         # Motto:  "What happens in the kernel stays in the kernel"
-
-        njobs = 0
 
         # ---- Kernel State
         current = None                          # Currently running task
@@ -324,11 +311,8 @@ class Kernel(object):
 
         # Create a new task. Putting it on the ready queue
         def _new_task(coro, daemon=False):
-            nonlocal njobs
             task = Task(coro, daemon)
             tasks[task.id] = task
-            if not daemon:
-                njobs += 1
             _reschedule_task(task)
             return task
 
@@ -380,23 +364,6 @@ class Kernel(object):
                 return True
             else:
                 return False
-
-        # finalize task.  Called after the task has run to completion
-        def _finalize_task(task, value=None, exc=None):
-            nonlocal njobs
-            task.next_value = value
-            task.next_exc = exc
-            task.timeout = None
-
-            if not task.daemon:
-                njobs -= 1
-
-            # Wake any joining tasks
-            for wtask in task.joining.pop(len(task.joining)):
-                _reschedule_task(wtask)
-
-            task.terminated = True
-            del tasks[task.id]
 
         # Set a timeout or sleep event on the current task
         def _set_timeout(clock, sleep_type='timeout'):
@@ -672,71 +639,30 @@ class Kernel(object):
         main_task = None
 
         # ------------------------------------------------------------
-        # TaskExecutor
-        #
-        # This context manager supervises the execution cycle of a single
-        # task, allowing for monitoring, cleanup actions, and other things.
-        # ------------------------------------------------------------
-
-        class TaskExecutor:
-
-            def __init__(self, task):
-                self.task = task
-
-            def __enter__(self):
-                task = self.task
-                for a in _activations:
-                    a.running(task)
-
-                task.state = 'RUNNING'
-                task.cycles += 1
-                return self
-
-            def __exit__(self, ty, val, tb):
-                task = self.task
-                if task._last_io:
-                    _unregister_event(*task._last_io)
-                    task._last_io = None
-
-                # If pending exceptions, task must be finalized
-                if ty:
-                    _finalize_task(task)
-                    task.state = 'TERMINATED'
-
-                for a in _activations:
-                    a.suspended(task, val)
-
-        # ------------------------------------------------------------
         # Main Kernel Loop
         # ------------------------------------------------------------
         while True:
 
             # ------------------------------------------------------------
-            # Wait for work if nothing to run
+            # Wait for work to be submitted if nothing to run
             # ------------------------------------------------------------
 
-            if njobs == 0 or (main_task and main_task.next_exc):
+            if (main_task and main_task.terminated) or (not ready and not main_task):
                 if main_task:
                     main_task._joined = True
-                coro, poll_timeout = (yield (main_task.next_value, main_task.next_exc)) if main_task else (yield (None, None))
+                coro = (yield (main_task.next_value, main_task.next_exc)) if main_task else (yield (None, None))
                 main_task = _new_task(coro) if coro else None
-                # If a task was created and a timeout was given, we impose a deadline on the task
-                if main_task and poll_timeout:
-                    current = main_task
-                    _set_timeout(poll_timeout + time_monotonic())
                 del coro
 
             # ------------------------------------------------------------
             # I/O Polling/Waiting
             # ------------------------------------------------------------
 
-            if ready:
+            if ready or not main_task:
                 timeout = 0
             else:
                 current_time = time.monotonic()
                 timeout = sleepq.next_deadline(current_time)
-                if poll_timeout is not None and timeout > poll_timeout:
-                    timeout = poll_timeout
             try:
                 events = selector_select(timeout)
             except OSError as e:     # pragma: no cover
@@ -751,25 +677,24 @@ class Kernel(object):
                 rtask, wtask = key.data
                 intfd = isinstance(key.fileobj, int)
                 if mask & EVENT_READ:
-                    # Discussion: If the associated fileobj is
-                    # *not* a bare integer file descriptor, we
-                    # keep a record of the last I/O event in
-                    # _last_io and leave the task registered on
-                    # the event loop.  If it performs the same I/O
-                    # operation again, it will get a speed boost
-                    # from not having to re-register its
-                    # event. However, it's not safe to use this
-                    # optimization with bare integer fds.  These
-                    # fds often get reused and there is a
-                    # possibility that a fd will get closed and
-                    # reopened on a different resource without it
-                    # being detected by the kernel.  For that case,
-                    # its critical that we not leave the fd on the
-                    # event loop.
+                    # Discussion: If the associated fileobj is *not* a
+                    # bare integer file descriptor, we keep a record
+                    # of the last I/O event in _last_io and leave the
+                    # task registered on the event loop.  If it
+                    # performs the same I/O operation again, it will
+                    # get a speed boost from not having to re-register
+                    # its event. However, it's not safe to use this
+                    # optimization with bare integer fds.  These fds
+                    # often get reused and there is a possibility that
+                    # a fd will get closed and reopened on a different
+                    # resource without it being detected by the
+                    # kernel.  For that case, its critical that we not
+                    # leave the fd on the event loop.
                     rtask._last_io = None if intfd else (key.fileobj, EVENT_READ)
                     _reschedule_task(rtask)
                     mask &= ~EVENT_READ
                     rtask = None
+
                 if mask & EVENT_WRITE:
                     wtask._last_io = None if intfd else (key.fileobj, EVENT_WRITE)
                     _reschedule_task(wtask)
@@ -789,69 +714,88 @@ class Kernel(object):
             # Time handling (sleep/timeouts
             # ------------------------------------------------------------
 
-            if True:
-                current_time = time_monotonic()
-                for tm, (taskid, sleep_type) in sleepq.expired(current_time):
-                    # When a task wakes, verify that the timeout value matches that stored
-                    # on the task. If it differs, it means that the task completed its
-                    # operation, was cancelled, or is no longer concerned with this
-                    # sleep operation.  In that case, we do nothing
-                    if taskid in tasks:
-                        task = tasks[taskid]
-                        if sleep_type == 'sleep':
-                            if tm == task.sleep:
-                                task.sleep = None
-                                _reschedule_task(task, value=current_time)
-                        else:
-                            if tm == task.timeout:
-                                task.timeout = None
-                                # If cancellation is allowed and the task is blocked, reschedule it
-                                if task.allow_cancel and task.cancel_func:
-                                    task.cancel_func()
-                                    _reschedule_task(task, exc=TaskTimeout(current_time))
-                                else:
-                                    # Task is on the ready queue or can't be cancelled right now,
-                                    # mark it as pending cancellation
-                                    task.cancel_pending = TaskTimeout(current_time)
+            current_time = time_monotonic()
+            for tm, (taskid, sleep_type) in sleepq.expired(current_time):
+                # When a task wakes, verify that the timeout value matches that stored
+                # on the task. If it differs, it means that the task completed its
+                # operation, was cancelled, or is no longer concerned with this
+                # sleep operation.  In that case, we do nothing
+                if taskid in tasks:
+                    task = tasks[taskid]
+                    if sleep_type == 'sleep':
+                        if tm == task.sleep:
+                            task.sleep = None
+                            _reschedule_task(task, value=current_time)
+                    else:
+                        if tm == task.timeout:
+                            task.timeout = None
+                            # If cancellation is allowed and the task is blocked, reschedule it
+                            if task.allow_cancel and task.cancel_func:
+                                task.cancel_func()
+                                _reschedule_task(task, exc=TaskTimeout(current_time))
+                            else:
+                                # Task is on the ready queue or can't be cancelled right now,
+                                # mark it as pending cancellation
+                                task.cancel_pending = TaskTimeout(current_time)
 
             # ------------------------------------------------------------
             # Run ready tasks
             # ------------------------------------------------------------
 
             for _ in range(len(ready)):
-                current = ready_popleft()
+                active = current = ready_popleft()
                 try:
-                    with TaskExecutor(task=current) as executor:
-                        # The current task runs traps until it suspends
-                        while current:
-                            if current.next_exc is None:
-                                trap = current._send(current.next_value)
-                                current.next_value = None
-                            else:
-                                trap = current._throw(current.next_exc)
-                                current.next_exc = None
+                    for a in _activations:
+                        a.running(active)
+                    active.state = 'RUNNING'
+                    active.cycles += 1
 
-                            # Run the trap function. These never raise exceptions
-                            # unless there's a fatal programming error in the kernel itself
-                            try:
-                                traps[trap[0]](*trap[1:])
-                            except Exception as e:
-                                current.next_exc = e
+                    # The current task runs traps until it suspends
+                    while current:
+                        if current.next_exc is None:
+                            trap = current._send(current.next_value)
+                            current.next_value = None
+                        else:
+                            trap = current._throw(current.next_exc)
+                            current.next_exc = None
 
-                # Exception is raised during coroutine execution, the task
-                # terminated. Set final return code and break out
-                except StopIteration as e:
-                    current.next_value = e.value
-
-                except Exception as e:
-                    current.next_exc = e
-
+                        # Run the trap function. These never raise exceptions
+                        # unless there's a fatal programming error in the kernel itself
+                        try:
+                            traps[trap[0]](*trap[1:])
+                        except Exception as e:
+                            current.next_exc = e
+                      
+                # If any exception is raised during coroutine execution, the
+                # task is terminated.   Set the final return code and break out
                 except BaseException as e:
-                    current.next_exc = e
-                    raise
+                    # Wake all joining tasks and set the current task a terminated state
+                    for wtask in active.joining.pop(len(active.joining)):
+                        _reschedule_task(wtask)
+                    active.terminated = True
+                    active.state = 'TERMINATED'
+                    del tasks[active.id]
+                    active.timeout = None
+                    
+                    if isinstance(e, StopIteration):
+                        active.next_value = e.value
+                        active.next_exc = None
+                    else:
+                        active.next_value = None
+                        active.next_exc = e
+                        if not isinstance(e, Exception):
+                            raise
+                
+                finally:
+                    if active._last_io:
+                        _unregister_event(*active._last_io)
+                        active._last_io = None
+
+                    for a in _activations:
+                        a.suspended(active)
 
 def run(corofunc, *args, with_monitor=False, selector=None,
-        debug=None, activations=None, timeout=None, **extra):
+        debug=None, activations=None, **extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
@@ -876,4 +820,4 @@ def run(corofunc, *args, with_monitor=False, selector=None,
         kernel._call_at_shutdown(m.close)
 
     with kernel:
-        return kernel.run(corofunc, *args, timeout=timeout)
+        return kernel.run(corofunc, *args)

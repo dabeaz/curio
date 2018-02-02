@@ -23,10 +23,9 @@ class ActivationBase:
         '''
         pass
 
-    def suspended(self, task, exc):
+    def suspended(self, task):
         '''
-        Called after the task has suspended. exc is set to an exception if
-        the task has terminated.
+        Called after the task has suspended.
         '''
         pass
 

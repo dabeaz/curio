@@ -540,8 +540,9 @@ def test_iterline(kernel):
         await serv.cancel()
 
     async def main():
-        serv = await spawn(tcp_server, '', 25000, handler)
-        await spawn(test_client, ('localhost', 25000), serv)
+        async with TaskGroup() as g:
+            serv = await g.spawn(tcp_server, '', 25000, handler)
+            await g.spawn(test_client, ('localhost', 25000), serv)
 
     kernel.run(main())
 
@@ -586,9 +587,10 @@ def test_double_recv(kernel):
 
     async def main():
         serv = await spawn(tcp_server, '', 25000, handler)
-        await spawn(test_client, ('localhost', 25000), serv)
+        client = await spawn(test_client, ('localhost', 25000), serv)
         await done.wait()
         await serv.cancel()
+        await client.join()
 
     kernel.run(main())
 

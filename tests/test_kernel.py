@@ -24,8 +24,10 @@ def test_raise(kernel):
     try:
         kernel.run(boom)
         assert False, 'boom() did not raise'
-    except TaskError as exc:
-        assert isinstance(exc.__cause__, Error)
+    except Error as e:
+        pass
+    except:
+        assert False, 'boom() raised wrong error'
 
 def test_sleep(kernel):
     start = end = 0
@@ -688,11 +690,11 @@ def test_task_run_error(kernel):
 
     try:
         kernel.run(main)
-    except TaskError as e:
-        assert isinstance(e.__cause__, ValueError)
-    else:
-        assert False
-
+        assert False, "Exception not raised"
+    except ValueError as e:
+        pass
+    except:
+        assert False, "Wrong exception raised"
 
 def test_sleep_0_starvation(kernel):
     # This task should not block other tasks from running, and should be
@@ -895,19 +897,16 @@ def test_single_stepping(kernel):
         nonlocal value
         await sleep(0)
         value = 1
-        await sleep(0.5)
+        await sleep(0.1)
         value = 2
 
     task = kernel.run(partial(spawn, child, daemon=True))
     while value < 1:
-        kernel.run(timeout=None)
+        kernel.run()
     assert True
-    while value < 2:
-        kernel.run(timeout=0.1)
-    assert True
-
-    with pytest.raises(TaskError):
-        kernel.run(sleep,1,timeout=0.1)
+    time.sleep(0.2)
+    kernel.run()
+    assert value == 2
 
 def test_io_registration(kernel):
     # Tests some tricky corner cases of the kernel that are difficult

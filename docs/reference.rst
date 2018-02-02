@@ -37,20 +37,17 @@ All coroutines in curio are executed by an underlying kernel.  Normally, you wou
 run a top-level coroutine using the following function:
 
 .. function:: run(corofunc, *args, debug=None, selector=None,
-              with_monitor=False, timeout=None, **other_kernel_args)
+              with_monitor=False, **other_kernel_args)
 
    Run the async function *corofunc* to completion and return its
-   final return value.  If the supplied coroutine crashes with an
-   exception, a ``TaskError`` exception is raised.  This is chained
-   exception--look at the ``__cause__`` attribute to get more
-   information.  *args* are the arguments provided to *corofunc*.  If
-   *with_monitor* is ``True``, then the monitor debugging task
-   executes in the background.  If *selector* is given, it should be
-   an instance of a selector from the :mod:`selectors
+   final return value.  *args* are the arguments provided to
+   *corofunc*.  If *with_monitor* is ``True``, then the monitor
+   debugging task executes in the background.  If *selector* is given,
+   it should be an instance of a selector from the :mod:`selectors
    <python:selectors>` module.  *debug* is a list of optional
-   debugging features. See the section on debugging for more detail.  *timeout*
-   sets an initial timeout on the supplied coroutine.   A ``RuntimeError``
-   is raised if ``run()`` is invoked more than once from the same thread.
+   debugging features. See the section on debugging for more detail.
+   A ``RuntimeError`` is raised if ``run()`` is invoked more than once
+   from the same thread.
 
 If you are going to repeatedly run coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
@@ -63,21 +60,17 @@ them using its ``run()`` method as described below:
 
 There is only one method that may be used on a :class:`Kernel` outside of coroutines.
 
-.. method:: Kernel.run(corofunc=None, *args, timeout=None, shutdown=False)
+.. method:: Kernel.run(corofunc=None, *args, shutdown=False)
 
-   Runs the kernel until all non-daemonic tasks have finished
-   execution.  *corofunc* is an async function to run as a task.  The
-   final result of this function, if supplied, is returned.  If an
-   exception occurs, it is wrapped in a ``TaskError`` exception.
-   *args* are the arguments given to *corofunc*.  *timeout* specified
-   a timeout to put on the initial task.  If *shutdown*
-   is ``True``, the kernel will cancel all daemonic tasks and perform
-   a clean shutdown once all regular tasks have completed.  Calling
-   this method with no coroutine and *shutdown* set to ``True``
-   will make the kernel cancel all remaining tasks and perform a
-   clean shut down.   Raise a `RuntimeError` if a task is submitted to an
-   already running kernel or if an attempt is made to run more than one
-   kernel in a thread.
+   Runs the kernel until the supplied async function *corofunc*
+   completes execution.The final result of this function, if supplied,
+   is returned. *args* are the arguments given to *corofunc*.  If
+   *shutdown* is ``True``, the kernel will cancel all remaining tasks
+   and perform a clean shutdown. Calling this method with *corofunc*
+   set to ``None`` causes the kernel to run through a single check for
+   task activity before returning immediately.  Raises a
+   `RuntimeError` if a task is submitted to an already running kernel
+   or if an attempt is made to run more than one kernel in a thread.
 
 If submitting multiple tasks, one after another, from synchronous
 code, consider using a kernel as a context manager.  For example::

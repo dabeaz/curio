@@ -47,8 +47,9 @@ def test_tcp_echo(kernel):
         await sock.close()
 
     async def main():
-        await spawn(server, ('', 25000))
-        await spawn(client, ('localhost', 25000))
+        async with TaskGroup() as g:
+            await g.spawn(server, ('', 25000))
+            await g.spawn(client, ('localhost', 25000))
 
     kernel.run(main())
 
@@ -108,8 +109,9 @@ def test_tcp_file_echo(kernel):
         await sock.close()
 
     async def main():
-        await spawn(server, ('', 25000))
-        await spawn(client, ('localhost', 25000))
+        async with TaskGroup() as g:
+             await g.spawn(server, ('', 25000))
+             await g.spawn(client, ('localhost', 25000))
 
     kernel.run(main())
 
@@ -151,8 +153,9 @@ def test_udp_echo(kernel):
         results.append('client close')
 
     async def main():
-        await spawn(server, ('', 25000))
-        await spawn(client, ('localhost', 25000))
+        async with TaskGroup() as g:
+            await g.spawn(server, ('', 25000))
+            await g.spawn(client, ('localhost', 25000))
 
     kernel.run(main())
 
@@ -315,9 +318,10 @@ def test_recvfrom_timeout(kernel):
         await sock.close()
 
     async def canceller():
-        await spawn(server, ('', 25000))
+        t = await spawn(server, ('', 25000))
         await sleep(1.0)
         results.append('client done')
+        await t.join()
 
     kernel.run(canceller())
 
@@ -380,8 +384,9 @@ def test_buffer_into(kernel):
     s1, s2 = socketpair()
 
     async def main():
-        await spawn(sender, s1)
-        await spawn(receiver, s2)
+        async with TaskGroup() as g:
+            await g.spawn(sender, s1)
+            await g.spawn(receiver, s2)
 
     kernel.run(main())
     s1._socket.close()

@@ -78,7 +78,7 @@ class LocalsActivation(ActivationBase):
         self.current = task
         self.old = _set_tasklocal(task)
         
-    def suspended(self, task, exc):
+    def suspended(self, task):
         _current_task_local_storage.value = self.old
         self.current = None
 

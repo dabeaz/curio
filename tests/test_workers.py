@@ -28,8 +28,9 @@ def test_cpu(kernel):
         results.append(('fib', r))
 
     async def main():
-        await spawn(spin, 10)
-        await spawn(cpu_bound, 36)
+        async with TaskGroup() as g:
+            await g.spawn(spin, 10)
+            await g.spawn(cpu_bound, 36)
 
     kernel.run(main())
 
@@ -60,8 +61,9 @@ def test_blocking(kernel):
         results.append('sleep done')
 
     async def main():
-        await spawn(spin, 10)
-        await spawn(blocking, 2)
+        async with TaskGroup() as g:
+            await g.spawn(spin, 10)
+            await g.spawn(blocking, 2)
 
     kernel.run(main())
 
@@ -101,8 +103,9 @@ def test_worker_cancel(kernel, runner):
                 results.append(repr(e.__cause__))
 
     async def main():
-        await spawn(spin, 10)
-        await spawn(blocking, 5)
+        async with TaskGroup() as g:
+            await g.spawn(spin, 10)
+            await g.spawn(blocking, 5)
 
     kernel.run(main())
 
@@ -128,8 +131,9 @@ def test_worker_timeout(kernel, runner):
             results.append('cancel')
 
     async def main():
-        await spawn(spin, 10)
-        await spawn(blocking, 5)
+        async with TaskGroup() as g:
+            await g.spawn(spin, 10)
+            await g.spawn(blocking, 5)
 
     kernel.run(main())
 

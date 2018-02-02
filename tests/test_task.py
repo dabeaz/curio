@@ -21,6 +21,7 @@ def test_cancel_noblock(kernel):
         t = await spawn(child)
         await t.cancel(blocking=False)
         cancelled = True
+        await t.cancel()
 
     kernel.run(main)
     assert child_exit

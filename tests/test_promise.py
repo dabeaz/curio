@@ -18,6 +18,7 @@ def test_promise(kernel):
 
         assert 42 == await consumer(promise)
         assert promise.is_set()
+        await producer_task.join()
 
     kernel.run(main())
 
@@ -32,6 +33,8 @@ def test_promise_exception(kernel):
 
         with pytest.raises(RuntimeError):
             await consumer(promise)
+            
+        await producer_task.join()
 
     kernel.run(main())
 

@@ -36,7 +36,7 @@ class longblock(DebugBase):
         if self.check_filter(task):
             self.start = time.monotonic()
 
-    def suspended(self, task, exc):
+    def suspended(self, task):
         if self.check_filter(task):
             duration = time.monotonic() - self.start
             if duration > self.max_time:
@@ -49,10 +49,10 @@ class logcrash(DebugBase):
     def __init__(self, level=logging.ERROR, **kwargs):
         super().__init__(level=level, **kwargs)
 
-    def suspended(self, task, exc):
-        if exc and self.check_filter(task):
-            if not isinstance(exc, (StopIteration, TaskCancelled, KeyboardInterrupt, SystemExit)):
-                log.log(self.level, 'Task %r crashed', task.id, exc_info=exc)
+    def suspended(self, task):
+        if task.terminated and self.check_filter(task):
+            if not isinstance(task.next_exc, (StopIteration, TaskCancelled, KeyboardInterrupt, SystemExit)):
+                log.log(self.level, 'Task %r crashed', task.id, exc_info=task.next_exc)
 
 class schedtrace(DebugBase):
     '''
@@ -93,7 +93,7 @@ class traptrace(schedtrace):
         if self.check_filter(task):
             self.report = True
 
-    def suspended(self, task, exc):
+    def suspended(self, task):
         self.report = False
 
 

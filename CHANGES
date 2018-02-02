@@ -3,6 +3,25 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+02/02/2018 Some refactoring and simplification of the kernel run() 
+	   method.  First, run() only executes as long as the
+           submitted coroutine is active.  Upon termination, run()
+           immediately returns regardless of whether or not other
+           tasks are still running.  Curio was already generating
+           warning messages for orphaned tasks--tasks for which
+           Task.join() is never invoked.  As such, this change should
+           not affect most properly written applications.
+
+           Second, the timeout argument is no longer supported. If
+           you want a timeout on what's happening, put it into the 
+           supplied async function itself.
+
+           Finally, if Kernel.run() is called with no arguments, it
+           causes the kernel to process any activity that might be
+           pending at that moment in time before returning.  This is
+           something that might be useful should it be necessary
+           to integrate Curio with a foreign event-loop.
+
 01/31/2018 If the main task crashes with an exception, the kernel
            now returns immediately--even if child tasks are still
            in progress.   This prevents a problem where the main task

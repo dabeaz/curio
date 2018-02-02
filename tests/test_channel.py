@@ -4,7 +4,7 @@ import pytest
 from socket import *
 from curio.channel import Connection, Channel, AuthenticationError
 from curio.io import SocketStream
-from curio import spawn, sleep, CancelledError, TaskTimeout, timeout_after, TaskError
+from curio import spawn, sleep, CancelledError, TaskTimeout, timeout_after, TaskError, TaskGroup
 import copy
 
 @pytest.fixture
@@ -31,8 +31,9 @@ def test_connection_hello(kernel, conns):
             await c.send('client hello world')
 
     async def main(c1, c2):
-        await spawn(server, c1)
-        await spawn(client, c2)
+        async with TaskGroup() as g:
+            await g.spawn(server, c1)
+            await g.spawn(client, c2)
 
     kernel.run(main(*conns))
     assert results == ['server hello world',
@@ -54,8 +55,9 @@ def test_connection_hello_bytes(kernel, conns):
             await c.send(b'client hello world')
 
     async def main(c1, c2):
-        await spawn(server, c1)
-        await spawn(client, c2)
+        async with TaskGroup() as g:
+            await g.spawn(server, c1)
+            await g.spawn(client, c2)
 
     kernel.run(main(*conns))
     assert results == [b'server hello world',
@@ -78,8 +80,9 @@ def test_connection_large(kernel, conns):
             await c.send(len(msg))
 
     async def main(c1, c2):
-        await spawn(server, c1)
-        await spawn(client, c2)
+        async with TaskGroup() as g:
+            await g.spawn(server, c1)
+            await g.spawn(client, c2)
 
     kernel.run(main(*conns))
     assert results == [data,
@@ -103,8 +106,9 @@ def test_connection_auth(kernel, conns):
             await c.send('client hello world')
 
     async def main(c1, c2):
-        await spawn(server, c1)
-        await spawn(client, c2)
+        async with TaskGroup() as g:
+            await g.spawn(server, c1)
+            await g.spawn(client, c2)
 
     kernel.run(main(*conns))
 
@@ -125,8 +129,9 @@ def test_connection_auth_fail(kernel, conns):
                 await c.authenticate_client(b'what?')
 
     async def main(c1, c2):
-        await spawn(server, c1)
-        await spawn(client, c2)
+        async with TaskGroup() as g:
+            await g.spawn(server, c1)
+            await g.spawn(client, c2)
 
     kernel.run(main(*conns))
 
@@ -178,8 +183,9 @@ def test_connection_send_partial_bytes(kernel, conns):
             await c.send(len(msg))
 
     async def main(c1, c2):
-        await spawn(server, c1)
-        await spawn(client, c2)
+        async with TaskGroup() as g:
+            await g.spawn(server, c1)
+            await g.spawn(client, c2)
 
     kernel.run(main(*conns))
     assert results == [data[5:15], 10,
@@ -213,8 +219,9 @@ def test_connection_from_connection(kernel):
             await c.send('client hello world')
 
     async def main(c1, c2):
-        await spawn(server, c1)
-        await spawn(client, c2)
+        async with TaskGroup() as g:
+            await g.spawn(server, c1)
+            await g.spawn(client, c2)
 
     kernel.run(main(c1, c2))
     assert results == ['server hello world',
@@ -331,8 +338,9 @@ def test_channel_hello(kernel, chs):
             await c.send('client hello world')
 
     async def main(ch1, ch2):
-        await spawn(server, ch1)
-        await spawn(client, ch2)
+        async with TaskGroup() as g:
+            await g.spawn(server, ch1)
+            await g.spawn(client, ch2)
 
     kernel.run(main(*chs))
     assert results == ['server hello world',
@@ -356,8 +364,9 @@ def test_channel_hello_auth(kernel, chs):
             await c.send('client hello world')
 
     async def main(ch1, ch2):
-        await spawn(server, ch1)
-        await spawn(client, ch2)
+        async with TaskGroup() as g:
+            await g.spawn(server, ch1)
+            await g.spawn(client, ch2)
 
     kernel.run(main(*chs))
     assert results == ['server hello world',
