@@ -3,6 +3,14 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+02/03/2018 Local() objects have been removed.  The idea of having a
+           thread-local style object for storing attributes is fraught
+           with problems--especially given the potential mix of tasks,
+           threads, and processes that is possible in Curio.  The
+           implementation of this has been moved into the examples
+           directory where it can be adapted/copied into your code if
+           it's still needed.   Better yet, maybe take a look at PEP 567.
+
 02/02/2018 Some refactoring and simplification of the kernel run() 
 	   method.  First, run() only executes as long as the
            submitted coroutine is active.  Upon termination, run()

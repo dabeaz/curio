@@ -28,8 +28,6 @@ class Queue(object):
     not safe for communicating between Curio and external
     threads, processes, etc.
     '''
-    __slots__ = ('maxsize', '_queue', '_get_waiting',
-                 '_put_waiting', '_join_waiting', '_task_count')
 
     def __init__(self, maxsize=0):
         self.maxsize = maxsize

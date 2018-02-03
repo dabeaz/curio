@@ -60,7 +60,6 @@ log = logging.getLogger(__name__)
 from .errors import *
 from .task import Task
 from .traps import _read_wait, Traps
-from .local import LocalsActivation
 from . import meta
 from .debug import _create_debuggers
 from .timequeue import TimeQueue
@@ -111,7 +110,6 @@ class Kernel(object):
 
         # Activations
         self._activations = activations if activations else []
-        self._activations.insert(0, LocalsActivation())
         
         # Debugging (activations in disguise)
         if debug:

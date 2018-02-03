@@ -1,12 +1,11 @@
-# local.py
+# curio/local.py
 #
-# This is an example of implementing Task Local Storage using Curio
-# scheduler activations.   Contributed by Nathaniel Smith. 
+# Task local storage.   Contributed by Nathaniel Smith.
 
 __all__ = ["Local"]
 
-# The public API is intentionally almost identical to that of threading.local:
-# the user allocates a Local() object, and then can attach arbitrary
+# Our public API is intentionally almost identical to that of threading.local:
+# the user allocates a curio.Local() object, and then can attach arbitrary
 # attributes to it. Reading one of these attributes later will return the last
 # value that was assigned to this attribute *by code running inside the same
 # Task*.
@@ -61,8 +60,7 @@ import threading
 
 # -- Curio
 
-from curio.activation import ActivationBase, trap_patch
-from curio.traps import Traps
+from .activation import ActivationBase
 
 # The thread-local storage slot that points to the task-local storage dict for
 # whatever task is currently running.
@@ -70,11 +68,13 @@ _current_task_local_storage = threading.local()
 
 class LocalsActivation(ActivationBase):
     def activate(self, kernel):
-        @trap_patch(kernel, Traps._trap_spawn)
-        def spawn(*args, trap):
-            trap(*args)
-            _copy_tasklocal(self.current, self.current.next_value)
+        pass
 
+    def created(self, task):
+        task.task_local_storage = { }
+        if self.current:
+            _copy_tasklocal(self.current, task)
+        
     def running(self, task):
         self.current = task
         self.old = _set_tasklocal(task)
@@ -88,7 +88,6 @@ def _set_tasklocal(task):
     _current_task_local_storage.value = task.task_local_storage
     return old
 
-# Called from _trap_spawn to implement task local inheritance.
 def _copy_tasklocal(parent, child):
     # Make a shallow copy of the values associated with each Local object.
     for local, values in parent.task_local_storage.items():

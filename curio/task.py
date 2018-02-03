@@ -88,7 +88,7 @@ class Task(object):
         'cycles', 'state', 'cancel_func', 'future', 'sleep',
         'timeout', 'next_value', 'next_exc', 'joining', 'cancelled',
         'terminated', 'cancel_pending', '_run_coro', '_last_io',
-        '_deadlines', '_joined', '_taskgroup', 'task_local_storage',
+        '_deadlines', '_joined', '_taskgroup', 
         'allow_cancel', '__weakref__', '__dict__'
     )
     _lastid = 1
@@ -113,8 +113,6 @@ class Task(object):
         self.terminated = False       # Has the task actually Terminated?
         self.cancel_pending = None    # Deferred cancellation exception pending (if any)
         self.allow_cancel = True      # Can cancellation exceptions be delivered?
-
-        self.task_local_storage = {}  # Task local storage
 
         # Actual execution is wrapped by a supporting coroutine
         self._run_coro = self._task_runner(self.coro)
@@ -240,6 +238,9 @@ class Task(object):
             pdb.post_mortem(self.next_exc.__traceback__)
 
     def traceback(self):    # pragma: no cover
+        '''
+        Return a formatted traceback showing where the task is currently executing.
+        '''
         return _format_stack(self)
 
 class TaskGroup(object):

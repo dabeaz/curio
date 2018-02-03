@@ -30,7 +30,6 @@ from .meta import awaitable, iscoroutinefunction
 from . import thread
 
 class Event(object):
-    __slots__ = ('_set', '_waiting')
 
     def __init__(self):
         self._set = False
@@ -102,7 +101,6 @@ class _LockBase(object):
         return thread.AWAIT(self.__aexit__(*args))
 
 class Lock(_LockBase):
-    __slots__ = ('_acquired', '_waiting')
 
     def __init__(self):
         self._acquired = False
@@ -131,7 +129,6 @@ class Lock(_LockBase):
 
 
 class RLock(_LockBase):
-    __slots__ = ('_lock', '_owner', '_count')
 
     def __init__(self):
         self._lock = Lock()
@@ -169,7 +166,6 @@ class RLock(_LockBase):
 
 
 class Semaphore(_LockBase):
-    __slots__ = ('_value', '_waiting')
 
     def __init__(self, value=1):
         self._value = value
@@ -204,8 +200,6 @@ class Semaphore(_LockBase):
 
 class BoundedSemaphore(Semaphore):
 
-    __slots__ = ('_bound',)
-
     def __init__(self, value=1):
         self._bound = value
         super().__init__(value)
@@ -221,8 +215,6 @@ class BoundedSemaphore(Semaphore):
 
 
 class Condition(_LockBase):
-
-    __slots__ = ('_lock', '_waiting')
 
     def __init__(self, lock=None):
         if lock is None:
