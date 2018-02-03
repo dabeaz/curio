@@ -227,7 +227,7 @@ class Monitor(object):
     def command_where(self, sout, taskid):
         task = self.kernel._tasks.get(taskid)
         if task:
-            sout.write(task.traceback + '\n')
+            sout.write(task.traceback() + '\n')
         else:
             sout.write('No task %d\n' % taskid)
 

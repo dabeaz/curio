@@ -239,7 +239,6 @@ class Task(object):
         if self.next_exc:
             pdb.post_mortem(self.next_exc.__traceback__)
 
-    @property
     def traceback(self):    # pragma: no cover
         return _format_stack(self)
 

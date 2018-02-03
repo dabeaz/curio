@@ -83,7 +83,6 @@ class Kernel(object):
     '''
 
     def __init__(self, *, selector=None, debug=None, activations=None):
-        self._running = False
 
         # Functions to call at shutdown
         self._shutdown_funcs = []
@@ -96,9 +95,8 @@ class Kernel(object):
         self._ready = deque()
         self._tasks = {}                  
 
-        # Coroutine runner and internal state
+        # Coroutine runner
         self._runner = None
-        self._crashed = False
 
         # Attributes related to the loopback socket (only initialized if required)
         self._notify_sock = None
@@ -139,76 +137,49 @@ class Kernel(object):
     # Submit a new task to the kernel
 
     def run(self, corofunc=None, *args, shutdown=False):
-        if self._running:
-            raise RuntimeError('Curio kernel already running')
-
-        if meta.curio_running():
-            raise RuntimeError('Only one Curio kernel per thread is allowed')
-
-        if corofunc and self._crashed:
-            raise RuntimeError("Can't submit further tasks to a crashed kernel.")
 
         coro = meta.instantiate_coroutine(corofunc, *args) if corofunc else None
 
-        with meta.asyncgen_manager():
-            meta.set_running_flag(True)
-            self._running = True
-            try:
-                if not self._runner:
-                    self._runner = self._run_coro()
-                    self._runner.send(None)
+        with meta.running():
+            if not self._runner or not self._runner.gi_frame:
+                self._runner = self._run_coro()
+                self._runner.send(None)
 
-                # Submit the given coroutine (if any)
-                try:
-                    if coro or not shutdown:
-                        ret_val, ret_exc = self._runner.send(coro)
-                    else:
-                        ret_val = ret_exc = None
-                except BaseException as e:
-                    # If the underlying runner coroutine died for some reason,
-                    # then something bad happened.  Maybe a KeyboardInterrupt
-                    # or an internal programming problem.  We'll remove it and
-                    # mark the kernel as crashed.   It's still possible that someone
-                    # will attempt a kernel shutdown later.
-                    self._runner = None
-                    self._crashed = True
-                    raise
+            # Submit the given coroutine (if any)
+            if coro or not shutdown:
+                ret_val, ret_exc = self._runner.send(coro)
+            else:
+                ret_val = ret_exc = None
 
-                # If shutdown has been requested, run the shutdown process
-                if shutdown:
-                    # For "reasons" related to task scheduling, the task
-                    # of shutting down all remaining tasks is best managed
-                    # by a launching a task dedicated to carrying out the task (sic)
-                    async def _shutdown_tasks(tocancel):
-                        for task in tocancel:
-                            await task.cancel()
+            # If shutdown has been requested, run the shutdown process
+            if shutdown:
+                # For "reasons" related to task scheduling, the task
+                # of shutting down all remaining tasks is best managed
+                # by a launching a task dedicated to carrying out the task (sic)
+                async def _shutdown_tasks(tocancel):
+                    for task in tocancel:
+                        await task.cancel()
 
-                    while self._tasks:
-                        tocancel = [task for task in self._tasks.values()
-                                    if task.id != self._kernel_task_id]
-                        tocancel.sort(key=lambda t: t.id)
-                        if self._kernel_task_id:
-                            tocancel.append(self._tasks[self._kernel_task_id])
-                        self._runner.send(_shutdown_tasks(tocancel))
-                        self._kernel_task_id = None
-                    self._runner.close()
-                    del self._runner
+                while self._tasks:
+                    tocancel = [task for task in self._tasks.values()
+                                if task.id != self._kernel_task_id]
+                    tocancel.sort(key=lambda t: t.id)
+                    if self._kernel_task_id:
+                        tocancel.append(self._tasks[self._kernel_task_id])
+                    self._runner.send(_shutdown_tasks(tocancel))
+                    self._kernel_task_id = None
+                self._runner.close()
+                self._runner = None
 
-                    log.debug('Kernel %r shutting down', self)
+                # Call registered shutdown functions
+                for func in self._shutdown_funcs:
+                    func()
+                self._shutdown_funcs = None
 
-                    # Call registered shutdown functions
-                    for func in self._shutdown_funcs:
-                        func()
-                    self._shutdown_funcs = None
-
-                if ret_exc:
-                    raise ret_exc
-                else:
-                    return ret_val
-
-            finally:
-                meta.set_running_flag(False)
-                self._running = False
+            if ret_exc:
+                raise ret_exc
+            else:
+                return ret_val
 
     # ------------------------------------------------------------
     # Main kernel runtime
@@ -237,6 +208,7 @@ class Kernel(object):
         tasks = kernel._tasks                   # Task table
         sleepq = kernel._sleepq                 # Sleeping task queue
         wake_queue = kernel._wake_queue         # External wake queue
+        _activations = []
 
         # ---- Bound methods
         selector_register = selector.register
@@ -314,6 +286,8 @@ class Kernel(object):
             task = Task(coro, daemon)
             tasks[task.id] = task
             _reschedule_task(task)
+            for a in _activations:
+                a.created(task)
             return task
 
         # Reschedule a task, putting it back on the ready queue.

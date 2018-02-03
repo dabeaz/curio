@@ -17,6 +17,12 @@ class ActivationBase:
         '''
         pass
 
+    def created(self, task):
+        '''
+        Called immediately after a task has been created.
+        '''
+        pass
+
     def running(self, task):
         '''
         Called right before the execution of a task.

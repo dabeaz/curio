@@ -29,13 +29,19 @@ from .errors import SyncIOError
 
 
 _locals = threading.local()
-def set_running_flag(flag):
-    '''
-    Set a flag that indicates whether or not Curio is running in the
-    current thread.
-    '''
-    _locals.running = flag
 
+# Context manager that is used when the kernel is executing.
+
+@contextmanager
+def running():
+    if getattr(_locals, 'running', False):
+        raise RuntimeError('Only one Curio kernel per thread is allowed')
+    _locals.running = True
+    try:
+        with asyncgen_manager():
+            yield
+    finally:
+        _locals.running = False
 
 def curio_running():
     '''
