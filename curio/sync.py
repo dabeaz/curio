@@ -6,11 +6,11 @@
 # unless otherwise indicated.
 #
 # The general implementation strategy is based on task scheduling.
-# For example, if a task needs to wait on a lock, it goes to sleep.
-# When a task releases a lock, it wakes a sleeping task. 
+# For example, if a task needs to wait on a lock, it goes to sleep on
+# a queue.  When a task releases a lock, it wakes a sleeping task.
 #
 # Internally, task scheduling is provided by the SchedFIFO and
-# SchedBarrier classes in sched.py.   These are never manipulated
+# SchedBarrier classes in sched.py.  These are never manipulated
 # directly.  Instead the _scheduler_wait() and _scheduler_wake()
 # functions must be used.
 
@@ -49,7 +49,6 @@ class Event(object):
     async def wait(self):
         if self._set:
             return
-
         await _scheduler_wait(self._waiting, 'EVENT_WAIT')
 
     async def set(self):

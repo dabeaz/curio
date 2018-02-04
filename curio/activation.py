@@ -1,10 +1,9 @@
 # curio/activation.py
 #
-# Scheduler activations can be used to monitor and effect
-# what happens during task execution in the kernel. They
-# can be used to implement features such as task-local storage,
-# tracers, debuggers, and other things.   This file merely
-# defines the base class. 
+# Scheduler activations can be used to monitor and effect what happens
+# during task execution in the kernel. They can be used to implement
+# features such as task-local storage, tracers, debuggers, and other
+# things.  This file merely defines the base class.
 
 from functools import wraps
 

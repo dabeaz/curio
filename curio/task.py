@@ -83,7 +83,7 @@ class Task(object):
     related to execution state and debugging.  Tasks are not normally 
     instantiated directly. Instead, use spawn().
     '''
-    __slots__ = (
+    _slots__ = (
         'id', 'parentid', 'coro', 'daemon', 'name', '_send', '_throw',
         'cycles', 'state', 'cancel_func', 'future', 'sleep',
         'timeout', 'next_value', 'next_exc', 'joining', 'cancelled',
