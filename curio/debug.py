@@ -10,11 +10,11 @@ log = logging.getLogger(__name__)
 
 # -- Curio
 
-from .activation import ActivationBase, trap_patch
+from .activation import Activation, trap_patch
 from .traps import Traps
 from .errors import TaskCancelled
 
-class DebugBase(ActivationBase):
+class DebugBase(Activation):
     def __init__(self, level=logging.INFO, filter=None, **kwargs):
         self.level = level
         self.filter = filter

@@ -1,6 +1,6 @@
-# zmq pull client example.  Requires zmq_pusher.py to be running
+# zmq RPC client example. Requires zmq_rpcserv.py to be runnig
 
-import curio.zmq as zmq
+import curio_zmq as zmq
 from curio import sleep, spawn
 
 from hello import fib

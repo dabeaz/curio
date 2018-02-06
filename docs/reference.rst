@@ -1103,86 +1103,6 @@ Here is an example of a correspoinding consumer program using a channel::
         ch = Channel(('localhost', 30000))
         run(consumer(ch))
 
-ZeroMQ wrapper module
----------------------
-.. module:: curio.zmq
-
-The :mod:`curio.zmq` module provides an async wrapper around the third party
-pyzmq library for communicating via ZeroMQ.   You use it in the same way except
-that certain operations are replaced by async functions.
-
-.. class:: Context(*args, **kwargs)
-
-   An asynchronous subclass of ``zmq.Context``. It has the same arguments
-   and methods as the synchronous class.   Create ZeroMQ sockets using the
-   ``socket()`` method of this class.
-
-Sockets created by the :class:`curio.zmq.Context()` class have the following
-methods replaced by asynchronous versions:
-
-.. asyncmethod:: Socket.send(data, flags=0, copy=True, track=False)
-.. asyncmethod:: Socket.recv(flags=0, copy=True, track=False)
-.. asyncmethod:: Socket.send_multipart(msg_parts, flags=0, copy=True, track=False)
-.. asyncmethod:: Socket.recv_multipart(flags=0, copy=True, track=False)
-.. asyncmethod:: Socket.send_pyobj(obj, flags=0, protocol=pickle.DEFAULT_PROTOCOL)
-.. asyncmethod:: Socket.recv_pyobj(flags=0)
-.. asyncmethod:: Socket.send_json(obj, flags=0, **kwargs)
-.. asyncmethod:: Socket.recv_json(flags, **kwargs)
-.. asyncmethod:: Socket.send_string(u, flags=0, copy=True, encoding='utf-8')
-.. asyncmethod:: Socket.recv_string(flags=0, encoding='utf-8')
-
-To run a Curio application that uses ZeroMQ, a special selector must be given
-to the Kernel.  You can either do this::
-
-   from curio.zmq import ZMQSelector
-   from curio import run
-
-   async def main():
-       ...
-
-   run(main(), selector=ZMQSelector())
-
-Alternative, you can use the ``curio.zmq.run()`` function like this::
-
-   from curio.zmq import run
-
-   async def main():
-       ...
-
-   run(main())
-
-Here is an example of task that uses a ZMQ PUSH socket::
-
-    import curio.zmq as zmq
-
-    async def pusher(address):
-        ctx = zmq.Context()
-        sock = ctx.socket(zmq.PUSH)
-        sock.bind(address)
-        for n in range(100):
-            await sock.send(b'Message %d' % n)
-        await sock.send(b'exit')
-
-    if __name__ == '__main__':
-        zmq.run(pusher('tcp://*:9000'))
-
-Here is an example of a Curio task that receives messages::
-
-    import curio.zmq as zmq
-
-    async def puller(address):
-        ctx = zmq.Context()
-        sock = ctx.socket(zmq.PULL)
-        sock.connect(address)
-        while True:
-            msg = await sock.recv()
-            if msg == b'exit':
-                break
-            print('Got:', msg)
-
-    if __name__ == '__main__':
-        zmq.run(puller('tcp://localhost:9000'))
-
 subprocess wrapper module
 -------------------------
 .. module:: curio.subprocess
@@ -2198,6 +2118,71 @@ you'd need to do this::
 
 Again, keep in mind you don't need to do this is Curio is running in the
 main thread.  Running in a separate thread is more of a special case.
+
+Scheduler Activations
+---------------------
+.. module:: curio.activation
+
+Each task in Curio goes through a life-cycle of creation, running,
+suspension, and eventual termination.   These can be monitored by
+external tools by defining classes that inherit from :class:`Activation`.
+
+.. class:: Activation
+
+   Base class for defining scheduler activations.
+
+The following methods are executed as callback-functions by the kernel:
+
+.. method:: activate(kernel)
+
+   Executed once upon initialization of the Curio kernel. *kernel* is
+   a reference to the ``Kernel`` instance.
+
+.. method:: created(task)
+
+   Called when a new task is created.  *task* is the newly created ``Task`` instance.
+
+.. method:: running(task)
+
+   Called immediately prior to the execution of a task.
+
+.. method:: suspended(task)
+
+   Called when a task has suspended execution.
+
+.. method:: terminated(task)
+
+   Called when a task has terminated execution. Note: the
+   ``suspended()`` method is always called prior to a task being
+   terminated.
+
+As an example, here is a scheduler activation that monitors for long-execution times
+and reports warnings::
+
+    from curio.activation import Activation
+    import time
+
+    class LongBlock(Activation):
+        def __init__(self, maxtime):
+            self.maxtime = maxtime
+
+        def running(self, task):
+            self.start = time.time()
+  
+        def suspended(self, task):
+            end = time.time()
+            if end - self.start > self.maxtime:
+                print(f'Long blocking in {task.name}: {end - self.start}')
+
+Scheduler activations are registered when a ``Kernel`` is created or with the
+top-level ``run()`` function::
+
+    kern = Kernel(activations=[LongBlock(0.05)])
+    with kern:
+        kern.run(coro)
+
+    # Alternative
+    run(activations=[LongBlock(0.05)])
 
 Asynchronous Metaprogramming
 ----------------------------

@@ -1,6 +1,6 @@
 # zmq pull client example.  Requires zmq_pusher.py to be running
 
-import curio.zmq as zmq
+import curio_zmq as zmq
 
 async def puller(address):
     ctx = zmq.Context()

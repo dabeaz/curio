@@ -1,6 +1,6 @@
 # zmq push example. Run the zmq_puller.py program for the client
 
-import curio.zmq as zmq
+import curio_zmq as zmq
 
 async def pusher(address):
     ctx = zmq.Context()

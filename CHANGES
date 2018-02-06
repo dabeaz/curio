@@ -3,6 +3,10 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+02/04/2018 The ZMQ module has been removed from Curio core and put into
+           the examples directory.   This should be spun into a separate
+           package maintained independently of Curio.
+
 02/03/2018 Local() objects have been removed.  The idea of having a
            thread-local style object for storing attributes is fraught
            with problems--especially given the potential mix of tasks,

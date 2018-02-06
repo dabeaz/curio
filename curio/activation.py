@@ -7,7 +7,7 @@
 
 from functools import wraps
 
-class ActivationBase:
+class Activation:
     
     def activate(self, kernel):
         '''
@@ -34,15 +34,22 @@ class ActivationBase:
         '''
         pass
 
+    def terminated(self, task):
+        '''
+        Called after a task has terminated, but prior to the task
+        being collected by any associated join() operations
+        '''
+        pass
+
 def trap_patch(kernel, trapno):
     '''
     Patch the in-kernel trap table.  This decorator is intended for
-    use in scheduler activations.  Main use is in debuggers, tracers, etc.
-    Usage looks like this:
+    use in scheduler activations.  Main use is in debuggers, tracers,
+    etc.  Usage looks like this:
 
     from .traps import Traps
 
-    class Activation(ActivationBase):
+    class MyActivation(Activation):
 
         def activate(self, kernel):
 

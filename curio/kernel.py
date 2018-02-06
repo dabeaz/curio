@@ -765,6 +765,8 @@ class Kernel(object):
 
                     for a in _activations:
                         a.suspended(active)
+                        if active.terminated:
+                            a.terminated(active)
 
 def run(corofunc, *args, with_monitor=False, selector=None,
         debug=None, activations=None, **extra):
