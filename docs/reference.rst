@@ -159,6 +159,10 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
    prior to the cancellation request.  Cancelling a task also cancels
    any previously set timeout. 
 
+.. method:: Task.traceback()
+
+   Create a stack traceback string for the task.  Useful for debugging.
+
 The following public attributes are available of :class:`Task` instances:
 
 .. attribute:: Task.id
@@ -201,7 +205,6 @@ The following public attributes are available of :class:`Task` instances:
 .. attribute:: Task.terminated
 
    A boolean flag that indicates whether or not the task has run to completion.
-
 
 Task Groups
 -----------
@@ -2465,3 +2468,82 @@ This method first tries to receive data.  If none is available, the
 can be performed. When it awakes, the receive operation is
 retried. Just to emphasize, the :func:`_read_wait` doesn't actually
 perform any I/O. It's just scheduling a task for it.
+
+Debugging and Diagnostics
+-------------------------
+
+Curio provides a few facilities for basic debugging and diagnostics.  If you
+print a ``Task`` instance, it will tell you the name of the associated
+coroutine along with the current file/linenumber of where the task is currently 
+executing.   The output might look similar to this::
+
+    Task(id=3, name='child', state='TIME_SLEEP') at filename.py:9
+
+You can additionally use the ``Task.traceback()`` method to create a current
+stack traceback of any given task.  For example::
+
+    t = await spawn(coro)
+    ...
+    print(t.traceback())
+
+To find out more detailed information about what the kernel is doing, you can 
+supply one or more debugging modules to the ``run()`` function.  To trace
+all task scheduling events, use the ``schedtrace`` debugger as follows::
+
+    from curio.debug import schedtrace
+    run(coro, debug=schedtrace)
+
+To trace all low-level kernel traps, use the ``traptrace`` debugger::
+
+    from curio.debug import traptrace
+    run(coro, debug=traptrace)
+
+To report all exceptions from crashed tasks, use the ``logcrash`` debugger::
+
+    from curio.debug import logcrash
+    run(coro, debug=logcrash)
+
+To report warnings about long-running tasks that appear to be stalling the
+event loop, use the ``longblock`` debugger::
+
+    from curio.debug import longblock
+    run(coro, debug=longblock(max_time=0.1))
+
+The different debuggers may be combined together if you provide a list. For example::
+
+    run(coro, debug=[schedtrace, traptrace, logcrash])
+
+The amount of output produced by the different debugging modules might be considerable. You
+can filter it to a specific set of coroutine names using the ``filter`` keyword argument.
+For example::
+
+    async def spam():
+        ...
+
+    async def coro():
+        t = await spawn(spam)
+        ...
+
+    run(coro, debug=schedtrace(filter={'spam'}))
+
+The logging level used by the different debuggers can be changed using the 
+``level`` keyword argument::
+
+    run(coro, debug=schedtrace(level=logging.DEBUG))
+
+A different ``Logger`` instance can be used using the ``log`` keyword argument::
+
+    import logging
+    run(coro, debug=schedtrace(log=logging.getLogger('spam')))
+
+Be aware that all diagnostic logging is synchronous.  As such, all
+logging operations might temporarily block the event loop--especially
+if logging output involves file I/O or network operations.  If this is
+a concern, you should take steps to mitigate it in the configuration
+of logging.  For example, you might use the ``QueueHandler`` and
+``QueueListener`` objects from the ``logging`` module to offload log
+handling to a separate thread.
+
+
+ 
+

@@ -15,9 +15,10 @@ from .traps import Traps
 from .errors import TaskCancelled
 
 class DebugBase(Activation):
-    def __init__(self, level=logging.INFO, filter=None, **kwargs):
+    def __init__(self, *, level=logging.INFO, log=log, filter=None, **kwargs):
         self.level = level
         self.filter = filter
+        self.log = log
 
     def check_filter(self, task):
         if self.filter and task.name not in self.filter:
@@ -40,7 +41,7 @@ class longblock(DebugBase):
         if self.check_filter(task):
             duration = time.monotonic() - self.start
             if duration > self.max_time:
-                log.log(self.level, 'Task id=%d (%s) ran for %s seconds', task.id, task, duration)
+                self.log.log(self.level, '%r ran for %s seconds', task, duration)
 
 class logcrash(DebugBase):
     '''
@@ -51,8 +52,8 @@ class logcrash(DebugBase):
 
     def suspended(self, task):
         if task.terminated and self.check_filter(task):
-            if not isinstance(task.next_exc, (StopIteration, TaskCancelled, KeyboardInterrupt, SystemExit)):
-                log.log(self.level, 'Task %r crashed', task.id, exc_info=task.next_exc)
+            if task.next_exc and not isinstance(task.next_exc, (StopIteration, TaskCancelled, KeyboardInterrupt, SystemExit)):
+                self.log.log(self.level, '%r crashed', task, exc_info=task.next_exc)
 
 class schedtrace(DebugBase):
     '''
@@ -61,9 +62,21 @@ class schedtrace(DebugBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def created(self, task):
+        if self.check_filter(task):
+            self.log.log(self.level, 'CREATE:%f:%r', time.time(), task)
+
     def running(self, task):
         if self.check_filter(task):
-            log.log(self.level, 'SCHEDULE:%f:%d:%s', time.time(), task.id, task)
+            self.log.log(self.level, 'RUN:%f:%r', time.time(), task)
+
+    def suspended(self, task):
+        if self.check_filter(task):
+            self.log.log(self.level, 'SUSPEND:%f:%r', time.time(), task)
+
+    def terminated(self, task):
+        if self.check_filter(task):
+            self.log.log(self.level, 'TERMINATED:%f:%r', time.time(), task)
 
 class traptrace(schedtrace):
     '''
@@ -82,16 +95,18 @@ class traptrace(schedtrace):
             @trap_patch(kernel, trapno)
             def trapfunc(*args, trap, trapno=trapno):
                 if self.report:
-                    log.log(self.level, 'TRAP:%f:%s:%r', 
+                    self.log.log(self.level, 'TRAP:%f:Task(id=%r, name=%r):%s:%r', 
                             time.time(),
+                            self.task.id,
+                            self.task.name,
                             trapno,
                             args)
                 return trap(*args)
 
     def running(self, task):
-        super().running(task)
         if self.check_filter(task):
             self.report = True
+            self.task = task
 
     def suspended(self, task):
         self.report = False

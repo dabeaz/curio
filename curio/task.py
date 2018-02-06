@@ -130,7 +130,7 @@ class Task(object):
         self._ignore_result = False
 
     def __repr__(self):
-        return 'Task(id=%r, name=%r, %r, state=%r)' % (self.id, self.name, self.coro, self.state)
+        return 'Task(id=%r, name=%r, state=%r)' % (self.id, self.name, self.state)
 
     def __str__(self):
         filename, lineno = _where(self)
