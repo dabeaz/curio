@@ -204,8 +204,8 @@ class Monitor(object):
 ''')
 
     def command_ps(self, sout):
-        headers = ('Task', 'State', 'Cycles', 'Timeout', 'Task')
-        widths = (6, 12, 10, 7, 50)
+        headers = ('Task', 'State', 'Cycles', 'Timeout', 'Sleep', 'Task')
+        widths = (6, 12, 10, 7, 7, 50)
         for h, w in zip(headers, widths):
             sout.write('%-*s ' % (w, h))
         sout.write('\n')
@@ -215,14 +215,19 @@ class Monitor(object):
         for taskid in sorted(self.kernel._tasks):
             task = self.kernel._tasks.get(taskid)
             if task:
-                remaining = format(
+                timeout_remaining = format(
                     (task.timeout - timestamp),
                     '0.6f')[:7] if task.timeout else 'None'
-                sout.write('%-*d %-*s %-*d %-*s %-*s\n' % (widths[0], taskid,
-                                                           widths[1], task.state,
-                                                           widths[2], task.cycles,
-                                                           widths[3], remaining,
-                                                           widths[4], task.name))
+                sleep_remaining = format(
+                    (task.sleep - timestamp),
+                    '0.6f')[:7] if task.sleep else 'None'
+
+                sout.write('%-*d %-*s %-*d %-*s %-*s %-*s\n' % (widths[0], taskid,
+                                                                widths[1], task.state,
+                                                                widths[2], task.cycles,
+                                                                widths[3], timeout_remaining,
+                                                                widths[4], sleep_remaining,
+                                                                widths[5], task.name))
 
     def command_where(self, sout, taskid):
         task = self.kernel._tasks.get(taskid)
