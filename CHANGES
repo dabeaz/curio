@@ -3,6 +3,9 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+02/06/2018 Refinements to the schedular activation API and debugging
+           features.
+
 02/04/2018 The ZMQ module has been removed from Curio core and put into
            the examples directory.   This should be spun into a separate
            package maintained independently of Curio.

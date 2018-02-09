@@ -34,10 +34,23 @@ def _get_stack(task):
     frames = []
     coro = task.coro
     while coro:
-        f = coro.cr_frame if hasattr(coro, 'cr_frame') else coro.gi_frame
+        if hasattr(coro, 'cr_frame'):
+            f = coro.cr_frame
+            coro = coro.cr_await
+        elif hasattr(coro, 'ag_frame'):
+            f = coro.ag_frame
+            coro = coro.ag_await
+        elif hasattr(coro, 'gi_frame'):
+            f = coro.gi_frame
+            coro = coro.gi_yieldfrom
+        else:
+            # Note: Can't proceed further.  Need the ags_gen or agt_gen attribute
+            # from an asynchronous generator.  See https://bugs.python.org/issue32810
+            f = None
+            coro = None
+
         if f is not None:
             frames.append(f)
-        coro = coro.cr_await if hasattr(coro, 'cr_await') else coro.gi_yieldfrom
     return frames
 
 # Create a stack traceback for a task
