@@ -13,6 +13,9 @@ import pickle
 import struct
 import hmac
 import multiprocessing.connection as mpc
+import logging
+
+log = logging.getLogger(__name__)
 
 # -- Curio
 
@@ -28,6 +31,7 @@ AUTH_MESSAGE_LENGTH = mpc.MESSAGE_LENGTH    # 20
 CHALLENGE = mpc.CHALLENGE                   # b'#CHALLENGE#'
 WELCOME = mpc.WELCOME                       # b'#WELCOME#'
 FAILURE = mpc.FAILURE                       # b'#FAILURE#'
+
 
 
 class ConnectionError(CurioError):
@@ -177,10 +181,12 @@ class Connection(object):
         await self._deliver_challenge(authkey)
 
 class Channel(object):
-    def __init__(self, address, family=socket.AF_INET):
+    def __init__(self, address, family=socket.AF_INET, check_address=None):
         self.address = address
         self.family = family
         self.sock = None
+        if check_address:
+            self.check_address = check_address
 
     def __repr__(self):
         return 'Channel(%r, %r)' % (self.address, self.family)
@@ -205,23 +211,35 @@ class Channel(object):
         self.sock.listen(5)
         self.address = self.sock.getsockname()
 
+    def check_address(self, addr):
+        return True
+
     async def accept(self, *, authkey=None):
         if self.sock is None:
             self.bind()
 
         while True:
             client, addr = await self.sock.accept()
+            if not self.check_address(addr):
+                log.warning('Channel connection from %s rejected', addr)
+                await client.close()
+                del client
+                continue
+                
             client_stream = client.as_stream()
             c = Connection(client_stream, client_stream)
+            c.address = addr
             try:
                 async with timeout_after(1):
                     if authkey:
                         await c.authenticate_server(authkey)
                 break
             except (TaskTimeout, AuthenticationError, EOFError):
+                log.warning('Channel connection from %s failed', addr, exc_info=True)
                 await c.close()
                 del c
                 del client_stream
+                del client
         return c
 
     async def connect(self, *, authkey=None):
@@ -237,11 +255,13 @@ class Channel(object):
                             await c.authenticate_client(authkey)
                     return c
                 except TaskTimeout:
+                    log.warning('Channel connection to %s timed out', self.address)
                     await c.close()
                     del c
                     del sock_stream
 
             except OSError as e:
+                log.error('Channel connection to %s failed', self.address, exc_info=True)
                 await sock.close()
                 await sleep(1)
 
