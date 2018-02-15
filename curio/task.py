@@ -27,12 +27,11 @@ __all__ = ['Task', 'TaskGroup', 'sleep', 'wake_at', 'current_task',
            'check_cancellation', 'set_cancellation' ]
 
 # Internal functions used for debugging/diagnostics
-def _get_stack(task):
+def _get_stack(coro):
     '''
     Extracts a list of stack frames from a chain of generator/coroutine calls
     '''
     frames = []
-    coro = task.coro
     while coro:
         if hasattr(coro, 'cr_frame'):
             f = coro.cr_frame
@@ -60,7 +59,7 @@ def _format_stack(task):
     '''
     extracted_list = []
     checked = set()
-    for f in _get_stack(task):
+    for f in _get_stack(task.coro):
         lineno = f.f_lineno
         co = f.f_code
         filename = co.co_filename
@@ -80,7 +79,7 @@ def _format_stack(task):
 # Return the (filename, lineno) where a task is currently executing
 def _where(task):
     basename = os.path.basename(__file__)
-    for f in _get_stack(task):
+    for f in _get_stack(task.coro):
         lineno = f.f_lineno
         co = f.f_code
         filename = co.co_filename
