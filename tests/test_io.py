@@ -142,6 +142,115 @@ def test_filestream_blocking(kernel):
     ]
 
 
+def test_filestream_bad_blocking(kernel):
+    '''
+    Test of exposing a socket in blocking mode with buffered data error
+    '''
+    done = Event()
+    results = []
+
+    async def handler(client, addr):
+        await client.send(b'OK')
+        s = client.makefile('rwb', buffering=0)
+        line = await s.readline()
+        assert line == b'hello\n'
+        try:
+            with s.blocking() as f:
+                pass
+        except IOError:
+            results.append(True)
+        else:
+            results.append(False)
+        await done.set()
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sock.send(b'hello\nworld\n')
+        data = await sock.recv(8192)
+        await sock.close()
+
+    async def main():
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
+
+    kernel.run(main())
+    assert results[0]
+
+def test_socketstream_bad_blocking(kernel):
+    '''
+    Test of exposing a socket in blocking mode with buffered data error
+    '''
+    done = Event()
+    results = []
+
+    async def handler(client, addr):
+        await client.send(b'OK')
+        s = client.as_stream()
+        line = await s.readline()
+        assert line == b'hello\n'
+        try:
+            with s.blocking() as f:
+                pass
+        except IOError:
+            results.append(True)
+        else:
+            results.append(False)
+        await done.set()
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sock.send(b'hello\nworld\n')
+        data = await sock.recv(8192)
+        await sock.close()
+
+    async def main():
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
+
+    kernel.run(main())
+    assert results[0]
+
+def test_read_partial(kernel):
+    done = Event()
+    results = []
+    async def handler(client, addr):
+        try:        
+            await client.send(b'OK')
+            s = client.as_stream()
+            line = await s.readline()
+            results.append(line)
+            data = await s.read(2)
+            results.append(data)
+            data = await s.read(1000)
+            results.append(data)
+        finally:
+            await done.set()
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sock.send(b'hello\nworld\n')
+        await sock.close()
+
+
+    async def main():
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
+
+    kernel.run(main())
+    assert results == [ b'hello\n', b'wo', b'rld\n']
+
 def test_readall(kernel):
     done = Event()
     results = []
@@ -149,11 +258,11 @@ def test_readall(kernel):
     async def handler(client, addr):
         results.append('handler start')
         await client.send(b'OK')
-        s = client.as_stream()
-        data = await s.readall()
-        results.append(data)
-        results.append('handler done')
-        await done.set()
+        async with client.as_stream() as s:
+            data = await s.readall()
+            results.append(data)
+            results.append('handler done')
+            await done.set()
 
     async def test_client(address, serv):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -181,6 +290,35 @@ def test_readall(kernel):
         b'Msg1\nMsg2\nMsg3\n',
         'handler done'
     ]
+
+
+def test_readall_partial(kernel):
+    done = Event()
+
+    async def handler(client, addr):
+        await client.send(b'OK')
+        s = client.as_stream()
+        line = await s.readline()
+        assert line == b'hello\n'
+        data = await s.readall()
+        assert data == b'world\n'
+        await done.set()
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sock.send(b'hello\nworld\n')
+        await sock.close()
+
+
+    async def main():
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
+
+    kernel.run(main())
 
 
 def test_readall_timeout(kernel):
@@ -258,6 +396,36 @@ def test_read_exactly(kernel):
         'handler done'
     ]
 
+
+def test_read_exactly_incomplete(kernel):
+    done = Event()
+    results = []
+    async def handler(client, addr):
+        await client.send(b'OK')
+        s = client.as_stream()
+        try:
+            await s.read_exactly(100)
+        except EOFError as e:
+            results.append(e.bytes_read)
+        finally:
+            await done.set()
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sock.send(b'Msg1\nMsg2\nMsg3\n')
+        await sock.close()
+
+    async def main():
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
+
+    kernel.run(main())
+
+    assert results[0] ==  b'Msg1\nMsg2\nMsg3\n'
 
 def test_read_exactly_timeout(kernel):
     done = Event()
@@ -602,4 +770,105 @@ def test_double_recv(kernel):
         'handler done'
         ]
 
+def test_sendall_cancel(kernel):
+    done = Event()
+    start = Event()
+    results = {}
 
+    async def handler(client, addr):
+        await start.wait()
+        nrecv = 0
+        while True:
+            data = await client.recv(1000000)
+            if not data:
+                break
+            nrecv += len(data)
+        results['handler'] = nrecv
+        await client.close()
+        await done.set()
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        try:
+            await sock.sendall(b'x'*10000000)
+        except CancelledError as e:
+            results['sender'] = e.bytes_sent
+        await sock.close()
+
+    async def main():
+        serv = await spawn(tcp_server, '', 25000, handler)
+        t = await spawn(test_client, ('localhost', 25000), serv)
+        await sleep(0.1)
+        await t.cancel()
+        await start.set()
+        await serv.cancel()
+        await done.wait()
+
+    kernel.run(main())
+
+    assert results['handler'] == results['sender']
+
+
+def test_stream_bad_context(kernel):
+    done = Event()
+    results = []
+    async def handler(client, addr):
+        await client.send(b'OK')
+        try:
+            with client.as_stream() as s:
+                data = await s.readall()
+        except AsyncOnlyError:
+            results.append(True)
+        finally:
+            await done.set()
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sock.send(b'Hello\n')
+        await sock.close()
+
+
+    async def main():
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
+
+    kernel.run(main())
+
+    assert results == [ True ]
+
+def test_stream_bad_iter(kernel):
+    done = Event()
+    results = []
+    async def handler(client, addr):
+        await client.send(b'OK')
+        try:
+            async with client.as_stream() as s:
+                for line in s:
+                    pass
+        except AsyncOnlyError:
+            results.append(True)
+        finally:
+            await done.set()
+
+    async def test_client(address, serv):
+        sock = socket(AF_INET, SOCK_STREAM)
+        await sock.connect(address)
+        await sock.recv(8)
+        await sock.send(b'Hello\n')
+        await sock.close()
+
+
+    async def main():
+        serv = await spawn(tcp_server, '', 25000, handler)
+        await spawn(test_client, ('localhost', 25000), serv)
+        await done.wait()
+        await serv.cancel()
+
+    kernel.run(main())
+
+    assert results == [ True ]
