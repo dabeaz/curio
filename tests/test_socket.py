@@ -4,7 +4,7 @@ import os
 
 from curio import *
 from curio.socket import *
-
+from curio import io
 
 def test_tcp_echo(kernel):
     results = []
@@ -370,7 +370,7 @@ def test_buffer_into(kernel):
 
     async def receiver(s2):
         a = array('i', (0 for n in range(1000000)))
-        view = memoryview(a).cast('b')
+        view = memoryview(a).cast('B')
         total = 0
         while view:
             nrecv = await s2.recv_into(view)
@@ -393,6 +393,85 @@ def test_buffer_into(kernel):
     s2._socket.close()
 
     assert all(n == x for n, x in enumerate(results[0]))
+
+
+def test_buffer_stream_into(kernel):
+    from array import array
+    results = []
+    async def sender(s1):
+        a = array('i', range(1000000))
+        await s1.sendall(b'Hello world\n')
+        await s1.sendall(a)
+
+    async def receiver(s2):
+        a = array('i', (0 for n in range(1000000)))
+        view = memoryview(a).cast('B')
+        total = 0
+        s2_stream = s2.as_stream()
+        assert isinstance(s2_stream, io.SocketStream)
+        line = await s2_stream.readline()
+        assert line == b'Hello world\n'
+        while view:
+            nrecv = await s2_stream.readinto(view)
+            if not nrecv:
+                break
+            total += nrecv
+            view = view[nrecv:]
+
+        results.append(a)
+
+    s1, s2 = socketpair()
+
+    async def main():
+        async with TaskGroup() as g:
+            await g.spawn(sender, s1)
+            await g.spawn(receiver, s2)
+
+    kernel.run(main())
+    s1._socket.close()
+    s2._socket.close()
+
+    assert all(n == x for n, x in enumerate(results[0]))
+
+def test_buffer_makefile_into(kernel):
+    from array import array
+    results = []
+    async def sender(s1):
+        a = array('i', range(1000000))
+        await s1.sendall(b'Hello world\n')
+        await s1.sendall(a)
+
+    async def receiver(s2):
+        a = array('i', (0 for n in range(1000000)))
+        view = memoryview(a).cast('B')
+        total = 0
+        s2_file = s2.makefile('rb')
+        assert isinstance(s2_file, io.FileStream)
+
+        line = await s2_file.readline()
+        assert line == b'Hello world\n'
+        while view:
+            nrecv = await s2_file.readinto(view)
+            if not nrecv:
+                break
+            total += nrecv
+            view = view[nrecv:]
+
+        results.append(a)
+
+    s1, s2 = socketpair()
+
+    async def main():
+        async with TaskGroup() as g:
+            await g.spawn(sender, s1)
+            await g.spawn(receiver, s2)
+
+    kernel.run(main())
+    s1._socket.close()
+    s2._socket.close()
+
+    assert all(n == x for n, x in enumerate(results[0]))
+
 
 
 def test_read_write_on_same_socket(kernel):
