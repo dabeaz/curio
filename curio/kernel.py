@@ -48,6 +48,7 @@ __all__ = ['Kernel', 'run' ]
 import socket
 import time
 import os
+import errno
 import logging
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque
@@ -640,8 +641,8 @@ class Kernel(object):
             except OSError as e:     # pragma: no cover
                 # If there is nothing to select, windows throws an
                 # OSError, so just set events to an empty list.
-                log.error('Exception %r from selector_select ignored ' % e,
-                          exc_info=True)
+                if e.errno != getattr(errno, 'WSAEINVAL', None):
+                    raise
                 events = []
 
             # Reschedule tasks with completed I/O
@@ -767,6 +768,7 @@ class Kernel(object):
                         a.suspended(active)
                         if active.terminated:
                             a.terminated(active)
+                    current = active = None
 
 def run(corofunc, *args, with_monitor=False, selector=None,
         debug=None, activations=None, **extra):
