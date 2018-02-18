@@ -3,6 +3,36 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+02/18/2018 Improvement to async threads that allow async functions to
+           also be used as a thread target.  For example::
+
+               import time
+               async def consumer(queue):
+                   while True:
+                       item = await queue.get()
+                       print('Got:', item)
+                       time.sleep(5)    #  Doesn't block rest of kernel
+                       await queue.task_done()
+
+               async def main():
+                   q = Queue()
+                   t = AsyncThread(target=consumer, args=(q,))
+                   await t.start()
+
+                   for i in range(10):
+                       await q.put(i)
+                       await sleep(1)
+
+                   await q.join()
+                   await t.cancel()
+
+               run(main())
+
+           In this code, the consumer() coroutine runs in a separate
+           thread than the rest of the code.  As a result, long blocking
+           operations such as time.sleep() don't affect the rest of the
+           kernel.
+
 02/06/2018 Refinements to the schedular activation API and debugging
            features.
 

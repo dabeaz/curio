@@ -4,9 +4,14 @@ import pytest
 from curio import *
 from curio.thread import AWAIT, AsyncThread, async_thread
 from curio.file import aopen
+import time
 
 def simple_func(x, y):
     AWAIT(sleep(0.5))     # Execute a blocking operation
+    return x + y
+
+async def blocking_coro(x, y):
+    time.sleep(0.5)
     return x + y
 
 async def simple_coro(x, y):
@@ -22,9 +27,32 @@ def test_good_result(kernel):
 
     kernel.run(main())
 
+def test_good_coro_result(kernel):
+    async def main():
+        t = AsyncThread(target=blocking_coro, args=(2, 3))
+        await t.start()
+        result = await t.join()
+        assert result == 5
+
+    kernel.run(main())
+
 def test_bad_result(kernel):
     async def main():
         t = AsyncThread(target=simple_func, args=(2, '3'))
+        await t.start()
+        try:
+            result = await t.join()
+            assert False
+        except TaskError as e:
+            assert isinstance(e.__cause__, TypeError)
+            assert True
+
+    kernel.run(main())
+
+
+def test_bad_coro_result(kernel):
+    async def main():
+        t = AsyncThread(target=blocking_coro, args=(2, '3'))
         await t.start()
         try:
             result = await t.join()
