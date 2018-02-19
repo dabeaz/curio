@@ -11,14 +11,17 @@ from concurrent.futures import Future
 from functools import wraps
 from inspect import iscoroutine
 from contextlib import contextmanager
+from types import coroutine
+import sys
 
 # -- Curio
 
 from . import sync
-from .task import spawn, disable_cancellation
-from .traps import _future_wait 
+from .task import spawn, disable_cancellation, current_task
+from .traps import _future_wait, _scheduler_wait
 from . import errors
 from . import io
+from . import sched
 
 _locals = threading.local()
 
@@ -117,13 +120,97 @@ def AWAIT(coro):
     else:
         raise errors.AsyncOnlyError('Must be used as async')
 
-def async_thread(func=None, *, daemon=False):
+
+@coroutine
+def _acm_exit():
+    yield _AsyncContextManager
+
+def _check_async_thread_block(code, offset, _cache={}):
+    '''
+    Analyze a given async_thread() context manager block to make sure it doesn't
+    contain any await operations
+    '''
+    if (code, offset) in _cache:
+        return _cache[code, offset]
+
+    import dis
+    instr = dis.get_instructions(code)
+    level = 0
+    result = True
+    for op in instr:
+        if op.offset < offset:
+            continue
+        if op.opname == 'SETUP_ASYNC_WITH':
+            level += 1
+        if op.opname in { 'YIELD_FROM', 'YIELD_VALUE' } and level > 0:
+            result = False
+            break
+        if op.opname == 'WITH_CLEANUP_START':
+            level -= 1
+            if level == 0:
+                break
+            
+    _cache[code, offset] = result
+    return result
+
+class _AsyncContextManager:
+    async def __aenter__(self):
+        frame = sys._getframe(1)
+        if not _check_async_thread_block(frame.f_code, frame.f_lasti):
+            raise RuntimeError("async/await not allowed inside an async_thread context block")
+
+        # We need to arrange a handoff of execution to a separate
+        # thread. It's a bit tricky, by the gist of the idea is that
+        # an AsyncThread is launched and made to wait for an event.
+        # The current task suspends itself on a throwaway scheduling
+        # barrier and arranges for the event to be set on suspension.
+        # The thread will then take over and drive the task through a
+        # single execution cycle on the thread.
+        
+        self.task = await current_task()
+        self.start = sync.UniversalEvent()
+        self.thread = AsyncThread(target=self._runner)
+        await self.thread.start()
+        await _scheduler_wait(sched.SchedBarrier(), 'ASYNC_CONTEXT_ENTER', lambda: self.start.set())
+
+    async def __aexit__(self, ty, val, tb):
+        await _acm_exit()
+
+    def _runner(self):
+        # Wait for the task to be suspended
+        self.start.wait()
+
+        # Remove the task from the temporary barrier on which it was sleeping.
+        # This is done by calling its cancellation function. Note: This doesn't
+        # actually cancel the task, it merely performs cleanup actions and 
+        # readies the task to run again 
+        self.task.cancel_func()
+        self.task.cancel_func = None
+
+        # Run the code through a *single* send() cycle. It should end up on the
+        # await _acm_exit() operation above.  It is critically important that
+        # no await/async operations occur in this process.  The code should have
+        # been validated previously.
+        result = self.task._send(None)
+
+        # If the result is not the result of _acm_exit() above, then
+        # some kind of very bizarre runtime problem has been
+        # encountered.
+        if result is not _AsyncContextManager:
+            self.task._throw(RuntimeError('yielding not allowed in AsyncThread. Got %r' % result))
+            
+        # Arrange to have the task join with the async thread runner.  This is rather subtle,
+        # but this will cause the task to reawaken back in its original execution thread
+        # upon the completion of this _runner() function.
+        self.thread._task.joining.add(self.task)
+
+def async_thread(func=None):
     if func is None:
-        return lambda func: async_thread(func, daemon=daemon)
+        return _AsyncContextManager()
 
     @wraps(func)
     async def runner(*args, **kwargs):
-        t = AsyncThread(func, args=args, kwargs=kwargs, daemon=daemon)
+        t = AsyncThread(func, args=args, kwargs=kwargs)
         await t.start()
         try:
             return await t.join()

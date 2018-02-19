@@ -4,6 +4,21 @@ CHANGES
 Version 0.9 : In Progress
 -------------------------
 
+02/19/2018 Added ability of async threads to be created via context manager.
+           For example:
+
+              async with async_thread():
+                  # Various blocking/synchronous operations
+                  # Executes in a separate thread
+                  ...
+
+           When used, the body of the context manager runs in a
+           separate thread and may involve blocking operations.
+           However, be aware that any use of async/await is NOT
+           allowed in such a block.  Any attempt to await on an async
+           function inside the block will result in a RuntimeError
+           exception. 
+
 02/06/2018 Refinements to the schedular activation API and debugging
            features.
 

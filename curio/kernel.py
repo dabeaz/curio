@@ -489,10 +489,13 @@ class Kernel(object):
 
         # ----------------------------------------
         # Wait on a scheduler primitive
-        def _trap_sched_wait(sched, state):
+        def _trap_sched_wait(sched, state, callback):
             if _check_cancellation():
                 return
             _suspend_task(state, sched.add(current))
+            if callback:
+                callback()
+            
 
         # ----------------------------------------
         # Reschedule one or more tasks from a scheduler primitive

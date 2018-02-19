@@ -100,11 +100,11 @@ def _cancel_task(task, exc=errors.TaskCancelled, val=None):
 
 
 @coroutine
-def _scheduler_wait(sched, state):
+def _scheduler_wait(sched, state, callback=None):
     '''
     Put the task to sleep on a scheduler primitive.
     '''
-    yield (_trap_sched_wait, sched, state)
+    yield (_trap_sched_wait, sched, state, callback)
 
 
 @coroutine
