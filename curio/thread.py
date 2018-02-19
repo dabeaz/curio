@@ -16,8 +16,9 @@ from types import coroutine
 # -- Curio
 
 from . import sync
-from .task import spawn, disable_cancellation
-from .traps import _future_wait
+from .task import spawn, disable_cancellation, current_task, sleep
+from .traps import _future_wait, _scheduler_wait, _scheduler_wake
+from . import sched
 from . import errors
 from . import io
 from . import meta
@@ -87,37 +88,9 @@ class AsyncThread(object):
         self._request.set_result(None)
         self._terminate_evt.set()
 
-    def _async_runner(self):
-        _locals.thread = self
-        coro = self.target(*self.args, **self.kwargs)
-        self._result_value = None
-        self._result_exc = None
-        while True:
-            try:
-                if self._result_exc is None:
-                    request = coro.send(self._result_value)
-                else:
-                    request = coro.throw(self._result_exc)
-                self._request.set_result(request)
-                self._done_evt.wait()
-                self._done_evt.clear()
-            except StopIteration as e:
-                self._result_value = e.value
-                break
-            except BaseException as e:
-                self._result_value = None
-                self._result_exc = e
-                break
-
-        self._request.set_result(None)     # Shut down the coroutine runner
-        self._terminate_evt.set()
-
     async def start(self):
         self._task = await spawn(self._coro_runner, daemon=True)
-        if meta.iscoroutinefunction(self.target):
-            self._thread = threading.Thread(target=self._async_runner, daemon=True)
-        else:
-            self._thread = threading.Thread(target=self._func_runner, daemon=True)
+        self._thread = threading.Thread(target=self._func_runner, daemon=True)
         self._thread.start()
 
     def AWAIT(self, coro):
@@ -156,7 +129,7 @@ def AWAIT(coro):
 
 def async_thread(func=None, *, daemon=False):
     if func is None:
-        return lambda func: async_thread(func, daemon=daemon)
+        return lambda func: async_thread(func=func, daemon=daemon)
 
     @wraps(func)
     async def runner(*args, **kwargs):
