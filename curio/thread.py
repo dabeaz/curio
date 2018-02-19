@@ -11,23 +11,16 @@ from concurrent.futures import Future
 from functools import wraps
 from inspect import iscoroutine
 from contextlib import contextmanager
-from types import coroutine
 
 # -- Curio
 
 from . import sync
-from .task import spawn, disable_cancellation, current_task, sleep
-from .traps import _future_wait, _scheduler_wait, _scheduler_wake
-from . import sched
+from .task import spawn, disable_cancellation
+from .traps import _future_wait 
 from . import errors
 from . import io
-from . import meta
 
 _locals = threading.local()
-
-@coroutine
-def _run_trap(trap):
-    return (yield trap)
 
 class AsyncThread(object):
 
@@ -57,9 +50,6 @@ class AsyncThread(object):
             # If no coroutine, we're shutting down
             if not coro:
                 break
-
-            if isinstance(coro, tuple):
-                coro = _run_trap(coro)
 
             # Run the the coroutine
             try:
@@ -129,7 +119,7 @@ def AWAIT(coro):
 
 def async_thread(func=None, *, daemon=False):
     if func is None:
-        return lambda func: async_thread(func=func, daemon=daemon)
+        return lambda func: async_thread(func, daemon=daemon)
 
     @wraps(func)
     async def runner(*args, **kwargs):
