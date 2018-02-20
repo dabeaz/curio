@@ -249,6 +249,7 @@ def test_recv_timeout(kernel):
         await sleep(1.0)
         await sock.close()
         results.append('client done')
+        await task.join()
 
     kernel.run(canceller())
 

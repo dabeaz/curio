@@ -368,6 +368,7 @@ def test_task_group_use_error(kernel):
          t2 = await spawn(sleep, 0)
          with pytest.raises(RuntimeError):
              await g.add_task(t2)
+         await t2.join()
 
     kernel.run(main())
              

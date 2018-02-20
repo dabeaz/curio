@@ -21,8 +21,8 @@ def test_queue_simple(kernel):
     async def producer():
         queue = Queue()
         results.append('producer_start')
-        await spawn(consumer(queue, 'cons1'))
-        await spawn(consumer(queue, 'cons2'))
+        c1 = await spawn(consumer(queue, 'cons1'))
+        c2 = await spawn(consumer(queue, 'cons2'))
         await sleep(0.1)
         for n in range(4):
             await queue.put(n)
@@ -32,6 +32,8 @@ def test_queue_simple(kernel):
         results.append('producer_join')
         await queue.join()
         results.append('producer_done')
+        await c1.join()
+        await c2.join()
 
     kernel.run(producer())
 
@@ -61,8 +63,8 @@ def test_queue_simple_iter(kernel):
     async def producer():
         queue = Queue()
         results.append('producer_start')
-        await spawn(consumer(queue, 'cons1'))
-        await spawn(consumer(queue, 'cons2'))
+        c1 = await spawn(consumer(queue, 'cons1'))
+        c2 = await spawn(consumer(queue, 'cons2'))
         await sleep(0.1)
         for n in range(4):
             await queue.put(n)
@@ -72,6 +74,8 @@ def test_queue_simple_iter(kernel):
         results.append('producer_join')
         await queue.join()
         results.append('producer_done')
+        await c1.join()
+        await c2.join()
 
     kernel.run(producer())
 
@@ -103,7 +107,7 @@ def test_queue_unbounded(kernel):
     async def producer():
         queue = Queue()
         results.append('producer_start')
-        await spawn(consumer(queue, 'cons1'))
+        c1 = await spawn(consumer(queue, 'cons1'))
         await sleep(0.1)
         for n in range(4):
             await queue.put(n)
@@ -111,6 +115,7 @@ def test_queue_unbounded(kernel):
         results.append('producer_join')
         await queue.join()
         results.append('producer_done')
+        await c1.join()
 
     kernel.run(producer())
 

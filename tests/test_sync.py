@@ -252,10 +252,11 @@ class TestLock:
         async def worker_timeout(seconds):
             lck = Lock()
             async with lck:
-                await spawn(worker, lck)
+                w = await spawn(worker, lck)
                 results.append('sleep')
                 await sleep(seconds)
                 results.append('sleep_done')
+                await w.join()
 
         kernel.run(worker_timeout(1))
 
@@ -465,10 +466,11 @@ class TestSemaphore:
         async def worker_timeout(seconds):
             lck = Semaphore()
             async with lck:
-                await spawn(worker, lck)
+                w = await spawn(worker, lck)
                 results.append('sleep')
                 await sleep(seconds)
                 results.append('sleep_done')
+                await w.join()
 
         kernel.run(worker_timeout(1))
 
@@ -610,6 +612,7 @@ class TestCondition:
             results.append('sleep')
             await sleep(seconds)
             results.append('done')
+            await task.join()
 
         kernel.run(worker_cancel(1))
 
