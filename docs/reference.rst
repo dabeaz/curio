@@ -1826,7 +1826,7 @@ If you need to perform a lot of synchronous operations, but still
 interact with Curio, you might consider launching an asynchronous
 thread. An asynchronous thread flips the whole world around--instead
 of executing synchronous operations using ``run_in_thread()``, you
-kick everything out to a thread and perform the asynchronous
+kick everything out to a thread and selectively perform the asynchronous
 operations using a magic ``AWAIT()`` function. 
 
 .. class:: AsyncThread(target, args=(), kwargs={}, daemon=True)
@@ -1849,7 +1849,7 @@ operations using a magic ``AWAIT()`` function.
 .. asyncmethod:: cancel()
 
    Cancels the asynchronous thread.  The behavior is the same as cancellation
-   performed on Curio tasks.  An asynchronous thread can only be cancelled
+   performed on Curio tasks.  Note: An asynchronous thread can only be cancelled
    when it performs blocking operations on asynchronous objects (e.g.,
    using ``AWAIT()``.
 
@@ -1858,7 +1858,7 @@ Within a thread, the following function can be used to execute a coroutine.
 .. function:: AWAIT(coro)
 
    Execute a coroutine on behalf of an asynchronous thread.  The requested
-   coroutine executes in Curio's main execution thread.  The caller is
+   coroutine always executes in Curio's main execution thread.  The caller is
    blocked until it completes.  If used outside of an asynchronous thread,
    an ``AsyncOnlyError`` exception is raised.  If ``coro`` is not a 
    coroutine, it is returned unmodified.   The reason ``AWAIT`` is all-caps
@@ -1973,7 +1973,7 @@ thread can only be cancelled on blocking operations involving ``AWAIT()``.
 A final curious thing about async threads is that the ``AWAIT()``
 function is no-op if you don't give it a coroutine.  This means that
 code, in many cases, can be made to be compatible with regular Python
-threads.  For example, this code actually runs::
+threads.  For example, this code involving normal threads actually runs::
 
     from curio.thread import AWAIT
     from curio import CancelledError

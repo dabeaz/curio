@@ -117,6 +117,7 @@ class Connection(object):
         else:
             msg = header + bytes(m[offset:offset + size])
             await self._writer.write(msg)
+        return size
 
     async def recv_bytes(self, maxlength=None):
         '''
@@ -133,9 +134,25 @@ class Connection(object):
 
     async def recv_bytes_into(self, buf, offset=0):
         '''
-        Receive bytes into a writable memory buffer
+        Receive bytes into a writable memory buffer.  The buffer must be large enough to 
+        hold the message.  The number of bytes received in the message is returned.
         '''
-        pass
+        header = await self._reader.read_exactly(4)
+        size, = struct.unpack('!i', header)
+        with memoryview(buf).cast('B') as m:
+            if size > (len(m) - offset):
+                # Message is too large to fit in allotted space
+                # Drain the I/O and raise an error
+                while size > 0:
+                    data = await self._reader.read(size)
+                    if not data:
+                        break
+                    size -= len(data)
+                raise IOError('Message is too large to fit')
+            nread = await self._reader.readinto(m[offset:offset+size])
+            if nread != size:
+                raise EOFError('Expected end of data')
+            return nread
 
     async def send(self, obj):
         '''

@@ -421,3 +421,32 @@ def test_channel_slow_connect(kernel, chs):
     assert results == ['server hello world',
                        'client hello world']
 
+
+def test_recv_bytes_into(kernel, chs):
+    import array
+    results = { }
+    async def client(ch):
+        c = await ch.connect(authkey=b'peekaboo')
+        a = array.array('i', [0]*100000)
+        nrecv = await c.recv_bytes_into(a)
+        results['nrecv'] = nrecv
+        results['got'] = a
+        await c.close()
+
+    async def server(serv):
+        c = await serv.accept(authkey=b'peekaboo')
+        a = array.array('i', range(100000))
+        nsent = await c.send_bytes(a)
+        results['nsent'] = nsent
+        results['sent'] = a
+        await c.close()
+
+    async def main(ch1, ch2):
+        t1 = await spawn(server(ch1))
+        t2 = await spawn(client(ch2))
+        await t1.join()
+        await t2.join()
+
+    kernel.run(main, *chs)
+    assert results['nrecv'] == results['nsent']
+    assert results['got'] == results['sent']
