@@ -171,21 +171,21 @@ class Socket(object):
                 await _read_wait(self._fileno)
 
     async def sendall(self, data, flags=0):
-        buffer = memoryview(data).cast('b')
-        total_sent = 0
-        try:
-            while buffer:
-                try:
-                    nsent = self._socket_send(buffer, flags)
-                    total_sent += nsent
-                    buffer = buffer[nsent:]
-                except WantWrite:
-                    await _write_wait(self._fileno)
-                except WantRead:   # pragma: no cover
-                    await _read_wait(self._fileno)
-        except errors.CancelledError as e:
-            e.bytes_sent = total_sent
-            raise
+        with memoryview(data).cast('B') as buffer:
+            total_sent = 0
+            try:
+                while buffer:
+                    try:
+                        nsent = self._socket_send(buffer, flags)
+                        total_sent += nsent
+                        buffer = buffer[nsent:]
+                    except WantWrite:
+                        await _write_wait(self._fileno)
+                    except WantRead:   # pragma: no cover
+                        await _read_wait(self._fileno)
+            except errors.CancelledError as e:
+                e.bytes_sent = total_sent
+                raise
 
     async def accept(self):
         while True:
@@ -386,39 +386,39 @@ class StreamBase(object):
         return b''.join(chunks)
 
     async def readinto(self, memory):
-        view = memoryview(memory)
-        remaining = len(view)
-        total_read = 0
+        with memoryview(memory).cast('B') as view:
+            remaining = len(view)
+            total_read = 0
 
-        # It's possible that there is data already buffered on this stream. 
-        # If so, we have to copy into the memory buffer first.
-        buffered = len(self._buffer)
-        tocopy = remaining if (remaining < buffered) else buffered
-        if tocopy:
-            view[:tocopy] = self._buffer[:tocopy]
-            del self._buffer[:tocopy]
-            remaining -= tocopy
-            total_read += tocopy
+            # It's possible that there is data already buffered on this stream. 
+            # If so, we have to copy into the memory buffer first.
+            buffered = len(self._buffer)
+            tocopy = remaining if (remaining < buffered) else buffered
+            if tocopy:
+                view[:tocopy] = self._buffer[:tocopy]
+                del self._buffer[:tocopy]
+                remaining -= tocopy
+                total_read += tocopy
 
-        # To emulate behavior of synchronous readinto(), we read all available
-        # bytes up to the buffer size.
-        while remaining > 0:
-            try:
-                nrecv = self._readinto_impl(view[total_read:total_read+remaining])
+            # To emulate behavior of synchronous readinto(), we read all available
+            # bytes up to the buffer size.
+            while remaining > 0:
+                try:
+                    nrecv = self._readinto_impl(view[total_read:total_read+remaining])
 
-                # On proper file objects, None might be returned to indicate blocking
-                if nrecv is None:
+                    # On proper file objects, None might be returned to indicate blocking
+                    if nrecv is None:
+                        await _read_wait(self._fileno)
+                    elif nrecv == 0:
+                        break
+                    else:
+                        total_read += nrecv
+                        remaining -= nrecv
+                except WantRead:
                     await _read_wait(self._fileno)
-                elif nrecv == 0:
-                    break
-                else:
-                    total_read += nrecv
-                    remaining -= nrecv
-            except WantRead:
-                await _read_wait(self._fileno)
-            except WantWrite:
-                await _write_wait(self._fileno)
-        return total_read
+                except WantWrite:
+                    await _write_wait(self._fileno)
+            return total_read
         
     async def readline(self):
         while True:
@@ -545,7 +545,7 @@ class FileStream(StreamBase):
 
     async def write(self, data):
         nwritten = 0
-        view = memoryview(data).cast('b')
+        view = memoryview(data).cast('B')
         try:
             while view:
                 try:
@@ -618,7 +618,7 @@ class SocketStream(StreamBase):
 
     async def write(self, data):
         nwritten = 0
-        view = memoryview(data).cast('b')
+        view = memoryview(data).cast('B')
         try:
             while view:
                 try:
