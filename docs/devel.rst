@@ -2607,10 +2607,11 @@ Just pop into the REPL and try this::
     Consumer done
     >>> 
 
-Just to be clear about what's happening here,  ``consumer()`` is a normal synchronous
-function.  It uses the ``AWAIT()`` function on a queue.  We just gave
-it a normal thread queue and launched it into a normal thread at the
-interactive prompt.  It still works. Curio is not running at all.
+Just to be clear about what's happening here, ``consumer()`` is a
+normal synchronous function.  It uses the ``AWAIT()`` function on a
+queue.  We just gave it a normal thread queue and launched it into a
+normal thread at the interactive prompt.  It still works. Curio is not
+running at all.
 
 Running threads within Curio have some side benefits.  If you're
 willing to abandon the limitations of the ``threading`` module, you'll
@@ -2660,10 +2661,30 @@ The ``timeout_after()`` feature also works fine.  You don't use it as an
 asynchronous context manager in a synchronous function, but it has the same
 overall effect.  Don't try this with a normal thread.
 
-The process of launching an asynchronous thread can be a bit cumbersome.
-Therefore, there is a special decorator ``@async_thread`` that can be
-used to adapt a synchronous function.   There are two ways to use it.
-One way to use it is to apply it to a function directly like this::
+The process of launching an asynchronous thread can be a bit
+cumbersome. Therefore, there are some convenience features for making
+it easier.  If you're working within Curio, you can use ``spawn_thread()``
+to launch a thread.  It works in the same general manner as the normal
+``spawn`` function. For example::
+
+    t = await spawn_thread(consumer, q)
+    ...
+    await t.join()
+
+The ``spawn_thread()`` function can also be used as an asynchronous context
+manager::
+
+    async with spawn_thread():
+         consumer(q)
+         ...
+
+If you use this latter form, the entire body of the context manager runs in
+an asynchronous thread.  You are not allowed to use any operation involving
+``async`` or ``await``.  However, you can still use the magic ``AWAIT()`` function
+to delegate async operations back to Curio.
+
+Finally, there is a special decorator ``@async_thread`` that can be
+used to adapt a synchronous function.  For example::
 
     from curio.thread import async_thread, await
     from curio import run, tcp_server
@@ -2682,29 +2703,10 @@ One way to use it is to apply it to a function directly like this::
 If you do this, the function becomes a coroutine where any invocation
 automatically launches it into a thread. This is useful if you need to
 write coroutines that perform a lot of blocking operations, but you'd
-like that coroutine to work transparently with the rest of Curio.
-
-The other way to use the decorator is an adapter for existing
-synchronous code. For example, here is an alternative technique
-for launching an asynchronous thread::
-
-    from curio.thread import await, async_thread
-    import curio
-
-    # A synchronous function
-    def consumer(q):
-        while True:
-            item = AWAIT(q.get())   # <- !!!!
-            if not item:
-                break
-            print('Got:', item)
-        print('Consumer done')
-
-    async def main():
-        q = curio.Queue()
-        t = await spawn(async_thread(consumer), q)
-        ...
-        await t.join()
+like that coroutine to work transparently with the rest of Curio.  Not
+to add further magic, functions that use ``@async_thread`` can still
+be used in normal synchronous code.  If called from a non-coroutine, 
+the function executes normally.
 
 All of this discussion is really not presenting asynchronous threads
 in their full glory.  The key idea though is that instead of thinking

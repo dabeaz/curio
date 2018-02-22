@@ -1846,12 +1846,35 @@ operations using a magic ``AWAIT()`` function.
    The final result is returned in the same manner as the usual ``Task.join()``
    method used on Curio tasks.
 
+.. asyncmethod:: wait()
+   
+   Waits for the thread to terminate, but do not result any result.
+
+.. attribute:: AsyncThread.result
+
+   The result of the thread, if completed.  If accessed before the thread
+   terminates, a ``RuntimeError`` exception is raised.  If the task crashed
+   with an exception, that exception is reraised on access.
+   
 .. asyncmethod:: cancel()
 
    Cancels the asynchronous thread.  The behavior is the same as cancellation
    performed on Curio tasks.  Note: An asynchronous thread can only be cancelled
    when it performs blocking operations on asynchronous objects (e.g.,
    using ``AWAIT()``.
+
+As a shortcut for creating an asynchronous thread, you can use ``spawn_thread()`` instead.
+
+.. asyncfunction:: spawn_thread(func=None, *args, daemon=False)
+
+   Launch an asynchronous thread that runs the callable ``func(*args)``.
+   ``daemon`` specifies if the thread runs in daemonic mode.   This
+   function may also be used as a context manager if ``func`` is ``None``.
+   In that case, the body of the context manager executes in a separate
+   thread. For the context manager case, the body is not allowed to perform
+   any asynchronous operation involving ``async`` or ``await``.  However,
+   the ``AWAIT()`` function may be used to delegate asynchronous operations
+   back to Curio's main thread.
 
 Within a thread, the following function can be used to execute a coroutine.
 
@@ -1870,7 +1893,7 @@ Here is a simple example of an asynchronous thread that reads data off a
 Curio queue::
 
     from curio import run, Queue, sleep, CancelledError
-    from curio.thread import AsyncThread, AWAIT
+    from curio.thread import spawn_thread, AWAIT
 
     def consumer(queue):
         try:
@@ -1885,8 +1908,7 @@ Curio queue::
 
     async def main():
         q = Queue()
-        t = AsyncThread(target=consumer, args=(q,))
-        await t.start()
+        t = await spawn_thread(consumer, q)
 
         for i in range(10):
             await q.put(i)
@@ -1911,6 +1933,8 @@ Using this decorator, you can write a function like this::
         try:
             while True:
                 item = AWAIT(queue.get())
+                if item is None:
+                    break
                 print('Got:', item)
                 AWAIT(queue.task_done())
 
@@ -1919,24 +1943,27 @@ Using this decorator, you can write a function like this::
             raise
 
 Now, whenever the code executes (e.g., ``await consumer(q)``), a
-thread will automatically be created.   The decorator might also
-be useful in combination with ``spawn()`` like this::
+thread will automatically be created.  One amazing thing about such
+functions is that they can still be used in traditional synchronous
+code.  For example, you could use the above ``consumer`` function with
+normal threaded code::
 
-    def consumer(queue):
-        try:
-            while True:
-                item = AWAIT(queue.get())
-                print('Got:', item)
-                AWAIT(queue.task_done())
+    import threading
+    import queue
 
-        except CancelledError:
-            print('Consumer goodbye!')
-            raise
+    def producer(queue):
+        for i in range(10):
+            queue.put(i)
+        queue.put(None)
 
-    async def main():
-        q = Queue()
-        t = await spawn(async_thread(consumer)(q))
-        ...
+    def main():
+        q = queue.Queue()
+        t1 = threading.Thread(target=consumer, args=(q,))
+	t1.start()
+        producer(q)
+        t1.join()
+
+    main()
 
 Asynchronous threads can use all of Curio's features including
 coroutines, asynchronous context managers, asynchronous iterators,
