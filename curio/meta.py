@@ -106,7 +106,7 @@ def instantiate_coroutine(corofunc, *args, **kwargs):
     if inspect.iscoroutine(corofunc) or inspect.isgenerator(corofunc):
         return corofunc
 
-    if not iscoroutinefunction(corofunc):
+    if not iscoroutinefunction(corofunc) and not getattr(corofunc, '_async_thread', False):
         coro = corofunc(*args, **kwargs)
         if not inspect.iscoroutine(coro):
             raise TypeError('Could not create coroutine from %s' % corofunc)

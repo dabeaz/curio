@@ -2,7 +2,7 @@
 #
 # Not your parent's threading
 
-__all__ = [ 'AWAIT', 'async_thread', 'AsyncThread', 'is_async_thread' ]
+__all__ = [ 'AWAIT', 'async_thread', 'AsyncThread', 'is_async_thread', 'spawn_thread' ]
 
 # -- Standard Library
 
@@ -22,6 +22,7 @@ from .traps import _future_wait, _scheduler_wait
 from . import errors
 from . import io
 from . import sched
+from . import meta
 
 _locals = threading.local()
 
@@ -42,6 +43,7 @@ class AsyncThread(object):
         self._result_exc = None
         self._thread = None
         self._task = None
+        self._joined = False
 
     async def _coro_runner(self):
         while True:
@@ -103,9 +105,22 @@ class AsyncThread(object):
         else:
             return self._result_value
 
+    async def wait(self):
+        await self._terminate_evt.wait()
+        self._joined = True
+
+    @property
+    def result(self):
+        if not self._terminated_evt.is_set():
+            raise RuntimeError('Thread not terminated')
+        if self._result_exc:
+            raise self._result_exc
+        else:
+            return self._result_value
+
     async def cancel(self):
         await self._task.cancel()
-
+        await self.wait()
 
 def AWAIT(coro):
     '''
@@ -120,10 +135,6 @@ def AWAIT(coro):
     else:
         raise errors.AsyncOnlyError('Must be used as async')
 
-
-@coroutine
-def _acm_exit():
-    yield _AsyncContextManager
 
 def _check_async_thread_block(code, offset, _cache={}):
     '''
@@ -153,6 +164,10 @@ def _check_async_thread_block(code, offset, _cache={}):
     _cache[code, offset] = result
     return result
 
+@coroutine
+def _async_thread_exit():
+    yield _AsyncContextManager
+
 class _AsyncContextManager:
     async def __aenter__(self):
         frame = sys._getframe(1)
@@ -174,7 +189,7 @@ class _AsyncContextManager:
         await _scheduler_wait(sched.SchedBarrier(), 'ASYNC_CONTEXT_ENTER', lambda: self.start.set())
 
     async def __aexit__(self, ty, val, tb):
-        await _acm_exit()
+        await _async_thread_exit()
 
     def _runner(self):
         # Wait for the task to be suspended
@@ -188,12 +203,12 @@ class _AsyncContextManager:
         self.task.cancel_func = None
 
         # Run the code through a *single* send() cycle. It should end up on the
-        # await _acm_exit() operation above.  It is critically important that
+        # await _async_thread_exit() operation above.  It is critically important that
         # no await/async operations occur in this process.  The code should have
         # been validated previously.
         result = self.task._send(None)
 
-        # If the result is not the result of _acm_exit() above, then
+        # If the result is not the result of _async_thread_exit() above, then
         # some kind of very bizarre runtime problem has been
         # encountered.
         if result is not _AsyncContextManager:
@@ -204,24 +219,65 @@ class _AsyncContextManager:
         # upon the completion of this _runner() function.
         self.thread._task.joining.add(self.task)
 
-def async_thread(func=None):
+def spawn_thread(func=None, *args, daemon=False):
+    '''
+    Launch an async thread.  This mimicks the way a task is normally spawned. For
+    example:
+
+         t = await spawn_thread(func, arg1, arg2)
+         ...
+         await t.join()
+
+    It can also be used as a context manager to launch a code block into a thread:
+
+         async with spawn_thread():
+             sync_op ...
+             sync_op ...
+    '''
     if func is None:
         return _AsyncContextManager()
+    else:
+        if iscoroutine(func) or meta.iscoroutinefunction(func):
+            raise TypeError("spawn_thread() can't be used on coroutines")
+        async def runner(args, daemon):
+            t = AsyncThread(func, args=args, daemon=daemon)
+            await t.start()
+            return t
+        return runner(args, daemon)
 
+def async_thread(func=None, *, daemon=False):
+    '''
+    Decorator that is used to mark a callable as running in an asynchronous thread
+    '''
+    if func is None:
+        return lambda func: async_thread(func, daemon=daemon)
+
+    if meta.iscoroutinefunction(func):
+        raise TypeError("async_thread can't be applied to coroutines.")
+        
     @wraps(func)
-    async def runner(*args, **kwargs):
-        t = AsyncThread(func, args=args, kwargs=kwargs)
-        await t.start()
-        try:
-            return await t.join()
-        except errors.CancelledError as e:
-            await t.cancel()
-            raise
-        except errors.TaskError as e:
-            raise e.__cause__ from None
-    return runner
+    def wrapper(*args, **kwargs):
+        if meta._from_coroutine():
+            async def runner(*args, **kwargs):
+                t = AsyncThread(func, args=args, kwargs=kwargs, daemon=daemon)
+                await t.start()
+                try:
+                    return await t.join()
+                except errors.CancelledError as e:
+                    await t.cancel()
+                    raise
+                except errors.TaskError as e:
+                    raise e.__cause__ from None
+            return runner(*args, **kwargs)
+        else:
+            return func(*args, **kwargs)
+    wrapper._async_thread = True
+    return wrapper
 
 def is_async_thread():
+    '''
+    Returns True if current thread is an async thread.
+    '''
     return hasattr(_locals, 'thread')
 
 class ThreadProxy(object):

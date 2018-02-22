@@ -4,10 +4,39 @@ CHANGES
 Version 0.9 : In Progress
 -------------------------
 
+02/22/2018 The async_thread() function is now meant to be used as a decorator only.
+
+              @async_thread
+              def func(args):
+                  ...
+
+           When the decorated function is called from asynchronous code using
+           await func(args), it will seamlessly run in a separate execution thread.
+           However, the function can also be called from synchronous code using
+           func(args).  In that case, the function runs as it normally does.
+           It's subtle, but the @async_thread decorator allows a function to adapt
+           to either a synchronous or asynchronous environment depending on how 
+           it has been called. 
+ 
+02/22/2018 New function spawn_thread() can be used to launch asynchronous threads.
+           It mirrors the use of the spawn() function. For example:
+
+              def func(args):
+                  ...
+
+              t = await spawn_thread(func, args)
+              result = await t.join()
+
+           Previously, async threads were created using the AsyncThread class.
+	   That still works, but the spawn_thread() function is probably easier.
+
+           The launched function must be a normal synchronous function. 
+           spawn_thread() can also be used as a context manager (see below).
+
 02/19/2018 Added ability of async threads to be created via context manager.
            For example:
 
-              async with async_thread():
+              async with spawn_thread():
                   # Various blocking/synchronous operations
                   # Executes in a separate thread
                   ...
