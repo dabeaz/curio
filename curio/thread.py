@@ -89,6 +89,7 @@ class AsyncThread(object):
         self._thread.start()
 
     def AWAIT(self, coro):
+            
         self._request.set_result(coro)
         self._done_evt.wait()
         self._done_evt.clear()
@@ -122,11 +123,21 @@ class AsyncThread(object):
         await self._task.cancel()
         await self.wait()
 
-def AWAIT(coro):
+def AWAIT(coro, *args, **kwargs):
     '''
     Await for a coroutine in an asynchronous thread.  If coro is
     not a proper coroutine, this function acts a no-op, returning coro.
     '''
+    # If the coro is a callable and it's identifiable as a coroutine function,
+    # wrap it inside a coroutine and pass that.
+    if callable(coro):
+        if meta.iscoroutinefunction(coro) and hasattr(_locals, 'thread'):
+            async def _coro(coro):
+                return await coro(*args, **kwargs)
+            coro = _coro(coro)
+        else:
+            coro = coro(*args, **kwargs)
+
     if not iscoroutine(coro):
         return coro
 
