@@ -102,15 +102,15 @@ Tasks
 
 The following functions are defined to help manage the execution of tasks.
 
-.. asyncfunction:: spawn(corofunc, *args, daemon=False)
+.. asyncfunction:: spawn(corofunc, *args, daemon=False, report_crash=True)
 
    Create a new task that runs the async function *corofunc*.  *args*
    are the arguments provided to *corofunc*. Returns a :class:`Task`
    instance as a result.  The *daemon* option, if supplied, specifies
-   that the new task will run indefinitely in the background.  Curio
-   only runs as long as there are non-daemonic tasks to execute.
-   Note: a daemonic task will still be cancelled if the underlying
-   kernel is shut down.  
+   that the new task will never be joined and that it's result may be
+   disregarded.  The *report_crash* option specifies whether or not tasks
+   that terminate due to an uncaught exception print a log message or not.
+   The default behavior is ``True``.
 
    Note: ``spawn()`` creates a completely independent task.  The resulting task
    is not placed into any kind of task group as might be managed by :class:`TaskGroup`
@@ -229,14 +229,15 @@ a ``TaskGroup`` instance.
 
 The following methods are supported on ``TaskGroup`` instances:
 
-.. asyncmethod:: TaskGroup.spawn(corofunc, *args, ignore_result=False)
+.. asyncmethod:: TaskGroup.spawn(corofunc, *args, ignore_result=False, report_crash=True)
 
    Create a new task that's part of the group.  Returns a ``Task`` instance.
    The *ignore_result* flag indicates whether or not the group cares about the 
    task's final result.  If specified, the result of the task is ignored.
    The task is still considered part of the group for purposes of cancellation
    however (i.e., if the task group is cancelled, any running tasks with an ignored result
-   in the group are also cancelled).   
+   in the group are also cancelled).   The *report_crash* flag controls whether a traceback
+   is logged when a task exits with an uncaught exception.
 
 .. asyncmethod:: TaskGroup.add_task(coro)
 

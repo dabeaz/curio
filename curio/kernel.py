@@ -281,8 +281,8 @@ class Kernel(object):
         #
 
         # Create a new task. Putting it on the ready queue
-        def _new_task(coro, daemon=False):
-            task = Task(coro, daemon)
+        def _new_task(coro):
+            task = Task(coro)
             tasks[task.id] = task
             _reschedule_task(task)
             for a in _activations:
@@ -449,8 +449,8 @@ class Kernel(object):
 
         # ----------------------------------------
         # Add a new task to the kernel
-        def _trap_spawn(coro, daemon):
-            task = _new_task(coro, daemon)
+        def _trap_spawn(coro):
+            task = _new_task(coro)
             task.parentid = current.id
             current.next_value = task
 
@@ -594,7 +594,10 @@ class Kernel(object):
         # Initialize the loopback task (if not already initialized)
         if kernel._kernel_task_id is None:
             _init_loopback()
-            kernel._kernel_task_id = _new_task(_kernel_task(), daemon=True).id
+            t = _new_task(_kernel_task())
+            t.daemon = True
+            kernel._kernel_task_id = t.id
+            del t
 
         # If there are tasks on the ready queue already, must cancel 
         # any prior pending I/O before re-entering the kernel loop
@@ -759,6 +762,8 @@ class Kernel(object):
                     else:
                         active.next_value = None
                         active.next_exc = e
+                        if active.report_crash and not isinstance(e, CancelledError):
+                            log.error('Task Crash: %r', active, exc_info=True)
                         if not isinstance(e, Exception):
                             raise
                 

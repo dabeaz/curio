@@ -86,7 +86,8 @@ class Monitor(object):
         self._closing = threading.Event()
         self._ui_thread.start()
 
-        monitor_task = Task(self.monitor_task(), daemon=True)
+        monitor_task = Task(self.monitor_task())
+        monitor_task.daemon = True
         kern._ready.append(monitor_task)
         kern._tasks[monitor_task.id] = monitor_task
 

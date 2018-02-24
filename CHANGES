@@ -3,6 +3,41 @@ CHANGES
 
 Version 0.9 : In Progress
 -------------------------
+02/24/2018 Refinements to Task crash reporting.  By default all Tasks
+           that terminate with an uncaught exception log that exception
+           as soon as it is detected.  Although there is a risk that this
+           creates extra output, silencing the output makes it almost
+           impossible to debug programs.  This is because errors get
+           deferred to a later join() method---and you often don't know
+           when that's going to take place.  You might just be staring
+           a program wondering why it's not working.    If you really
+           want errors to be silent, use spawn(coro, report_crash=False).
+           
+02/23/2018 Some refinements to the AWAIT() function.  You can now call it as 
+           follows:
+
+               result = AWAIT(callable, *args, **kwargs)
+
+           If the passed callable is a coroutine function or a function that
+           produces an awaitable object, it will be passed to Curio and executed
+           in an asynchronous context.   If callable is just a normal function,
+           then callable(*args, **kwargs) is returned.
+
+           This change is made to make it slightly easier to use objects
+           as UniversalQueue within the context of an async thread.  For example,
+           if you do this::
+
+               q = UniversalQueue()
+               ...
+               @async_thread
+               def consumer():
+                   while True:
+                       item = AWAIT(q.get)
+                       print("Got:", item)
+ 
+            The AWAIT operation will run the asynchronous version of q.get()
+            instead of the normal synchronous version.  You want this--the
+            async version supports cancellation and other nice features.
 
 02/22/2018 The async_thread() function is now meant to be used as a decorator only.
 

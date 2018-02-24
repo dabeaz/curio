@@ -105,13 +105,14 @@ class Task(object):
     )
     _lastid = 1
 
-    def __init__(self, coro, daemon=False):
+    def __init__(self, coro):
         self.id = Task._lastid
         Task._lastid += 1
         self.parentid = None          # Parent task id (if any)
         self.coro = coro              # Underlying generator/coroutine
         self.name = getattr(coro, '__qualname__', str(coro))
-        self.daemon = daemon          # Daemonic flag
+        self.daemon = False           # Daemonic flag
+        self.report_crash = True      # Crash reporting
         self.cycles = 0               # Execution cycles completed
         self.state = 'INITIAL'        # Execution state
         self.cancel_func = None       # Cancellation function
@@ -160,16 +161,14 @@ class Task(object):
                 log.warning('%r never joined', self)
 
     async def _task_runner(self, coro):
-        me = await current_task()
         try:
             return await coro
         finally:
             if self._taskgroup:
-                await self._taskgroup._task_done(me)
+                await self._taskgroup._task_done(self)
                 if self._ignore_result:
-                    self._taskgroup._task_discard(me)
-                me._joined = True
-
+                    self._taskgroup._task_discard(self)
+                self._joined = True
 
     async def join(self):
         '''
@@ -399,7 +398,7 @@ class TaskGroup(object):
         else:
             self._running.add(task)
 
-    async def spawn(self, coro, *args, ignore_result=False):
+    async def spawn(self, coro, *args, ignore_result=False, report_crash=True):
         '''
         Spawn a new task into the task group.  The ignore_result option,
         if given, makes the group disregard the result of the task--even
@@ -410,7 +409,7 @@ class TaskGroup(object):
         if self._closed:
             raise RuntimeError('Task group is closed')
 
-        task = await spawn(coro, *args)
+        task = await spawn(coro, *args, report_crash=report_crash)
         task._ignore_result = ignore_result
         await self.add_task(task)
         return task
@@ -590,7 +589,7 @@ async def schedule():
     '''
     await sleep(0)
 
-async def spawn(corofunc, *args, daemon=False, allow_cancel=True):
+async def spawn(corofunc, *args, daemon=False, allow_cancel=True, report_crash=True):
     '''
     Create a new task, running corofunc(*args). Use the daemon=True
     option if the task runs forever as a background task.  If
@@ -598,8 +597,10 @@ async def spawn(corofunc, *args, daemon=False, allow_cancel=True):
     cancellation related exceptions (including timeouts).
     '''
     coro = meta.instantiate_coroutine(corofunc, *args)
-    task = await _spawn(coro, daemon)
+    task = await _spawn(coro)
     task.allow_cancel = allow_cancel
+    task.daemon = daemon
+    task.report_crash = report_crash
     return task
 
 async def gather(tasks, *, return_exceptions=False):
