@@ -100,11 +100,11 @@ def _cancel_task(task, exc=errors.TaskCancelled, val=None):
 
 
 @coroutine
-def _scheduler_wait(sched, state, callback=None):
+def _scheduler_wait(sched, state):
     '''
     Put the task to sleep on a scheduler primitive.
     '''
-    yield (_trap_sched_wait, sched, state, callback)
+    yield (_trap_sched_wait, sched, state)
 
 
 @coroutine
@@ -145,7 +145,7 @@ def _unset_timeout(previous):
     '''
     Restore the previous timeout for the current task.
     '''
-    yield (_trap_unset_timeout, previous)
+    return (yield (_trap_unset_timeout, previous))
 
 
 @coroutine

@@ -310,7 +310,7 @@ class ThreadWorker(object):
         def run_callable():
             try:
                 future.set_result(func(*args))
-            except Exception as err:
+            except BaseException as err:
                 future.set_exception(err)
             finally:
                 done_evt.wait()

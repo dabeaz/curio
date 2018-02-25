@@ -9,7 +9,7 @@ __all__ = [ 'AWAIT', 'async_thread', 'AsyncThread', 'is_async_thread', 'spawn_th
 import threading
 from concurrent.futures import Future
 from functools import wraps
-from inspect import iscoroutine
+from inspect import iscoroutine, isgenerator
 from contextlib import contextmanager
 from types import coroutine
 import sys
@@ -18,7 +18,7 @@ import sys
 
 from . import sync
 from .task import spawn, disable_cancellation, current_task
-from .traps import _future_wait, _scheduler_wait
+from .traps import _future_wait, _scheduler_wait, _scheduler_wake
 from . import errors
 from . import io
 from . import sched
@@ -89,7 +89,6 @@ class AsyncThread(object):
         self._thread.start()
 
     def AWAIT(self, coro):
-            
         self._request.set_result(coro)
         self._done_evt.wait()
         self._done_evt.clear()
@@ -119,8 +118,8 @@ class AsyncThread(object):
         else:
             return self._result_value
 
-    async def cancel(self):
-        await self._task.cancel()
+    async def cancel(self, *, exc=errors.TaskCancelled):
+        await self._task.cancel(exc=exc)
         await self.wait()
 
 def AWAIT(coro, *args, **kwargs):
@@ -138,13 +137,14 @@ def AWAIT(coro, *args, **kwargs):
         else:
             coro = coro(*args, **kwargs)
 
-    if not iscoroutine(coro):
-        return coro
 
-    if hasattr(_locals, 'thread'):
-        return _locals.thread.AWAIT(coro)
+    if iscoroutine(coro) or isgenerator(coro):
+        if hasattr(_locals, 'thread'):
+            return _locals.thread.AWAIT(coro)
+        else:
+            raise errors.AsyncOnlyError('Must be used as async')
     else:
-        raise errors.AsyncOnlyError('Must be used as async')
+        return coro
 
 
 def _check_async_thread_block(code, offset, _cache={}):
@@ -196,39 +196,78 @@ class _AsyncContextManager:
         self.task = await current_task()
         self.start = sync.UniversalEvent()
         self.thread = AsyncThread(target=self._runner)
+        self.barrier = sched.SchedBarrier()
         await self.thread.start()
-        await _scheduler_wait(sched.SchedBarrier(), 'ASYNC_CONTEXT_ENTER', lambda: self.start.set())
+        self.task.suspend_func = lambda: self.start.set()
+        await _scheduler_wait(self.barrier, 'ASYNC_CONTEXT_ENTER')
 
     async def __aexit__(self, ty, val, tb):
+        # This method is not executed by Curio proper.  Instead, the _runner()
+        # method below drives the coroutine into here.   The await statement that
+        # follows causes the coroutine to stop at this point.  _runner() will 
+        # arrange to have the task resume normal execution in its original thread
         await _async_thread_exit()
 
     def _runner(self):
         # Wait for the task to be suspended
         self.start.wait()
 
-        # Remove the task from the temporary barrier on which it was sleeping.
-        # This is done by calling its cancellation function. Note: This doesn't
-        # actually cancel the task, it merely performs cleanup actions and 
-        # readies the task to run again 
-        self.task.cancel_func()
-        self.task.cancel_func = None
+        
+        # This coroutine stands in for the original task.  The primary purpose
+        # of this is to make cancellation/timeout requests work properly.  We'll
+        # wait for the _runner() thread to terminate.  If it gets cancelled,
+        # we cancel the associated thread.   There is some critical synchronization
+        # requirements--namely, it's not safe to proceed with the _runner() function
+        # until the _waiter() coroutine has started and suspended itself.
+        _waiter_evt = threading.Event()
+        async def _waiter():
+            try:
+                self.task.suspend_func = _waiter_evt.set
+                await self.thread.join()
+            except errors.CancelledError as e:
+                await self.thread.cancel(exc=e)
+                # This never returns... the task will be waiting for the
+                # thread to terminate.  However, the thread switches back to
+                # original coroutine at that point.  We are properly closed however.
 
-        # Run the code through a *single* send() cycle. It should end up on the
-        # await _async_thread_exit() operation above.  It is critically important that
-        # no await/async operations occur in this process.  The code should have
-        # been validated previously.
-        result = self.task._send(None)
+        # Context-switch the Task to run a different coroutine momentarily
+        orig_coro = self.task._switch(_waiter())
+        try:
+            # Reawaken the task.  It's going to wake up in the _waiter() 
+            # coroutine above. 
+            AWAIT(_scheduler_wake(self.barrier, 1))
+            _waiter_evt.wait()
 
-        # If the result is not the result of _async_thread_exit() above, then
-        # some kind of very bizarre runtime problem has been
-        # encountered.
-        if result is not _AsyncContextManager:
-            self.task._throw(RuntimeError('yielding not allowed in AsyncThread. Got %r' % result))
-            
-        # Arrange to have the task join with the async thread runner.  This is rather subtle,
-        # but this will cause the task to reawaken back in its original execution thread
-        # upon the completion of this _runner() function.
-        self.thread._task.joining.add(self.task)
+            # Run the code through a *single* send() cycle. It should end up on the
+            # await _async_thread_exit() operation above.  It is critically important that
+            # no bare await/async operations occur in this process.  The code should have
+            # been validated previously.  It *IS* okay for AWAIT() operations to be used.
+            result = orig_coro.send(None)
+
+            # If the result is not the result of _async_thread_exit() above, then
+            # some kind of very bizarre runtime problem has been
+            # encountered.
+            if result is not _AsyncContextManager:
+                self.task._throw(RuntimeError('yielding not allowed in AsyncThread. Got %r' % result))
+        finally:
+            # No matter what has happened, the "Task" is sitting on a
+            # termination event right now.  This is happening in the
+            # _waiter() coroutine above in either the
+            # self.thread.join() or self.thread.wait() method.  We're
+            # going to manually remove the task from whatever it's
+            # waiting on and arrange to have it reawake upon
+            # termination of the coroutine runner task instead.
+
+            if self.task.cancel_func:
+                self.task.cancel_func()
+                self.task.cancel_func = None
+
+            # Dispense with the _waiter coro and switch back to the original coroutine
+            self.task._run_coro.close()   
+            self.task._switch(orig_coro)
+
+            # Wait on the joining barrier of the coroutine runner
+            self.task.cancel_func = self.thread._task.joining.add(self.task)
 
 def spawn_thread(func=None, *args, daemon=False):
     '''
@@ -268,15 +307,18 @@ def async_thread(func=None, *, daemon=False):
         
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if meta._from_coroutine():
+        if meta._from_coroutine() and not is_async_thread():
             async def runner(*args, **kwargs):
                 t = AsyncThread(func, args=args, kwargs=kwargs, daemon=daemon)
                 await t.start()
                 try:
                     return await t.join()
                 except errors.CancelledError as e:
-                    await t.cancel()
-                    raise
+                    await t.cancel(exc=e)
+                    if t._result_exc:
+                        raise t._result_exc from None
+                    else:
+                        return t._result_value
                 except errors.TaskError as e:
                     raise e.__cause__ from None
             return runner(*args, **kwargs)

@@ -103,8 +103,8 @@ class Task(object):
         '_deadlines', '_joined', '_taskgroup', 
         'allow_cancel', '__weakref__', '__dict__'
     )
-    _lastid = 1
 
+    _lastid = 1
     def __init__(self, coro):
         self.id = Task._lastid
         Task._lastid += 1
@@ -126,6 +126,7 @@ class Task(object):
         self.terminated = False       # Has the task actually Terminated?
         self.cancel_pending = None    # Deferred cancellation exception pending (if any)
         self.allow_cancel = True      # Can cancellation exceptions be delivered?
+        self.suspend_func = None      # Optional suspension callback (called when task suspends)
 
         # Actual execution is wrapped by a supporting coroutine
         self._run_coro = self._task_runner(self.coro)
@@ -253,6 +254,13 @@ class Task(object):
         Return a formatted traceback showing where the task is currently executing.
         '''
         return _format_stack(self)
+
+    def _switch(self, coro):
+        orig_coro = self._run_coro
+        self._run_coro = coro
+        self._send = coro.send
+        self._throw = coro.throw
+        return orig_coro
 
 class TaskGroup(object):
     '''
@@ -754,7 +762,7 @@ class _TimeoutAfter(object):
         return self
 
     async def __aexit__(self, ty, val, tb):
-        await _unset_timeout(self._prior)
+        current_clock = await _unset_timeout(self._prior)
 
         # Discussion.  If a timeout has occurred, it will either
         # present itself here as a TaskTimeout or TimeoutCancellationError
@@ -805,6 +813,15 @@ class _TimeoutAfter(object):
                             raise TaskTimeout(val.args[0]).with_traceback(tb) from None
                         else:
                             return False
+            elif ty is None:
+                if current_clock > self._deadlines[-1]:
+                    # Further discussion.  In the presence of threads and blocking
+                    # operations, it's possible that a timeout has expired, but 
+                    # there was simply no opportunity to catch it because there was
+                    # no suspension point.  
+                    log.warning('%r. Timeout occurred, but was uncaught. Ignored.',
+                                await current_task())
+
         finally:
             self._deadlines.pop()
 

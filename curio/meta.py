@@ -119,7 +119,7 @@ def instantiate_coroutine(corofunc, *args, **kwargs):
         context().send(None)
     except StopIteration as e:
         return e.value
-    
+
 def blocking(func):
     '''
     Decorator indicating that a function performs a blocking operation.

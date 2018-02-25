@@ -468,7 +468,10 @@ class Kernel(object):
             task.timeout = None
 
             # Set the cancellation exception
-            task.cancel_pending = exc(exc.__name__ if val is None else val)
+            if isinstance(exc, BaseException):
+                task.cancel_pending = exc
+            else:
+                task.cancel_pending = exc(exc.__name__ if val is None else val)
 
             # If the task doesn't allow the delivery of a cancellation exception right now
             # we're done.  It's up to the task to check for it later
@@ -489,13 +492,10 @@ class Kernel(object):
 
         # ----------------------------------------
         # Wait on a scheduler primitive
-        def _trap_sched_wait(sched, state, callback):
+        def _trap_sched_wait(sched, state):
             if _check_cancellation():
                 return
             _suspend_task(state, sched.add(current))
-            if callback:
-                callback()
-            
 
         # ----------------------------------------
         # Reschedule one or more tasks from a scheduler primitive
@@ -571,6 +571,7 @@ class Kernel(object):
                 # pending exception.
                 if isinstance(current.cancel_pending, TaskTimeout):
                     current.cancel_pending = None
+                current.next_value = now
 
         # ----------------------------------------
         # Return the running kernel
@@ -744,7 +745,8 @@ class Kernel(object):
                             traps[trap[0]](*trap[1:])
                         except Exception as e:
                             current.next_exc = e
-                      
+
+                    
                 # If any exception is raised during coroutine execution, the
                 # task is terminated.   Set the final return code and break out
                 except BaseException as e:
@@ -768,10 +770,19 @@ class Kernel(object):
                             raise
                 
                 finally:
+                    # Some tricky task/thread interactions require knowing when
+                    # a coroutine has suspended. If suspend_func has been set, 
+                    # trigger it and clear.
+                    if active.suspend_func:
+                        active.suspend_func()
+                        active.suspend_func = None
+
+                    # Unregister any prior I/O listening
                     if active._last_io:
                         _unregister_event(*active._last_io)
                         active._last_io = None
 
+                    # Trigger scheduler activations (if any)
                     for a in _activations:
                         a.suspended(active)
                         if active.terminated:
