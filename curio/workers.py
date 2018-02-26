@@ -362,6 +362,7 @@ class ProcessWorker(object):
             await self.pool.release(self)
 
     def run_server(self, ch):
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         while True:
             func, args = ch.recv()

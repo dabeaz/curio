@@ -125,7 +125,7 @@ class Kernel(object):
         return self
 
     def __exit__(self, ty, val, tb):
-        if not ty:
+        if not ty or ty in { KeyboardInterrupt, SystemExit }:
             self.run(shutdown=True)
 
     def _call_at_shutdown(self, func):
@@ -764,7 +764,7 @@ class Kernel(object):
                     else:
                         active.next_value = None
                         active.next_exc = e
-                        if active.report_crash and not isinstance(e, CancelledError):
+                        if active.report_crash and not isinstance(e, (CancelledError, SystemExit)):
                             log.error('Task Crash: %r', active, exc_info=True)
                         if not isinstance(e, Exception):
                             raise

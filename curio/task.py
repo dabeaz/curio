@@ -53,10 +53,11 @@ def _get_stack(coro):
     return frames
 
 # Create a stack traceback for a task
-def _format_stack(task):
+def _format_stack(task, complete=False):
     '''
     Formats a traceback from a stack of coroutines/generators
     '''
+    dirname = os.path.dirname(__file__)
     extracted_list = []
     checked = set()
     for f in _get_stack(task.coro):
@@ -64,6 +65,8 @@ def _format_stack(task):
         co = f.f_code
         filename = co.co_filename
         name = co.co_name
+        if not complete and os.path.dirname(filename) == dirname:
+            continue
         if filename not in checked:
             checked.add(filename)
             linecache.checkcache(filename)
@@ -78,13 +81,13 @@ def _format_stack(task):
 
 # Return the (filename, lineno) where a task is currently executing
 def _where(task):
-    basename = os.path.basename(__file__)
+    dirname = os.path.dirname(__file__)
     for f in _get_stack(task.coro):
         lineno = f.f_lineno
         co = f.f_code
         filename = co.co_filename
         name = co.co_name
-        if os.path.basename(filename) == basename:
+        if os.path.dirname(filename) == dirname:
             continue
         return filename, lineno
     return None, None
@@ -156,9 +159,7 @@ class Task(object):
     def __del__(self):
         self.coro.close()
         if not self._joined and not self.cancelled and not self.daemon:
-            if self.next_exc:
-                log.error('Exception in unjoined task %r', self, exc_info=self.next_exc)
-            elif not self.daemon:
+            if not self.daemon and not self.next_exc:
                 log.warning('%r never joined', self)
 
     async def _task_runner(self, coro):
