@@ -14,6 +14,7 @@ from .file import *
 from .channel import *
 from .bridge import *
 from .promise import *
+from .thread import *
 
 __all__ = [*errors.__all__,
            *task.__all__,
@@ -27,4 +28,5 @@ __all__ = [*errors.__all__,
            *channel.__all__,
            *bridge.__all__,
            *promise.__all__,
+           *thread.__all__,
            ]
