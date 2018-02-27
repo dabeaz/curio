@@ -44,7 +44,6 @@ class AsyncThread(object):
         self._thread = None
         self._task = None
         self._joined = False
-        self._cancel_pending = None
 
     async def _coro_runner(self):
         while True:
@@ -65,8 +64,6 @@ class AsyncThread(object):
             except BaseException as e:
                 self._result_value = None
                 self._result_exc = e
-                if e is self._cancel_pending:
-                    self._cancel_pending = None
 
             # Hand it back to the thread
             coro = None
@@ -122,7 +119,6 @@ class AsyncThread(object):
             return self._result_value
 
     async def cancel(self, *, exc=errors.TaskCancelled):
-        self._cancel_pending = exc
         await self._task.cancel(exc=exc)
         await self.wait()
 
@@ -232,7 +228,7 @@ class _AsyncContextManager:
 
             # The original task needs to come back
             self.task._switch(orig_coro)
-            self.task.cancel_pending = self.thread._cancel_pending
+            self.task.cancel_pending = self.thread._task.cancel_pending
 
             # This never returns... the task resumes immediately, but it's back
             # in its original coroutine.
@@ -311,8 +307,7 @@ def async_thread(func=None, *, daemon=False):
                     return await t.join()
                 except errors.CancelledError as e:
                     await t.cancel(exc=e)
-                    if t._cancel_pending:
-                        await set_cancellation(t._cancel_pending)
+                    await set_cancellation(t._task.cancel_pending)
                     if t._result_exc:
                         raise t._result_exc from None
                     else:
