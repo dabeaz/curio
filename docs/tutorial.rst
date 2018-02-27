@@ -569,10 +569,10 @@ making a hasty exit.
 Number Crunching and Blocking Operations
 ----------------------------------------
 
-Now, suppose for a moment that the kid has decided, for reasons
-unknown, that building the Millenium Falcon requires computing a sum
-of larger and larger Fibonacci numbers using an exponential algorithm
-like this::
+Now, suppose for a moment that the kid has discovered that the shape
+of the Millenium Falcon is based on the Golden Ratio and that building
+it now requires computing a sum of larger and larger Fibonacci numbers
+using an exponential algorithm like this::
 
     def fib(n):
         if n < 2:
@@ -637,10 +637,10 @@ example, you could start a separate terminal window and type this::
     *** Connection closed by remote host ***
     bash %
 
-The bad news is that if you want other tasks to run, you have to
-figure out some way to carry out computationally intensive work
-elsewhere.  If you know that work might take awhile, you can have it
-execute in a separate process. Change the code to use
+The bad news is that if you want other tasks to run, you'll have to
+figure out some other way to carry out computationally intensive work.
+If you know that the work might take awhile, you can have it execute
+in a separate process. Change the code to use
 ``curio.run_in_process()`` like this::
 
     async def kid():
@@ -670,7 +670,7 @@ intensive work is being carried out in a subprocess. You should be
 able to run the monitor, send the signal, and see the shutdown occur
 as before. 
 
-The problem of blocking might also apply to other operations involving
+The problem of blocking might also apply to operations involving
 I/O.  For example, suppose your kid starts hanging out with a bunch of
 savvy 5th graders who are into microservices. Suddenly, the
 ``kid()`` task morphs into something that's making HTTP requests and
@@ -702,10 +702,12 @@ decoding JSON::
                 print('Fine. Saving my work.')
                 raise
 
-That's great except that ``requests`` knows nothing of Curio, it
-blocks the internal event loop while waiting for a response, and we're
-back to the same problem as before.  To fix this, you can use
-``curio.run_in_thread()``.  Modify the code like this::
+That's great except that the popular ``requests`` library knows
+nothing of Curio and it blocks the internal event loop while waiting
+for a response.  This essential the same problem as before except
+that ``requests.get()`` mainly spends its time waiting. For this, 
+you can use ``curio.run_in_thread()`` to offload work to a separate thread.  
+Modify the code like this::
 
     import requests
 
