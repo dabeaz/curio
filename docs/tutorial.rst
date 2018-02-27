@@ -671,17 +671,12 @@ able to run the monitor, send the signal, and see the shutdown occur
 as before. 
 
 The problem of blocking might also apply to other operations involving
-I/O.  For example, accessing a database or calling out to other
-libraries.  In fact, any I/O operation not preceded by an explicit
-``await`` might block.  If you know that blocking is possible, use the
-``curio.run_in_thread()`` coroutine.  For example, in this modified
-code, the kid decides to take a rest after computing each Fibonacci
-number.  For reasons unknown, the kid is calling the blocking
-``time.sleep()``.  To keep it from blocking all tasks and the entire
-kernel, you've got to constantly remind the kid to do it in a separate
-thread::
+I/O.  For example, suppose your kid starts hanging out with a bunch of
+savvy 5th graders who are into microservices. Suddenly, the
+``kid()`` task morphs into something that's making HTTP requests and
+decoding JSON::
 
-    import time
+    import requests
 
     async def kid():
         while True:
@@ -700,32 +695,47 @@ thread::
             try:
                 total = 0
                 for n in range(50):
-                    total += await curio.run_in_process(fib, n)
-                    # Rest a bit
-		    await curio.run_in_thread(time.sleep, n)
+                    r = requests.get(f'http://www.dabeaz.com/cgi-bin/fib.py?n={n}')
+		    resp = r.json()
+                    total += int(resp['value'])
             except curio.CancelledError:
                 print('Fine. Saving my work.')
                 raise
-    
-Note: ``time.sleep()`` has only been used to illustrate blocking in an
-outside library.  Presumably the kid would be doing some more useful
-here such as watching a famous Fibonacci YouTuber blather on about
-their three pet pug dogs or something.  Curio already has its own sleep
-function so if you really need to sleep, use that instead.
 
-Curiouser and Curiouser
------------------------
+That's great except that ``requests`` knows nothing of Curio, it
+blocks the internal event loop while waiting for a response, and we're
+back to the same problem as before.  To fix this, you can use
+``curio.run_in_thread()``.  Modify the code like this::
 
-Like actual kids, as much as you tell them to be responsible, you can
-never be quite sure that they're going to do the right thing in all
-circumstances.  The previous section on blocking operations
-illustrates a problem lurks in the shadows of any async
-program--namely the risk of blocking the interval event loop without
-even knowing it. Fixes to the problem have involved knowing what
-operations are dangerous and explicitly using calls such as
-``run_in_thread()`` or ``run_in_process``. 
+    import requests
 
-(dramatic pause...)
+    async def kid():
+        while True:
+            try:
+                print('Can I play?')
+                await curio.timeout_after(1, start_evt.wait)
+                break
+            except curio.TaskTimeout:
+                print('Wha!?!')
+
+        print('Building the Millenium Falcon in Minecraft')
+        async with curio.TaskGroup() as f:
+            await f.spawn(friend, 'Max')
+            await f.spawn(friend, 'Lillian')
+            await f.spawn(friend, 'Thomas')
+            try:
+                total = 0
+                for n in range(50):
+                    r = await curio.run_in_thread(requests.get,
+                                                  f'http://www.dabeaz.com/cgi-bin/fib.py?n={n}')
+		    resp = r.json()
+                    total += int(resp['value'])
+            except curio.CancelledError:
+                print('Fine. Saving my work.')
+                raise
+
+You'll find that this version works.  All of the tasks run, you can
+send signals, and it's responsive.
 
 A Simple Echo Server
 --------------------
@@ -746,7 +756,7 @@ echo server written directly with sockets using curio::
         async with sock:
             while True:
                 client, addr = await sock.accept()
-                await spawn(echo_client, client, addr)
+                await spawn(echo_client, client, addr, daemon=True)
     
     async def echo_client(client, addr):
         print('Connection from', addr)
@@ -816,12 +826,13 @@ using ``tcp_server()`` like this::
     if __name__ == '__main__':
         run(tcp_server, '', 25000, echo_client)
 
-The ``tcp_server()`` coroutine takes care of a few low-level details 
+The ``tcp_server()`` coroutine takes care of a few low-level details
 such as creating the server socket and binding it to an address.  It
 also takes care of properly closing the client socket so you no longer
 need the extra ``async with client`` statement from before.  Clients
-are also launched into a proper task group so cancellation of the server shuts everything down
-just like the kid's friends in the earlier example.
+are also launched into a proper task group so cancellation of the
+server shuts everything down just like the kid's friends in the
+earlier example.
 
 A Stream-Based Echo Server
 --------------------------
