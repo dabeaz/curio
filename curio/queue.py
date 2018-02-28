@@ -88,7 +88,7 @@ class Queue(object):
         if self._task_count == 0 and self._join_waiting:
             await _scheduler_wake(self._join_waiting, n=len(self._join_waiting))
 
-    async def __aiter__(self):
+    def __aiter__(self):
         return self
 
     async def __anext__(self):
@@ -349,7 +349,7 @@ class UniversalQueue(object):
         loop = asyncio.get_event_loop()
         return loop.run_in_executor(None, self.join_sync)
 
-    async def __aiter__(self):
+    def __aiter__(self):
         return self
 
     async def __anext__(self):
