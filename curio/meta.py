@@ -368,9 +368,7 @@ def is_safe_generator(agen):
     if agen.ag_code in _safe_async_generators:
         return True
 
-    def _is_unsafe_block(instr, end_offset=-1):
-        is_generator = False
-        in_final = False
+    def _is_unsafe_block(instr, end_offset=-1, is_generator=False, in_final=False):
         is_unsafe = False
         for op in instr:
             if op.offset == end_offset:
@@ -380,7 +378,7 @@ def is_safe_generator(agen):
             if op.opname == 'END_FINALLY':
                 return (is_generator, is_unsafe)
             if op.opname in {'SETUP_FINALLY', 'SETUP_EXCEPT', 'SETUP_ASYNC_WITH'}:
-                is_g, is_u = _is_unsafe_block(instr, op.argval)
+                is_g, is_u = _is_unsafe_block(instr, op.argval, is_generator, in_final)
                 is_generator |= is_g
                 is_unsafe |= is_u
             if op.opname == 'YIELD_FROM' and is_generator and in_final:

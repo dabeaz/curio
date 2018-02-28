@@ -11,19 +11,19 @@ class _TestActivation(Activation):
         self.events.append('activate')
 
     def created(self, task):
-        if task.name == 'main':
+        if task.name.endswith('main'):
             self.events.append('created')
 
     def running(self, task):
-        if task.name == 'main':
+        if task.name.endswith('main'):
             self.events.append('running')
 
     def suspended(self, task):
-        if task.name == 'main':
+        if task.name.endswith('main'):
             self.events.append('suspended')
 
     def terminated(self, task):
-        if task.name == 'main':
+        if task.name.endswith('main'):
             self.events.append('terminated')
 
 def test_activation_base():
