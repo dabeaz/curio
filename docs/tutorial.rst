@@ -739,6 +739,73 @@ Modify the code like this::
 You'll find that this version works.  All of the tasks run, you can
 send signals, and it's responsive.
 
+Curiouser and Curiouser
+-----------------------
+
+Like actual kids, as much as you tell tasks to be responsible, you can
+never be quite sure that they’re going to do the right thing in all
+circumstances. The previous section on blocking operations illustrates
+a problem that lurks in the shadows of any async program–-namely the
+lack of task preemption and the risk of blocking the interval event
+loop without even knowing it. Potentially any operation not involving
+an explict ``await`` is suspect.  However, it's really up to you to
+know more about the nature of what's being done and to explicitly use
+calls such as ``run_in_thread()`` or ``run_in_process()`` as
+appropriate.
+
+There is another approach however.   Rewrite the ``fib()`` function and
+``kid()`` task as follows::
+
+    @curio.async_thread
+    def fib(n):
+        r = requests.get(f'http://www.dabeaz.com/cgi-bin/fib.py?n={n}')
+        resp = r.json()
+        return int(resp['value'])
+
+    async def kid():
+        while True:
+            try:
+                print('Can I play?')
+                await curio.timeout_after(1, start_evt.wait)
+                break
+            except curio.TaskTimeout:
+                print('Wha!?!')
+
+        print('Building the Millenium Falcon in Minecraft')
+        async with curio.TaskGroup() as f:
+            await f.spawn(friend, 'Max')
+            await f.spawn(friend, 'Lillian')
+            await f.spawn(friend, 'Thomas')
+            try:
+                total = 0
+                for n in range(50):
+                    total += await fib(n)
+            except curio.CancelledError:
+                print('Fine. Saving my work.')
+                raise
+
+In this code, the ``kid()`` task uses ``await fib()`` to call the
+``fib()`` function. It looks like you're calling a coroutine, but in
+reality, it's launching a background thread and running the function
+in that.  Since it's a separate thread, blocking operations aren't
+going to block the rest of Curio.   In fact, you'll find that the example
+works the same as it did before.
+
+Functions marked with ``@async_thread`` are also unusual in that they
+can be called from normal synchronous code as well.  For example, you could
+launch an interactive interpreter and do this::
+
+    >>> fib(5)
+    8
+    >>>
+
+In this case, there is no need to launch a background thread--the function
+simply runs as it normally would.  
+
+There's more than meets the eye when it comes to Curio and threads. However,
+Curio provides a number of features for making coroutines and threads
+play nicely together.  This is only a small taste.
+
 A Simple Echo Server
 --------------------
 
