@@ -325,9 +325,10 @@ threads is to use curio's ``UniversalQueue`` class::
 
     async def main():
         q = curio.UniversalQueue()
-        prod_task = threading.Thread(target=producer, args=(q,)).start()
+        prod_task = threading.Thread(target=producer, args=(q,))
+        prod_task.start()
         cons_task = await curio.spawn(consumer, q)
-        await run_in_thread(prod_task.join)
+        await curio.run_in_thread(prod_task.join)
         await cons_task.cancel()
 
     if __name__ == '__main__':
