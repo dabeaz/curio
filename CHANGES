@@ -1,8 +1,8 @@
 CHANGES
 -------
 
-Version 0.9 : In Progress
--------------------------
+Version 0.9 : March 10, 2018
+----------------------------
 02/24/2018 Refinements to Task crash reporting.  By default all Tasks
            that terminate with an uncaught exception log that exception
            as soon as it is detected.  Although there is a risk that this
