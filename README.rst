@@ -24,8 +24,9 @@ vary.
 
 News
 ----
-The version 0.9 "release" of curio has a few small improvements to
-sockets and some cleanup.
+The version 0.9 "release" of curio has various improvements and cleanups
+throughout. Some major changes include better support for the buffer API
+and improvements to async threads.
 
 Quick install
 -------------
@@ -53,7 +54,7 @@ Here is a simple TCP echo server implemented using sockets and curio:
         async with sock:
             while True:
                 client, addr = await sock.accept()
-                await spawn(echo_client, client, addr)
+                await spawn(echo_client, client, addr, daemon=True)
     
     async def echo_client(client, addr):
         print('Connection from', addr)
