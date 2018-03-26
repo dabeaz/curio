@@ -232,6 +232,7 @@ class Task(object):
         await _cancel_task(self, exc=exc)
         if blocking:
             await _scheduler_wait(self.joining, 'TASK_JOIN')
+
         return True
 
     async def interrupt(self):

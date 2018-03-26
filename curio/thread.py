@@ -13,6 +13,9 @@ from inspect import iscoroutine, isgenerator
 from contextlib import contextmanager
 from types import coroutine
 import sys
+import logging
+
+log = logging.getLogger(__name__)
 
 # -- Curio
 
@@ -90,6 +93,9 @@ class AsyncThread(object):
         except BaseException as e:
             self.next_value = None
             self.next_exc = e
+            if not isinstance(e, errors.CancelledError):
+                log.warning("Unexpected exception in cancelled async thread", exc_info=True)
+                
         finally:
             self._request.set_result(None)
             self._terminate_evt.set()
@@ -134,10 +140,11 @@ class AsyncThread(object):
             return self.next_value
 
     async def cancel(self, *, exc=errors.TaskCancelled, blocking=True):
+        self.cancelled = True
         await self._task.cancel(exc=exc, blocking=blocking)
         if blocking:
             await self.wait()
-            self.cancelled = True
+
 
 def AWAIT(coro, *args, **kwargs):
     '''
