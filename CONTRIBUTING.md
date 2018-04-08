@@ -2,7 +2,7 @@ Contributing to Curio
 =====================
 
 Curio is a young project and currently rather experimental.
-Contributions of any kind that make it better are welcome--this
+Contributions of most kinds that make it better are welcome--this
 includes code, documentation, examples, and feature requests.
 
 There aren't too many formal guidelines.  If submitting a bug report,
@@ -37,3 +37,12 @@ This will create a `venv-cpython35` directory that you can install
 py.test into. From there you can follow what the
 [`.travis.yml` file](https://github.com/dabeaz/curio/blob/master/.travis.yml)
 does to run Curio's test suite (both for code and documentation).
+
+Important Note
+--------------
+Pull requests related to type-hinting, type annotations, or static type
+checking will not be accepted.  Given the dynamic nature of Python, there
+is a pretty good chance that such annotations will be wrong.  If you want
+this, use a different programming language or a different library.
+
+
