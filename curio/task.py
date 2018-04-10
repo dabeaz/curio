@@ -10,6 +10,8 @@ from collections import deque
 import linecache
 import traceback
 import os.path
+from functools import partial
+from contextvars import copy_context
 
 log = logging.getLogger(__name__)
 
@@ -100,7 +102,7 @@ class Task(object):
     '''
     _slots__ = (
         'id', 'parentid', 'coro', 'daemon', 'name', '_send', '_throw',
-        'cycles', 'state', 'cancel_func', 'future', 'sleep',
+        'cycles', 'state', 'cancel_func', 'future', 'sleep', 'context',
         'timeout', 'next_value', 'next_exc', 'joining', 'cancelled',
         'terminated', 'cancel_pending', '_run_coro', '_last_io',
         '_deadlines', '_joined', '_taskgroup', 
@@ -130,6 +132,7 @@ class Task(object):
         self.cancel_pending = None    # Deferred cancellation exception pending (if any)
         self.allow_cancel = True      # Can cancellation exceptions be delivered?
         self.suspend_func = None      # Optional suspension callback (called when task suspends)
+        self.context = None           # Contextvars support
 
         # Actual execution is wrapped by a supporting coroutine
         self._run_coro = self._task_runner(self.coro)
@@ -137,8 +140,8 @@ class Task(object):
         # Last I/O operation performed
         self._last_io = None          
 
-        # Bound coroutine methods
-        self._send = self._run_coro.send   
+        # Bound coroutine methods, set up by spawn
+        self._send = self._run_coro.send
         self._throw = self._run_coro.throw
 
         self._deadlines = []          # Timeout deadlines
@@ -608,6 +611,9 @@ async def spawn(corofunc, *args, daemon=False, allow_cancel=True, report_crash=T
     '''
     coro = meta.instantiate_coroutine(corofunc, *args)
     task = await _spawn(coro)
+    task.context = copy_context()
+    task._send = partial(task.context.run, task._run_coro.send)
+    task._throw = partial(task.context.run, task._run_coro.throw)
     task.allow_cancel = allow_cancel
     task.daemon = daemon
     task.report_crash = report_crash
