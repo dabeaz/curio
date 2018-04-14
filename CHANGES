@@ -2,6 +2,10 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+04/14/2018 Changed the method of spawning processes for run_in_process to
+           use the "spawn" method of the multiprocessing module. This 
+	   prevents issues of having open file-descriptors cloned by
+           accident via fork().  For example, as in Issue #256.
 
 Version 0.9 : March 10, 2018
 ----------------------------
