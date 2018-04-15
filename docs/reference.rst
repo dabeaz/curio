@@ -545,7 +545,10 @@ calculations and blocking operations.  Use the following functions to do that:
    Run ``callable(*args)`` in a separate process and returns
    the result.  If cancelled, the underlying
    worker process (if started) is immediately cancelled by a ``SIGTERM``
-   signal.
+   signal.  It is important to note that the given callable is executed
+   in an entirely independent Python interpreter and that no shared
+   global state should be assumed.  The separate process is launched
+   using the "spawn" method of the ``multiprocessing`` module. 
 
 .. asyncfunction:: run_in_thread(callable, *args)
 
