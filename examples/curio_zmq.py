@@ -29,26 +29,6 @@ methods replaced by asynchronous versions:
    Socket.send_string(u, flags=0, copy=True, encoding='utf-8')
    Socket.recv_string(flags=0, encoding='utf-8')
 
-To run a Curio application that uses ZeroMQ, a special selector must be given
-to the Kernel.  You can either do this::
-
-   from curio_zmq import ZMQSelector
-   from curio import run
-
-   async def main():
-       ...
-
-   run(main(), selector=ZMQSelector())
-
-Alternative, you can use the ``curio_zmq.run()`` function like this::
-
-   from curio_zmq import run
-
-   async def main():
-       ...
-
-   run(main())
-
 Here is an example of task that uses a ZMQ PUSH socket::
 
     import curio_zmq as zmq
@@ -83,10 +63,10 @@ Here is an example of a Curio task that receives messages::
 '''
 
 import pickle
-from zmq.asyncio import ZMQSelector
 from zmq.utils import jsonapi
 import zmq
 
+from curio.kernel import run  # for import compatibility
 from curio.traps import _read_wait, _write_wait
 
 # Pull all ZMQ constants and exceptions into our namespace
@@ -141,10 +121,3 @@ class CurioZMQSocket(zmq.Socket):
 
 class Context(zmq.Context):
     _socket_class = CurioZMQSocket
-
-def run(*args, **kwargs):
-    '''
-    Replacement for the Curio run() function that uses ZMQSelector.
-    '''
-    from curio import kernel
-    return kernel.run(selector=ZMQSelector(), *args, **kwargs)
