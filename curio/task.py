@@ -164,7 +164,8 @@ class Task(object):
 
     async def _task_runner(self, coro):
         try:
-            return await coro
+            self.next_value = await coro
+            return self.next_value
         finally:
             if self._taskgroup:
                 await self._taskgroup._task_done(self)
@@ -378,8 +379,9 @@ class TaskGroup(object):
         if not task._ignore_result:
             self._finished.append(task)
             # Set the first completed task (if successful exit)
-            if self.completed is None and not task.next_exc:
-                self.completed = task
+            if self.completed is None:
+                if not (self._wait is object and task.next_value is None):
+                    self.completed = task
         await self._sema.release()
 
     # Discards a task from the TaskGroup.  Called implicitly if
@@ -457,7 +459,8 @@ class TaskGroup(object):
         '''
         Wait for tasks in a task group to terminate.  If wait=all, then 
         wait for all tasks to exit. If wait=any, then wait for the first
-        task to terminate.  In both cases, if any task exits with an 
+        task to terminate.  If wait=object, then wait for the first task
+        that returns a non-None result. In all cases, if any task exits with an 
         unexpected exception, all remaining tasks are immediately cancelled
         and a TaskGroupError() exception is raised.   If the join()
         operation is cancelled, all remaining tasks are cancelled and the
@@ -471,7 +474,7 @@ class TaskGroup(object):
         # If there are any tasks in error, or the wait policy dictates
         # cancellation of remaining tasks, cancel them
 
-        if exceptional or (wait is None) or (wait is any and self.completed):
+        if exceptional or (wait is None) or (wait in [any,object] and self.completed):
             while self._running:
                 task = self._running.pop()
                 await task.cancel(blocking=False)
@@ -506,7 +509,7 @@ class TaskGroup(object):
                     if not exceptional:
                         cancel_remaining = True
                     exceptional.append(task)
-                elif (wait is any) and task == self.completed:
+                elif (wait in [any,object]) and task == self.completed:
                     cancel_remaining = True
 
                 if cancel_remaining:
