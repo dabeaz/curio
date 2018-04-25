@@ -3,11 +3,22 @@ CHANGES
 Version 0.10 : In Progress
 --------------------------
 
-04/25/2018 Added an interesting new capability to TaskGroups.  You now
-           have the option to wait for any non-None result to come back.
-           For example, something like this:
+04/25/2018 A slight tweak on TaskGroups.  The wait=any option now waits for
+           any task to return a non-None result.  If tasks, 
 
-               async with TaskGroup(wait=object) as g:
+               async def coro1():
+                    await sleep(1)
+                    return
+
+               async def coro2():
+                    await sleep(2)
+                    return 42
+
+               async def coro3():
+                    await sleep(3)
+                    return 37
+
+               async with TaskGroup(wait=any) as g:
                     await g.spawn(coro1)
                     await g.spawn(coro2)
                     await g.spawn(coro3)
@@ -16,10 +27,13 @@ Version 0.10 : In Progress
                if g.completed:
                    result = g.completed.result
 
-           In this case, the task group waits until any non-None 
-           successful result comes back. If so, all of the other
-           tasks are cancelled.  As with before, an error in any
-           task causes all of the tasks to cancel.
+           In this example, coro1() finishes first, but doesn't return
+           a result.  So, it is disregarded.  The result is 42, returned
+           from coro2().  coro3() is cancelled.
+
+	   This is a potential incompatibility in prior code that merely spawned
+           tasks that never returned a result.  To fix this, have the tasks
+           return True or some other non-None value. 
 
 04/14/2018 Changed the method of spawning processes for run_in_process to
            use the "spawn" method of the multiprocessing module. This 

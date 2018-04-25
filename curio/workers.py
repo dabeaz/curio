@@ -343,7 +343,7 @@ class ProcessWorker(object):
         self.pool = pool
 
     def _launch(self):
-        context = multiprocessing.get_context('spawn')
+        context = multiprocessing.get_context('fork')
         client_ch, server_ch = context.Pipe()
         self.process = context.Process(
             target=self.run_server, args=(server_ch, ), daemon=True)
