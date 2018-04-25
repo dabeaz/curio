@@ -132,7 +132,7 @@ class AsyncThread(object):
 
     @property
     def result(self):
-        if not self._terminated_evt.is_set():
+        if not self._terminate_evt.is_set():
             raise RuntimeError('Thread not terminated')
         if self.next_exc:
             raise self.next_exc

@@ -2,6 +2,25 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+
+04/25/2018 Added an interesting new capability to TaskGroups.  You now
+           have the option to wait for any non-None result to come back.
+           For example, something like this:
+
+               async with TaskGroup(wait=object) as g:
+                    await g.spawn(coro1)
+                    await g.spawn(coro2)
+                    await g.spawn(coro3)
+                    ...
+
+               if g.completed:
+                   result = g.completed.result
+
+           In this case, the task group waits until any non-None 
+           successful result comes back. If so, all of the other
+           tasks are cancelled.  As with before, an error in any
+           task causes all of the tasks to cancel.
+
 04/14/2018 Changed the method of spawning processes for run_in_process to
            use the "spawn" method of the multiprocessing module. This 
 	   prevents issues of having open file-descriptors cloned by
