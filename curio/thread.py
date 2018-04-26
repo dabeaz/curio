@@ -117,6 +117,11 @@ class AsyncThread(object):
 
     async def join(self):
         await self.wait()
+        self._joined = True
+
+        if self._taskgroup:
+            self._taskgroup._task_discard(self)
+
         if self.next_exc:
             raise errors.TaskError() from self.next_exc
         else:
@@ -125,10 +130,6 @@ class AsyncThread(object):
     async def wait(self):
         await self._terminate_evt.wait()
         self.terminated = True
-        self._joined = True
-
-        if self._taskgroup:
-            self._taskgroup._task_discard(self)
 
     @property
     def result(self):

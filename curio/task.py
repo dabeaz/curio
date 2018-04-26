@@ -179,6 +179,9 @@ class Task(object):
         or raises a TaskError if the task crashed with an exception.
         '''
         await self.wait()
+        if self._taskgroup:
+            self._taskgroup._task_discard(self)
+        self._joined = True
         if self.next_exc:
             raise TaskError('Task crash') from self.next_exc
         else:
@@ -191,9 +194,9 @@ class Task(object):
         if not self.terminated:
             await _scheduler_wait(self.joining, 'TASK_JOIN')
 
-        self._joined = True
-        if self._taskgroup:
-            self._taskgroup._task_discard(self)
+        #self._joined = True
+        #if self._taskgroup:
+        #    self._taskgroup._task_discard(self)
         
     @property
     def result(self):
@@ -449,7 +452,7 @@ class TaskGroup(object):
         Cancel all remaining running tasks. Tasks are removed
         from the task group when cancelled.
         '''
-        self._closed = True
+        # self._closed = True
         for task in list(self._running):
             await task.cancel(blocking=blocking)
             self._task_discard(task)
@@ -514,7 +517,7 @@ class TaskGroup(object):
                 if cancel_remaining:
                     while self._running:
                         ctask = self._running.pop()
-                        await ctask.cancel(blocking=False)
+                        await ctask.cancel(blocking=True)
 
         self._closed = True
 
