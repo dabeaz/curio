@@ -253,7 +253,7 @@ The following methods are supported on ``TaskGroup`` instances:
 
    Wait for tasks in the group to terminate.  If *wait* is `all`, then
    wait for all tasks to completee.  If *wait* is `any` then wait for
-   any task to complete and cancel any remaining tasks. 
+   any task to return a non-None result and cancel any remaining tasks. 
    If any task returns with an error, then all remaining tasks are
    immediately cancelled and a ``TaskGroupError`` exception is raised.
    If the ``join()`` operation itself is cancelled, all remaining
@@ -267,8 +267,9 @@ The following methods are supported on ``TaskGroup`` instances:
 
 .. attribute:: TaskGroup.completed
 
-   The first task that completed in the group.  Useful when used in
-   combination with the ``wait=any`` option on ``join()``.   
+   The first task that completed with a result in the group.  Useful
+   when used in combination with the ``wait=any`` option on
+   ``join()``.
 
 
 The preferred way to use a ``TaskGroup`` is as a context manager.  For
@@ -295,7 +296,7 @@ order that they complete::
         async for task in g:
             print(task, 'completed.', task.result)
 
-If you wanted to launch tasks and exit when the first one has finished,
+If you wanted to launch tasks and exit when the first one has returned a result,
 use the ``wait=any`` option like this::
 
     async with TaskGroup(wait=any) as g:
