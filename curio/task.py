@@ -452,7 +452,7 @@ class TaskGroup(object):
         Cancel all remaining running tasks. Tasks are removed
         from the task group when cancelled.
         '''
-        # self._closed = True
+        self._closed = True
         for task in list(self._running):
             await task.cancel(blocking=blocking)
             self._task_discard(task)
