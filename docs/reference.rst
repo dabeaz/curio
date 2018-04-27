@@ -253,13 +253,12 @@ The following methods are supported on ``TaskGroup`` instances:
 
    Wait for tasks in the group to terminate.  If *wait* is `all`, then
    wait for all tasks to completee.  If *wait* is `any` then wait for
-   any task to return a non-None result and cancel any remaining tasks. 
-   If any task returns with an error, then all remaining tasks are
-   immediately cancelled and a ``TaskGroupError`` exception is raised.
-   If the ``join()`` operation itself is cancelled, all remaining
-   tasks in the group are also cancelled.  If a ``TaskGroup`` is used
-   as a context manager, the ``join()`` method is called on
-   context-exit.
+   any task to terminate and cancel any remaining tasks.  If any task
+   returns with an error, then all remaining tasks are immediately
+   cancelled and a ``TaskGroupError`` exception is raised.  If the
+   ``join()`` operation itself is cancelled, all remaining tasks in
+   the group are also cancelled.  If a ``TaskGroup`` is used as a
+   context manager, the ``join()`` method is called on context-exit.
 
 .. asyncmethod:: TaskGroup.cancel_remaining()
 

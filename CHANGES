@@ -3,37 +3,6 @@ CHANGES
 Version 0.10 : In Progress
 --------------------------
 
-04/25/2018 A slight tweak on TaskGroups.  The wait=any option now waits for
-           any task to return a non-None result.  If tasks, 
-
-               async def coro1():
-                    await sleep(1)
-
-               async def coro2():
-                    await sleep(2)
-                    return 42
-
-               async def coro3():
-                    await sleep(3)
-                    return 37
-
-               async with TaskGroup(wait=any) as g:
-                    await g.spawn(coro1)
-                    await g.spawn(coro2)
-                    await g.spawn(coro3)
-                    ...
-
-               if g.completed:
-                   result = g.completed.result
-
-           In this example, coro1() finishes first, but doesn't return
-           a result.  So, it is disregarded.  The result is 42, returned
-           from coro2().  coro3() is cancelled.
-
-	   This is a potential incompatibility in prior code that merely spawned
-           tasks that never returned a result.  To fix this, have the tasks
-           return True or some other non-None value. 
-
 04/14/2018 Changed the method of spawning processes for run_in_process to
            use the "spawn" method of the multiprocessing module. This 
 	   prevents issues of having open file-descriptors cloned by

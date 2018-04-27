@@ -382,9 +382,8 @@ class TaskGroup(object):
         if not task._ignore_result:
             self._finished.append(task)
             # Set the first completed task (if successful exit)
-            if self.completed is None:
-                if not (self._wait is any and task.next_value is None):
-                    self.completed = task
+            if self.completed is None and task.next_exc is None:
+                self.completed = task
         await self._sema.release()
 
     # Discards a task from the TaskGroup.  Called implicitly if
@@ -462,7 +461,7 @@ class TaskGroup(object):
         '''
         Wait for tasks in a task group to terminate.  If wait=all,
         then wait for all tasks to exit. If wait=any, then wait for
-        the first task that returns a non-None value to terminate.  In
+        the first task that terminates.  In
         both cases, if any task exits with an unexpected exception,
         all remaining tasks are immediately cancelled and a
         TaskGroupError() exception is raised.  If the join() operation

@@ -24,8 +24,7 @@ async def open_tcp_stream(hostname, port, delay=0.3):
     # Connection attempts are made to each target, but staggered with a delay.
     # Each connection attempt is launched in its own task.  The first successful
     # connection causes every other task to immediately cancel.
-    async with TaskGroup(wait=any) as group:
-
+    async with TaskGroup(wait=None) as group:
         # Task that attempts to make a connection
         async def try_connect(sockargs, addr):
             try:
@@ -33,23 +32,19 @@ async def open_tcp_stream(hostname, port, delay=0.3):
                 await sock.connect(addr)
                 return sock
             except OSError as e:
-                errors.append(e)
                 await sock.close()
+                raise
 
-        # Task that tries all of the targets one after the other
-        async def connector():
-            for *sockargs, _, addr in targets:
-                task = await group.spawn(try_connect, sockargs, sock, addr)
-                async with ignore_after(delay):
-                    await task.wait()
+        for *sockargs, _, addr in targets:
+            await group.spawn(try_connect, sockargs, addr)
+            async with ignore_after(delay):
+                task = await group.next_done()
+                try:
+                    return task.result
+                except OSError as e:
+                    errors.append(e)
 
-        await group.spawn(connector)
-
-    # Get the connected socket from the first task that completed
-    if group.completed:
-        return group.completed.result
-    else:
-        raise OSError(errors)
+    raise OSError(errors)
 
 async def main():
     result = await open_tcp_stream('www.python.org', 80)
