@@ -12,38 +12,40 @@ async def open_tcp_stream(hostname, port, delay=0.3):
         raise OSError(f'nothing known about {hostname}:{port}')
 
     # Cluster the targets into unique address families (e.g., AF_INET, AF_INET6, etc.)
-    families = [ list(g) for _, g in itertools.groupby(sorted(targets), key=lambda t: t[0]) ]
+    # and make sure the first entries are from a different family.
+    families = [ list(g) for _, g in itertools.groupby(targets, key=lambda t: t[0]) ]
+    targets = [ fam.pop(0) for fam in families ]
+    targets.extend(itertools.chain(*families))
 
-    # Interleave the targets by address families
-    #  [ [a, b], [x, y] ] -> [ a, x, b, y ]
-    targets = itertools.chain(*zip(*families))
-
-    # Task group to manage concurrent tasks. There can only be one winner.
+    # Task group to manage a collection concurrent tasks. All die upon exit
     async with TaskGroup(wait=None) as group:
 
-        # Function to attempt a connection request
-        async def try_connect(sockargs, addr):
+        # Attempt to make a connection request
+        async def try_connect(sockargs, addr, errors):
             sock = socket.socket(*sockargs)
             try:
                 await sock.connect(addr)
                 return sock
-            except Exception:
+            except Exception as e:
                 await sock.close()
-                raise
+                errors.append(e)
 
         # List of accumulated errors to report in case of total failure
         errors = []
 
         # Walk the list of targets and try connections with a staggered delay
         for *sockargs, _, addr in targets:
-            await group.spawn(try_connect, sockargs, addr)
-            try:
-                sock = await ignore_after(delay, group.next_result)
-                if sock:
-                    return sock     # Note: Returning cancels all remaining tasks
-            except OSError as e:
-                errors.append(e)
+            await group.spawn(try_connect, sockargs, addr, errors)
+            sock = await ignore_after(delay, group.next_result)
+            if sock:
+                return sock
 
+        # Collect all of the remaining tasks looking for a good connection
+        async for task in group:
+            if task.result:
+                return task.result
+
+        # It didn't work. Oh well.
         raise OSError(errors)
 
 async def main():
