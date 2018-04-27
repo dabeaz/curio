@@ -40,7 +40,6 @@ class AsyncThread(object):
         self.terminated = False
         self.cancelled = False
         self._taskgroup = None
-        self._ignore_result = False
 
         self._request = Future()
         self._done_evt = threading.Event()
@@ -78,8 +77,6 @@ class AsyncThread(object):
 
         if self._taskgroup:
             await self._taskgroup._task_done(self)
-            if self._ignore_result:
-                self._taskgroup._task_discard(self)
             self._joined = True
 
         #await self._terminate_evt.set()

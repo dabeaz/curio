@@ -144,7 +144,6 @@ class Task(object):
         self._deadlines = []          # Timeout deadlines
         self._joined = False          # Indicate whether task was joined/cancelled
         self._taskgroup = None        # Set if part of a task group
-        self._ignore_result = False
 
     def __repr__(self):
         return 'Task(id=%r, name=%r, state=%r)' % (self.id, self.name, self.state)
@@ -169,8 +168,6 @@ class Task(object):
         finally:
             if self._taskgroup:
                 await self._taskgroup._task_done(self)
-                if self._ignore_result:
-                    self._taskgroup._task_discard(self)
                 self._joined = True
 
     async def join(self):
@@ -379,11 +376,10 @@ class TaskGroup(object):
     # Triggered on task completion. 
     async def _task_done(self, task):
         self._running.discard(task)
-        if not task._ignore_result:
-            self._finished.append(task)
-            # Set the first completed task (if successful exit)
-            if self.completed is None and task.next_exc is None:
-                self.completed = task
+        self._finished.append(task)
+        # Set the first completed task (if successful exit)
+        if self.completed is None and task.next_exc is None:
+            self.completed = task
         await self._sema.release()
 
     # Discards a task from the TaskGroup.  Called implicitly if
@@ -412,19 +408,14 @@ class TaskGroup(object):
         else:
             self._running.add(task)
 
-    async def spawn(self, coro, *args, ignore_result=False, report_crash=True):
+    async def spawn(self, coro, *args, report_crash=True):
         '''
-        Spawn a new task into the task group.  The ignore_result option,
-        if given, makes the group disregard the result of the task--even
-        if it fails.  This is useful if you want a task to be a member
-        of a group for the purposes of cancellation, but you don't want
-        the outcome of that task to affect the group as a whole.
+        Spawn a new task into the task group.
         '''
         if self._closed:
             raise RuntimeError('Task group is closed')
 
         task = await spawn(coro, *args, report_crash=report_crash)
-        task._ignore_result = ignore_result
         await self.add_task(task)
         return task
 
@@ -445,6 +436,16 @@ class TaskGroup(object):
             await self.cancel_remaining()
 
         return task
+
+    async def next_result(self):
+        '''
+        Return the result of the next task that finishes.  
+        '''
+        task = await self.next_done()
+        if task:
+            return task.result
+        else:
+            raise RuntimeError('No task available')
 
     async def cancel_remaining(self, *, blocking=True):
         '''
@@ -516,7 +517,7 @@ class TaskGroup(object):
                 if cancel_remaining:
                     while self._running:
                         ctask = self._running.pop()
-                        await ctask.cancel(blocking=True)
+                        await ctask.cancel(blocking=False)
 
         self._closed = True
 

@@ -1761,19 +1761,30 @@ example::
 If a taskgroup is cancelled while waiting, all tasks in the group are
 also cancelled. 
 
-Sometimes you might want to launch a task where the result is discarded.
-To do that, use the ``ignore_result`` option to ``spawn()`` like this::
+Sometimes you might want to launch long-running tasks into a group,
+not knowing when they will finish.  This commonly occurs in server
+code.  One way to manage this is to launch the server into its own
+task under the group and then reap child tasks one at a time as the
+complete. For example::
+
+    async def client(conn):
+        ...
+
+    async def server(group):
+        while True:
+            conn = await get_next_connection()
+            await group.spawn(client, conn)
 
     async def main():
         async with TaskGroup() as g:
-            await g.spawn(sometask, ignore_result=True)
-            ...
+            await g.spawn(server, g)
+            await for task in g:
+                 # task is a completed task. Could look at it or ignore it
+                 pass
 
-When this is used, the task is still managed by the group in the usual
-way with respect to waiting and cancellation.  However, the final result
-of the task is never inspected--even if the task aborts with an error.
-This option is useful in contexts when a task group might be long-lived,
-such as use in a server. 
+This might look a bit unusual, but it will keep the group from filling up
+with dead tasks and it still allows cancellation to kill everything in
+the group if you want.
 
 Getting a Task Self-Reference
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

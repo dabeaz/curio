@@ -229,15 +229,11 @@ a ``TaskGroup`` instance.
 
 The following methods are supported on ``TaskGroup`` instances:
 
-.. asyncmethod:: TaskGroup.spawn(corofunc, *args, ignore_result=False, report_crash=True)
+.. asyncmethod:: TaskGroup.spawn(corofunc, *args, report_crash=True)
 
-   Create a new task that's part of the group.  Returns a ``Task`` instance.
-   The *ignore_result* flag indicates whether or not the group cares about the 
-   task's final result.  If specified, the result of the task is ignored.
-   The task is still considered part of the group for purposes of cancellation
-   however (i.e., if the task group is cancelled, any running tasks with an ignored result
-   in the group are also cancelled).   The *report_crash* flag controls whether a traceback
-   is logged when a task exits with an uncaught exception.
+   Create a new task that's part of the group.  Returns a ``Task``
+   instance.  The *report_crash* flag controls whether a traceback is
+   logged when a task exits with an uncaught exception.
 
 .. asyncmethod:: TaskGroup.add_task(coro)
 

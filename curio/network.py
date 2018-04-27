@@ -105,19 +105,26 @@ async def run_server(sock, client_connected_task, ssl=None):
         async with client:
             await client_connected_task(client, addr)
 
+    async def run_server(sock, group):
+        while True:
+            client, addr = await sock.accept()
+            if ssl:
+                if isinstance(ssl, curiossl.CurioSSLContext):
+                    client = await ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
+                else:
+                    client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
+                if not isinstance(client, Socket):
+                    client = Socket(client)
+            await group.spawn(run_client, client, addr)
+            del client
+
     async with sock:
-        async with TaskGroup() as client_group:
-            while True:
-                client, addr = await sock.accept()
-                if ssl:
-                    if isinstance(ssl, curiossl.CurioSSLContext):
-                        client = await ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
-                    else:
-                        client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
-                    if not isinstance(client, Socket):
-                        client = Socket(client)
-                await client_group.spawn(run_client, client, addr, ignore_result=True)
-                del client
+        async with TaskGroup() as tg:
+            await tg.spawn(run_server, sock, tg)
+            # Reap all of the children tasks as they complete
+            async for task in tg:
+                task._joined = True
+                del task
 
 def tcp_server_socket(host, port, family=socket.AF_INET, backlog=100,
                       reuse_address=True, reuse_port=False):

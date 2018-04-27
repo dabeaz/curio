@@ -2,6 +2,12 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+04/27/2018 Removed the ignore_result keyword argument to TaskGroup.spawn().
+           It's not really needed and the extra complexity isn't worth it.
+
+04/27/2018 Added TaskGroup.next_result() function.  It's mostly a convenience
+           function for returning the result of the next task that completes.
+           If the task failed with an exception, that exception is raised.
 
 04/14/2018 Changed the method of spawning processes for run_in_process to
            use the "spawn" method of the multiprocessing module. This 
