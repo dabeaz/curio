@@ -27,8 +27,8 @@ async def open_tcp_stream(hostname, port, delay=0.3):
     async with TaskGroup(wait=None) as group:
         # Task that attempts to make a connection
         async def try_connect(sockargs, addr):
+            sock = socket.socket(*sockargs)
             try:
-                sock = socket.socket(*sockargs)
                 await sock.connect(addr)
                 return sock
             except OSError as e:
