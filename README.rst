@@ -117,13 +117,13 @@ several concurrent connection requests and use the first one that
 succeeds.
 
 One solution to this problem is the so-called "Happy Eyeballs"
-algorithm as described in `RFC 6555`
-<https://tools.ietf.org/html/rfc6555>.  You can read the RFC for more
+algorithm as described in `RFC 6555
+<https://tools.ietf.org/html/rfc6555>`_.  You can read the RFC for more
 details, but Nathaniel Smith's `Pyninsula Talk
 <https://www.youtube.com/watch?v=i-R704I8ySE>`_ talk gives a pretty good
 overview of the problem and one possible implementation solution.  The
 gist of the algorithm is that a client makes concurrent time-staggered
-connection requests and use the first connection that is successful.
+connection requests and uses the first connection that is successful.
 What makes it tricky is that the algorithm involves a combination of
 timing, concurrency, and task cancellation--something that would be
 pretty hard to coordinate using a classical approach involving threads.
@@ -213,7 +213,7 @@ more in-depth coverage.  The `tutorial
 <https://curio.readthedocs.io/en/latest/tutorial.html>`_ is a good
 starting point.  The `howto
 <https://curio.readthedocs.io/en/latest/howto.html>`_ describes how to
-carry out various tasks.  The `developer guide <https://curio.readthedocs.io/en/latest/deve.html>`_
+carry out various tasks.  The `developer guide <https://curio.readthedocs.io/en/latest/devel.html>`_
 describes the general design of Curio and how to use it in more detail.
 
 Talks Related to Curio
@@ -222,8 +222,7 @@ Talks Related to Curio
 Much of Curio's design and issues related to async programming more generally have
 been described in various conference talks.
 
-* `The Other Async (Threads + Asyncio = Love) <https://www.youtube.com/watch?v=x1ndXuw7S0s>`_, Keynote talk
-by David Beazley at PyGotham, 2017.
+* `The Other Async (Threads + Asyncio = Love) <https://www.youtube.com/watch?v=x1ndXuw7S0s>`_, Keynote talk by David Beazley at PyGotham, 2017.
 
 * `Fear and Awaiting in Async <https://www.youtube.com/watch?v=E-1Y4kSsAFc>`_, Keynote talk by David Beazley at PyOhio 2016.
 
