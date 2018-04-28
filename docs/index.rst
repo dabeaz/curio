@@ -185,6 +185,18 @@ A: No.  Although curio provides a significant amount of overlapping
 functionality, the API is different and smaller.  Compatibility with
 other libaries is not a goal.
 
+**Q: Is there any kind of overarching design philosophy?**
+
+A: Yes and no. The "big picture" design of Curio is mainly inspired by
+the kernel/user space distinction found in operating systems only it's
+more of a separation into "synchronous" and "asynchronous" runtime
+environments.  Beyond that, Curio tends to take rather pragmatic view
+towards concurrent programming techniques more generally.  It's
+probably best to view Curio as providing a base set of primitives upon
+which you can build all sorts of interesting things.  However, it's
+not going to dictate much in the way of religious rules on how you
+structure it.
+
 **Q: How many tasks can be created?**
 
 A: Each task involves an instance of a ``Task`` class that
@@ -197,20 +209,22 @@ combined with any per-user limits imposed by the operating system.
  
 **Q: Can curio interoperate with other event loops?**
 
-A: At this time, no.  However, curio is a young project. It's
-something that might be added later.
+A: It depends on what you mean by the word "interoperate."  Curio's
+preferred mechanism of communication with the external world is a
+queue.  It is possible to communicate between Curio, threads, and
+other event loops using queues.  Curio can also submit work to 
+the ``asyncio`` event loop with the provision that it must be running
+separately in a different thread.
 
 **Q: How fast is curio?**
 
 A: In rough benchmarking of the simple echo server shown here, Curio
-runs about 20% faster than comparable code using coroutines in
-``asyncio`` on Python 3.6. This is on OS-X so your mileage might
-vary. Curio is not as fast as servers that utilize threads, low-level
-callback-based event handling (e.g., low-level protocols in
-``asyncio``), or direct coding in assembly language.  However, those
-approaches also don't involve coroutines (which is the whole point of
-Curio). See the ``examples/benchmark`` directory of the distribution
-for various testing programs.  
+runs about 90% faster than comparable code using coroutines in
+``asyncio`` and about 50% faster than similar code written using Trio.
+This was last measured on Linux using Python 3.7b3. Keep in mind there
+is a lot more to overall application performance than the performance
+of a simple echo server so your mileage might vary. See the ``examples/benchmark``
+dirctory for various testing programs.
 
 **Q: Is curio going to evolve into a framework?**
 
@@ -218,7 +232,7 @@ A: No, because evolving into a framework would mean modifying Curio to
 actually do something.  If it actually did something, then people
 would start using it to do things.  And then all of those things would
 have to be documented, tested, and supported.  People would start
-complaining about how all the things related to the various provided
+complaining about how all the things related to the various built-in
 things should have new things added to do some crazy thing.  No forget
 that, Curio remains committed to not doing much of anything the best
 it can.  This includes not implementing HTTP.
@@ -228,12 +242,23 @@ it can.  This includes not implementing HTTP.
 A: Future work on curio will primarily focus on features related to
 performance, debugging, diagnostics, and reliability.  A main goal is
 to provide a robust environment for running and controlling concurrent
-tasks.
+tasks.  However, it's also supposed to be fun. A lot of time is
+being spent thinking about the API and how to make it pleasant.
+
+**Q: Is there a Curio sticker?**
+
+A: No. However, you can make a `stencil <https://www.youtube.com/watch?v=jOW1X8-_7eI>`_
 
 **Q: How big is curio?**
 
-A: The complete library currently consists of fewer than 2500 lines of
-source statements.  This does not include blank lines and comments.
+A: The complete library currently consists of about 3200 statements
+as reported in coverage tests.
+
+**Q: I see various warnings about not using Curio. What should I do?**
+
+A: Has programming taught you nothing? Warnings are meant to be ignored.
+Of course you should use Curio.  However, be aware that the main reason
+you shouldn't be using Curio is that you should be using it.
 
 **Q: Can I contribute?**
 

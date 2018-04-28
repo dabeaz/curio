@@ -364,14 +364,12 @@ separately in a different thread.
 **Q: How fast is curio?**
 
 A: In rough benchmarking of the simple echo server shown here, Curio
-runs about 20% faster than comparable code using coroutines in
-``asyncio`` on Python 3.6. This is on OS-X so your mileage might
-vary. Curio is not as fast as servers that utilize threads, low-level
-callback-based event handling (e.g., low-level protocols in
-``asyncio``), or direct coding in assembly language.  However, those
-approaches also don't involve coroutines (which is the whole point of
-Curio). See the ``examples/benchmark`` directory of the distribution
-for various testing programs.  
+runs about 90% faster than comparable code using coroutines in
+``asyncio`` and about 50% faster than similar code written using Trio.
+This was last measured on Linux using Python 3.7b3. Keep in mind there
+is a lot more to overall application performance than the performance
+of a simple echo server so your mileage might vary. See the ``examples/benchmark``
+dirctory for various testing programs.
 
 **Q: Is curio going to evolve into a framework?**
 
