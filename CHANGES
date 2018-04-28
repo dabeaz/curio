@@ -2,6 +2,29 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+04/28/2018 Added new "object" wait mode to TaskGroup.  It waits for the
+           first non-None result to be returned by a task.  Then all 
+           remaining tasks are cancelled.  For example:
+
+               async def coro1():
+                   await sleep(1)
+                   return None
+
+               async def coro2():
+                   await sleep(2)
+                   return 37
+
+               async def coro3():
+                   await sleep(3)
+                   return 42
+ 
+               async with TaskGroup(wait=object) as tg:
+                   await tg.spawn(coro1)      # Ignored (returns None)
+                   await tg.spawn(coro2)      # Returns result
+                   await tg.spawn(coro3)      # Cancelled
+
+               print(tg.completed.result)  # -> 37
+
 04/27/2018 Removed the ignore_result keyword argument to TaskGroup.spawn().
            It's not really needed and the extra complexity isn't worth it.
 

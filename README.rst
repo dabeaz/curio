@@ -14,7 +14,7 @@ Curio has no third-party dependencies and is not built using the
 standard asyncio module.  Most users will probably find it to be a bit
 too-low level--it's probably best to think of it as a library for building
 libraries.  Although you might not use it directly, many of its ideas
-have influend other libraries with similar functionality.
+have influenced other libraries with similar functionality.
 
 Important Disclaimer
 --------------------
@@ -72,7 +72,7 @@ server implemented using sockets and Curio:
     if __name__ == '__main__':
         run(echo_server, ('',25000))
 
-If you have programmed with threads, you find that curio looks similar.
+If you have programmed with threads, you'll find that curio looks similar.
 You'll also find that the above server can handle thousands of simultaneous 
 client connections even though no threads are being used under the hood.
 
@@ -101,17 +101,15 @@ portion of the code:
 A Complex Example
 -----------------
 
-The above example only illustrates a few basics--and emphasizes the
-fact that using Curio looks a lot like programming with
-threads. You'll find Curio to be a bit more interesting if you try
-something more complicated.
+The above example only illustrates a few basics.  You'll find Curio to
+be a bit more interesting if you try something more complicated.
 
 As an example, one such problem is that of making a client TCP
 connection on a dual IPv4/IPv6 network.  On such networks, functions
 such as ``socket.getaddrinfo()`` return a series of possible
 connection endpoints.  To make a connection, each endpoint is tried
-until one of them succeeds.  However, serious performance problems
-arise if this is done as a purely sequential process as bad connection
+until one of them succeeds.  However, serious usability problems
+arise if this is done as a purely sequential process since bad connection
 requests might take a considerable time to fail.  It's better to try
 several concurrent connection requests and use the first one that
 succeeds.
@@ -132,26 +130,30 @@ Here is an example of how the problem can be solved with Curio:
 
 .. code:: python
 
+
     from curio import socket, TaskGroup, ignore_after, run
     import itertools
 
-    # Open a client-connection using "Happy Eyeballs"
     async def open_tcp_stream(hostname, port, delay=0.3):
-        # Get a list of connection targets for a given host/port
+        # Get all of the possible targets for a given host/port
         targets = await socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
         if not targets:
             raise OSError(f'nothing known about {hostname}:{port}')
 
-        # Organize the targets into unique address families (e.g., AF_INET, AF_INET6, etc.)
-        # and reorder so that the first entries are from a different family
+        # Cluster the targets into unique address families (e.g., AF_INET, AF_INET6, etc.)
+        # and make sure the first entries are from a different family.
         families = [ list(g) for _, g in itertools.groupby(targets, key=lambda t: t[0]) ]
         targets = [ fam.pop(0) for fam in families ]
         targets.extend(itertools.chain(*families))
 
-        # Task group to manage a collection concurrent tasks. All die upon exit
-        async with TaskGroup(wait=None) as group:
+        # List of accumulated errors to report in case of total failure
+        errors = []
 
-            # Task that attempts to make a connection request
+        # Task group to manage a collection concurrent tasks.
+        # Cancels all remaining once an interesting result is returned.
+        async with TaskGroup(wait=object) as group:
+
+            # Attempt to make a connection request
             async def try_connect(sockargs, addr, errors):
                 sock = socket.socket(*sockargs)
                 try:
@@ -160,24 +162,18 @@ Here is an example of how the problem can be solved with Curio:
                 except Exception as e:
                     await sock.close()
                     errors.append(e)
-
-            # List of accumulated errors to report in case of total failure
-            errors = []
-
-            # Walk the list of targets and try connections with a staggered delay
+ 
+           # Walk the list of targets and try connections with a staggered delay
             for *sockargs, _, addr in targets:
                 await group.spawn(try_connect, sockargs, addr, errors)
                 async with ignore_after(delay):
                      sock = await group.next_result()
                      if sock:
-                         return sock   # Success. All remaining tasks die
+                         break
 
-            # Collect all of the remaining tasks looking for a good connection
-            async for task in group:
-                if task.result:
-                    return task.result
-
-            # It didn't work. Oh well.
+        if group.completed:
+            return group.completed.result
+        else:
             raise OSError(errors)
 
     # Example use:
