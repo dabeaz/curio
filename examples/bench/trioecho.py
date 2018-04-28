@@ -22,8 +22,7 @@ async def echo_server(server_sock, ident):
         print("echo_server {}: started".format(ident))
         try:
             while True:
-                with trio.move_on_after(30):
-                    data = await server_sock.recv(BUFSIZE)
+                data = await server_sock.recv(BUFSIZE)
                 #print("echo_server {}: received data {!r}".format(ident, data))
                 if not data:
                     print("echo_server {}: connection closed".format(ident))
