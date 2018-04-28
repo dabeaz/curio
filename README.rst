@@ -208,7 +208,7 @@ function that reads off a queue like this:
                 break
             print('Got:', item)
 
-There is nothing too special. This is something you might write using standard thread-programming. 
+There is nothing too special here. This is something you might write using standard thread-programming. 
 However, it's easy to make this code read data sent from a Curio async task.  Use a ``UniversalQueue``
 object like this:
 

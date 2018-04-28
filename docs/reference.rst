@@ -249,7 +249,9 @@ The following methods are supported on ``TaskGroup`` instances:
 
    Wait for tasks in the group to terminate.  If *wait* is `all`, then
    wait for all tasks to completee.  If *wait* is `any` then wait for
-   any task to terminate and cancel any remaining tasks.  If any task
+   any task to terminate and cancel any remaining tasks.  If *wait* is
+   `object`, then wait for any task to terminate and return a non-None
+   object, cancelling all remaining tasks afterwards.  If any task
    returns with an error, then all remaining tasks are immediately
    cancelled and a ``TaskGroupError`` exception is raised.  If the
    ``join()`` operation itself is cancelled, all remaining tasks in
@@ -263,7 +265,7 @@ The following methods are supported on ``TaskGroup`` instances:
 .. attribute:: TaskGroup.completed
 
    The first task that completed with a result in the group.  Useful
-   when used in combination with the ``wait=any`` option on
+   when used in combination with the ``wait=any`` or ``wait=object`` options on
    ``join()``.
 
 
