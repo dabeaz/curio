@@ -130,7 +130,6 @@ Here is an example of how the problem can be solved with Curio:
 
 .. code:: python
 
-
     from curio import socket, TaskGroup, ignore_after, run
     import itertools
 
@@ -193,6 +192,49 @@ back with a time delay.  When a successful connection is made, it is
 returned and any remaining tasks are magically cancelled.   That's 
 pretty neat.
 
+Thread Interoperability Example
+-------------------------------
+
+One of the more notable features of Curio is how it can interoperate with
+traditional synchronous code.  For example, maybe you have a standard
+function that reads off a queue like this:
+
+.. code:: python
+
+    def consumer(queue):
+        while True:
+            item = queue.get()
+            if item is None:
+                break
+            print('Got:', item)
+
+There is nothing too special. This is something you might write using standard thread-programming. 
+However, it's easy to make this code read data sent from a Curio async task.  Use a ``UniversalQueue``
+object like this:
+
+.. code:: python
+   
+    from curio import UniversalQueue, run, sleep, spawn
+    from threading import Thread
+
+    async def producer(n, queue):
+        for x in range(n):
+            await queue.put(x)
+            await sleep(1)
+        await queue.put(None)
+
+    async def main():
+        q = UniversalQueue()
+        Thread(target=consumer, args=(q,)).start()
+        t = await spawn(producer, 10, q)
+        await t.join()
+
+    run(main)
+
+As the name implies, ``UniversalQueue`` is a queue that can be used in
+both synchronous and asynchronous code.  The API is the same. It just
+works.
+
 Additional Features
 -------------------
 
@@ -229,7 +271,7 @@ been described in various conference talks.
 Additional Resources
 --------------------
 
-* `Trio <https://github.com/python-trio/trio/>`_ A different I/O library that's been inspired by Curio and shares many of its overarching ideas.
+* `Trio <https://github.com/python-trio/trio/>`_ A different I/O library that was initially inspired by Curio.
 
 * `Some thoughts on asynchronous API design in a post-async/await world <https://vorpus.org/blog/some-thoughts-on-asynchronous-api-design-in-a-post-asyncawait-world/>`_, by Nathaniel Smith.
 
