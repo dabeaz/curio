@@ -10,7 +10,7 @@ cooperative multitasking and existing programming abstractions such as
 threads, sockets, files, subprocesses, locks, and queues.  You'll find
 it to be small, fast, and fun.
 
-Curio has no third-party dependencies and is not built using the
+Curio has no third-party dependencies and does not use the
 standard asyncio module.  Most users will probably find it to be a bit
 too-low level--it's probably best to think of it as a library for building
 libraries.  Although you might not use it directly, many of its ideas
@@ -39,7 +39,7 @@ A Simple Example
 
 Curio provides the same basic primitives that you typically find with
 thread programming.  For example, here is a simple concurrent TCP echo
-server implemented using sockets and Curio:
+server implemented using sockets and curio:
 
 .. code:: python
 
@@ -149,7 +149,8 @@ Here is an example of how the problem can be solved with Curio:
         errors = []
 
         # Task group to manage a collection concurrent tasks.
-        # Cancels all remaining once an interesting result is returned.
+        # It waits for a single task to return a non-None object
+	# and cancels all remaining tasks when complete.
         async with TaskGroup(wait=object) as group:
 
             # Attempt to make a connection request
@@ -168,7 +169,7 @@ Here is an example of how the problem can be solved with Curio:
                 async with ignore_after(delay):
                      sock = await group.next_result()
                      if sock:
-                         break
+                         return sock
 
         if group.completed:
             return group.completed.result
@@ -189,8 +190,8 @@ allowed to live beyond the lifetime of the code defined in the
 associated ``async with`` context manager block.  Inside this block,
 you'll find statements that spawn tasks and wait for a result to come
 back with a time delay.  When a successful connection is made, it is
-returned and any remaining tasks are magically cancelled.   That's 
-pretty neat.
+returned and any remaining tasks are magically cancelled (the ``wait=object``
+controls this behavior).   That's pretty neat.
 
 Thread Interoperability Example
 -------------------------------
@@ -257,8 +258,8 @@ describes the general design of Curio and how to use it in more detail.
 Talks Related to Curio
 ----------------------
 
-Much of Curio's design and issues related to async programming more generally have
-been described in various conference talks.
+Most of the principles behind Curio's design and general issues
+related to async programming have been described in various conference talks:
 
 * `The Other Async (Threads + Asyncio = Love) <https://www.youtube.com/watch?v=x1ndXuw7S0s>`_, Keynote talk by David Beazley at PyGotham, 2017.
 
@@ -283,7 +284,7 @@ The Big Question: Why?
 
 Python already has a variety of libraries for async and event driven
 I/O. So, why create yet another library?  There is no simple answer to
-that question, but here are a few of the motivations for creating curio.
+that question, but here are a few of the motivations for creating Curio.
 
 * Python 3 has evolved considerably as a programming language and has
   adopted many new language features that are well-suited to cleanly
@@ -306,11 +307,13 @@ that question, but here are a few of the motivations for creating curio.
   curio will feel familiar.  That is by design.
 
 * Simplicity is an important part of writing reliable systems
-  software.  When your code fails, it helps to be able to debug
-  it--possibly down to the level of individual calls to the operating
-  system if necessary. Simplicity matters a lot.  Simple code also
-  tends to run faster. The implementation of Curio aims to be simple.
-  The API for using Curio aims to be intuitive. 
+  software. Some of this simplicity comes from making intuitive
+  programming APIs, but simplicity also comes from details of the
+  implementation itself.  Although parts of Curio may appear magical,
+  it's actually built around a very small core of functionality
+  centered on task scheduling. There is considerably less design complexity
+  in the internals of Curio than what's typically found in a normal
+  async framework.  This is also a big reason why Curio is fast.
 
 * It's fun. 
 
@@ -327,20 +330,17 @@ manner.
 **Q: Is curio meant to be a clone of asyncio?**
 
 A: No.  Although curio provides a significant amount of overlapping
-functionality, the API is different and smaller.  Compatibility with
-other libaries is not a goal.
+functionality, the API is different.  Compatibility with other
+libaries is not a goal.
 
 **Q: Is there any kind of overarching design philosophy?**
 
-A: Yes and no. The "big picture" design of Curio is mainly inspired by
-the kernel/user space distinction found in operating systems only it's
-more of a separation into "synchronous" and "asynchronous" runtime
-environments.  Beyond that, Curio tends to take rather pragmatic view
-towards concurrent programming techniques more generally.  It's
-probably best to view Curio as providing a base set of primitives upon
-which you can build all sorts of interesting things.  However, it's
-not going to dictate much in the way of religious rules on how you
-structure it.
+A: Yes and no. The "big picture" design of curio is mainly inspired by
+the kernel/user space isolation found in operating systems.  Beyond
+that, curio takes a generally pragmatic view towards concurrent
+programming techniques.  It's probably best to view curio as providing
+a base set of primitives upon which you can build all sorts of
+interesting things.  Yes, you can use it to shoot yourself in the foot.
 
 **Q: How many tasks can be created?**
 
@@ -363,7 +363,7 @@ separately in a different thread.
 
 **Q: How fast is curio?**
 
-A: In rough benchmarking of the simple echo server shown here, Curio
+A: In rough benchmarking of the simple echo server shown here, curio
 runs about 90% faster than comparable code using coroutines in
 ``asyncio`` and about 50% faster than similar code written using Trio.
 This was last measured on Linux using Python 3.7b3. Keep in mind there
@@ -373,13 +373,13 @@ dirctory for various testing programs.
 
 **Q: Is curio going to evolve into a framework?**
 
-A: No, because evolving into a framework would mean modifying Curio to
+A: No, because evolving into a framework would mean modifying curio to
 actually do something.  If it actually did something, then people
 would start using it to do things.  And then all of those things would
 have to be documented, tested, and supported.  People would start
 complaining about how all the things related to the various built-in
 things should have new things added to do some crazy thing.  No forget
-that, Curio remains committed to not doing much of anything the best
+that. Curio remains committed to not doing much of anything the best
 it can.  This includes not implementing HTTP.
 
 **Q: What are future plans?**
@@ -390,20 +390,19 @@ to provide a robust environment for running and controlling concurrent
 tasks.  However, it's also supposed to be fun. A lot of time is
 being spent thinking about the API and how to make it pleasant.
 
-**Q: Is there a Curio sticker?**
+**Q: Is there a curio sticker?**
 
 A: No. However, you can make a `stencil <https://www.youtube.com/watch?v=jOW1X8-_7eI>`_
 
-**Q: How big is curio?**
+**Q: Is there a curio community?**
 
-A: The complete library currently consists of about 3200 statements
-as reported in coverage tests.
+A: Curio is a lifestyle.
 
-**Q: I see various warnings about not using Curio. What should I do?**
+**Q: I see various warnings about not using curio. What should I do?**
 
 A: Has programming taught you nothing? Warnings are meant to be ignored.
-Of course you should use Curio.  However, be aware that the main reason
-you shouldn't be using Curio is that you should be using it.
+Of course you should use curio.  However, be aware that the main reason
+you shouldn't be using curio is that you should be using it.
 
 **Q: Can I contribute?**
 
@@ -419,7 +418,7 @@ Read the official docs here: https://curio.readthedocs.io
 Discussion Forum
 ----------------
 
-A discussion forum for Curio is available at http://forum.dabeaz.com/c/curio.  
+A discussion forum for curio is available at http://forum.dabeaz.com/c/curio.  
 Please go there to ask questions and find out whats happening with the project.
 
 Contributors

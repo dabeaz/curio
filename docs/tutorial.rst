@@ -704,7 +704,7 @@ decoding JSON::
 
 That's great except that the popular ``requests`` library knows
 nothing of Curio and it blocks the internal event loop while waiting
-for a response.  This essential the same problem as before except
+for a response.  This is essentially the same problem as before except
 that ``requests.get()`` mainly spends its time waiting. For this, 
 you can use ``curio.run_in_thread()`` to offload work to a separate thread.  
 Modify the code like this::
