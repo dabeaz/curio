@@ -1,13 +1,20 @@
 curio - concurrent I/O
 ======================
 
-Curio is a library for performing concurrent I/O and common system
-programming tasks such as launching subprocesses and farming work
-out to thread and process pools.  It uses Python coroutines and the
-explicit async/await syntax introduced in Python 3.5.  Its programming
-model is based on cooperative multitasking and existing programming
-abstractions such as threads, sockets, files, subprocesses, locks, and
-queues.  You'll find it to be small, fast, and fun.
+Curio is a library of building blocks for performing concurrent I/O
+and common system programming tasks such as launching subprocesses,
+working with files, and farming work out to thread and process pools.
+It uses Python coroutines and the explicit async/await syntax
+introduced in Python 3.5.  Its programming model is based on
+cooperative multitasking and existing programming abstractions such as
+threads, sockets, files, subprocesses, locks, and queues.  You'll find
+it to be small, fast, and fun.
+
+Curio has no third-party dependencies and is not built using the
+standard asyncio module.  Most users will probably find it to be a bit
+too-low level--it's probably best to think of it as a library for building
+libraries.  Although you might not use it directly, many of its ideas
+have influend other libraries with similar functionality.
 
 Important Disclaimer
 --------------------
@@ -22,21 +29,17 @@ better results using the version cloned from github.  You'll also want
 to make sure you're using Python 3.6. Of course, your mileage might
 vary.
 
-News
-----
-The version 0.9 "release" of curio has various improvements and cleanups
-throughout. Some major changes include better support for the buffer API
-and improvements to async threads.
-
 Quick install
 -------------
 
 ``pip install git+https://github.com/dabeaz/curio.git``
 
-An Example
-----------
+A Simple Example
+-----------------
 
-Here is a simple TCP echo server implemented using sockets and curio:
+Curio provides the same basic primitives that you typically find with
+thread programming.  For example, here is a simple concurrent TCP echo
+server implemented using sockets and Curio:
 
 .. code:: python
 
@@ -74,8 +77,8 @@ You'll also find that the above server can handle thousands of simultaneous
 client connections even though no threads are being used under the hood.
 
 Of course, if you prefer something a little higher level, you can have
-curio take care of the fiddly bits related to setting up the server portion
-of the code:
+curio take care of the fiddly bits related to setting up the server
+portion of the code:
 
 .. code:: python
 
@@ -95,34 +98,141 @@ of the code:
     if __name__ == '__main__':
         run(tcp_server, '', 25000, echo_client)
 
-This is only a small sample of what's possible.  Read the `official documentation
-<https://curio.readthedocs.io>`_ for more in-depth coverage.  The `tutorial 
-<https://curio.readthedocs.io/en/latest/tutorial.html>`_ is a good starting point.
-The `howto <https://curio.readthedocs.io/en/latest/howto.html>`_ describes how
-to carry out various tasks.
+A Complex Example
+-----------------
+
+The above example only illustrates a few basics--and emphasizes the
+fact that using Curio looks a lot like programming with
+threads. You'll find Curio to be a bit more interesting if you try
+something more complicated.
+
+As an example, one such problem is that of making a client TCP
+connection on a dual IPv4/IPv6 network.  On such networks, functions
+such as ``socket.getaddrinfo()`` return a series of possible
+connection endpoints.  To make a connection, each endpoint is tried
+until one of them succeeds.  However, serious performance problems
+arise if this is done as a purely sequential process as bad connection
+requests might take a considerable time to fail.  It's better to try
+several concurrent connection requests and use the first one that
+succeeds.
+
+One solution to this problem is the so-called "Happy Eyeballs"
+algorithm as described in `RFC 6555`
+<https://tools.ietf.org/html/rfc6555>.  You can read the RFC for more
+details, but Nathaniel Smith's `Pyninsula Talk
+<https://www.youtube.com/watch?v=i-R704I8ySE>`_ talk gives a pretty good
+overview of the problem and one possible implementation solution.  The
+gist of the algorithm is that a client makes concurrent time-staggered
+connection requests and use the first connection that is successful.
+What makes it tricky is that the algorithm involves a combination of
+timing, concurrency, and task cancellation--something that would be
+pretty hard to coordinate using a classical approach involving threads.
+
+Here is an example of how the problem can be solved with Curio:
+
+.. code:: python
+
+    from curio import socket, TaskGroup, ignore_after, run
+    import itertools
+
+    # Open a client-connection using "Happy Eyeballs"
+    async def open_tcp_stream(hostname, port, delay=0.3):
+        # Get a list of connection targets for a given host/port
+        targets = await socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+        if not targets:
+            raise OSError(f'nothing known about {hostname}:{port}')
+
+        # Organize the targets into unique address families (e.g., AF_INET, AF_INET6, etc.)
+        # and reorder so that the first entries are from a different family
+        families = [ list(g) for _, g in itertools.groupby(targets, key=lambda t: t[0]) ]
+        targets = [ fam.pop(0) for fam in families ]
+        targets.extend(itertools.chain(*families))
+
+        # Task group to manage a collection concurrent tasks. All die upon exit
+        async with TaskGroup(wait=None) as group:
+
+            # Task that attempts to make a connection request
+            async def try_connect(sockargs, addr, errors):
+                sock = socket.socket(*sockargs)
+                try:
+                    await sock.connect(addr)
+                    return sock
+                except Exception as e:
+                    await sock.close()
+                    errors.append(e)
+
+            # List of accumulated errors to report in case of total failure
+            errors = []
+
+            # Walk the list of targets and try connections with a staggered delay
+            for *sockargs, _, addr in targets:
+                await group.spawn(try_connect, sockargs, addr, errors)
+                async with ignore_after(delay):
+                     sock = await group.next_result()
+                     if sock:
+                         return sock   # Success. All remaining tasks die
+
+            # Collect all of the remaining tasks looking for a good connection
+            async for task in group:
+                if task.result:
+                    return task.result
+
+            # It didn't work. Oh well.
+            raise OSError(errors)
+
+    # Example use:
+    async def main():
+        result = await open_tcp_stream('www.python.org', 80)
+        print(result)
+
+    run(main)
+
+This might require a bit of study, but the key to this solution is the
+Curio ``TaskGroup`` instance which represents a collection of managed
+concurrently executing tasks.  Tasks created in the group aren't
+allowed to live beyond the lifetime of the code defined in the
+associated ``async with`` context manager block.  Inside this block,
+you'll find statements that spawn tasks and wait for a result to come
+back with a time delay.  When a successful connection is made, it is
+returned and any remaining tasks are magically cancelled.   That's 
+pretty neat.
 
 Additional Features
 -------------------
 
 Curio provides additional support for SSL connections, synchronization
-primitives (events, locks, recursive locks, semaphores, and condition variables),
-queues, Unix signals, subprocesses, as well as running tasks in
-threads and processes. The task model fully supports cancellation,
-timeouts, monitoring, and other features critical to writing reliable
-code.
+primitives (events, locks, recursive locks, semaphores, and condition
+variables), queues, Unix signals, subprocesses, as well as running
+tasks in threads and processes. The task model fully supports
+cancellation, timeouts, monitoring, and other features critical to
+writing reliable code.
+
+The two examples shown are only a small sample of what's possible.
+Read the `official documentation <https://curio.readthedocs.io>`_ for
+more in-depth coverage.  The `tutorial
+<https://curio.readthedocs.io/en/latest/tutorial.html>`_ is a good
+starting point.  The `howto
+<https://curio.readthedocs.io/en/latest/howto.html>`_ describes how to
+carry out various tasks.  The `developer guide <https://curio.readthedocs.io/en/latest/deve.html>`_
+describes the general design of Curio and how to use it in more detail.
 
 Talks Related to Curio
 ----------------------
 
-* `The Other Async (Threads + Asyncio = Love)` <https://www.youtube.com/watch?v=x1ndXuw7S0s>, Keynote talk
+Much of Curio's design and issues related to async programming more generally have
+been described in various conference talks.
+
+* `The Other Async (Threads + Asyncio = Love) <https://www.youtube.com/watch?v=x1ndXuw7S0s>`_, Keynote talk
 by David Beazley at PyGotham, 2017.
 
 * `Fear and Awaiting in Async <https://www.youtube.com/watch?v=E-1Y4kSsAFc>`_, Keynote talk by David Beazley at PyOhio 2016.
 
 * `Topics of Interest (Async) <https://www.youtube.com/watch?v=ZzfHjytDceU>`_, Keynote talk by David Beazley at Python Brasil 2015.
 
-Other Resources
----------------
+* `Python Concurrency from the Ground Up (LIVE) <https://www.youtube.com/watch?v=MCs5OvhV9S4>`_, talk by David Beazley at PyCon 2015.
+
+Additional Resources
+--------------------
 
 * `Trio <https://github.com/python-trio/trio/>`_ A different I/O library that's been inspired by Curio and shares many of its overarching ideas.
 
@@ -163,7 +273,7 @@ that question, but here are a few of the motivations for creating curio.
   it--possibly down to the level of individual calls to the operating
   system if necessary. Simplicity matters a lot.  Simple code also
   tends to run faster. The implementation of Curio aims to be simple.
-  The API for using Curio aims to be intuitive.
+  The API for using Curio aims to be intuitive. 
 
 * It's fun. 
 
@@ -182,6 +292,18 @@ manner.
 A: No.  Although curio provides a significant amount of overlapping
 functionality, the API is different and smaller.  Compatibility with
 other libaries is not a goal.
+
+**Q: Is there any kind of overarching design philosophy?**
+
+A: Yes and no. The "big picture" design of Curio is mainly inspired by
+the kernel/user space distinction found in operating systems only it's
+more of a separation into "synchronous" and "asynchronous" runtime
+environments.  Beyond that, Curio tends to take rather pragmatic view
+towards concurrent programming techniques more generally.  It's
+probably best to view Curio as providing a base set of primitives upon
+which you can build all sorts of interesting things.  However, it's
+not going to dictate much in the way of religious rules on how you
+structure it.
 
 **Q: How many tasks can be created?**
 
@@ -220,7 +342,7 @@ A: No, because evolving into a framework would mean modifying Curio to
 actually do something.  If it actually did something, then people
 would start using it to do things.  And then all of those things would
 have to be documented, tested, and supported.  People would start
-complaining about how all the things related to the various provided
+complaining about how all the things related to the various built-in
 things should have new things added to do some crazy thing.  No forget
 that, Curio remains committed to not doing much of anything the best
 it can.  This includes not implementing HTTP.
@@ -235,17 +357,18 @@ being spent thinking about the API and how to make it pleasant.
 
 **Q: Is there a Curio sticker?**
 
-A: No.
+A: No. However, you can make a `stencil <https://www.youtube.com/watch?v=jOW1X8-_7eI>`_
 
 **Q: How big is curio?**
 
 A: The complete library currently consists of about 3200 statements
 as reported in coverage tests.
 
-**Q: I see these warnings about not using Curio. What should I do?**
+**Q: I see various warnings about not using Curio. What should I do?**
 
 A: Has programming taught you nothing? Warnings are meant to be ignored.
-Of course you should use Curio.
+Of course you should use Curio.  However, be aware that the main reason
+you shouldn't be using Curio is that you should be using it.
 
 **Q: Can I contribute?**
 
