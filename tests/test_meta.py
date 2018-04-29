@@ -2,6 +2,7 @@ from curio import meta
 from curio import *
 from functools import partial
 import pytest
+import sys
 
 def test_blocking(kernel):
     @meta.blocking
@@ -134,5 +135,27 @@ def test_awaitable_partial(kernel):
     kernel.run(partial(func, 1, 2), 3)
     kernel.run(partial(func, z=3), 1, 2)
 
+if sys.version_info >= (3,7):
+    import contextlib
+    def test_asynccontextmanager(kernel):
+        results = []
+        @contextlib.asynccontextmanager
+        async def manager():
+             try:
+                 yield (await coro())
+             finally:
+                 await cleanup()
 
-    
+        async def coro():
+            results.append('coro')
+            return 'result'
+
+        async def cleanup():
+            results.append('cleanup')
+
+        async def main():
+            async with manager() as r:
+                results.append(r)
+
+        kernel.run(main)
+        assert results == ['coro', 'result', 'cleanup']

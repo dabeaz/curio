@@ -312,7 +312,6 @@ def safe_generator(func):
     _safe_async_generators[func.__code__] = True
     return func
 
-
 class finalize(object):
     '''
     Context manager that safely finalizes an asynchronous generator.
@@ -392,7 +391,6 @@ def is_safe_generator(agen):
         return False
 
 
-
 # This context manager is used to manage the execution of async generators
 # in Python 3.6.  In certain circumstances, they can't be used safely
 # unless finalized properly.  This context manager installs some hooks
@@ -404,8 +402,14 @@ def asyncgen_manager():
         old_asyncgen_hooks = sys.get_asyncgen_hooks()
 
         def _init_async_gen(agen):
+            # It's possible that we've come here through @asynccontextmanager in the contextlib module.
+            # If so, we assume that the generator is being managed properly and allow it through.
+            f = sys._getframe(1)
+            if f.f_code.co_name == '__aenter__' and 'contextlib' in f.f_code.co_filename:
+                return
+
+            # Inspect the code of the generator to see if it might be safe 
             if not is_safe_generator(agen) and not finalize.is_finalized(agen):
-                # Inspect the code of the generator to see if it might be safe 
                 raise RuntimeError("Async generator with async finalization must be wrapped by\n"
                                    "async with curio.meta.finalize(agen) as agen:\n"
                                    "    async for n in agen:\n"
