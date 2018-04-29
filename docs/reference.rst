@@ -418,6 +418,12 @@ functions can be used for this purpose:
    a ``curio.UncaughtTimeoutError`` is raised in the outer
    timeout.
 
+.. asyncfunction:: timeout_at(deadline, corofunc=None, *args)
+
+   The same as :func:`timeout_after` except that the deadline time is
+   given as an absolute clock time.  Use the :func:`clock` function to
+   get a base time for computing a deadline.
+
 .. asyncfunction:: ignore_after(seconds, corofunc=None, *args, timeout_result=None)
 
    Execute the specified coroutine and return its result. Issue a
@@ -433,6 +439,11 @@ functions can be used for this purpose:
    operations.  ``curio.TimeoutCancellationError`` and
    ``curio.UncaughtTimeoutError`` exceptions might be raised
    according to the same rules as for :func:`timeout_after`.
+
+.. asyncfunction:: ignore_at(deadline, corofunc=None, *args)
+
+   The same as :func:`ignore_after` except that the deadline time is
+   given as an absolute clock time. 
 
 Here is an example that shows how these functions can be used::
 
