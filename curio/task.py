@@ -422,7 +422,7 @@ class TaskGroup(object):
         await self.add_task(task)
         return task
 
-    async def next_done(self, *, cancel_remaining=False):
+    async def next_done(self):
         '''
         Wait for the next task to finish.
         '''
@@ -434,9 +434,6 @@ class TaskGroup(object):
             task._taskgroup = None
         else:
             task = None
-
-        if task and cancel_remaining:
-            await self.cancel_remaining()
 
         return task
 

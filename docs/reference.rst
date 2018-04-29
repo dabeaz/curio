@@ -239,18 +239,23 @@ The following methods are supported on ``TaskGroup`` instances:
 
    Adds an already existing task to the task group. 
 
-.. asyncmethod:: TaskGroup.next_done(*, cancel_remaining=False)
+.. asyncmethod:: TaskGroup.next_done()
 
    Returns the next completed task.  Returns ``None`` if no more tasks remain.
-   A ``TaskGroup`` may also be used as an asynchronous iterator. If the
-   *cancel_remaining* option is given, all remaining tasks are cancelled.
+   A ``TaskGroup`` may also be used as an asynchronous iterator. 
+
+.. asyncmethod:: TaskGroup.next_result()
+
+   Returns the result of the next completed task.  If the task failed with an
+   exception, that exception is raised.  A ``RuntimeError`` exception is raised
+   if this is called when no remaining tasks are available. 
 
 .. asyncmethod:: TaskGroup.join(*, wait=all)
 
-   Wait for tasks in the group to terminate.  If *wait* is `all`, then
-   wait for all tasks to completee.  If *wait* is `any` then wait for
+   Wait for tasks in the group to terminate.  If *wait* is ``all``, then
+   wait for all tasks to completee.  If *wait* is ``any`` then wait for
    any task to terminate and cancel any remaining tasks.  If *wait* is
-   `object`, then wait for any task to terminate and return a non-None
+   ``object``, then wait for any task to terminate and return a non-None
    object, cancelling all remaining tasks afterwards.  If any task
    returns with an error, then all remaining tasks are immediately
    cancelled and a ``TaskGroupError`` exception is raised.  If the
