@@ -20,7 +20,7 @@ from .traps import *
 from .sched import SchedBarrier
 from . import meta
 
-__all__ = ['Task', 'TaskGroup', 'sleep', 'wake_at', 'current_task',
+__all__ = ['Task', 'TaskGroup', 'sleep', 'wake_at', 'current_task', 'get_all_tasks',
            'spawn', 'gather', 'timeout_after', 'timeout_at',
            'ignore_after', 'ignore_at', 'clock', 'aside', 'schedule',
            'enable_cancellation', 'disable_cancellation',
@@ -577,6 +577,13 @@ async def current_task():
     Returns a reference to the current task
     '''
     return await _get_current()
+
+async def get_all_tasks():
+    '''
+    Returns a list of all active tasks
+    '''
+    kernel = await _get_kernel()
+    return list(kernel._tasks.values())
 
 async def sleep(seconds):
     '''

@@ -2,6 +2,11 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+04/29/2018 New task-related function.  get_all_tasks() returns a list of all active
+           Tasks. For example:
+
+               tasks = await get_all_tasks()
+
 04/29/2018 Curio now properly allows async context managers to be defined using
            context.asynccontextmanager.  Issue #247.
 
