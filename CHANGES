@@ -7,6 +7,9 @@ Version 0.10 : In Progress
 
                tasks = await get_all_tasks()
 
+           Tasks also have a where() method that returns a (filename, lineno) tuple
+           indicating where they are executing.
+
 04/29/2018 Curio now properly allows async context managers to be defined using
            context.asynccontextmanager.  Issue #247.
 

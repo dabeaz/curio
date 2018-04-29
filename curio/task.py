@@ -258,6 +258,12 @@ class Task(object):
         '''
         return _format_stack(self)
 
+    def where(self):    # pragma: no cover
+        '''
+        Return a tuple (filename, lineno) where task is executing
+        '''
+        return _where(self)
+
     def _switch(self, coro):
         orig_coro = self._run_coro
         self._run_coro = coro

@@ -163,6 +163,10 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
 
    Create a stack traceback string for the task.  Useful for debugging.
 
+.. method:: Task.where()
+
+   Return a (filename, lineno) tuple where the task is executing. For debugging.
+
 The following public attributes are available of :class:`Task` instances:
 
 .. attribute:: Task.id
@@ -2530,6 +2534,10 @@ stack traceback of any given task.  For example::
     t = await spawn(coro)
     ...
     print(t.traceback())
+
+Instead of a full traceback, you can also get the current filename and line number::
+
+    filename, lineno = await t.where()
 
 To find out more detailed information about what the kernel is doing, you can 
 supply one or more debugging modules to the ``run()`` function.  To trace
