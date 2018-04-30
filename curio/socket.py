@@ -33,12 +33,38 @@ def fromfd(*args, **kwargs):
 
 # Replacements for blocking functions related to domain names and DNS
 
+#@wraps(_socket.create_connection)
+#async def create_connection(*args, **kwargs):
+#    sock = await workers.run_in_thread(partial(_socket.create_connection, *args, **kwargs))
+#    return io.Socket(sock)
 
-@wraps(_socket.create_connection)
-async def create_connection(*args, **kwargs):
-    sock = await workers.run_in_thread(partial(_socket.create_connection, *args, **kwargs))
-    return io.Socket(sock)
+async def create_connection(address, timeout=None, source_address=None):
+    '''
+    Pure async implementation of the socket.create_connection function in standard library
+    '''
+    host, port = address
+    err = None
+    for res in await getaddrinfo(host, port, 0, SOCK_STREAM):
+        af, socktype, proto, canonname, sa = res
+        sock = None
+        try:
+            sock = socket(af, socktype, proto)
+            if source_address:
+                sock.bind(source_address)
+            await sock.connect(sa)
+            # Break explicitly a reference cycle
+            err = None
+            return sock
 
+        except error as _:
+            err = _
+            if sock is not None:
+                await sock.close()
+
+    if err is not None:
+        raise err
+    else:
+        raise error("getaddrinfo returns an empty list")
 
 @wraps(_socket.getaddrinfo)
 async def getaddrinfo(*args, **kwargs):
