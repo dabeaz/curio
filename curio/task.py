@@ -486,7 +486,7 @@ class TaskGroup(object):
         if exceptional or (wait is None) or (wait in (any, object) and self.completed):
             while self._running:
                 task = self._running.pop()
-                await task.cancel(blocking=False)
+                await task.cancel()
 
         self._finished.clear()
 
@@ -524,7 +524,7 @@ class TaskGroup(object):
                 if cancel_remaining:
                     while self._running:
                         ctask = self._running.pop()
-                        await ctask.cancel(blocking=False)
+                        await ctask.cancel()
 
         self._closed = True
 

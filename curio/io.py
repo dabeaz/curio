@@ -419,7 +419,7 @@ class StreamBase(object):
                     await _write_wait(self._fileno)
             return total_read
         
-    async def readline(self):
+    async def readline(self, maxlen=None):
         while True:
             nl_index = self._buffer.find(b'\n')
             if nl_index >= 0:
@@ -927,7 +927,7 @@ class SyncStreamBase(object):
                     thread.AWAIT(_write_wait, self._fileno)
             return total_read
         
-    def readline(self):
+    def readline(self, maxlen=None):
         while True:
             nl_index = self._buffer.find(b'\n')
             if nl_index >= 0:
