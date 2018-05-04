@@ -453,14 +453,17 @@ class TaskGroup(object):
         else:
             raise RuntimeError('No task available')
 
-    async def cancel_remaining(self, *, blocking=True):
+    async def cancel_remaining(self):
         '''
         Cancel all remaining running tasks. Tasks are removed
         from the task group when cancelled.
         '''
         self._closed = True
-        for task in list(self._running):
-            await task.cancel(blocking=blocking)
+        running = list(self._running)
+        for task in running:
+            await task.cancel(blocking=False)
+        for task in running:
+            await task.wait()
             self._task_discard(task)
 
             
@@ -540,9 +543,7 @@ class TaskGroup(object):
 
     async def __aexit__(self, ty, val, tb):
         if ty:
-            # Exception in the block itself.  Cancel all running children
-            for task in self._running:
-                await task.cancel(blocking=False)
+            await self.cancel_remaining()
         else:
             await self.join(wait=self._wait)
 
