@@ -57,7 +57,7 @@ Here is an example of a simple UDP echo server using sockets::
             await sock.sendto(data, addr)
 
     if __name__ == '__main__':
-        curio.run(main, ('', 26000))
+        curio.run(udp_echo, ('', 26000))
 
 At this time, there are no high-level function (i.e., similar to
 ``tcp_server()``) to run a UDP server. 
