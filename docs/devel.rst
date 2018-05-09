@@ -170,7 +170,7 @@ You can also define an asynchronous iterator::
         def __init__(self, start):
             self.start = start
 
-        async def __aiter__(self):
+        def __aiter__(self):
             return AsyncCountdownIter(self.start)
 
     class AsyncCountdownIter(object):
@@ -181,7 +181,7 @@ You can also define an asynchronous iterator::
             self.n -= 1
             if self.n <= 0:
                 raise StopAsyncIteration
-            return self.n
+            return self.n + 1
 
     async def main():
         async for n in AsyncCountdown(5):
