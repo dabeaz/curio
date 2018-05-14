@@ -562,6 +562,7 @@ class Kernel(object):
             if previous and previous >= 0 and previous < now:
                 # Perhaps create a TaskTimeout pending exception here.
                 _set_timeout(previous)
+                current.next_value = now
             else:
                 _set_timeout(previous)
                 current.timeout = previous
