@@ -6,7 +6,7 @@ from curio import *
 from curio.socket import *
 from curio import io
 
-def test_tcp_echo(kernel):
+def test_tcp_echo(kernel, portno):
     results = []
     async def server(address):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -48,8 +48,8 @@ def test_tcp_echo(kernel):
 
     async def main():
         async with TaskGroup() as g:
-            await g.spawn(server, ('', 25000))
-            await g.spawn(client, ('localhost', 25000))
+            await g.spawn(server, ('', portno))
+            await g.spawn(client, ('localhost', portno))
 
     kernel.run(main())
 
@@ -70,7 +70,7 @@ def test_tcp_echo(kernel):
     ]
 
 
-def test_tcp_file_echo(kernel):
+def test_tcp_file_echo(kernel, portno):
     results = []
     async def server(address):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -110,8 +110,8 @@ def test_tcp_file_echo(kernel):
 
     async def main():
         async with TaskGroup() as g:
-             await g.spawn(server, ('', 25000))
-             await g.spawn(client, ('localhost', 25000))
+             await g.spawn(server, ('', portno))
+             await g.spawn(client, ('localhost', portno))
 
     kernel.run(main())
 
@@ -170,7 +170,7 @@ def test_udp_echo(kernel):
     ]
 
 
-def test_accept_timeout(kernel):
+def test_accept_timeout(kernel, portno):
     results = []
     async def server(address):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -185,7 +185,7 @@ def test_accept_timeout(kernel):
             results.append('accept timeout')
         await sock.close()
 
-    kernel.run(server(('', 25000)))
+    kernel.run(server(('', portno)))
 
     assert results == [
         'accept wait',
@@ -193,7 +193,7 @@ def test_accept_timeout(kernel):
     ]
 
 
-def test_accept_cancel(kernel):
+def test_accept_cancel(kernel, portno):
     results = []
     async def server(address):
         sock = socket(AF_INET, SOCK_STREAM)
@@ -209,7 +209,7 @@ def test_accept_cancel(kernel):
         await sock.close()
 
     async def canceller():
-        task = await spawn(server, ('', 25000))
+        task = await spawn(server, ('', portno))
         await sleep(0.5)
         await task.cancel()
 

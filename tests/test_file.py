@@ -120,9 +120,9 @@ def test_bad_usage(kernel):
 wlines = ['line1\n', 'line2\n', 'line3\n']
 
 
-def test_write(kernel):
+def test_write(kernel, tmpdir):
     async def main():
-        outname = os.path.join(dirname, 'tmp.txt')
+        outname = tmpdir.join('tmp.txt')
         async with aopen(outname, 'w') as f:
             outdata = ''.join(wlines)
             await f.write(outdata)
@@ -133,9 +133,9 @@ def test_write(kernel):
     kernel.run(main())
 
 
-def test_writelines(kernel):
+def test_writelines(kernel, tmpdir):
     async def main():
-        outname = os.path.join(dirname, 'tmp.txt')
+        outname = tmpdir.join('tmp.txt')
         async with aopen(outname, 'w') as f:
             await f.writelines(wlines)
 
@@ -156,9 +156,9 @@ def test_seek_tell(kernel):
 
     kernel.run(main())
 
-def test_truncate(kernel):
+def test_truncate(kernel, tmpdir):
     async def main():
-        outname = os.path.join(dirname, 'tmp.txt')
+        outname = tmpdir.join('tmp.txt')
         async with aopen(outname, 'wb') as f:
             await f.write(b'12345')
             await f.flush()
