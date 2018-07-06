@@ -255,7 +255,7 @@ class UniversalQueue(object):
     async def get(self):
         item, fut = self._get()
         if fut:
-            await asyncio.wait_for(asyncio.wrap_future(fut), None)
+            await asyncio.wrap_future(fut)
             item = fut.result()
         return item
 
@@ -322,7 +322,7 @@ class UniversalQueue(object):
             fut = self._put(item)
             if not fut:
                 break
-            await asyncio.wait_for(asyncio.wrap_future(fut), None)
+            await asyncio.wrap_future(fut)
 
     def task_done_sync(self):
         with self._all_tasks_done:
