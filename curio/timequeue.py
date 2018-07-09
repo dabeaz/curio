@@ -159,6 +159,6 @@ class TimeQueue:
             bucketno = 0 if delta < 4.0 else int(0.5*log2(delta))
             if bucketno > 7:
                 bucketno = 7
-            while self.far_deadlines[bucketno] <= expires and bucketno < 8:
+            while bucketno < 8 and self.far_deadlines[bucketno] <= expires:
                 self.far[bucketno].pop(item, None)
                 bucketno += 1
