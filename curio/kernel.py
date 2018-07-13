@@ -515,7 +515,13 @@ class Kernel(object):
         # absolute flag indicates whether or not an absolute or relative clock
         # interval has been provided
         def _trap_sleep(clock, absolute):
+            nonlocal current
             if _check_cancellation():
+                return
+
+            if clock == 0:
+                _reschedule_task(current)
+                current = None
                 return
 
             # We used to have a special case where sleep periods <= 0 would
