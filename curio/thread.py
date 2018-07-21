@@ -30,6 +30,22 @@ from . import meta
 
 _locals = threading.local()
 
+# Class that allows functions to be registered to thread-exit.
+# Note: This requires at most only one reference to be held in _locals above
+class ThreadAtExit(object):
+    def __init__(self):
+        self.callables = []
+
+    def atexit(self, callable):
+        self.callables.append(callable)
+
+    def __del__(self):
+        for func in self.callables:
+            try:
+                func()
+            except Exception as e:
+                log.warning('Exception in thread_exit handler ignored', exc_info=e)
+
 class AsyncThread(object):
 
     def __init__(self, target, args=(), kwargs={}, daemon=False):
@@ -84,6 +100,7 @@ class AsyncThread(object):
 
     def _func_runner(self):
         _locals.thread = self
+        _locals.thread_exit = ThreadAtExit()
         try:
             self.next_value = self.target(*self.args, **self.kwargs)
             self.next_exc = None
@@ -170,6 +187,7 @@ def AWAIT(coro, *args, **kwargs):
             raise errors.AsyncOnlyError('Must be used as async')
     else:
         return coro
+
 
 
 def _check_async_thread_block(code, offset, _cache={}):
@@ -358,29 +376,46 @@ def is_async_thread():
 
 _request_queue = None
 
-@contextmanager
+def TAWAIT(coro, *args, **kwargs):
+    '''
+    Ensure that the caller is an async thread (promoting if necessary),
+    then await for a coroutine
+    '''
+    if not is_async_thread():
+        enable_async()
+    return AWAIT(coro, *args, **kwargs)
+
+def thread_atexit(callable):
+    _locals.thread_exit.atexit(callable)
+
 def enable_async():
     '''
-    Enable asynchronous operations in an existing thread.
+    Enable asynchronous operations in an existing thread.  This only
+    shuts down once the thread exits.
     '''
+    if hasattr(_locals, 'thread'):
+        return
+
     if _request_queue is None:
         raise RuntimeError('Curio: enable_threads not used')
 
     fut = Future()
     _request_queue.put(('start', threading.current_thread(), fut))
     _locals.thread = fut.result()
-    try:
-        yield
-    finally:
+    _locals.thread_exit = ThreadAtExit()
+    
+    def shutdown(thread=_locals.thread):
         fut = Future()
-        _request_queue.put(('stop', _locals.thread, fut))
-        del _locals.thread
+        _request_queue.put(('stop', thread, fut))
         fut.result()
+    _locals.thread_exit.atexit(shutdown)
 
 async def thread_handler():
     '''
     Special handler function that allows Curio to respond to
-    threads that want to access async functions.
+    threads that want to access async functions.   This handler
+    must be spawned manually in code that wants to allow normal
+    threads to promote to Curio async threads.
     '''
     global _request_queue
     assert _request_queue is None, "thread_handler already running"
@@ -392,6 +427,7 @@ async def thread_handler():
             if request == 'start':
                 athread = AsyncThread(None)
                 athread._task = await spawn(athread._coro_runner, daemon=True)
+                athread._thread = thr
                 fut.set_result(athread)
             elif request == 'stop':
                 thr._request.set_result(None)
