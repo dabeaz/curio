@@ -404,9 +404,9 @@ def enable_async():
     _locals.thread = fut.result()
     _locals.thread_exit = ThreadAtExit()
     
-    def shutdown(thread=_locals.thread):
+    def shutdown(thread=_locals.thread, rq=_request_queue):
         fut = Future()
-        _request_queue.put(('stop', thread, fut))
+        rq.put(('stop', thread, fut))
         fut.result()
     _locals.thread_exit.atexit(shutdown)
 
