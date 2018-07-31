@@ -179,7 +179,7 @@ You can also define an asynchronous iterator::
 
         async def __anext__(self):
             self.n -= 1
-            if self.n <= 0:
+            if self.n < 0:
                 raise StopAsyncIteration
             return self.n + 1
 
