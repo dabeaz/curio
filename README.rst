@@ -369,7 +369,7 @@ runs about 90% faster than comparable code using coroutines in
 This was last measured on Linux using Python 3.7b3. Keep in mind there
 is a lot more to overall application performance than the performance
 of a simple echo server so your mileage might vary. See the ``examples/benchmark``
-dirctory for various testing programs.
+directory for various testing programs.
 
 **Q: Is curio going to evolve into a framework?**
 
