@@ -117,6 +117,7 @@ class Kernel(object):
         if debug:
             self._activations.extend(_create_debuggers(debug))
 
+
     def __del__(self):
         if self._shutdown_funcs is not None:
             raise RuntimeError(
@@ -126,8 +127,7 @@ class Kernel(object):
         return self
 
     def __exit__(self, ty, val, tb):
-        if not ty or ty in { KeyboardInterrupt, SystemExit }:
-            self.run(shutdown=True)
+        self.run(shutdown=True)
 
     def _call_at_shutdown(self, func):
         self._shutdown_funcs.append(func)
@@ -640,6 +640,8 @@ class Kernel(object):
                     main_task._joined = True
                 coro = (yield (main_task.next_value, main_task.next_exc)) if main_task else (yield (None, None))
                 main_task = _new_task(coro) if coro else None
+                if main_task:
+                    main_task.report_crash = False
                 del coro
 
             # ------------------------------------------------------------
@@ -798,7 +800,7 @@ class Kernel(object):
                     current = active = None
 
 def run(corofunc, *args, with_monitor=False, selector=None,
-        debug=None, activations=None, **extra):
+        debug=None, activations=None, **kernel_extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
@@ -813,8 +815,7 @@ def run(corofunc, *args, with_monitor=False, selector=None,
     '''
 
     kernel = Kernel(selector=selector, debug=debug, activations=activations,
-                    **extra)
-
+                    **kernel_extra)
 
     # Check if a monitor has been requested
     if with_monitor or 'CURIOMONITOR' in os.environ:   # pragma: no cover
