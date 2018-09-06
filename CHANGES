@@ -2,6 +2,13 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+09/05/2018 Tasks submitted to Kernel.run() no longer log exceptions should they
+           crash.  Such tasks already return immediately to the caller with the
+           exception raised. 
+
+09/05/2018 Refinement to Kernel.__exit__() to make sure the kernel shuts down
+           regardless of any exceptions that have occurred.  See Issue #275.
+
 04/29/2018 New task-related function.  get_all_tasks() returns a list of all active
            Tasks. For example:
 
