@@ -10,6 +10,13 @@ from collections import deque
 import linecache
 import traceback
 import os.path
+from functools import partial
+
+try:
+    import contextvars
+    _has_contextvars = True
+except ImportError:
+    _has_contextvars = False
 
 log = logging.getLogger(__name__)
 
@@ -267,8 +274,13 @@ class Task(object):
     def _switch(self, coro):
         orig_coro = self._run_coro
         self._run_coro = coro
-        self._send = coro.send
-        self._throw = coro.throw
+
+        if _has_contextvars:
+            self._send = partial(self.context.run, coro.send)
+            self._throw = partial(self.context.run, coro.throw)
+        else:
+            self._send = coro.send
+            self._throw = coro.throw
         return orig_coro
 
 class TaskGroup(object):
@@ -631,6 +643,12 @@ async def spawn(corofunc, *args, daemon=False, allow_cancel=True, report_crash=T
     task.allow_cancel = allow_cancel
     task.daemon = daemon
     task.report_crash = report_crash
+
+    if _has_contextvars:
+        task.context = contextvars.copy_context()
+        task._send = partial(task.context.run, task._send)
+        task._throw = partial(task.context.run, task._throw)
+
     return task
 
 async def gather(tasks, *, return_exceptions=False):
