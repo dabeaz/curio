@@ -1,5 +1,5 @@
 # test_kernel.py
-
+import sys
 import time
 import pytest
 from curio import *
@@ -557,3 +557,26 @@ def test_aside_cancel(kernel):
     del os.environ['PYTHONPATH']
     assert results == [0, 1, 2, 3, 4]
 
+
+@pytest.mark.skipif(sys.version_info[0:2] < (3, 7), "contextvars needs 3.7+")
+def test_contextvars(kernel):
+    import contextvars
+    cvar = contextvars.ContextVar("test")
+
+    async def one():
+        cvar.set("abc")
+        assert cvar.get() == "abc"
+
+    async def two():
+        assert cvar.get(default=None) is None
+        cvar.set("def")
+        assert cvar.get(default=None) == "def"
+
+    async def main():
+        t1 = await spawn(one)
+        await t1.join()
+        t2 = await spawn(two)
+        await t2.join()
+        assert cvar.get(default="ghi") == "ghi"
+
+    kernel.run(main)
