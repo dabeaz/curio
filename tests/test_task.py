@@ -558,7 +558,7 @@ def test_aside_cancel(kernel):
     assert results == [0, 1, 2, 3, 4]
 
 
-@pytest.mark.skipif(sys.version_info[0:2] < (3, 7), "contextvars needs 3.7+")
+@pytest.mark.skipif(sys.version_info[0:2] < (3, 7), reason="contextvars needs 3.7+")
 def test_contextvars(kernel):
     import contextvars
     cvar = contextvars.ContextVar("test")
