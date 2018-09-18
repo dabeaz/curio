@@ -6,7 +6,7 @@ __all__ = [
     'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError',
     'TaskInterrupted', 'TaskGroupError', 'SyncIOError', 'TaskExit',
     'KernelExit', 'ResourceBusy', 'ReadResourceBusy',
-    'WriteResourceBusy', 'GroupExit', 'TimeoutCancellationError',
+    'WriteResourceBusy', 'TimeoutCancellationError',
     'UncaughtTimeoutError', 'TaskCancelled', 'AsyncOnlyError',
 ]
 
@@ -26,13 +26,6 @@ class CancelledError(CurioError):
 class TaskCancelled(CancelledError):
     '''
     Exception raised from task being directly cancelled.
-    '''
-
-
-class GroupExit(TaskCancelled):
-    '''
-    Exception that can be raised by a task to directly cancel
-    all tasks in its task group.
     '''
 
 class TaskExit(TaskCancelled):
