@@ -5,7 +5,7 @@
 __all__ = [
     'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError',
     'TaskInterrupted', 'TaskGroupError', 'SyncIOError', 'TaskExit',
-    'KernelExit', 'ResourceBusy', 'ReadResourceBusy',
+    'ResourceBusy', 'ReadResourceBusy',
     'WriteResourceBusy', 'TimeoutCancellationError',
     'UncaughtTimeoutError', 'TaskCancelled', 'AsyncOnlyError',
 ]
@@ -25,18 +25,14 @@ class CancelledError(CurioError):
 
 class TaskCancelled(CancelledError):
     '''
-    Exception raised from task being directly cancelled.
+    Exception raised as a result of a task being directly cancelled.
     '''
 
-class TaskExit(TaskCancelled):
-    '''
-    Exception that can be raised to directly cancel itself.
-    '''
 
 class TimeoutCancellationError(CancelledError):
     '''
     Exception raised if task is being cancelled due to a timeout, but
-    not the inner-most timeout in effect. 
+    it's not the inner-most timeout in effect. 
     '''
 
 
@@ -45,12 +41,20 @@ class TaskTimeout(CancelledError):
     Exception raised if task is cancelled due to timeout.
     '''
 
+
 class TaskInterrupted(CancelledError):
     '''
     Raised if the current operation is interrupted for some
     reason. It's implied that the task would catch this and
     retry the operation.
     '''
+
+
+class TaskExit(BaseException):
+    '''
+    Cause a task to terminate immediately.
+    '''
+
 
 class UncaughtTimeoutError(CurioError):
     '''
@@ -66,6 +70,7 @@ class TaskError(CurioError):
     The __cause__ attribute contains the actual exception that
     occurred in the task.
     '''
+
 
 class TaskGroupError(CurioError):
     '''
@@ -83,6 +88,7 @@ class TaskGroupError(CurioError):
 
     def __iter__(self):
         return self.failed.__iter__()
+
 
 class SyncIOError(CurioError):
     '''
@@ -105,14 +111,12 @@ class ResourceBusy(CurioError):
     on behalf of another task.
     '''
 
+
 class ReadResourceBusy(ResourceBusy):
     pass
+
 
 class WriteResourceBusy(ResourceBusy):
     pass
 
-class KernelExit(BaseException):
-    '''
-    Exception that can be raised by user-code to force the entire
-    Curio kernel to exit.
-    '''
+
