@@ -66,6 +66,11 @@ from .debug import _create_debuggers
 from .timequeue import TimeQueue
 from .activation import Activation
 
+try:
+    from sniffio import current_async_library_cvar
+except ImportError:
+    current_async_library_cvar = None
+
 # ----------------------------------------------------------------------
 # Underlying kernel that drives everything
 # ----------------------------------------------------------------------
@@ -823,5 +828,11 @@ def run(corofunc, *args, with_monitor=False, selector=None,
         m = Monitor(kernel)
         kernel._call_at_shutdown(m.close)
 
-    with kernel:
-        return kernel.run(corofunc, *args)
+    if current_async_library_cvar is not None:
+        token = current_async_library_cvar.set("curio")
+    try:
+        with kernel:
+            return kernel.run(corofunc, *args)
+    finally:
+        if current_async_library_cvar is not None:
+            current_async_library_cvar.reset(token)
