@@ -1439,21 +1439,21 @@ limit the number of tasks performing an operation.  For example::
 
     import curio
 
-    async def worker(sema):
+    async def worker(sema, worker_num):
         async with sema:
-            print('Working')
+            print(f'[{worker_num}] Working hard. Semaphore is: {sema}')
             await curio.sleep(5)
 
     async def main():
-         sema = curio.Semaphore(2)     # Allow two tasks at a time
+        # Allow only two (hard) working tasks at a time
+        sema = curio.Semaphore(2)
+        # Launch a bunch of tasks
+        tasks = [await curio.spawn(worker(sema, _)) for _ in range(10)]
+        # After this point, you should see two tasks doing
+        # hard work at a same time.
+        [await _.join() for _ in tasks]  # wait for tasks to finish
 
-         # Launch a bunch of tasks
-         for n in range(10):
-             await curio.spawn(worker(sema))
-
-         # After this point, you should see two tasks at a time run. Every 5 seconds.
-
-    curio.run(main())
+    curio.run(main)
 
 .. class:: Condition(lock=None)
 
