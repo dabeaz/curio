@@ -14,7 +14,7 @@ __all__ = [
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
     '_cancel_task', '_scheduler_wait', '_scheduler_wake',
     '_get_kernel', '_get_current', '_set_timeout', '_unset_timeout',
-    '_clock',
+    '_clock', '_io_waiting',
     ]
 
 # -- Standard library
@@ -40,6 +40,7 @@ class Traps(IntEnum):
     _trap_unset_timeout = 9
     _trap_clock = 10
     _trap_spawn = 11
+    _trap_io_waiting = 12
 
 
 globals().update((trap.name, trap) for trap in Traps)
@@ -62,6 +63,13 @@ def _write_wait(fileobj):
     '''
     yield (_trap_io, fileobj, EVENT_WRITE, 'WRITE_WAIT')
 
+@coroutine
+def _io_waiting(fileobj):
+    '''
+    Return a tuple (rtask, wtask) of tasks currently blocked waiting
+    for I/O on fileobj.
+    '''
+    return (yield (_trap_io_waiting, fileobj))
 
 @coroutine
 def _future_wait(future, event=None):

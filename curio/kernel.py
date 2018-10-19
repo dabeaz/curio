@@ -415,6 +415,18 @@ class Kernel(object):
             _suspend_task(state, lambda: _unregister_event(fileobj, event))
 
         # ----------------------------------------
+        # Return tasks currently waiting on a file obj.
+        def _trap_io_waiting(fileobj):
+            try:
+                key = selector_getkey(fileobj)
+                rtask, wtask = key.data
+                rtask = rtask if rtask and rtask.cancel_func else None
+                wtask = wtask if wtask and wtask.cancel_func else None
+                current.next_value = (rtask, wtask)
+            except KeyError:
+                current.next_value = (None, None)
+            
+        # ----------------------------------------
         # Wait on a Future
         def _trap_future_wait(future, event):
             if _check_cancellation():
