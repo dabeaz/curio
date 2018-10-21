@@ -718,8 +718,22 @@ exception.
 
 .. asyncmethod:: Socket.close()
 
-   Close the connection.  This method is not called on garbage collection.
+   Close the connection.  This method is not called on garbage
+   collection.  Warning: You know that scene from Star Wars where
+   they're taking a fun joy-ride through hyperspace, there's a sudden
+   disturbance in the force, and they emerge into the middle of an
+   asteroid debris field?  That's kind of what it will be like if a task
+   chooses to use a giant "death laser" to close a socket being
+   used by another task.  Only instead of it being a disturbance in
+   the force, it will be more like dropping a huge amount of acid and
+   having your debugger emerge from the trip into the middle of that
+   scene from The Matrix Reloaded.  Yeah, THAT scene.  Don't do that.
+   Consider using `Socket.shutdown()` or cancelling a task instead.
 
+.. asyncmethod:: Socket.shutdown(how)
+
+   Shutdown the socket.  
+   
 .. asyncmethod:: do_handshake()
 
    Perform an SSL client handshake. The underlying socket must have already
@@ -2451,6 +2465,10 @@ cancellation point.
    Blocking trap. Sleep until data can be written on *fileobj*.
    *fileobj* is any file-like object with a `fileno()` method.
 
+.. asyncfunction:: _io_waiting(fileobj)
+   Synchronous trap.  Returns a tuple `(rtask, wtask)` of tasks
+   currently sleeping on *fileobj* (if any).  Returns immediately.
+   
 .. asyncfunction:: _future_wait(future)
 
    Blocking trap. Sleep until a result is set on *future*.  *future*
