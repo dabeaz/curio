@@ -468,15 +468,10 @@ class TaskGroup(object):
             self._task_discard(task)
 
             
-    async def join(self, *, wait=all):
+    async def join(self):
         '''
-        Wait for tasks in a task group to terminate.  If wait=all,
-        then wait for all tasks to exit. If wait=any, then wait for
-        the first task that terminates.  If wait=object, then wait for
-        the first task that returns a non-None result. In
-        all cases, if any task exits with an unexpected exception,
-        all remaining tasks are immediately cancelled and a
-        TaskGroupError() exception is raised.  If the join() operation
+        Wait for tasks in a task group to terminate according to the
+        wait policy set for the group.  If the join() operation itself
         is cancelled, all remaining tasks are cancelled and the
         cancellation exception is reraised.
         '''
@@ -487,7 +482,7 @@ class TaskGroup(object):
         # If there are any tasks in error, or the wait policy dictates
         # cancellation of remaining tasks, cancel them
 
-        if exceptional or (wait is None) or (wait in (any, object) and self.completed):
+        if exceptional or (self._wait is None) or (self._wait in (any, object) and self.completed):
             while self._running:
                 task = self._running.pop()
                 await task.cancel()
@@ -522,7 +517,7 @@ class TaskGroup(object):
                     if not exceptional:
                         cancel_remaining = True
                     exceptional.append(task)
-                elif (wait in (any, object)) and task == self.completed:
+                elif (self._wait in (any, object)) and task == self.completed:
                     cancel_remaining = True
 
                 if cancel_remaining:
@@ -546,7 +541,7 @@ class TaskGroup(object):
         if ty:
             await self.cancel_remaining()
         else:
-            await self.join(wait=self._wait)
+            await self.join()
 
     def __aiter__(self):
         return self

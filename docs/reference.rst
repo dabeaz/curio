@@ -223,8 +223,16 @@ a ``TaskGroup`` instance.
    A class representing a group of executing tasks.  *tasks* is an
    optional set of existing tasks to put into the group.  New tasks
    can later be added using the ``spawn()`` method below. *wait*
-   specifies the policy used for waiting for tasks.  See the ``join()``
-   method below.  Each ``TaskGroup`` is an independent entity.
+   specifies the policy used for waiting for tasks.  If *wait* is
+   ``all``, then wait for all tasks to completee.  If *wait* is
+   ``any`` then wait for any task to terminate and cancel any
+   remaining tasks.  If *wait* is ``object``, then wait for any task
+   to terminate and return a non-None object, cancelling all remaining
+   tasks afterwards. If any task
+   returns with an error, then all remaining tasks are immediately
+   cancelled and a ``TaskGroupError`` exception is raised by the
+   ``join()`` method.
+   Each ``TaskGroup`` is an independent entity.
    Task groups do not form a hierarchy or any kind of relationship to
    other previously created task groups or tasks.  Moreover, Tasks created by
    the top level ``spawn()`` function are not placed into any task group.
@@ -254,17 +262,11 @@ The following methods are supported on ``TaskGroup`` instances:
    exception, that exception is raised.  A ``RuntimeError`` exception is raised
    if this is called when no remaining tasks are available. 
 
-.. asyncmethod:: TaskGroup.join(*, wait=all)
+.. asyncmethod:: TaskGroup.join()
 
-   Wait for tasks in the group to terminate.  If *wait* is ``all``, then
-   wait for all tasks to completee.  If *wait* is ``any`` then wait for
-   any task to terminate and cancel any remaining tasks.  If *wait* is
-   ``object``, then wait for any task to terminate and return a non-None
-   object, cancelling all remaining tasks afterwards.  If any task
-   returns with an error, then all remaining tasks are immediately
-   cancelled and a ``TaskGroupError`` exception is raised.  If the
-   ``join()`` operation itself is cancelled, all remaining tasks in
-   the group are also cancelled.  If a ``TaskGroup`` is used as a
+   Wait for tasks in the group to terminate according to the wait policy
+   set for the group.  If the ``join()`` operation itself is cancelled, all 
+   remaining tasks in the group are also cancelled.  If a ``TaskGroup`` is used as a
    context manager, the ``join()`` method is called on context-exit.
 
 .. asyncmethod:: TaskGroup.cancel_remaining()
@@ -274,8 +276,8 @@ The following methods are supported on ``TaskGroup`` instances:
 .. attribute:: TaskGroup.completed
 
    The first task that completed with a result in the group.  Useful
-   when used in combination with the ``wait=any`` or ``wait=object`` options on
-   ``join()``.
+   when used in combination with the ``wait=any`` or ``wait=object`` options 
+   to ``TaskGroup()``.
 
 
 The preferred way to use a ``TaskGroup`` is as a context manager.  For
