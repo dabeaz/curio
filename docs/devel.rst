@@ -999,38 +999,13 @@ cancellation), not the underlying Task.
 Task Exit
 ^^^^^^^^^
 
-Normally, a task exits when it returns.  If you're deeply buried into
-the guts of a bunch of code and you want to force a task exit, raise
-a ``TaskExit`` exception.  For example::
-
-    from curio import *
-
-    async def coro1():
-        print('About to die')
-        raise TaskExit()
-
-    async def coro2():
-        try:
-            await coro1()
-        except Exception as e:
-            print('Something went wrong')
-
-    async def coro3():
-        await coro2()
-
-    try:
-        run(coro3())
-    except TaskExit:
-        print('Task exited')
-
-Like the ``SystemExit`` built-in exception, ``TaskExit`` is a subclass
-of ``BaseException`` and won't be caught by exception handlers that
-look for ``Exception``.  
-
-If you want all tasks to die, raise a ``SystemExit`` or ``KernelExit``
-exception instead.  If this is raised in a task, the entire Curio
-kernel stops. In most situations, the leads to an orderly shutdown of
-all remaining tasks--each task being given a cancellation request.
+Normally, a task exits when it returns or raises an exception. If you
+want all tasks to die, raise a ``SystemExit`` exception instead.  If
+this is raised in a task, the entire Curio kernel stops. In most
+situations, the leads to an orderly shutdown of all remaining
+tasks--each task being given a cancellation request.   If you don't like
+the idea of using ``SystemExit``, define your own custom exception that
+inherits from ``BaseException`` and use that.   
 
 Task Cancellation
 ^^^^^^^^^^^^^^^^^
