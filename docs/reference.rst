@@ -1276,7 +1276,7 @@ For example::
 :class:`AsyncFile` objects are intentionally incompatible with code
 that uses files in a synchronous manner.  Partly, this is to help
 avoid unintentional errors in your program where blocking might
-occur with you realizing it.  If you know what you're doing and you
+occur without you realizing it.  If you know what you're doing and you
 need to access the underlying file in synchronous code, use the
 `blocking()` context manager like this::
 
