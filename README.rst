@@ -429,6 +429,7 @@ Contributors
 - Nathaniel Smith
 - Alexander Zhukov
 - Laura Dickinson
+- Sandeep Gupta
 
 About
 -----
