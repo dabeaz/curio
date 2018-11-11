@@ -46,7 +46,6 @@ in the README. Citations to Curio are also always appreciated.
 
 Testing
 -------
-[![Build Status](https://travis-ci.org/dabeaz/curio.svg?branch=master)](https://travis-ci.org/dabeaz/curio)
 
 Curio uses the [py.test](http://pytest.org) tool to write and drive
 its tests. Probably the best way to get set up to run the test suite
