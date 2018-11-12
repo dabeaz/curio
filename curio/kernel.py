@@ -634,6 +634,8 @@ class Kernel(object):
 
         for act in _activations:
             act.activate(kernel)
+            if kernel._kernel_task_id:
+                act.created(kernel._tasks[kernel._kernel_task_id])
 
         # Main task (if any)
         main_task = None

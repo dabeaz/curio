@@ -51,3 +51,20 @@ def test_activation_crash():
         assert a.events == ['activate', 'created', 'running', 'suspended', 'running', 'suspended', 'terminated']
 
     kern.run(shutdown=True)
+
+class _TestActivationCreate(Activation):
+    def __init__(self):
+        self.events = set()
+
+    def created(self, task):
+        self.events.add(task.name.split('.')[-1])
+
+def test_activation_count():
+    async def main():
+        await sleep(0.001)
+
+    a = _TestActivationCreate()
+    run(main, activations=[a])
+    # There should be three tasks. main(), an in-kernel task, and a shutdown task
+    assert a.events == { 'main', '_kernel_task', '_shutdown_tasks' }
+
