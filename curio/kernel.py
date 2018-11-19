@@ -769,7 +769,6 @@ class Kernel(object):
                             traps[trap[0]](*trap[1:])
                         except Exception as e:
                             current.next_exc = e
-
                     
                 # If any exception is raised during coroutine execution, the
                 # task is terminated.   Set the final return code and break out

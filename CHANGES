@@ -2,6 +2,13 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+11/18/2018 Removed code that attempted to detect unsafe async generator
+           functions.  Such code is now executed without checks or 
+           warnings.  It's still possible that code in finally blocks
+           might not execute unless you use curio.meta.finalize() or
+           a function such as async_generator.aclosing() (third party).
+           The @safe_generator decorator is now also unnecessary.
+
 11/11/2018 Removed the wait argument to TaskGroup.join().  The waiting policy
            for task groups is specified in the TaskGroup constructor.  For
            example:

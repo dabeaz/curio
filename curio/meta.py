@@ -38,8 +38,7 @@ def running():
         raise RuntimeError('Only one Curio kernel per thread is allowed')
     _locals.running = True
     try:
-        with asyncgen_manager():
-            yield
+        yield
     finally:
         _locals.running = False
 
@@ -301,15 +300,10 @@ class AsyncObject(metaclass=AsyncInstanceType):
     pass
 
 
-# Dictionary that tracks the "safe" status of async generators with 
-# respect to asynchronous finalization.  Normally this is automatically
-# determined by looking at the code of async generators.  It can
-# be overridden using the @safe_generator decorator below. 
-
-_safe_async_generators = { }      # { code_objects: bool }
-
 def safe_generator(func):
-    _safe_async_generators[func.__code__] = True
+    '''
+    Deprecated
+    '''
     return func
 
 class finalize(object):
@@ -318,110 +312,12 @@ class finalize(object):
     This might be needed if an asynchronous generator uses async functions
     in try-finally and other constructs.
     '''
-
-    _finalized = set()
-
     def __init__(self, aobj):
         self.aobj = aobj
 
     async def __aenter__(self):
-        self._finalized.add(self.aobj)
         return self.aobj
 
     async def __aexit__(self, ty, val, tb):
         if hasattr(self.aobj, 'aclose'):
             await self.aobj.aclose()
-        self._finalized.discard(self.aobj)
-
-    @classmethod
-    def is_finalized(cls, aobj):
-        return aobj in cls._finalized
-
-def is_safe_generator(agen):
-    '''
-    Examine the code of an async generator to see if it appears
-    unsafe with respect to async finalization.  A generator
-    is unsafe if it utilizes any of the following constructs:
-
-    1. Use of async-code in a finally block
-
-       try:
-           yield v
-       finally:
-           await coro()
-
-    2. Use of yield inside an async context manager
-
-       async with m:
-           ...
-           yield v
-           ...
-
-    3. Use of async-code in try-except
-
-       try:
-           yield v
-       except Exception:
-           await coro()
-    '''
-    if agen.ag_code in _safe_async_generators:
-        return True
-
-    def _is_unsafe_block(instr, end_offset=-1, is_generator=False, in_final=False):
-        is_unsafe = False
-        for op in instr:
-            if op.offset == end_offset:
-                in_final = True
-            if op.opname == 'YIELD_VALUE':
-                is_generator = True
-            if op.opname == 'END_FINALLY':
-                return (is_generator, is_unsafe)
-            if op.opname in {'SETUP_FINALLY', 'SETUP_EXCEPT', 'SETUP_ASYNC_WITH'}:
-                is_g, is_u = _is_unsafe_block(instr, op.argval, is_generator, in_final)
-                is_generator |= is_g
-                is_unsafe |= is_u
-            if op.opname == 'YIELD_FROM' and is_generator and in_final:
-                is_unsafe = True
-        return (is_generator, is_unsafe)
-
-    if not _is_unsafe_block(dis.get_instructions(agen.ag_code))[1]:
-        _safe_async_generators[agen.ag_code] = True
-        return True
-    else:
-        return False
-
-
-# This context manager is used to manage the execution of async generators
-# in Python 3.6.  In certain circumstances, they can't be used safely
-# unless finalized properly.  This context manager installs some hooks
-# for dealing with this in Curio.
-
-@contextmanager
-def asyncgen_manager():
-    if hasattr(sys, 'get_asyncgen_hooks'):
-        old_asyncgen_hooks = sys.get_asyncgen_hooks()
-
-        def _init_async_gen(agen):
-            # It's possible that we've come here through @asynccontextmanager in the contextlib module.
-            # If so, we assume that the generator is being managed properly and allow it through.
-            f = sys._getframe(1)
-            if f.f_code.co_name == '__aenter__' and 'contextlib' in f.f_code.co_filename:
-                return
-
-            # Inspect the code of the generator to see if it might be safe 
-            if not is_safe_generator(agen) and not finalize.is_finalized(agen):
-                raise RuntimeError("Async generator with async finalization must be wrapped by\n"
-                                   "async with curio.meta.finalize(agen) as agen:\n"
-                                   "    async for n in agen:\n"
-                                   "         ...\n"
-                                   "See PEP 533 for further discussion.")
-
-        sys.set_asyncgen_hooks(_init_async_gen)
-    try:
-        yield
-    finally:
-        if hasattr(sys, 'get_asyncgen_hooks'):
-            sys.set_asyncgen_hooks(*old_asyncgen_hooks)
-
-
-        
