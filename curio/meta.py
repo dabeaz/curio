@@ -38,7 +38,8 @@ def running():
         raise RuntimeError('Only one Curio kernel per thread is allowed')
     _locals.running = True
     try:
-        yield
+        with asyncgen_manager():
+            yield
     finally:
         _locals.running = False
 
@@ -302,7 +303,7 @@ class AsyncObject(metaclass=AsyncInstanceType):
 
 def safe_generator(func):
     '''
-    Deprecated
+    Deprecated. For backwards compatibility only.
     '''
     return func
 
@@ -321,3 +322,29 @@ class finalize(object):
     async def __aexit__(self, ty, val, tb):
         if hasattr(self.aobj, 'aclose'):
             await self.aobj.aclose()
+
+
+# This context manager is used to manage the execution of async generators
+# in Python 3.6.  In certain circumstances, they can't be used safely
+# unless finalized properly.  This context manager installs some a hook
+# for detecting lack of finalization.
+
+@contextmanager
+def asyncgen_manager():
+    if hasattr(sys, 'get_asyncgen_hooks'):
+        old_asyncgen_hooks = sys.get_asyncgen_hooks()
+        def _fini_async_gen(agen):
+            if agen.ag_frame is not None:
+                raise RuntimeError("Async generator with async finalization must be wrapped by\n"
+                                   "async with curio.meta.finalize(agen) as agen:\n"
+                                   "    async for n in agen:\n"
+                                   "         ...\n"
+                                   "See PEP 533 for further discussion.")
+
+        sys.set_asyncgen_hooks(None, _fini_async_gen)
+    try:
+        yield
+    finally:
+        if hasattr(sys, 'get_asyncgen_hooks'):
+            sys.set_asyncgen_hooks(*old_asyncgen_hooks)
+
