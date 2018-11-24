@@ -437,6 +437,9 @@ Curio was created by David Beazley (@dabeaz).  http://www.dabeaz.com
 
 It is a young project.  All contributions welcome.
 
+P.S.
+----
+You should come take a `course <https://www.dabeaz.com/courses.html>`_!
 
 .. |--| unicode:: U+2013   .. en dash
 .. |---| unicode:: U+2014  .. em dash, trimming surrounding whitespace
