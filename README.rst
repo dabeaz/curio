@@ -19,14 +19,13 @@ have influenced other libraries with similar functionality.
 Important Disclaimer
 --------------------
 
-Curio is experimental software that currently only works on POSIX
-systems (OS X, Linux, etc.).  Although it is a work in progress, it is
+Curio is experimental software. Although it is a work in progress, it is
 extensively documented and has a fairly comprehensive test suite.
 Just be aware that the programming API is fluid and could change at
 any time.  Although curio can be installed via pip, the version
 uploaded on PyPI is only updated occasionally.  You'll probably get
 better results using the version cloned from github.  You'll also want
-to make sure you're using Python 3.6. Of course, your mileage might
+to make sure you're using Python 3.6 or later. Of course, your mileage might
 vary.
 
 Quick install
