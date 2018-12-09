@@ -83,7 +83,8 @@ class Kernel(object):
     Use the kernel run() method to submit work.
     '''
 
-    def __init__(self, *, selector=None, debug=None, activations=None):
+    def __init__(self, *, selector=None, debug=None, activations=None,
+                 timeslice=1.0, timebase=4, timebucketcount=8):
 
         # Functions to call at shutdown
         self._shutdown_funcs = []
@@ -108,7 +109,7 @@ class Kernel(object):
         self._wake_queue = deque()
 
         # Sleeping task queue
-        self._sleepq = TimeQueue()
+        self._sleepq = TimeQueue(timeslice=timeslice, base=timebase, bucketcount=timebucketcount)
 
         # Activations
         self._activations = activations if activations else []
@@ -116,7 +117,6 @@ class Kernel(object):
         # Debugging (activations in disguise)
         if debug:
             self._activations.extend(_create_debuggers(debug))
-
 
     def __del__(self):
         if self._shutdown_funcs is not None:

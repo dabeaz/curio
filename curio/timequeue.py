@@ -49,14 +49,15 @@ import heapq
 from math import log2
 
 class TimeQueue:
-    def __init__(self, timeslice=1.0):
+    def __init__(self, timeslice=1.0, bucketcount=8, base=4):
         self.near_deadline = 0.0
         self.timeslice = timeslice
+        self.base = timeslice*base
         self.near = []
 
-        # Set of buckets for timeouts occurring 4, 16, 64s, 256s, etc. in the future (from deadline)
-        self.far = [ {} for _ in range(8) ]
-        self.far_deadlines = [self.near_deadline] + [self.near_deadline + 4 ** n for n in range(1,8) ]
+        # Set of buckets for timeouts occurring base, base**2, etc. time slices in the future (from deadline)
+        self.far = [ {} for _ in range(bucketcount) ]
+        self.far_deadlines = [self.near_deadline] + [self.near_deadline + self.base**n for n in range(1,bucketcount)]
 
     def _advance(self, deadline):
         # Sets a new near deadline and adjusts the buckets if necessary
@@ -73,7 +74,8 @@ class TimeQueue:
 
         bucketno = 0
         bucket_deadline = deadline
-        while bucketno < 8:
+        bucketcount = len(self.far_deadlines)
+        while bucketno < bucketcount:
             # If a bucket has a deadline less than the new deadline.
             # Its contents need to be processed.  Some of its items
             # might need to go into the near queue.
@@ -90,11 +92,17 @@ class TimeQueue:
                 # If the next bucket has a deadline that's greater than
                 # than the deadline of the current bucket, we're done.
                 # Otherwise, we move on to reprocess its contents as well.
-                if bucketno < 8 and self.far_deadlines[bucketno] > bucket_deadline:
+                if bucketno < bucketcount and self.far_deadlines[bucketno] > bucket_deadline:
                     break
-                bucket_deadline = deadline + 4**bucketno
+                bucket_deadline = deadline + self.base**bucketno
             else:
                 break
+
+    def _bucketno(self, delta, bucketcount=None):
+        if delta < self.base:
+            return 0
+        bucketcount = bucketcount or len(self.far_deadlines)-1
+        return min(int(log2(delta)/log2(self.base)), bucketcount-1)
 
     def next_deadline(self, current_clock):
         '''
@@ -125,14 +133,10 @@ class TimeQueue:
         if expires < self.near_deadline:
             heapq.heappush(self.near, (expires, item))
 
-
         # Otherwise, the item gets dropped into a bucket for future processing
         else:
             delta = expires - self.near_deadline
-            bucketno = 0 if delta < 4.0 else int(0.5*log2(delta))
-            if bucketno > 7:
-                bucketno = 7
-            self.far[bucketno][item] = expires
+            self.far[self._bucketno(delta)][item] = expires
 
     def expired(self, deadline):
         '''
@@ -155,10 +159,9 @@ class TimeQueue:
         if expires is None:
             return
         delta = expires - self.near_deadline
+        bucketcount = len(self.far_deadlines)
         if delta >= 0:
-            bucketno = 0 if delta < 4.0 else int(0.5*log2(delta))
-            if bucketno > 7:
-                bucketno = 7
-            while bucketno < 8 and self.far_deadlines[bucketno] <= expires:
+            bucketno = self._bucketno(delta, bucketcount)
+            while bucketno < bucketcount and self.far_deadlines[bucketno] <= expires:
                 self.far[bucketno].pop(item, None)
                 bucketno += 1
