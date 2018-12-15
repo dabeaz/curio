@@ -127,7 +127,8 @@ class Kernel(object):
         return self
 
     def __exit__(self, ty, val, tb):
-        self.run(shutdown=True)
+        if self._shutdown_funcs is not None:
+            self.run(shutdown=True)
 
     def _call_at_shutdown(self, func):
         self._shutdown_funcs.append(func)
@@ -137,6 +138,8 @@ class Kernel(object):
     # Submit a new task to the kernel
 
     def run(self, corofunc=None, *args, shutdown=False):
+        if self._shutdown_funcs is None:
+            raise RuntimeError("Can't submit new tasks to a kernel that's been shut down. Create a new kernel.")
 
         coro = meta.instantiate_coroutine(corofunc, *args) if corofunc else None
 
