@@ -19,14 +19,13 @@ have influenced other libraries with similar functionality.
 Important Disclaimer
 --------------------
 
-Curio is experimental software that currently only works on POSIX
-systems (OS X, Linux, etc.).  Although it is a work in progress, it is
+Curio is experimental software. Although it is a work in progress, it is
 extensively documented and has a fairly comprehensive test suite.
 Just be aware that the programming API is fluid and could change at
 any time.  Although curio can be installed via pip, the version
 uploaded on PyPI is only updated occasionally.  You'll probably get
 better results using the version cloned from github.  You'll also want
-to make sure you're using Python 3.6. Of course, your mileage might
+to make sure you're using Python 3.6 or later. Of course, your mileage might
 vary.
 
 Quick install
@@ -277,6 +276,8 @@ Additional Resources
 * `Some thoughts on asynchronous API design in a post-async/await world <https://vorpus.org/blog/some-thoughts-on-asynchronous-api-design-in-a-post-asyncawait-world/>`_, by Nathaniel Smith.
 
 * `A Tale of Event Loops <https://github.com/AndreLouisCaron/a-tale-of-event-loops>`_, by André Caron.
+
+* `Curio based HTTP server <https://github.com/triflesoft/curio-http-server>`_, by Roman Akopov.
 
 
 The Big Question: Why?
