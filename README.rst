@@ -278,6 +278,8 @@ Additional Resources
 
 * `A Tale of Event Loops <https://github.com/AndreLouisCaron/a-tale-of-event-loops>`_, by André Caron.
 
+* `Curio based HTTP server <https://github.com/triflesoft/curio-http-server>`_, by Roman Akopov.
+
 
 The Big Question: Why?
 ----------------------
