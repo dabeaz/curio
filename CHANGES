@@ -2,6 +2,9 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+03/09/2019 Fixed a bug in network.open_connection() that was passing arguments
+           incorrectly.  Issue #291.
+
 11/18/2018 Removed code that attempted to detect unsafe async generator
            functions.  Such code is now executed without checks or 
            warnings.  It's still possible that code in finally blocks

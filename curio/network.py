@@ -67,7 +67,7 @@ async def open_connection(host, port, *, ssl=None, source_addr=None, server_host
     if server_hostname and not ssl:
         raise ValueError('server_hostname is only applicable with SSL')
 
-    sock = await socket.create_connection((host, port), source_addr)
+    sock = await socket.create_connection((host, port), source_address=source_addr)
 
     try:
         # Apply SSL wrapping to the connection, if applicable
