@@ -837,8 +837,10 @@ class _TimeoutAfter(object):
                     # operations, it's possible that a timeout has expired, but 
                     # there was simply no opportunity to catch it because there was
                     # no suspension point.  
-                    log.warning('%r. Timeout occurred, but was uncaught. Ignored.',
-                                await current_task())
+                    badness = current_clock - self._deadlines[-1]
+                    log.warning('%r. Operation completed successfully, '
+                                'but it took longer than an enclosing timeout. Badness delta=%r.', 
+                                await current_task(), badness)
 
         finally:
             self._deadlines.pop()
