@@ -191,10 +191,6 @@ class Task(object):
         '''
         if not self.terminated:
             await _scheduler_wait(self.joining, 'TASK_JOIN')
-
-        #self._joined = True
-        #if self._taskgroup:
-        #    self._taskgroup._task_discard(self)
         
     @property
     def result(self):
@@ -233,7 +229,9 @@ class Task(object):
             return False
         await _cancel_task(self, exc=exc)
         if blocking:
-            await _scheduler_wait(self.joining, 'TASK_JOIN')
+            await self.wait()
+            if self.next_exc and not isinstance(self.next_exc, CancelledError):
+                raise self.next_exc
 
         return True
 
@@ -465,6 +463,8 @@ class TaskGroup(object):
             await task.cancel(blocking=False)
         for task in running:
             await task.wait()
+            if task.next_exc and not isinstance(task.next_exc, CancelledError):
+                raise task.next_exc
             self._task_discard(task)
 
             

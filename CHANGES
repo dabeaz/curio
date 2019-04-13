@@ -2,6 +2,11 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+04/12/2019 Modified Task.cancel() and TaskGroup.cancel_remaining() to re-raise
+           any non-cancellation related exception that might have been raised
+           in a task as a result the cancellation operation.  This almost 
+           always indicates a bug in cancellation handling.  See Issue #294.
+
 03/09/2019 Fixed a bug in network.open_connection() that was passing arguments
            incorrectly.  Issue #291.
 
