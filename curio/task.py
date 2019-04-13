@@ -230,8 +230,6 @@ class Task(object):
         await _cancel_task(self, exc=exc)
         if blocking:
             await self.wait()
-            if self.next_exc and not isinstance(self.next_exc, CancelledError):
-                raise self.next_exc
 
         return True
 
@@ -463,8 +461,6 @@ class TaskGroup(object):
             await task.cancel(blocking=False)
         for task in running:
             await task.wait()
-            if task.next_exc and not isinstance(task.next_exc, CancelledError):
-                raise task.next_exc
             self._task_discard(task)
 
             
