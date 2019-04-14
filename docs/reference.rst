@@ -157,7 +157,11 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
    returns immediately.  Returns ``True`` if the task was actually
    cancelled. ``False`` is returned if the task was already finished
    prior to the cancellation request.  Cancelling a task also cancels
-   any previously set timeout. 
+   any previously set timeout.  Note: uncaught exceptions that occur
+   as a result of cancellation are logged, but not propagated
+   out of the ``Task.cancel()`` method.   If you need to inspect a
+   task to see how it terminated, use ``Task.join()`` or inspect
+   the value of ``Task.result``. 
 
 .. method:: Task.traceback()
 
@@ -271,7 +275,10 @@ The following methods are supported on ``TaskGroup`` instances:
 
 .. asyncmethod:: TaskGroup.cancel_remaining()
 
-   Cancel all remaining tasks.
+   Cancel all remaining tasks.  Cancelled tasks are disregarded by the task
+   group when reporting results.  Note: if any uncaught exceptions occur in
+   a Task as a result of cancellation, those exceptions are logged, but 
+   discarded.  
 
 .. attribute:: TaskGroup.completed
 
@@ -388,6 +395,11 @@ The following functions are used by tasks to help manage time.
 
    Sleep for a specified number of seconds.  If the number of seconds is 0, the
    kernel merely switches to the next task (if any).
+
+.. asyncfunction:: schedule()
+
+   Immediately task switch to the next ready task.  This is the same as
+   ``sleep(0)``.
 
 .. asyncfunction:: wake_at(clock)
 
