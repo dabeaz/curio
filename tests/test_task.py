@@ -371,39 +371,6 @@ def test_task_group_use_error(kernel):
          await t2.join()
 
     kernel.run(main())
-             
-def test_enable_cancellation_function(kernel):
-    cancelled = False
-    done = False
-
-    async def child():
-        nonlocal cancelled
-        try:
-            await sleep(1)
-        except CancelledError:
-            cancelled = True
-            raise
-            
-    async def task():
-        nonlocal done
-        async with disable_cancellation():
-            await sleep(1)
-            await enable_cancellation(child())
-            assert True
-
-        with pytest.raises(CancelledError):
-            await sleep(1)
-        done = True
-
-    async def main():
-        t = await spawn(task)
-        await sleep(0.1)
-        await t.cancel()
-      
-    kernel.run(main)
-    assert cancelled
-    assert done
-
 
 def test_defer_cancellation(kernel):
     async def cancel_me(e1, e2):
@@ -457,17 +424,9 @@ def test_self_cancellation(kernel):
 
     kernel.run(suicidal_task)
 
-def test_illegal_enable_cancellation(kernel):
+def test_disable_cancellation_explicit_raise(kernel):
     async def task():
-        with pytest.raises(RuntimeError):
-             async with enable_cancellation():
-                 pass
-
-    kernel.run(task)
-
-def test_illegal_disable_cancellation_exception(kernel):
-    async def task():
-        with pytest.raises(RuntimeError):
+        with pytest.raises(CancelledError):
              async with disable_cancellation():
                  raise CancelledError()
 

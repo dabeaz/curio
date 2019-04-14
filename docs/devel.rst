@@ -1391,7 +1391,7 @@ If you are trying to shield a single operation, you can also pass a coroutine to
 
     async def coro():
         ...
-        await disable_cancellation(op)
+        await disable_cancellation(op())
         ...
 
 Code that disables cancellation can explicitly poll for the presence
@@ -1433,66 +1433,6 @@ The ``set_cancellation()`` function can be used to clear or change the
 pending cancellation exception to something else.  The above code ignores
 the ``TaskTimeout`` exception and keeps running.
 
-When cancellation is disabled, it can be selectively enabled again using
-``enable_cancellation()`` like this::
-
-    async def coro():
-        ...
-        async with disable_cancellation():
-            while True:
-                await op1()
-                await op2()
-
-                async with enable_cancellation():
-                    # These operations can be cancelled
-                    await op3()
-                    await op4()
-
-                if await check_cancellation():
-                    break    # We're done
-
-       await blocking_op()     # Cancellation delivered here (if any)
-
-When cancellation is re-enabled, it allows the enclosed statements to 
-receive cancellation requests and timeouts as exceptions as normal.
-
-An important feature of ``enable_cancellation()`` is that it does not
-propagate cancellation exceptions--meaning that it does not allow
-such exceptions to be raised in the outer block of statements
-where cancellation is disabled.  Instead, if there is a cancellation,
-it becomes "pending" at the conclusion of the ``enable_cancellation()``
-context.  It will be delivered at the next blocking operation where 
-cancellation is allowed.   Here is a concrete example that illustrates
-this behavior::
-
-    async def coro():
-        async with disable_cancellation():
-            print('Hello')
-            async with enable_cancellation():
-                print('About to die')
-                raise CancelledError()
-                print('Never printed')
-            print('Yawn')
-            await sleep(2)
-
-        print('About to deep sleep')
-        await sleep(5000)
-
-    run(coro)
-
-If you run this code, you'll get output like this::
-
-    Hello
-    About to die
-    Yawn
-    About to deep sleep
-    Traceback (most recent call last):
-    ...
-    curio.errors.CancelledError
-
-Carefully observe that cancellation is being reported on the first blocking operation
-outside the ``disable_cancellation()`` block.  There will be a quiz later.
-
 It is fine for ``disable_cancellation()`` blocks to be nested.   This makes them
 safe for use in subroutines.  For example::
 
@@ -1511,48 +1451,28 @@ safe for use in subroutines.  For example::
     run(coro1)
 
 If nested, cancellation is reported at the first blocking operation
-that occurs when cancellation is re-enabled.   
-
-It is illegal for ``enable_cancellation()`` to be used outside of a
-``disable_cancellation()`` context.  Doing so results in a
-``RuntimeError`` exception.  Cancellation is normally enabled in Curio
-so it makes little sense to use this feature in isolation.  Correct
-usage also tends to require careful coordination with code in which
-cancellation is disabled.  For that reason, it can't be used by
-itself.  
-
-It is also illegal for any kind of cancellation exception to be raised
-in a ``disable_cancellation()`` context. For example::
+that occurs when cancellation is re-enabled.  If a cancellation
+related exception is explicitly raised inside a
+``disable_cancellation()`` context, it becomes a pending cancellation
+if cancellation is disabled in the outer block.  For example::
 
     async def coro():
         async with disable_cancellation():
-            ...
-            raise CancelledError()    # ILLEGAL
-            ...
-
-Doing this causes your program to die with a ``RuntimeError``.  The
-``disable_cancellation()`` feature is meant to be a strong guarantee
-that cancellation-related exceptions are not raised in the given block
-of statements.  If you raise such an exception, you're violating the
-rules.  
-
-It is legal for cancellation exceptions to be raised inside a
-``enable_cancellation()`` context.  For example::
-
-    async def coro():
-        async with disable_cancellation():
-            ...
-            async with enable_cancellation():
+            async with disable_cancellation():
                 ...
-                raise CancelledError()    # LEGAL
+                raise CancelledError()
+                ...
 
-            # Exception becomes "pending" here
+            # Cancellation becomes pending here
             ...
 
-        await blocking_op()  # Cancellation reported here
+        await blocking_op()         # Cancellation raised here
 
-Cancellation exceptions that escape ``enable_cancellation()`` become
-pending and are reported when blocking operations are performed later.
+The `disable_cancellation()` manager offers a strong guarantee that
+a ``CancelledError`` exception won't be delivered in the block. If
+code decides to raise that exception manually, there's not much that
+can be done about that within the same code block, but the exception can
+be deferred in outer blocks.
 
 Programming Considerations for Cancellation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

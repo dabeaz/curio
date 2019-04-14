@@ -2,7 +2,13 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
-
+04/14/2019 Simplified the implementation and semantics of cancellation control.
+           The enable_cancellation() function has been removed.  It is now
+           only possible to disable cancellation.  Nesting is still allowed.
+           Pending cancellation exceptions are raised on the first blocking
+           call executed when reenabled.  The check_cancellation() function 
+           can be used to explicitly check for cancellation as before.
+           
 03/09/2019 Fixed a bug in network.open_connection() that was passing arguments
            incorrectly.  Issue #291.
 

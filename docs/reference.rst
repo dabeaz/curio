@@ -514,22 +514,23 @@ Cancellation Control
    blocking operation that's performed once cancellation delivery is
    reenabled.  This function may be used to shield a single coroutine 
    or used as a context manager (see example below).
-   
-.. function:: enable_cancellation(corofunc=None, *args)
 
-   Reenables the delivery of cancellation-related exceptions.  This
-   function is used as a context manager.  It may only be used
-   inside a context in which cancellation has been disabled.  This
-   function may be used to shield a single coroutine or used as
-   a context manager (see example below).
-
-.. asyncfunction:: check_cancellation()
+.. asyncfunction:: check_cancellation(exc=None)
 
    Checks to see if any cancellation is pending for the calling task.
    If cancellation is allowed, a cancellation exception is raised
    immediately.  If cancellation is not allowed, it returns the
    pending cancellation exception instance (if any).  Returns ``None``
-   if no cancellation is pending.
+   if no cancellation is pending. If ``exc`` is supplied and it matches
+   the type of the pending exception, the exception is returned and
+   any pending cancellation exception is cleared.
+
+.. asyncfunction:: set_cancellation(exc)
+
+   Set the pending cancellation exception for the calling task to ``exc``.
+   If cancellation is allowed, it will be raised immediately on the next
+   blocking operation.  Returns any previously set, but pending cancellation
+   exception.
 
 Use of these functions is highly specialized and is probably best avoided.
 Here is an example that shows typical usage::
@@ -539,10 +540,6 @@ Here is an example that shows typical usage::
             while True:
                 await coro1()
                 await coro2()
-                async with enable_cancellation():
-                    await coro3()   # May be cancelled
-                    await coro4()   # May be cancelled
-
                 if await check_cancellation():
                     break   # Bail out!
 
