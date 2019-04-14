@@ -207,6 +207,9 @@ class Task(object):
 
     @property
     def exception(self):
+        '''
+        Return any pending exception of a task or None.
+        '''
         if not self.terminated:
             raise RuntimeError('Task not terminated')
         return self.next_exc
@@ -262,6 +265,11 @@ class Task(object):
         return _where(self)
 
     def _switch(self, coro):
+        '''
+        Switch the underlying coroutine being executed by the task.
+        For wizards only--this is used to coordinate some of Curio's
+        coroutine-thread interaction.
+        '''
         orig_coro = self._run_coro
         self._run_coro = coro
         self._send = coro.send

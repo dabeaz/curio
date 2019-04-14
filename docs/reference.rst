@@ -1139,7 +1139,7 @@ Here is an example of a producer program using channels::
         ch = Channel(('localhost', 30000))
         run(producer(ch))
 
-Here is an example of a correspoinding consumer program using a channel::
+Here is an example of a corresponding consumer program using a channel::
 
     # consumer.py
     from curio import Channel, run

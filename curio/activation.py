@@ -69,6 +69,3 @@ def trap_patch(kernel, trapno):
         kernel._traps[trapno] = wrapper
         return wrapper
     return decorate
-
-    
-    
