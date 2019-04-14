@@ -24,8 +24,7 @@ from . import meta
 __all__ = ['Task', 'TaskGroup', 'sleep', 'wake_at', 'current_task', 'get_all_tasks',
            'spawn', 'gather', 'timeout_after', 'timeout_at',
            'ignore_after', 'ignore_at', 'clock', 'aside', 'schedule',
-           'enable_cancellation', 'disable_cancellation',
-           'check_cancellation', 'set_cancellation' ]
+           'disable_cancellation', 'check_cancellation', 'set_cancellation' ]
 
 # Internal functions used for debugging/diagnostics
 def _get_stack(coro):
@@ -655,46 +654,27 @@ async def gather(tasks, *, return_exceptions=False):
                 raise
     return results
 
-# Utility functions for controlling cancellation
+# Context manager for supervising cancellation masking
 class _CancellationManager(object):
-
-    def __init__(self, allow_cancel):
-        self.allow_cancel = allow_cancel
-        self.cancel_pending = None
 
     async def __aenter__(self):
         self.task = await current_task()
-        if self.task.allow_cancel and self.allow_cancel:
-            raise RuntimeError('enable_cancellation() may not be used in a context where cancellation is already allowed')
         self._last_allow_cancel = self.task.allow_cancel
-        self.task.allow_cancel = self.allow_cancel
+        self.task.allow_cancel = False
         return self
 
     async def __aexit__(self, ty, val, tb):
+        # Restore previous cancellation flag
         self.task.allow_cancel = self._last_allow_cancel
 
-        # If a CancelledError is raised on exit from a block, the
-        # following rules are in play:
-        #
-        # 1. If the block did not allow cancellation in the first place,
-        #    a RuntimeError occurs.  It illegal for CancelledError to
-        #    be raised in any form when cancellation is disabled.
-        #
-        # 2. If cancellation is not allowed in the outer block,
-        #    the CancelledError is transformed back into a pending
-        #    exception.  The outer block can certainly check for
-        #    this if it wants, but it can also just defer the
-        #    cancellation to a point where cancellation is allowed again.
-        #
-        if isinstance(val, CancelledError):
-            if not self.allow_cancel:
-                raise RuntimeError('%s must not be raised in a disable_cancellation block' %
-                                   ty.__name__)
-            if not self.task.allow_cancel:
-                self.cancel_pending = self.task.cancel_pending = val
-                return True
+        # If a CancelledError is being raised on exit from a block, it
+        # becomes pending in the task if cancellation is not allowed
+        # in the outer context.  Curio should never have delivered 
+        # such an exception on its own--it could be manually raised however.
+        if isinstance(val, CancelledError) and not self.task.allow_cancel:
+            self.task.cancel_pending = val
+            return True
         else:
-            self.cancel_pending = self.task.cancel_pending
             return False
 
     def __enter__(self):
@@ -703,24 +683,13 @@ class _CancellationManager(object):
     def __exit__(self, *args):
         return thread.AWAIT(self.__aexit__(*args))
 
-
-def enable_cancellation(coro=None, *args):
-    if coro is None:
-        return _CancellationManager(True)
-    else:
-        coro = meta.instantiate_coroutine(coro, *args)
-        async def run():
-            async with _CancellationManager(True):
-                return await coro
-        return run()
-
 def disable_cancellation(coro=None, *args):
     if coro is None:
-        return _CancellationManager(False)
+        return _CancellationManager()
     else:
         coro = meta.instantiate_coroutine(coro, *args)
         async def run():
-            async with _CancellationManager(False):
+            async with _CancellationManager():
                 return await coro
         return run()
 
