@@ -260,27 +260,22 @@ class Channel(object):
         return c
 
     async def connect(self, *, authkey=None):
-        while True:
-            try:
-                sock = socket.socket(self.family, socket.SOCK_STREAM)
-                await sock.connect(self.address)
-                sock_stream = sock.as_stream()
-                c = Connection(sock_stream, sock_stream)
-                try:
-                    async with timeout_after(1):
-                        if authkey:
-                            await c.authenticate_client(authkey)
-                    return c
-                except TaskTimeout:
-                    log.warning('Channel connection to %s timed out', self.address)
-                    await c.close()
-                    del c
-                    del sock_stream
-
-            except OSError as e:
-                log.error('Channel connection to %s failed', self.address, exc_info=True)
-                await sock.close()
-                await sleep(1)
+        sock = socket.socket(self.family, socket.SOCK_STREAM)
+        await sock.connect(self.address)
+        sock_stream = sock.as_stream()
+        c = Connection(sock_stream, sock_stream)
+        try:
+            async with timeout_after(1):
+                if authkey:
+                    await c.authenticate_client(authkey)
+            return c
+        except TaskTimeout:
+            log.warning('Channel connection to %s timed out', self.address)
+            await c.close()
+            del c
+            del sock_stream
+            # Note: Raising an OSError.  
+            raise TimeoutError("Connection timed out")
 
     async def close(self):
         if self.sock:

@@ -471,7 +471,13 @@ def test_aside_basic(kernel):
     results = [ ]
 
     async def consumer(ch):
-        c = await ch.connect(authkey=b'peekaboo')
+        while True:
+            try:
+                c = await ch.connect(authkey=b'peekaboo')
+                break
+            except OSError:
+                await sleep(0.1)
+
         while True:
             msg = await c.recv()
             if msg is None:
@@ -496,7 +502,12 @@ def test_aside_cancel(kernel):
     results = [ ]
 
     async def consumer(ch, t):
-        c = await ch.connect(authkey=b'peekaboo')
+        while True:
+            try:
+                c = await ch.connect(authkey=b'peekaboo')
+                break
+            except OSError:
+                await sleep(0.1)
         while True:
             msg = await c.recv()
             if msg == 5:

@@ -2,6 +2,10 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+04/14/2019 The Channel.connect() method no longer implements auto-retry. 
+           In practice, this kind of feature can cause interference. Better
+           to let the caller do the retry if they want.
+
 04/14/2019 Simplified the implementation and semantics of cancellation control.
            The enable_cancellation() function has been removed.  It is now
            only possible to disable cancellation.  Nesting is still allowed.

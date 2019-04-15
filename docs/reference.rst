@@ -1062,8 +1062,7 @@ The following methods are used to establish a connection on a :class:`Channel` i
 .. asyncmethod:: Channel.connect(*, authkey=None)
 
    Make an outgoing connection. *authkey* is an optional authentication key.
-   This method repeatedly attempts to make a connection if the other
-   endpoint is not responding.  Returns a :class:`Connection` instance.
+   Returns a :class:`Connection` instance.
 
 .. method:: Channel.bind()
 
