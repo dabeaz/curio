@@ -2276,7 +2276,8 @@ be useful if writing larger programs involving coroutines.
 
 Here is an example::
 
-    from curio.abc import AsyncABC, abstractmethod
+    from abc import abstractmethod
+    from curio.meta import AsyncABC
 
     class Base(AsyncABC):
         @abstractmethod
