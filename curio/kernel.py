@@ -816,7 +816,7 @@ class Kernel(object):
                     current = active = None
 
 def run(corofunc, *args, with_monitor=False, selector=None,
-        debug=None, activations=None, **kernel_extra):
+        debug=None, activations=None, shutdown=False, **kernel_extra):
     '''
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
@@ -840,4 +840,4 @@ def run(corofunc, *args, with_monitor=False, selector=None,
         kernel._call_at_shutdown(m.close)
 
     with kernel:
-        return kernel.run(corofunc, *args)
+        return kernel.run(corofunc, *args, shutdown=shutdown)
