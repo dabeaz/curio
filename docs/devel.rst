@@ -2965,19 +2965,19 @@ Synchronous/Asynchronous Queuing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 One approach for bridging asynchronous and synchronous code is to use
-a ``Queue`` and to take an approach similar to how you might
+a ``UniversalQueue`` and to take an approach similar to how you might
 communicate between threads.  For example, you can write code like
 this::
 
-    from curio import run, spawn, Queue
+    from curio import run, spawn, UniversalQueue
 
-    q = Queue()
+    q = UniversalQueue()
 
     async def worker():
         item = await q.get()
         print('Got:', item)
 
-    def yLazyow():
+    def yow():
         print('Synchronous yow')
         q.put('yow')      # Works (note: there is no await)
         print('Goodbye yow')
@@ -2997,7 +2997,7 @@ Running this code produces the following output::
     Got: yow
     Main goodbye
 
-Curio queues allow the ``q.put()`` method to be used from synchronous
+Curio universal queues allow the ``q.put()`` method to be used from synchronous
 code.  Thus, if you're in the synchronous realm, you can at least
 queue up a bunch of data.  It won't be processed until you return to
 the world of Curio tasks though.  So, in the above code, you won't
