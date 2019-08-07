@@ -49,14 +49,8 @@ def curio_running():
     '''
     return getattr(_locals, 'running', False)
 
-
-# Some flags defined in Include/code.h
-_CO_NESTED = 0x0010
-_CO_GENERATOR = 0x0020
-_CO_COROUTINE = 0x0080
-_CO_ITERABLE_COROUTINE = 0x0100
-_CO_ASYNC_GENERATOR = 0x0200
-_CO_FROM_COROUTINE = _CO_COROUTINE | _CO_ITERABLE_COROUTINE | _CO_ASYNC_GENERATOR
+_CO_NESTED = inspect.CO_NESTED
+_CO_FROM_COROUTINE = inspect.CO_COROUTINE | inspect.CO_ITERABLE_COROUTINE | inspect.CO_ASYNC_GENERATOR
 
 try:
     _isasyncgenfunction = inspect.isasyncgenfunction

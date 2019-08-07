@@ -551,7 +551,7 @@ class Kernel(object):
                 clock += time_monotonic()
             _set_timeout(clock, 'sleep')
             _suspend_task('TIME_SLEEP', 
-                          lambda task=current: setattr(task, 'sleep', None))
+                          lambda task=current: (sleepq.cancel((task.id, 'sleep'), task.sleep), setattr(task, 'sleep', None)))
 
         # ----------------------------------------
         # Set a timeout to be delivered to the calling task
