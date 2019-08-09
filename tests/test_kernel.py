@@ -824,26 +824,6 @@ def test_reentrant_kernel(kernel):
 
     kernel.run(main)
 
-def test_submit_errors(kernel):
-    import types
-    @types.coroutine
-    def bad_trap():
-        with pytest.raises(IndexError):
-            yield (123, "bad")
-
-    async def main():
-        await bad_trap()
-
-    with pytest.raises(TypeError):
-        kernel.run(abs)
-
-    kernel.run(main)
-
-    # Repair the kernel (only for testing)
-    kernel._crashed = False
-    kernel._shutdown_funcs = []
-    kernel._kernel_task_id = None
-
 from curio.traps import *
 
 def test_pending_cancellation(kernel):

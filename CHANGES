@@ -2,6 +2,16 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+08/09/2019 Exceptions raised inside the Curio kernel itself are no longer 
+           reported to tasks.  Instead, they cause Curio to die. The
+           kernel is never supposed to raise exceptions on its own--any
+           exception that might be raised is an internal programming error.
+           This change should not impact user-level code, but might affect
+           uncontrolled Ctrl-C handling. If a KeyboardInterrupt occurs
+           in the middle of kernel-level code, it will cause an uncontrolled
+           death. If this actually matters to you, then modify your code to
+           properly handle Ctrl-C via signal handling.
+
 04/14/2019 The Channel.connect() method no longer implements auto-retry. 
            In practice, this kind of feature can cause interference. Better
            to let the caller do the retry if they want.
