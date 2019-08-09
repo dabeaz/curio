@@ -92,13 +92,13 @@ class Popen(object):
         except CancelledError as err:
             if stdout_task:
                 await stdout_task.cancel()
-                err.stdout = stdout_task.next_exc.bytes_read
+                err.stdout = stdout_task.exception.bytes_read
             else:
                 err.stdout = b''
 
             if stderr_task:
                 await stderr_task.cancel()
-                err.stderr = stderr_task.next_exc.bytes_read
+                err.stderr = stderr_task.exception.bytes_read
             else:
                 err.stderr = b''
             raise

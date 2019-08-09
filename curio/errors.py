@@ -75,7 +75,7 @@ class TaskGroupError(CurioError):
     def __init__(self, failed):
         self.args = (failed,)
         self.failed = failed
-        self.errors = { type(task.next_exc) for task in failed }
+        self.errors = { type(task.exception) for task in failed }
 
     def __str__(self):
         return 'TaskGroupError(%s)' % ', '.join(err.__name__ for err in self.errors)

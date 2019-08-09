@@ -101,11 +101,11 @@ class Task(object):
     __slots__ = (
         'id', 'parentid', 'coro', 'daemon', 'name', '_send', '_throw',
         'cycles', 'state', 'cancel_func', 'future', 'sleep',
-        'timeout', 'next_value', 'next_exc', 'joining', 'cancelled',
-        'terminated', 'cancel_pending', '_run_coro', '_last_io',
-        '_deadlines', '_joined', '_taskgroup', 
-        'allow_cancel', '__weakref__', '__dict__'
-    )
+        '_final_result', '_final_exc', 'timeout', 'joining',
+        'cancelled', 'terminated', 'cancel_pending', '_run_coro',
+        '_last_io', '_trap_result', '_deadlines', '_joined',
+        '_taskgroup', 'allow_cancel', '__weakref__', '__dict__' 
+        )
 
     _lastid = 1
     def __init__(self, coro):
@@ -115,6 +115,8 @@ class Task(object):
         self.coro = coro              # Underlying generator/coroutine
         self.name = getattr(coro, '__qualname__', str(coro))
         self.daemon = False           # Daemonic flag
+        self._final_result = None     # Final result of execution
+        self._final_exc = None        # Final exception of execution
         self.report_crash = True      # Crash reporting
         self.cycles = 0               # Execution cycles completed
         self.state = 'INITIAL'        # Execution state
@@ -122,8 +124,6 @@ class Task(object):
         self.future = None            # Pending Future (if any)
         self.sleep = None             # Pending sleep (if any)
         self.timeout = None           # Pending timeout (if any)
-        self.next_value = None        # Next value to send on execution
-        self.next_exc = None          # Next exception to send on execution
         self.joining = SchedBarrier() # Set of tasks waiting to join with this one
         self.cancelled = None         # Has the task been cancelled?
         self.terminated = False       # Has the task actually Terminated?
@@ -133,6 +133,9 @@ class Task(object):
 
         # Actual execution is wrapped by a supporting coroutine
         self._run_coro = self._task_runner(self.coro)
+
+        # Result of the last trap
+        self._trap_result = None 
 
         # Last I/O operation performed
         self._last_io = None          
@@ -158,13 +161,12 @@ class Task(object):
     def __del__(self):
         self.coro.close()
         if not self._joined and not self.cancelled and not self.daemon:
-            if not self.daemon and not self.next_exc:
+            if not self.daemon and not self.exception:
                 log.warning('%r never joined', self)
 
     async def _task_runner(self, coro):
         try:
-            self.next_value = await coro
-            return self.next_value
+            return await coro
         finally:
             if self._taskgroup:
                 await self._taskgroup._task_done(self)
@@ -179,10 +181,10 @@ class Task(object):
         if self._taskgroup:
             self._taskgroup._task_discard(self)
         self._joined = True
-        if self.next_exc:
-            raise TaskError('Task crash') from self.next_exc
+        if self.exception:
+            raise TaskError('Task crash') from self.exception
         else:
-            return self.next_value
+            return self.result
 
     async def wait(self):
         '''
@@ -199,10 +201,15 @@ class Task(object):
         if not self.terminated:
             raise RuntimeError('Task not terminated')
         self._joined = True
-        if self.next_exc:
-            raise self.next_exc
+        if self._final_exc:
+            raise self._final_exc
         else:
-            return self.next_value
+            return self._final_result
+
+    @result.setter
+    def result(self, value):
+        self._final_result = value
+        self._final_exc = None
 
     @property
     def exception(self):
@@ -211,7 +218,12 @@ class Task(object):
         '''
         if not self.terminated:
             raise RuntimeError('Task not terminated')
-        return self.next_exc
+        return self._final_exc
+
+    @exception.setter
+    def exception(self, value):
+        self._final_result = None
+        self._final_exc = value
 
     async def cancel(self, *, exc=TaskCancelled, blocking=True):
         '''
@@ -248,8 +260,8 @@ class Task(object):
         Run a pdb post-mortem on any pending exception information
         '''
         import pdb
-        if self.next_exc:
-            pdb.post_mortem(self.next_exc.__traceback__)
+        if self.exception:
+            pdb.post_mortem(self.exception.__traceback__)
 
     def traceback(self):    # pragma: no cover
         '''
@@ -387,12 +399,6 @@ class TaskGroup(object):
     async def _task_done(self, task):
         self._running.discard(task)
         self._finished.append(task)
-        # Set the first completed task (if successful exit)
-        if self.completed is None and task.next_exc is None:
-            if self._wait is object:
-                self.completed = task if (task.next_value is not None) else None
-            else:
-                self.completed = task
         await self._sema.release()
 
     # Discards a task from the TaskGroup.  Called implicitly if
@@ -441,6 +447,7 @@ class TaskGroup(object):
 
         if self._finished:
             task = self._finished.popleft()
+            await task.wait()
             task._taskgroup = None
         else:
             task = None
@@ -449,7 +456,8 @@ class TaskGroup(object):
 
     async def next_result(self):
         '''
-        Return the result of the next task that finishes.  
+        Return the result of the next task that finishes. Note: if task
+        termined via exception, that exception is raised here.
         '''
         task = await self.next_done()
         if task:
@@ -479,12 +487,20 @@ class TaskGroup(object):
         cancellation exception is reraised.
         '''
 
+        # If there are any currently finished tasks, find the ones in error
+        for task in self._finished:
+            await task.wait()
+            if self.completed is None and not task.exception:
+                if self._wait is object:
+                    self.completed = task if (task.result is not None) else None
+                else:
+                    self.completed = task
+        
         # Find all currently finished tasks to collect the ones in error
-        exceptional = [ task for task in self._finished if task.next_exc ]
+        exceptional = [ task for task in self._finished if task.exception ]
 
         # If there are any tasks in error, or the wait policy dictates
         # cancellation of remaining tasks, cancel them
-
         if exceptional or (self._wait is None) or (self._wait in (any, object) and self.completed):
             while self._running:
                 task = self._running.pop()
@@ -510,13 +526,22 @@ class TaskGroup(object):
             if not self._finished:
                 continue
 
+            # Collect any finished tasks
             while self._finished:
                 task = self._finished.popleft()
+                await task.wait()
                 task._taskgroup = None
                 cancel_remaining = False
 
+                # Check if we're still waiting for the result of the first task
+                if self.completed is None and not task.exception:
+                    if self._wait is object:
+                        self.completed = task if (task.result is not None) else None
+                    else:
+                        self.completed = task
+
                 # If the task is in error state and nothing else is. Cancel everything else
-                if task.next_exc:
+                if task.exception:
                     if not exceptional:
                         cancel_remaining = True
                     exceptional.append(task)
@@ -531,7 +556,7 @@ class TaskGroup(object):
         self._closed = True
 
         # We remove any task that was directly cancelled
-        exceptional = [task for task in exceptional if not isinstance(task.next_exc, TaskCancelled) ]
+        exceptional = [task for task in exceptional if not isinstance(task.exception, TaskCancelled) ]
 
         # If there are exceptions on any task, we raise a TaskGroupError
         if exceptional:

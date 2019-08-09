@@ -62,8 +62,12 @@ class AsyncThread(object):
         self._terminate_evt = sync.UniversalEvent()
 
         self._coro = None
-        self.next_value = None
-        self.next_exc = None
+        self._coro_result = None
+        self._coro_exc = None
+
+        self._final_value = None
+        self._final_exc = None
+
         self._thread = None
         self._task = None
         self._joined = False
@@ -81,11 +85,11 @@ class AsyncThread(object):
 
             # Run the the coroutine
             try:
-                self.next_value = await coro
-                self.next_exc = None
+                self._coro_result = await coro
+                self._coro_exc = None
             except BaseException as e:
-                self.next_value = None
-                self.next_exc = e
+                self._coro_result = None
+                self._coro_exc = e
 
             # Hand it back to the thread
             coro = None
@@ -95,18 +99,21 @@ class AsyncThread(object):
             await self._taskgroup._task_done(self)
             self._joined = True
 
-        #await self._terminate_evt.set()
-        
-
     def _func_runner(self):
         _locals.thread = self
         _locals.thread_exit = ThreadAtExit()
         try:
-            self.next_value = self.target(*self.args, **self.kwargs)
-            self.next_exc = None
+            self._coro_result = self.target(*self.args, **self.kwargs)
+            self._coro_exc = None
+            # self.next_result = (self.target(*self.args, **self.kwargs), None)
+            # self.next_value = self.target(*self.args, **self.kwargs)
+            #self.next_exc = None
         except BaseException as e:
-            self.next_value = None
-            self.next_exc = e
+            self._coro_result = None
+            self._coro_exc = e
+
+            #self.next_value = None
+            #self.next_exc = e
             if not isinstance(e, errors.CancelledError):
                 log.warning("Unexpected exception in cancelled async thread", exc_info=True)
                 
@@ -124,10 +131,10 @@ class AsyncThread(object):
         self._done_evt.wait()
         self._done_evt.clear()
 
-        if self.next_exc:
-            raise self.next_exc
+        if self._coro_exc:
+            raise self._coro_exc
         else:
-            return self.next_value
+            return self._coro_result
 
     async def join(self):
         await self.wait()
@@ -136,10 +143,10 @@ class AsyncThread(object):
         if self._taskgroup:
             self._taskgroup._task_discard(self)
 
-        if self.next_exc:
-            raise errors.TaskError() from self.next_exc
+        if self._coro_exc:
+            raise errors.TaskError() from self._coro_exc
         else:
-            return self.next_value
+            return self._coro_result
 
     async def wait(self):
         await self._terminate_evt.wait()
@@ -149,10 +156,16 @@ class AsyncThread(object):
     def result(self):
         if not self._terminate_evt.is_set():
             raise RuntimeError('Thread not terminated')
-        if self.next_exc:
-            raise self.next_exc
+        if self._coro_exc:
+            raise self._coro_exc
         else:
-            return self.next_value
+            return self._coro_result
+
+    @property
+    def exception(self):
+        if not self._terminate_evt.is_set():
+            raise RuntimeError('Thread not terminated')
+        return self._coro_exc
 
     async def cancel(self, *, exc=errors.TaskCancelled, blocking=True):
         self.cancelled = True
@@ -279,6 +292,7 @@ class _AsyncContextManager:
 
         # Context-switch the Task to run a different coroutine momentarily
         orig_coro = self.task._switch(_waiter())
+        self.task._trap_result = None
 
         # Reawaken the task.  It's going to wake up in the _waiter()  coroutine above. 
         AWAIT(_scheduler_wake(self.barrier, 1))
@@ -287,7 +301,7 @@ class _AsyncContextManager:
         # await _async_thread_exit() operation above.  It is critically important that
         # no bare await/async operations occur in this process.  The code should have
         # been validated previously.  It *IS* okay for AWAIT() operations to be used.
-        result = orig_coro.send(None)
+        result = orig_coro.send((None,None))
 
         # If the result is not the result of _async_thread_exit() above, then
         # some kind of very bizarre runtime problem has been encountered.
@@ -351,10 +365,10 @@ def async_thread(func=None, *, daemon=False):
                 except errors.CancelledError as e:
                     await t.cancel(exc=e)
                     await set_cancellation(t._task.cancel_pending)
-                    if t.next_exc:
-                        raise t.next_exc from None
+                    if t._coro_exc:
+                        raise t._coro_exc from None
                     else:
-                        return t.next_value
+                        return t._coro_result
                 except errors.TaskError as e:
                     raise e.__cause__ from None
             return runner(*args, **kwargs)

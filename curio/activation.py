@@ -41,7 +41,7 @@ class Activation:
         '''
         pass
 
-def trap_patch(kernel, trapno):
+def trap_patch(kernel, trapname):
     '''
     Patch the in-kernel trap table.  This decorator is intended for
     use in scheduler activations.  Main use is in debuggers, tracers,
@@ -53,19 +53,19 @@ def trap_patch(kernel, trapno):
 
         def activate(self, kernel):
 
-            @trap_patch(kernel, Traps._some_trap)
+            @trap_patch(kernel, '_some_trap')
             def new_some_trap(*args, trapfunc):
                  result = trapfunc(*args)     # Call original trap
                  return result
 
     You can die using this feature.  Tread lightly.
     '''
-    orig_trap = kernel._traps[trapno]
+    orig_trap = kernel._traps[trapname]
 
     def decorate(func):
         @wraps(func)
         def wrapper(*args):
             return func(*args, trap=orig_trap)
-        kernel._traps[trapno] = wrapper
+        kernel._traps[trapname] = wrapper
         return wrapper
     return decorate

@@ -40,7 +40,6 @@
 # rest of Curio run on it.  You just need to make sure you implement
 # the required traps.
 
-
 __all__ = ['Kernel', 'run' ]
 
 # -- Standard Library
@@ -60,7 +59,7 @@ log = logging.getLogger(__name__)
 
 from .errors import *
 from .task import Task
-from .traps import _read_wait, Traps
+from .traps import _read_wait
 from . import meta
 from .debug import _create_debuggers
 from .timequeue import TimeQueue
@@ -149,10 +148,13 @@ class Kernel(object):
                 self._runner.send(None)
 
             # Submit the given coroutine (if any)
+            ret_val = ret_exc = None
             if coro or not shutdown:
-                ret_val, ret_exc = self._runner.send(coro)
-            else:
-                ret_val = ret_exc = None
+                task = self._runner.send(coro)
+                if task:
+                    ret_exc = task.exception
+                    ret_val = task.result if not ret_exc else None
+                del task
 
             # If shutdown has been requested, run the shutdown process
             if shutdown:
@@ -294,10 +296,8 @@ class Kernel(object):
             return task
 
         # Reschedule a task, putting it back on the ready queue.
-        def _reschedule_task(task, value=None, exc=None):
+        def _reschedule_task(task):
             ready_append(task)
-            task.next_value = value
-            task.next_exc = exc
             task.state = 'READY'
             task.cancel_func = None
 
@@ -336,8 +336,8 @@ class Kernel(object):
         # Check if task has pending cancellation
         def _check_cancellation():
             if current.allow_cancel and current.cancel_pending:
-                current.next_exc = current.cancel_pending
-                current.next_value = current.cancel_pending = None
+                current._trap_result = current.cancel_pending
+                current.cancel_pending = None
                 return True
             else:
                 return False
@@ -387,7 +387,7 @@ class Kernel(object):
         # and there is no public API outside the kernel.  Instead,
         # coroutines use a statement such as
         #
-        #   yield (_blocking_trap_io, sock, EVENT_READ, 'READ_WAIT')
+        #   yield ('_trap_io', sock, EVENT_READ, 'READ_WAIT')
         #
         # to invoke a specific trap.
         # ------------------------------------------------------------
@@ -408,8 +408,7 @@ class Kernel(object):
                 try:
                     _register_event(fileobj, event, current)
                 except CurioError as e:
-                    current.next_exc = e
-                    current.next_value = None
+                    current._trap_result = e
                     return
 
             # This step indicates that we have managed any deferred I/O management
@@ -425,9 +424,9 @@ class Kernel(object):
                 rtask, wtask = key.data
                 rtask = rtask if rtask and rtask.cancel_func else None
                 wtask = wtask if wtask and wtask.cancel_func else None
-                current.next_value = (rtask, wtask)
+                current._trap_result = (rtask, wtask)
             except KeyError:
-                current.next_value = (None, None)
+                current._trap_result = (None, None)
             
         # ----------------------------------------
         # Wait on a Future
@@ -468,7 +467,7 @@ class Kernel(object):
         def _trap_spawn(coro):
             task = _new_task(coro)
             task.parentid = current.id
-            current.next_value = task
+            current._trap_result = task
 
         # ----------------------------------------
         # Cancel a task
@@ -503,7 +502,8 @@ class Kernel(object):
 
             # Cancel and reschedule the task
             task.cancel_func()
-            _reschedule_task(task, exc=task.cancel_pending)
+            task._trap_result = task.cancel_pending
+            _reschedule_task(task)
             task.cancel_pending = None
 
         # ----------------------------------------
@@ -523,7 +523,7 @@ class Kernel(object):
         # ----------------------------------------
         # Return the current value of the kernel clock
         def _trap_clock():
-            current.next_value = time_monotonic()
+            current._trap_result = time_monotonic()
 
         # ----------------------------------------
         # Sleep for a specified period. Returns value of monotonic clock.
@@ -565,7 +565,7 @@ class Kernel(object):
                 if old_timeout and current.timeout > old_timeout:
                     current.timeout = old_timeout
 
-            current.next_value = old_timeout
+            current._trap_result = old_timeout
 
         # ----------------------------------------
         # Clear a previously set timeout
@@ -583,7 +583,7 @@ class Kernel(object):
             if previous and previous >= 0 and previous < now:
                 # Perhaps create a TaskTimeout pending exception here.
                 _set_timeout(previous)
-                current.next_value = now
+                current._trap_result = now
             else:
                 _set_timeout(previous)
                 current.timeout = previous
@@ -594,26 +594,25 @@ class Kernel(object):
                 # pending exception.
                 if isinstance(current.cancel_pending, TaskTimeout):
                     current.cancel_pending = None
-                current.next_value = now
+                current._trap_result = now
 
         # ----------------------------------------
         # Return the running kernel
         def _trap_get_kernel():
-            current.next_value = kernel
+            current._trap_result = kernel
 
         # ----------------------------------------
         # Return the currently running task
         def _trap_get_current():
-            current.next_value = current
+            current._trap_result = current
 
         # ------------------------------------------------------------
         # Final setup.
         # ------------------------------------------------------------
 
         # Create the traps tables
-        kernel._traps = traps = [None] * len(Traps)
-        for trap in Traps:
-            traps[trap] = locals()[trap.name]
+        kernel._traps = traps = { key:value for key, value in locals().items()
+                                  if key.startswith('_trap_') }
 
         # Initialize the loopback task (if not already initialized)
         if kernel._kernel_task_id is None:
@@ -655,7 +654,7 @@ class Kernel(object):
             if (main_task and main_task.terminated) or (not ready and not main_task):
                 if main_task:
                     main_task._joined = True
-                coro = (yield (main_task.next_value, main_task.next_exc)) if main_task else (yield (None, None))
+                coro = (yield main_task) if main_task else (yield None)
                 main_task = _new_task(coro) if coro else None
                 if main_task:
                     main_task.report_crash = False
@@ -732,14 +731,16 @@ class Kernel(object):
                     if sleep_type == 'sleep':
                         if tm == task.sleep:
                             task.sleep = None
-                            _reschedule_task(task, value=current_time)
+                            task._trap_result = current_time
+                            _reschedule_task(task)
                     else:
                         if tm == task.timeout:
                             task.timeout = None
                             # If cancellation is allowed and the task is blocked, reschedule it
                             if task.allow_cancel and task.cancel_func:
                                 task.cancel_func()
-                                _reschedule_task(task, exc=TaskTimeout(current_time))
+                                task._trap_result = TaskTimeout(current_time)
+                                _reschedule_task(task)
                             else:
                                 # Task is on the ready queue or can't be cancelled right now,
                                 # mark it as pending cancellation
@@ -751,69 +752,66 @@ class Kernel(object):
 
             for _ in range(len(ready)):
                 active = current = ready_popleft()
-                try:
-                    for a in _activations:
-                        a.running(active)
-                    active.state = 'RUNNING'
-                    active.cycles += 1
+                for a in _activations:
+                    a.running(active)
+                active.state = 'RUNNING'
+                active.cycles += 1
 
-                    # The current task runs traps until it suspends
-                    while current:
-                        if current.next_exc is None:
-                            trap = current._send(current.next_value)
-                            current.next_value = None
+                # The current task runs until it suspends or terminates
+                while current:
+                    try:
+                        trap = current._send(current._trap_result)
+                    except BaseException as e:
+                        # If any exception has occurred, the task is done.
+                        current = None
+
+                        # Wake all joining tasks and enter the terminated state.
+                        for wtask in active.joining.pop(len(active.joining)):
+                            _reschedule_task(wtask)
+                        active.terminated = True
+                        active.state = 'TERMINATED'
+                        del tasks[active.id]
+                        active.timeout = None
+                        # Normal termination (set the result)
+                        if isinstance(e, StopIteration):
+                            active.result = e.value
                         else:
-                            trap = current._throw(current.next_exc)
-                            current.next_exc = None
+                            # Abnormal termination (set an exception)
+                            active.exception = e
+                            if active.report_crash and not isinstance(e, (CancelledError, SystemExit)):
+                                log.error('Task Crash: %r', active, exc_info=True)
+                            if not isinstance(e, Exception):
+                                raise
+                        break
+                    
+                    # Run the trap function.  This is never supposed to raise
+                    # an exception unless there's a fatal programming error in
+                    # the kernel itself.  Such errors cause Curio to die. They
+                    # are not reported back to tasks.
 
-                        # Run the trap function. These never raise exceptions
-                        # unless there's a fatal programming error in the kernel itself
-                        try:
-                            traps[trap[0]](*trap[1:])
-                        except Exception as e:
-                            current.next_exc = e
-                    
-                # If any exception is raised during coroutine execution, the
-                # task is terminated.   Set the final return code and break out
-                except BaseException as e:
-                    # Wake all joining tasks and set the current task a terminated state
-                    for wtask in active.joining.pop(len(active.joining)):
-                        _reschedule_task(wtask)
-                    active.terminated = True
-                    active.state = 'TERMINATED'
-                    del tasks[active.id]
-                    active.timeout = None
-                    
-                    if isinstance(e, StopIteration):
-                        active.next_value = e.value
-                        active.next_exc = None
-                    else:
-                        active.next_value = None
-                        active.next_exc = e
-                        if active.report_crash and not isinstance(e, (CancelledError, SystemExit)):
-                            log.error('Task Crash: %r', active, exc_info=True)
-                        if not isinstance(e, Exception):
-                            raise
+                    current._trap_result = None
+                    traps[trap[0]](*trap[1:])
                 
-                finally:
-                    # Some tricky task/thread interactions require knowing when
-                    # a coroutine has suspended. If suspend_func has been set, 
-                    # trigger it and clear.
-                    if active.suspend_func:
-                        active.suspend_func()
-                        active.suspend_func = None
+                # --- The active task has suspended
 
-                    # Unregister any prior I/O listening
-                    if active._last_io:
-                        _unregister_event(*active._last_io)
-                        active._last_io = None
+                # Some tricky task/thread interactions require knowing when
+                # a coroutine has suspended. If suspend_func has been set, 
+                # trigger it and clear.
+                if active.suspend_func:
+                    active.suspend_func()
+                    active.suspend_func = None
 
-                    # Trigger scheduler activations (if any)
-                    for a in _activations:
-                        a.suspended(active)
-                        if active.terminated:
-                            a.terminated(active)
-                    current = active = None
+                # Unregister any prior I/O listening
+                if active._last_io:
+                    _unregister_event(*active._last_io)
+                    active._last_io = None
+
+                # Trigger scheduler activations (if any)
+                for a in _activations:
+                    a.suspended(active)
+                    if active.terminated:
+                        a.terminated(active)
+                current = active = None
 
 def run(corofunc, *args, with_monitor=False, selector=None,
         debug=None, activations=None, **kernel_extra):

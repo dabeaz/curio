@@ -11,7 +11,6 @@ log = logging.getLogger(__name__)
 # -- Curio
 
 from .activation import Activation, trap_patch
-from .traps import Traps
 from .errors import TaskCancelled
 
 class DebugBase(Activation):
@@ -52,8 +51,8 @@ class logcrash(DebugBase):
 
     def suspended(self, task):
         if task.terminated and self.check_filter(task):
-            if task.next_exc and not isinstance(task.next_exc, (StopIteration, TaskCancelled, KeyboardInterrupt, SystemExit)):
-                self.log.log(self.level, '%r crashed', task, exc_info=task.next_exc)
+            if task.exception and not isinstance(task.exception, (StopIteration, TaskCancelled, KeyboardInterrupt, SystemExit)):
+                self.log.log(self.level, '%r crashed', task, exc_info=task.exception)
 
 class schedtrace(DebugBase):
     '''
@@ -88,18 +87,15 @@ class traptrace(schedtrace):
         self.report = False
 
     def activate(self, kernel):
-        for trapno in Traps:
-            if self.traps and trapno not in self.traps:
-                continue
-
-            @trap_patch(kernel, trapno)
-            def trapfunc(*args, trap, trapno=trapno):
+        for trapname in self.traps:
+            @trap_patch(kernel, trapname)
+            def trapfunc(*args, trap, trapname=trapname):
                 if self.report:
                     self.log.log(self.level, 'TRAP:%f:Task(id=%r, name=%r):%s:%r', 
                             time.time(),
                             self.task.id,
                             self.task.name,
-                            trapno,
+                            trapname,
                             args)
                 return trap(*args)
 
