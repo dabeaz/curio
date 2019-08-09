@@ -21,10 +21,12 @@ from .traps import *
 from .sched import SchedBarrier
 from . import meta
 
-__all__ = ['Task', 'TaskGroup', 'sleep', 'wake_at', 'current_task', 'get_all_tasks',
-           'spawn', 'gather', 'timeout_after', 'timeout_at',
-           'ignore_after', 'ignore_at', 'clock', 'aside', 'schedule',
-           'disable_cancellation', 'check_cancellation', 'set_cancellation' ]
+__all__ = [
+    'Task', 'TaskGroup', 'sleep', 'wake_at', 'current_task',
+    'get_all_tasks', 'spawn', 'gather', 'timeout_after', 'timeout_at',
+    'ignore_after', 'ignore_at', 'clock', 'aside', 'schedule',
+    'disable_cancellation', 'check_cancellation', 'set_cancellation'
+]
 
 # Internal functions used for debugging/diagnostics
 def _get_stack(coro):
@@ -98,26 +100,18 @@ class Task(object):
     related to execution state and debugging.  Tasks are not normally 
     instantiated directly. Instead, use spawn().
     '''
-    __slots__ = (
-        'id', 'parentid', 'coro', 'daemon', 'name', '_send', '_throw',
-        'cycles', 'state', 'cancel_func', 'future', 'sleep',
-        '_final_result', '_final_exc', 'timeout', 'joining',
-        'cancelled', 'terminated', 'cancel_pending', '_run_coro',
-        '_last_io', '_trap_result', '_deadlines', '_joined',
-        '_taskgroup', 'allow_cancel', '__weakref__', '__dict__' 
-        )
-
     _lastid = 1
     def __init__(self, coro):
+        # Informational attributes about the task itself
         self.id = Task._lastid
         Task._lastid += 1
         self.parentid = None          # Parent task id (if any)
         self.coro = coro              # Underlying generator/coroutine
         self.name = getattr(coro, '__qualname__', str(coro))
         self.daemon = False           # Daemonic flag
-        self._final_result = None     # Final result of execution
-        self._final_exc = None        # Final exception of execution
         self.report_crash = True      # Crash reporting
+
+        # Attributes updated during execution (safe to inspect)
         self.cycles = 0               # Execution cycles completed
         self.state = 'INITIAL'        # Execution state
         self.cancel_func = None       # Cancellation function
@@ -130,6 +124,12 @@ class Task(object):
         self.cancel_pending = None    # Deferred cancellation exception pending (if any)
         self.allow_cancel = True      # Can cancellation exceptions be delivered?
         self.suspend_func = None      # Optional suspension callback (called when task suspends)
+        self.taskgroup = None         # Containing task group (if any)
+        self.joined = False           # Set if the task has actually been joined or result collected
+
+        # Final result of coroutine execution (use properties to access)
+        self._final_result = None     # Final result of execution
+        self._final_exc = None        # Final exception of execution
 
         # Actual execution is wrapped by a supporting coroutine
         self._run_coro = self._task_runner(self.coro)
@@ -144,9 +144,7 @@ class Task(object):
         self._send = self._run_coro.send   
         self._throw = self._run_coro.throw
 
-        self._deadlines = []          # Timeout deadlines
-        self._joined = False          # Indicate whether task was joined/cancelled
-        self._taskgroup = None        # Set if part of a task group
+        self._deadlines = []          # Timeout deadline stack
 
     def __repr__(self):
         return 'Task(id=%r, name=%r, state=%r)' % (self.id, self.name, self.state)
@@ -160,7 +158,7 @@ class Task(object):
 
     def __del__(self):
         self.coro.close()
-        if not self._joined and not self.cancelled and not self.daemon:
+        if not self.joined and not self.cancelled and not self.daemon:
             if not self.daemon and not self.exception:
                 log.warning('%r never joined', self)
 
@@ -168,9 +166,9 @@ class Task(object):
         try:
             return await coro
         finally:
-            if self._taskgroup:
-                await self._taskgroup._task_done(self)
-                self._joined = True
+            if self.taskgroup:
+                await self.taskgroup._task_done(self)
+                self.joined = True
 
     async def join(self):
         '''
@@ -178,9 +176,9 @@ class Task(object):
         or raises a TaskError if the task crashed with an exception.
         '''
         await self.wait()
-        if self._taskgroup:
-            self._taskgroup._task_discard(self)
-        self._joined = True
+        if self.taskgroup:
+            self.taskgroup._task_discard(self)
+        self.joined = True
         if self.exception:
             raise TaskError('Task crash') from self.exception
         else:
@@ -200,7 +198,7 @@ class Task(object):
         '''
         if not self.terminated:
             raise RuntimeError('Task not terminated')
-        self._joined = True
+        self.joined = True
         if self._final_exc:
             raise self._final_exc
         else:
@@ -239,7 +237,7 @@ class Task(object):
         the task was already completed.
         '''
         if self.terminated:
-            self._joined = True
+            self.joined = True
             return False
         await _cancel_task(self, exc=exc)
         if blocking:
@@ -386,8 +384,8 @@ class TaskGroup(object):
         self.completed = None    # First completed task
 
         for task in tasks:
-            assert not task._taskgroup
-            task._taskgroup = self
+            assert not task.taskgroup
+            task.taskgroup = self
             if task.terminated:
                 self._finished.append(task)
             else:
@@ -408,7 +406,7 @@ class TaskGroup(object):
             self._finished.remove(task)
         except ValueError:
             pass
-        task._taskgroup = None
+        task.taskgroup = None
         if task == self.completed:
             self.completed = None
 
@@ -416,12 +414,12 @@ class TaskGroup(object):
         '''
         Add an already existing task to the group.
         '''
-        if task._taskgroup:
+        if task.taskgroup:
             raise RuntimeError('Task is already part of a group')
 
         if self._closed:
             raise RuntimeError('Task group is closed')
-        task._taskgroup = self
+        task.taskgroup = self
         if task.terminated:
             await self._task_done(task)
         else:
@@ -448,7 +446,7 @@ class TaskGroup(object):
         if self._finished:
             task = self._finished.popleft()
             await task.wait()
-            task._taskgroup = None
+            task.taskgroup = None
         else:
             task = None
 
@@ -518,7 +516,7 @@ class TaskGroup(object):
                 while self._running:
                     task = self._running.pop()
                     await task.cancel()
-                    task._taskgroup = None
+                    task.taskgroup = None
                 raise
 
             # If we're here and nothing finished, it means that some task
@@ -530,7 +528,7 @@ class TaskGroup(object):
             while self._finished:
                 task = self._finished.popleft()
                 await task.wait()
-                task._taskgroup = None
+                task.taskgroup = None
                 cancel_remaining = False
 
                 # Check if we're still waiting for the result of the first task

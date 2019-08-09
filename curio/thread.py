@@ -55,7 +55,7 @@ class AsyncThread(object):
         self.daemon = daemon
         self.terminated = False
         self.cancelled = False
-        self._taskgroup = None
+        self.taskgroup = None
 
         self._request = Future()
         self._done_evt = threading.Event()
@@ -70,7 +70,7 @@ class AsyncThread(object):
 
         self._thread = None
         self._task = None
-        self._joined = False
+        self.joined = False
 
     async def _coro_runner(self):
         while True:
@@ -95,9 +95,9 @@ class AsyncThread(object):
             coro = None
             self._done_evt.set()
 
-        if self._taskgroup:
-            await self._taskgroup._task_done(self)
-            self._joined = True
+        if self.taskgroup:
+            await self.taskgroup._task_done(self)
+            self.joined = True
 
     def _func_runner(self):
         _locals.thread = self
@@ -138,10 +138,10 @@ class AsyncThread(object):
 
     async def join(self):
         await self.wait()
-        self._joined = True
+        self.joined = True
 
-        if self._taskgroup:
-            self._taskgroup._task_discard(self)
+        if self.taskgroup:
+            self.taskgroup._task_discard(self)
 
         if self._coro_exc:
             raise errors.TaskError() from self._coro_exc
@@ -292,7 +292,7 @@ class _AsyncContextManager:
 
         # Context-switch the Task to run a different coroutine momentarily
         orig_coro = self.task._switch(_waiter())
-        self.task._trap_result = None
+        # self.task._trap_result = None
 
         # Reawaken the task.  It's going to wake up in the _waiter()  coroutine above. 
         AWAIT(_scheduler_wake(self.barrier, 1))

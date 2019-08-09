@@ -123,7 +123,7 @@ async def run_server(sock, client_connected_task, ssl=None):
             await tg.spawn(run_server, sock, tg)
             # Reap all of the children tasks as they complete
             async for task in tg:
-                task._joined = True
+                task.joined = True
                 del task
 
 def tcp_server_socket(host, port, family=socket.AF_INET, backlog=100,

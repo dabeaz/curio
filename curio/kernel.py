@@ -69,7 +69,6 @@ from .activation import Activation
 # Underlying kernel that drives everything
 # ----------------------------------------------------------------------
 
-
 class Kernel(object):
     '''
     Curio run-time kernel.  selector argument to init specifies a
@@ -579,11 +578,10 @@ class Kernel(object):
             # up with the prior timeout handling and all manner of head-explosion
             # will occur.
 
-            now = time_monotonic()
+            current._trap_result = now = time_monotonic()
             if previous and previous >= 0 and previous < now:
                 # Perhaps create a TaskTimeout pending exception here.
                 _set_timeout(previous)
-                current._trap_result = now
             else:
                 _set_timeout(previous)
                 current.timeout = previous
@@ -594,7 +592,6 @@ class Kernel(object):
                 # pending exception.
                 if isinstance(current.cancel_pending, TaskTimeout):
                     current.cancel_pending = None
-                current._trap_result = now
 
         # ----------------------------------------
         # Return the running kernel
@@ -653,7 +650,7 @@ class Kernel(object):
 
             if (main_task and main_task.terminated) or (not ready and not main_task):
                 if main_task:
-                    main_task._joined = True
+                    main_task.joined = True
                 coro = (yield main_task) if main_task else (yield None)
                 main_task = _new_task(coro) if coro else None
                 if main_task:
@@ -827,7 +824,6 @@ def run(corofunc, *args, with_monitor=False, selector=None,
     new tasks to run in curio. Instead, create a Kernel instance and
     use its run() method instead.
     '''
-
     kernel = Kernel(selector=selector, debug=debug, activations=activations,
                     **kernel_extra)
 
