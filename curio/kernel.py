@@ -714,7 +714,7 @@ class Kernel(object):
 
 
             # ------------------------------------------------------------
-            # Time handling (sleep/timeouts
+            # Time handling (sleep/timeouts)
             # ------------------------------------------------------------
 
             current_time = time_monotonic()
@@ -723,25 +723,27 @@ class Kernel(object):
                 # on the task. If it differs, it means that the task completed its
                 # operation, was cancelled, or is no longer concerned with this
                 # sleep operation.  In that case, we do nothing
-                if taskid in tasks:
-                    task = tasks[taskid]
-                    if sleep_type == 'sleep':
-                        if tm == task.sleep:
-                            task.sleep = None
-                            task._trap_result = current_time
-                            _reschedule_task(task)
-                    else:
-                        if tm == task.timeout:
-                            task.timeout = None
-                            # If cancellation is allowed and the task is blocked, reschedule it
-                            if task.allow_cancel and task.cancel_func:
-                                task.cancel_func()
-                                task._trap_result = TaskTimeout(current_time)
-                                _reschedule_task(task)
-                            else:
-                                # Task is on the ready queue or can't be cancelled right now,
-                                # mark it as pending cancellation
-                                task.cancel_pending = TaskTimeout(current_time)
+                task = tasks.get(taskid)
+
+                if task is None:
+                    continue
+                if tm != getattr(task, sleep_type):
+                    continue
+
+                setattr(task, sleep_type, None)
+
+                if sleep_type == 'sleep':
+                    task._trap_result = current_time
+                    _reschedule_task(task)
+                # If cancellation is allowed and the task is blocked, reschedule it
+                elif task.allow_cancel and task.cancel_func:
+                    task.cancel_func()
+                    task._trap_result = TaskTimeout(current_time)
+                    _reschedule_task(task)
+                # Task is on the ready queue or can't be cancelled right now;
+                # mark it as pending cancellation
+                else:
+                    task.cancel_pending = TaskTimeout(current_time)
 
             # ------------------------------------------------------------
             # Run ready tasks
