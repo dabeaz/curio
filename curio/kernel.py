@@ -664,7 +664,7 @@ class Kernel(object):
             if ready or not main_task:
                 timeout = 0
             else:
-                current_time = time.monotonic()
+                current_time = time_monotonic()
                 timeout = sleepq.next_deadline(current_time)
             try:
                 events = selector_select(timeout)
@@ -735,11 +735,13 @@ class Kernel(object):
                 if sleep_type == 'sleep':
                     task._trap_result = current_time
                     _reschedule_task(task)
+
                 # If cancellation is allowed and the task is blocked, reschedule it
                 elif task.allow_cancel and task.cancel_func:
                     task.cancel_func()
                     task._trap_result = TaskTimeout(current_time)
                     _reschedule_task(task)
+
                 # Task is on the ready queue or can't be cancelled right now;
                 # mark it as pending cancellation
                 else:
