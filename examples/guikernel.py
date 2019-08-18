@@ -169,13 +169,12 @@ class TkKernel(Kernel):
                 yield
 
             else:
-                id_ = widget.after(
-                    max(int(secs*1000), 1),
-                    lambda: tk_send(
-                        "SLEEP_WAKE" if secs else "READY",
-                        reschedule=True,
-                    ),
+                tm = max(int(secs*1000), 1)
+                callback = lambda: tk_send(
+                    "SLEEP_WAKE" if secs else "READY",
+                    reschedule=True,
                 )
+                id_ = widget.after(tm, callback)
                 try:
                     yield
                 finally:
@@ -247,11 +246,16 @@ class TkKernel(Kernel):
                         else:
                             return (None, None)
 
+                    # Set the timeout for our `.after` callback.
+                    # Note that the selector is also considered in this
+                    # conditional as we cannot add a callback to a selector.
                     if kernel._ready or kernel._selector.get_map() or not tk_task:
                         timeout = 0
                     else:
                         timeout = kernel._sleepq.next_deadline(monotonic())
 
+                    # This makes sure that the loop will continue. We suspend
+                    # here only to receive any `tkinter` events.
                     with ensure_after(timeout, frame):
                         info = (yield)
 
@@ -262,9 +266,14 @@ class TkKernel(Kernel):
 
                     elif info == "CLOSE_WINDOW":
                         # Raise an error on event waiting tasks
+                        # Note: This will NOT raise the error on any
+                        # blocking operation; only `_wait_event` will raise
+                        # this exception.
                         for task in event_wait_pop(len(event_wait)):
                             _reschedule_task(task, exc=CloseWindow("X was pressed"))
 
+                    # Only remove events if there are event tasks or if
+                    # the queue is filling up.
                     event_tasks = [t for t in kernel._tasks.values() if iseventtask(t)]
                     if event_tasks:
                         offset = min(t.next_event for t in event_tasks)
@@ -273,7 +282,13 @@ class TkKernel(Kernel):
                                 event_queue_popleft()
                             for task in event_tasks:
                                 task.next_event -= offset
+                    # There aren't any event tasks to notice this change.
+                    elif len(event_queue) > 100:
+                        event_queue.clear()
 
+                    # Run using `schedule()`. Supplying `None` as the argument
+                    # means a task doing `while True: await schedule()` can block
+                    # the loop as the ready queue will never be empty.
                     _, exc = runner_send(schedule())
                     if exc:
                         raise exc
@@ -356,41 +371,38 @@ class CloseWindow(TkCurioError):
 
 # --- New traps / getters ---
 
-# Return the current toplevel `tkinter.Tk` instance
 async def current_toplevel():
+    """
+    Return the current toplevel `tkinter.Tk` instance for this kernel.
+    """
     kernel = await _get_kernel()
     return kernel._toplevel
 
 
-# Check if task is an event task
 def iseventtask(task):
+    """
+    Return True if `task` is considered an event task, meaning one that
+    acts on `tkinter` events.
+    Return False otherwise.
+    """
     return getattr(task, "next_event", -1) >= 0
 
 
-# Decorator to restrict trap to event tasks only
-def _event_trap(func):
-    @wraps(func)
-    async def _wrapped(*args):
-        if not iseventtask(await current_task()):
-            raise EventTaskOnly("Trap for event tasks only")
-        return await func(*args)
-
-    return _wrapped
-
-
-# Wait for a new event to be received
-@_event_trap
+# Wait for a new event to be received (similar to `_read_wait`)
 async def _wait_event():
     task = await current_task()
+    if not iseventtask(task):
+        raise EventTaskOnly("Trap for event tasks only")
     kernel = await _get_kernel()
     if len(kernel._event_queue) <= task.next_event:
         await _scheduler_wait(kernel._event_wait, "EVENT_WAIT")
 
 
-# Pop an unread event off the event queue
-@_event_trap
+# Pop an unread event off the event queue (similar to a `socket.recv`)
 async def _pop_event():
     task = await current_task()
+    if not iseventtask(task):
+        raise EventTaskOnly("Trap for event tasks only")
     kernel = await _get_kernel()
     try:
         event = kernel._event_queue[task.next_event]
@@ -407,7 +419,7 @@ async def _pop_event():
 async def pop_event(blocking=True):
     """
     Wait for and return the next unread event.
-    Raises `NoEvent` there is no new event and `blocking` is True.
+    Raises `NoEvent` if there is no new event and `blocking` is False.
     """
     if not blocking:
         return await _pop_event()
@@ -439,6 +451,8 @@ class aevents:
             return await ignore_after(self._timeout, pop_event())
 
 
+# Dah... this should be in itertools / builtins.
+# Speaking of which, where are the builtin `aiter` and `anext`!?
 class aenumerate:
     """
     The `aenumerate` object yields pairs containing a count (from
@@ -476,39 +490,52 @@ async def run_in_main(func_, *args, **kwargs):
 
 # --- Examples :D ---
 
+import curio
+
 async def test():
-    import curio
+
     toplevel = await current_toplevel()
     canvas = tkinter.Canvas(toplevel, highlightthickness=0)
     canvas.pack(expand=True, fill="both")
-    task = await curio.current_task()
-    task.next_event = 0
 
+    task = await curio.current_task()
+    task.next_event = 0 # Make current task an event task
+    assert iseventtask(task)
+
+    x = y = None
     lastx = lasty = None
+
     try:
         async for i, event in aenumerate(aevents()):
             if str(event.type) in {"Enter", "Motion"}:
                 x, y = event.x, event.y
                 if lastx is None:
                     lastx, lasty = x, y
+
                 canvas.create_line(lastx, lasty, x, y, width=5)
                 canvas.create_oval(x - 2, y - 2, x + 2, y + 2, fill="black")
                 lastx, lasty = x, y
+
     except CloseWindow:
         pass
 
     if False: # Toggle this to try out `run_in_main`'s power
+
         async with curio.spawn_thread():
             try:
                 print("not in main thread")
                 print(toplevel.winfo_exists())
+
             except RuntimeError as e:
                 print(repr(e))
+
             AWAIT(run_in_main(lambda: (
                 print("in main thread"),
                 print(toplevel.winfo_exists()),
             )))
-        await curio.sleep(2)
+
+        # Note that `CloseWindow` exceptions don't pop up here
+        await curio.sleep(5)
 
 
 if __name__ == "__main__":
