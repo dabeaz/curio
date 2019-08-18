@@ -1,5 +1,7 @@
 # guikernel.py
 #
+# Contributed by George Zhang.
+#
 # An example of using tkinter's loop to run curio's loop.
 #
 # Note that all operations with tkinter should use `run_in_main` to
