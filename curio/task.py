@@ -455,7 +455,7 @@ class TaskGroup(object):
     async def next_result(self):
         '''
         Return the result of the next task that finishes. Note: if task
-        termined via exception, that exception is raised here.
+        terminated via exception, that exception is raised here.
         '''
         task = await self.next_done()
         if task:
@@ -903,7 +903,7 @@ def ignore_after(seconds, coro=None, *args, timeout_result=None):
     is returned.  This is often more convenient that catching an
     exception.  You can apply the function to a single coroutine:
 
-        if ignore_after(5, coro(args)) is None:
+        if await ignore_after(5, coro(args)) is None:
             # A timeout occurred
             ...
 
