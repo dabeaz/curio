@@ -137,7 +137,7 @@ class Kernel(object):
 
     def run(self, corofunc=None, *args, shutdown=False):
         if self._shutdown_funcs is None:
-            raise RuntimeError("Can't submit new tasks to a kernel that's been shut down. Create a new kernel.")
+            raise RuntimeError("Can't run a kernel that's been shut down or crashed. Create a new kernel.")
 
         coro = meta.instantiate_coroutine(corofunc, *args) if corofunc else None
 
@@ -794,10 +794,8 @@ class Kernel(object):
                     try:
                         traps[trap[0]](*trap[1:])
                     except:
-                        # The currently running task enters a weird "limbo" state if the kernel
-                        # dies. Rather than reschedule it and hoping for the best on shutdown,
-                        # we simply drop it entirely. Oh well.  Everything is broken anyways.
-                        del tasks[active.id]
+                        # Disable any further use of the kernel on fatal crash.
+                        kernel._shutdown_funcs = None
                         raise
                 
                 # --- The active task has suspended
