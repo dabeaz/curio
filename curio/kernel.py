@@ -791,7 +791,14 @@ class Kernel(object):
                     # are not reported back to tasks.
 
                     current._trap_result = None
-                    traps[trap[0]](*trap[1:])
+                    try:
+                        traps[trap[0]](*trap[1:])
+                    except:
+                        # The currently running task enters a weird "limbo" state if the kernel
+                        # dies. Rather than reschedule it and hoping for the best on shutdown,
+                        # we simply drop it entirely. Oh well.  Everything is broken anyways.
+                        del tasks[active.id]
+                        raise
                 
                 # --- The active task has suspended
 
