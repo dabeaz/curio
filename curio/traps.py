@@ -41,27 +41,27 @@ async def _read_wait(fileobj):
     Wait until reading can be performed.  If another task is waiting
     on the same file, a ResourceBusy exception is raised. 
     '''
-    return await _kernel_trap('_trap_io', fileobj, EVENT_READ, 'READ_WAIT')
+    return await _kernel_trap('trap_io', fileobj, EVENT_READ, 'READ_WAIT')
 
 async def _write_wait(fileobj):
     '''
     Wait until writing can be performed. If another task is waiting
     to write on the same file, a ResourceBusy exception is raised.
     '''
-    return await _kernel_trap('_trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT')
+    return await _kernel_trap('trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT')
 
 async def _io_waiting(fileobj):
     '''
     Return a tuple (rtask, wtask) of tasks currently blocked waiting
     for I/O on fileobj.
     '''
-    return await _kernel_trap(_trap_io_waiting, fileobj)
+    return await _kernel_trap(trap_io_waiting, fileobj)
 
 async def _future_wait(future, event=None):
     '''
     Wait for the result of a Future to be ready.
     '''
-    return await _kernel_trap('_trap_future_wait', future, event)
+    return await _kernel_trap('trap_future_wait', future, event)
 
 async def _sleep(clock, absolute):
     '''
@@ -70,60 +70,60 @@ async def _sleep(clock, absolute):
     absolute is a boolean flag that indicates whether or not the clock
     period is an absolute time or relative.
     '''
-    return await _kernel_trap('_trap_sleep', clock, absolute)
+    return await _kernel_trap('trap_sleep', clock, absolute)
 
 async def _spawn(coro):
     '''
     Create a new task. Returns the resulting Task object.
     '''
-    return await _kernel_trap('_trap_spawn', coro)
+    return await _kernel_trap('trap_spawn', coro)
 
 async def _cancel_task(task, exc=errors.TaskCancelled, val=None):
     '''
     Cancel a task. Causes a CancelledError exception to raise in the task.
     Set the exc and val arguments to change the exception.
     '''
-    return await _kernel_trap('_trap_cancel_task', task, exc, val)
+    return await _kernel_trap('trap_cancel_task', task, exc, val)
 
 async def _scheduler_wait(sched, state):
     '''
     Put the task to sleep on a scheduler primitive.
     '''
-    return await _kernel_trap('_trap_sched_wait', sched, state)
+    return await _kernel_trap('trap_sched_wait', sched, state)
 
 async def _scheduler_wake(sched, n=1):
     '''
     Reschedule one or more tasks waiting on a scheduler primitive.
     '''
-    return await _kernel_trap('_trap_sched_wake', sched, n)
+    return await _kernel_trap('trap_sched_wake', sched, n)
 
 async def _get_kernel():
     '''
     Get the kernel executing the task.
     '''
-    return await _kernel_trap('_trap_get_kernel')
+    return await _kernel_trap('trap_get_kernel')
 
 async def _get_current():
     '''
     Get the currently executing task
     '''
-    return await _kernel_trap('_trap_get_current')
+    return await _kernel_trap('trap_get_current')
 
 async def _set_timeout(clock):
     '''
     Set a timeout for the current task that occurs at the specified clock value.
     Setting a clock of None clears any previous timeout.
     '''
-    return await _kernel_trap('_trap_set_timeout', clock)
+    return await _kernel_trap('trap_set_timeout', clock)
 
 async def _unset_timeout(previous):
     '''
     Restore the previous timeout for the current task.
     '''
-    return await _kernel_trap('_trap_unset_timeout', previous)
+    return await _kernel_trap('trap_unset_timeout', previous)
 
 async def _clock():
     '''
     Return the value of the kernel clock
     '''
-    return await _kernel_trap('_trap_clock')
+    return await _kernel_trap('trap_clock')
