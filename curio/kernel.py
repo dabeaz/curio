@@ -2,43 +2,47 @@
 #
 # Main execution kernel.  
 #
-# Curio is based on two overarching design principles that drive the code
+# Curio is based on a few overarching design principles that drive the code
 # you'll find here. 
 #
 # 1. Environmental Isolation.  
 #
 #    Curio strictly separates the environment of async and synchronous
-#    programming.  All asynchronous functionality is placed in
-#    async-function definitions.  Async functions request the services
-#    of the kernel using low-level yield statements (traps).  The
-#    kernel is an opaque black-box from the perspective of synchronous
-#    code.  There is only one available operation--run(coro) which
-#    runs a new task.  There are no other mechanisms available for
-#    controlling the kernel from synchronous code.  A good analogy
-#    might be the distinction between user and protected mode in an
-#    OS.  User programs run in user-mode and the operating system
-#    kernel runs in protected mode.  The same thing happens here.
-#    User programs in Curio can only run in async functions. Those
-#    programs can request the services of the kernel.  However,
-#    they're not granted any further access than that.
+#    programming.  All functionality related to async operation is
+#    placed in async-function definitions.  Async functions request
+#    the services of the kernel using low-level yield statements
+#    (traps).  The kernel is an opaque black-box from the perspective
+#    of synchronous code.  There is only one available
+#    operation--run(coro) which runs a new task.  There are no other
+#    mechanisms available for interacting with the kernel from
+#    synchronous code.  A good analogy might be the distinction
+#    between user and protected mode in an OS.  User programs run in
+#    user-mode and the operating system kernel runs in protected mode.
+#    The same thing happens here.  User programs in Curio can only run
+#    in async functions. Those programs can request the services of
+#    the kernel. However, they're not granted any further access than
+#    that (there is no API surface or anything that can be used).
 #    
 # 2. Microkernels
 #
 #    The low-level kernel is meant to be small, fast, and minimally
-#    featureful.  There are no publically exposed methods or
-#    extension hooks (e.g., inheritance).  In fact, almost nothing
-#    interesting happens here.  Instead, almost every useful part
-#    of Curio gets implemented in async functions found elsewhere.
-#    If you're trying to add new features to Curio, don't 
-#    add them to the kernel. Think about how to create objects and
-#    functions that operate at the async-function level instead.
-#    See files such as sync.py or queue.py for examples.   
+#    featureful.  In fact, almost nothing interesting happens in the
+#    kernel. Instead, almost every useful part of Curio gets
+#    implemented in async functions found elsewhere.  If you're trying
+#    to add new features to Curio, don't add them to the kernel. Think
+#    about how to create objects and functions that operate at the
+#    async-function level instead.  See files such as sync.py or
+#    queue.py for examples.
 #
-# No part of Curio has direct linkage to the Kernel class (it's
-# not imported or used anywhere in the code base).   If you want,
-# you can make a completely custom Kernel object and have the
-# rest of Curio run on it.  You just need to make sure you implement
-# the required traps.
+# 3. Decoupling
+#
+#    No part of Curio has direct linkage to the Kernel class (it's
+#    not imported or used anywhere else in the code base).   If you want,
+#    you can make a completely custom Kernel object and have the
+#    rest of Curio run on it.  You just need to make sure you implement
+#    the required traps.   This is in contrast to libraries such as
+#    asyncio where many parts of the implementation are required to
+#    carry a reference to the underlying event loop.
 
 __all__ = ['Kernel', 'run' ]
 
@@ -65,22 +69,17 @@ from .debug import _create_debuggers
 from .timequeue import TimeQueue
 from .activation import Activation
 
-# ----------------------------------------------------------------------
-# Underlying kernel that drives everything
-# ----------------------------------------------------------------------
-
 class Kernel(object):
     '''
-    Curio run-time kernel.  selector argument to init specifies a
-    different I/O selector.  debug argument specifies a list of
+    Curio run-time kernel.  The selector argument specifies a
+    different I/O selector. The debug argument specifies a list of
     debugger objects to apply. For example:
 
         from curio.debug import schedtrace, traptrace
         k = Kernel(debug=[schedtrace, traptrace])
 
-    Use the kernel run() method to submit work.
+    Use the kernel run() method to submit work to the kernel..
     '''
-
     def __init__(self, *, selector=None, debug=None, activations=None):
 
         # Functions to call at shutdown
@@ -94,7 +93,7 @@ class Kernel(object):
         self._ready = deque()
         self._tasks = {}                  
 
-        # Coroutine runner
+        # Coroutine runner function
         self._runner = None
 
         # Attributes related to the loopback socket (only initialized if required)
@@ -142,14 +141,14 @@ class Kernel(object):
         coro = meta.instantiate_coroutine(corofunc, *args) if corofunc else None
 
         with meta.running():
-            if not self._runner or not self._runner.gi_frame:
-                self._runner = self._run_coro()
-                self._runner.send(None)
+            # Make the kernel runtime environment (if needed)
+            if not self._runner:
+                self._runner = self._make_kernel_runtime()
 
-            # Submit the given coroutine (if any)
             ret_val = ret_exc = None
+            # Run the supplied coroutine (if any)
             if coro or not shutdown:
-                task = self._runner.send(coro)
+                task = self._runner(coro)
                 if task:
                     ret_exc = task.exception
                     ret_val = task.result if not ret_exc else None
@@ -170,9 +169,8 @@ class Kernel(object):
                     tocancel.sort(key=lambda t: t.id)
                     if self._kernel_task_id:
                         tocancel.append(self._tasks[self._kernel_task_id])
-                    self._runner.send(_shutdown_tasks(tocancel))
+                    self._runner(_shutdown_tasks(tocancel))
                     self._kernel_task_id = None
-                self._runner.close()
                 self._runner = None
 
                 # Call registered shutdown functions
@@ -186,22 +184,18 @@ class Kernel(object):
                 return ret_val
 
     # ------------------------------------------------------------
-    # Main kernel runtime
+    # Kernel runtime
     #
-    # This is the main kernel execution environment.  To better support
-    # pause/resume functionality, it is implemented as a coroutine.
-    # The above run() method starts it and uses the send() method to
-    # send in tasks to run.  By implementing it as a coroutine,
-    # various set-up steps don't have to be repeated on each
-    # invocation of run().
+    # This function creates the kernel execution environment. It
+    # returns a single function (a closure) that executes a coroutine.
     #
     # At first glance, this function is going to look giant and
     # insane. It is implementing the kernel runtime as a self-contained
     # black box.  There is no external API.  The only possible 
     # communication is via traps defined in curio/traps.py.  
-    # It's best to think of this as a "program within a program".  
+    # It's best to think of this as a "program within a program".
 
-    def _run_coro(kernel):
+    def _make_kernel_runtime(kernel):
 
         # Motto:  "What happens in the kernel stays in the kernel"
 
@@ -636,188 +630,191 @@ class Kernel(object):
             if kernel._kernel_task_id:
                 act.created(kernel._tasks[kernel._kernel_task_id])
 
-        # Main task (if any)
-        main_task = None
-
         # ------------------------------------------------------------
-        # Main Kernel Loop
+        # Main Kernel Loop.  Runs the supplied coroutine until it
+        # terminates. If no coroutine is supplied, it runs one cycle
+        # of the kernel.
         # ------------------------------------------------------------
-        while True:
+        def _kernel_run(coro):
+            nonlocal current
+            main_task = _new_task(coro) if coro else None
+            if main_task:
+                main_task.report_crash = False
+            del coro
 
-            # ------------------------------------------------------------
-            # Wait for work to be submitted if nothing to run
-            # ------------------------------------------------------------
+            while True:
+                # ------------------------------------------------------------
+                # I/O Polling/Waiting
+                # ------------------------------------------------------------
 
-            if (main_task and main_task.terminated) or (not ready and not main_task):
-                if main_task:
-                    main_task.joined = True
-                coro = (yield main_task) if main_task else (yield None)
-                main_task = _new_task(coro) if coro else None
-                if main_task:
-                    main_task.report_crash = False
-                del coro
-
-            # ------------------------------------------------------------
-            # I/O Polling/Waiting
-            # ------------------------------------------------------------
-
-            if ready or not main_task:
-                timeout = 0
-            else:
-                current_time = time_monotonic()
-                timeout = sleepq.next_deadline(current_time)
-            try:
-                events = selector_select(timeout)
-            except OSError as e:     # pragma: no cover
-                # If there is nothing to select, windows throws an
-                # OSError, so just set events to an empty list.
-                if e.errno != getattr(errno, 'WSAEINVAL', None):
-                    raise
-                events = []
-
-            # Reschedule tasks with completed I/O
-            for key, mask in events:
-                rtask, wtask = key.data
-                intfd = isinstance(key.fileobj, int)
-                if mask & EVENT_READ:
-                    # Discussion: If the associated fileobj is *not* a
-                    # bare integer file descriptor, we keep a record
-                    # of the last I/O event in _last_io and leave the
-                    # task registered on the event loop.  If it
-                    # performs the same I/O operation again, it will
-                    # get a speed boost from not having to re-register
-                    # its event. However, it's not safe to use this
-                    # optimization with bare integer fds.  These fds
-                    # often get reused and there is a possibility that
-                    # a fd will get closed and reopened on a different
-                    # resource without it being detected by the
-                    # kernel.  For that case, its critical that we not
-                    # leave the fd on the event loop.
-                    rtask._last_io = None if intfd else (key.fileobj, EVENT_READ)
-                    _reschedule_task(rtask)
-                    mask &= ~EVENT_READ
-                    rtask = None
-
-                if mask & EVENT_WRITE:
-                    wtask._last_io = None if intfd else (key.fileobj, EVENT_WRITE)
-                    _reschedule_task(wtask)
-                    mask &= ~EVENT_WRITE
-                    wtask = None
-
-                # Unregister the task if fileobj is not an integer fd (see
-                # note above).
-                if intfd:
-                    if mask:
-                        selector_modify(key.fileobj, mask, (rtask, wtask))
-                    else:
-                        selector_unregister(key.fileobj)
-
-
-            # ------------------------------------------------------------
-            # Time handling (sleep/timeouts)
-            # ------------------------------------------------------------
-
-            current_time = time_monotonic()
-            for tm, (taskid, sleep_type) in sleepq.expired(current_time):
-                # When a task wakes, verify that the timeout value matches that stored
-                # on the task. If it differs, it means that the task completed its
-                # operation, was cancelled, or is no longer concerned with this
-                # sleep operation.  In that case, we do nothing
-                task = tasks.get(taskid)
-
-                if task is None:
-                    continue
-                if tm != getattr(task, sleep_type):
-                    continue
-
-                setattr(task, sleep_type, None)
-
-                if sleep_type == 'sleep':
-                    task._trap_result = current_time
-                    _reschedule_task(task)
-
-                # If cancellation is allowed and the task is blocked, reschedule it
-                elif task.allow_cancel and task.cancel_func:
-                    task.cancel_func()
-                    task._trap_result = TaskTimeout(current_time)
-                    _reschedule_task(task)
-
-                # Task is on the ready queue or can't be cancelled right now;
-                # mark it as pending cancellation
+                if ready or not main_task:
+                    timeout = 0
                 else:
-                    task.cancel_pending = TaskTimeout(current_time)
-
-            # ------------------------------------------------------------
-            # Run ready tasks
-            # ------------------------------------------------------------
-
-            for _ in range(len(ready)):
-                active = current = ready_popleft()
-                for a in _activations:
-                    a.running(active)
-                active.state = 'RUNNING'
-                active.cycles += 1
-
-                # The current task runs until it suspends or terminates
-                while current:
-                    try:
-                        trap = current._send(current._trap_result)
-                    except BaseException as e:
-                        # If any exception has occurred, the task is done.
-                        current = None
-
-                        # Wake all joining tasks and enter the terminated state.
-                        for wtask in active.joining.pop(len(active.joining)):
-                            _reschedule_task(wtask)
-                        active.terminated = True
-                        active.state = 'TERMINATED'
-                        del tasks[active.id]
-                        active.timeout = None
-                        # Normal termination (set the result)
-                        if isinstance(e, StopIteration):
-                            active.result = e.value
-                        else:
-                            # Abnormal termination (set an exception)
-                            active.exception = e
-                            if active.report_crash and not isinstance(e, (CancelledError, SystemExit)):
-                                log.error('Task Crash: %r', active, exc_info=True)
-                            if not isinstance(e, Exception):
-                                raise
-                        break
-                    
-                    # Run the trap function.  This is never supposed to raise
-                    # an exception unless there's a fatal programming error in
-                    # the kernel itself.  Such errors cause Curio to die. They
-                    # are not reported back to tasks.
-
-                    current._trap_result = None
-                    try:
-                        traps[trap[0]](*trap[1:])
-                    except:
-                        # Disable any further use of the kernel on fatal crash.
-                        kernel._shutdown_funcs = None
+                    current_time = time_monotonic()
+                    timeout = sleepq.next_deadline(current_time)
+                try:
+                    events = selector_select(timeout)
+                except OSError as e:     # pragma: no cover
+                    # If there is nothing to select, windows throws an
+                    # OSError, so just set events to an empty list.
+                    if e.errno != getattr(errno, 'WSAEINVAL', None):
                         raise
-                
-                # --- The active task has suspended
+                    events = []
 
-                # Some tricky task/thread interactions require knowing when
-                # a coroutine has suspended. If suspend_func has been set, 
-                # trigger it and clear.
-                if active.suspend_func:
-                    active.suspend_func()
-                    active.suspend_func = None
+                # Reschedule tasks with completed I/O
+                for key, mask in events:
+                    rtask, wtask = key.data
+                    intfd = isinstance(key.fileobj, int)
+                    if mask & EVENT_READ:
+                        # Discussion: If the associated fileobj is *not* a
+                        # bare integer file descriptor, we keep a record
+                        # of the last I/O event in _last_io and leave the
+                        # task registered on the event loop.  If it
+                        # performs the same I/O operation again, it will
+                        # get a speed boost from not having to re-register
+                        # its event. However, it's not safe to use this
+                        # optimization with bare integer fds.  These fds
+                        # often get reused and there is a possibility that
+                        # a fd will get closed and reopened on a different
+                        # resource without it being detected by the
+                        # kernel.  For that case, its critical that we not
+                        # leave the fd on the event loop.
+                        rtask._last_io = None if intfd else (key.fileobj, EVENT_READ)
+                        _reschedule_task(rtask)
+                        mask &= ~EVENT_READ
+                        rtask = None
 
-                # Unregister any prior I/O listening
-                if active._last_io:
-                    _unregister_event(*active._last_io)
-                    active._last_io = None
+                    if mask & EVENT_WRITE:
+                        wtask._last_io = None if intfd else (key.fileobj, EVENT_WRITE)
+                        _reschedule_task(wtask)
+                        mask &= ~EVENT_WRITE
+                        wtask = None
 
-                # Trigger scheduler activations (if any)
-                for a in _activations:
-                    a.suspended(active)
-                    if active.terminated:
-                        a.terminated(active)
-                current = active = None
+                    # Unregister the task if fileobj is not an integer fd (see
+                    # note above).
+                    if intfd:
+                        if mask:
+                            selector_modify(key.fileobj, mask, (rtask, wtask))
+                        else:
+                            selector_unregister(key.fileobj)
+
+
+                # ------------------------------------------------------------
+                # Time handling (sleep/timeouts)
+                # ------------------------------------------------------------
+
+                current_time = time_monotonic()
+                for tm, (taskid, sleep_type) in sleepq.expired(current_time):
+                    # When a task wakes, verify that the timeout value matches that stored
+                    # on the task. If it differs, it means that the task completed its
+                    # operation, was cancelled, or is no longer concerned with this
+                    # sleep operation.  In that case, we do nothing
+                    task = tasks.get(taskid)
+
+                    if task is None:
+                        continue
+                    if tm != getattr(task, sleep_type):
+                        continue
+
+                    setattr(task, sleep_type, None)
+
+                    if sleep_type == 'sleep':
+                        task._trap_result = current_time
+                        _reschedule_task(task)
+
+                    # If cancellation is allowed and the task is blocked, reschedule it
+                    elif task.allow_cancel and task.cancel_func:
+                        task.cancel_func()
+                        task._trap_result = TaskTimeout(current_time)
+                        _reschedule_task(task)
+
+                    # Task is on the ready queue or can't be cancelled right now;
+                    # mark it as pending cancellation
+                    else:
+                        task.cancel_pending = TaskTimeout(current_time)
+
+                # ------------------------------------------------------------
+                # Run ready tasks
+                # ------------------------------------------------------------
+
+                for _ in range(len(ready)):
+                    active = current = ready_popleft()
+                    for a in _activations:
+                        a.running(active)
+                    active.state = 'RUNNING'
+                    active.cycles += 1
+
+                    # The current task runs until it suspends or terminates
+                    while current:
+                        try:
+                            trap = current._send(current._trap_result)
+                        except BaseException as e:
+                            # If any exception has occurred, the task is done.
+                            current = None
+
+                            # Wake all joining tasks and enter the terminated state.
+                            for wtask in active.joining.pop(len(active.joining)):
+                                _reschedule_task(wtask)
+                            active.terminated = True
+                            active.state = 'TERMINATED'
+                            del tasks[active.id]
+                            active.timeout = None
+                            # Normal termination (set the result)
+                            if isinstance(e, StopIteration):
+                                active.result = e.value
+                            else:
+                                # Abnormal termination (set an exception)
+                                active.exception = e
+                                if active.report_crash and not isinstance(e, (CancelledError, SystemExit)):
+                                    log.error('Task Crash: %r', active, exc_info=True)
+                                if not isinstance(e, Exception):
+                                    raise
+                            break
+
+                        # Run the trap function.  This is never supposed to raise
+                        # an exception unless there's a fatal programming error in
+                        # the kernel itself.  Such errors cause Curio to die. They
+                        # are not reported back to tasks.
+
+                        current._trap_result = None
+                        try:
+                            traps[trap[0]](*trap[1:])
+                        except:
+                            # Disable any further use of the kernel on fatal crash.
+                            kernel._shutdown_funcs = None
+                            raise
+
+                    # --- The active task has suspended
+
+                    # Some tricky task/thread interactions require knowing when
+                    # a coroutine has suspended. If suspend_func has been set, 
+                    # trigger it and clear.
+                    if active.suspend_func:
+                        active.suspend_func()
+                        active.suspend_func = None
+
+                    # Unregister any prior I/O listening
+                    if active._last_io:
+                        _unregister_event(*active._last_io)
+                        active._last_io = None
+
+                    # Trigger scheduler activations (if any)
+                    for a in _activations:
+                        a.suspended(active)
+                        if active.terminated:
+                            a.terminated(active)
+                    current = active = None
+
+                # If the main task has terminated, we're done.
+                if main_task:
+                    if main_task.terminated:
+                        main_task.joined = True
+                        return main_task
+                else:
+                    return None
+
+        return _kernel_run
+                        
 
 def run(corofunc, *args, with_monitor=False, selector=None,
         debug=None, activations=None, **kernel_extra):
@@ -825,7 +822,7 @@ def run(corofunc, *args, with_monitor=False, selector=None,
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
     is a convenience function that should primarily be used for
-    launching the top-level task of an curio-based application.  It
+    launching the top-level task of a curio-based application.  It
     creates an entirely new kernel, runs the given task to completion,
     and concludes by shutting down the kernel, releasing all resources used.
 
