@@ -11,6 +11,7 @@ __all__ = ['run', 'Popen', 'CompletedProcess', 'CalledProcessError',
 
 import subprocess
 import os
+import sys
 
 from subprocess import (
     CompletedProcess,
@@ -29,6 +30,9 @@ from .io import FileStream
 from . import thread
 from .workers import run_in_thread
 
+if sys.platform.startswith('win'):
+    from .file import AsyncFile as FileStream
+    
 class Popen(object):
     '''
     Curio wrapper around the Popen class from the subprocess module. All of the
@@ -51,7 +55,8 @@ class Popen(object):
                 # At hell's heart I stab thy coroutine attempting to read from a stream
                 # that's been used as a pipe input to a subprocess.  Must set back to
                 # blocking or all hell breaks loose in the child.
-                os.set_blocking(stdin.fileno(), True)
+                if hasattr(os, 'set_blocking'):
+                    os.set_blocking(stdin.fileno(), True)
 
         self._popen = subprocess.Popen(args, **kwargs)
 
