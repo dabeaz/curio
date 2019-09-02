@@ -5,6 +5,10 @@ from curio import subprocess
 from curio import *
 import os
 import pytest
+import sys
+
+pytestmark = pytest.mark.skipif(sys.platform.startswith("win"),
+                                reason="Not supported on Windows")
 
 # ---- Test subprocesses and worker task related functions
 

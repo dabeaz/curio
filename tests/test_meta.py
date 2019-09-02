@@ -21,6 +21,8 @@ def test_blocking(kernel):
 def cpufunc():
     return 1
 
+@pytest.mark.xfail(sys.platform.startswith("win"),
+                   reason="run_in_process broken on Windows")
 def test_cpubound(kernel):
     async def main():
          r = await cpufunc()

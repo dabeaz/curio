@@ -3,6 +3,7 @@ import sys
 import time
 import pytest
 from curio import *
+import sys
 
 def test_cancel_noblock(kernel):
     cancelled = False
@@ -465,6 +466,8 @@ async def producer(ch):
         await c.send(i)
     await c.send(None)   # Sentinel
 
+@pytest.mark.skipif(sys.platform.startswith("win"),
+                    reason='broken on Windows')
 def test_aside_basic(kernel):
     import os
     os.environ['PYTHONPATH'] = os.path.dirname(__file__)
@@ -495,7 +498,8 @@ def test_aside_basic(kernel):
     del os.environ['PYTHONPATH']
     assert results == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-
+@pytest.mark.skipif(sys.platform.startswith("win"),
+                    reason='broken on Windows')
 def test_aside_cancel(kernel):
     import os
     os.environ['PYTHONPATH'] = os.path.dirname(__file__)

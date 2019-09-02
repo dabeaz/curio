@@ -4,8 +4,11 @@ import time
 from curio import *
 import signal
 import os
+import sys
+import pytest
 
-
+@pytest.mark.skipif(sys.platform.startswith("win"),
+                    reason="Not supported on Windows")
 def test_task_signal(kernel):
     results = []
 
@@ -38,7 +41,8 @@ def test_task_signal(kernel):
         'done',
     ]
 
-
+@pytest.mark.skipif(sys.platform.startswith("win"),
+                    reason="Not supported on Windows")
 def test_task_signal_event(kernel):
     results = []
 
@@ -73,7 +77,8 @@ def test_task_signal_event(kernel):
         'done',
     ]
 
-
+@pytest.mark.skipif(sys.platform.startswith("win"),
+                    reason="Not supported on Windows")
 def test_task_signal_timeout(kernel):
     results = []
 

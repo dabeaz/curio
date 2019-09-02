@@ -5,6 +5,8 @@ from curio import *
 from curio.thread import AWAIT, async_thread, spawn_thread
 from curio.file import aopen
 import time
+import pytest
+
 
 def simple_func(x, y):
     AWAIT(sleep(0.5))     # Execute a blocking operation
@@ -161,6 +163,8 @@ def test_thread_read(kernel):
 import curio.subprocess as subprocess
 import sys
 
+@pytest.mark.skipif(sys.platform.startswith('win'),
+                    reason='Broken on windows')
 def test_subprocess_popen(kernel):
     def func():
         with subprocess.Popen([sys.executable, '-c', 'print("hello")'], stdout=subprocess.PIPE) as p:

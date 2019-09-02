@@ -474,7 +474,7 @@ def test_nested_timeout(kernel):
 
     async def parent():
         try:
-            await timeout_after(1, child())
+            await timeout_after(0.75, child())
         except TaskTimeout:
             results.append('parent timeout')
 
@@ -517,7 +517,7 @@ def test_nested_context_timeout(kernel):
 
     async def parent():
         try:
-            async with timeout_after(1):
+            async with timeout_after(0.75):
                 await child()
         except TaskTimeout:
             results.append('parent timeout')

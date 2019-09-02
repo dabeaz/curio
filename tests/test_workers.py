@@ -5,7 +5,7 @@ import pytest
 import time
 from curio import *
 import pytest
-
+import sys
 
 def fib(n):
     if n <= 2:
@@ -13,7 +13,8 @@ def fib(n):
     else:
         return fib(n - 1) + fib(n - 2)
 
-
+@pytest.mark.skipif(sys.platform.startswith("win"),
+                    reason='broken on Windows')
 def test_cpu(kernel):
     results = []
 
@@ -39,6 +40,8 @@ def test_cpu(kernel):
         ('fib', 14930352)
     ]
 
+@pytest.mark.skipif(sys.platform.startswith("win"),
+                    reason='broken on Windows')
 def test_bad_cpu(kernel):
     async def main():
         with pytest.raises(TypeError): 
@@ -80,7 +83,9 @@ def test_executor(kernel):
         assert r == 1
     kernel.run(main())
 
-@pytest.mark.parametrize('runner', [run_in_thread, run_in_process])
+@pytest.mark.parametrize('runner',
+    [run_in_thread] if sys.platform.startswith("win")
+                         else [run_in_thread, run_in_process])
 def test_worker_cancel(kernel, runner):
     results = []
 
@@ -114,7 +119,10 @@ def test_worker_cancel(kernel, runner):
     ]
 
 
-@pytest.mark.parametrize('runner', [run_in_thread, run_in_process])
+#@pytest.mark.parametrize('runner', [run_in_thread, run_in_process])
+@pytest.mark.parametrize('runner',
+    [run_in_thread] if sys.platform.startswith("win")
+                         else [run_in_thread, run_in_process])
 def test_worker_timeout(kernel, runner):
     results = []
 

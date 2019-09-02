@@ -6,6 +6,7 @@ from curio.channel import Connection, Channel, AuthenticationError
 from curio.io import SocketStream
 from curio import spawn, sleep, CancelledError, TaskTimeout, timeout_after, TaskError, TaskGroup
 import copy
+import sys
 
 @pytest.fixture
 def conns():
@@ -198,7 +199,8 @@ def test_connection_send_partial_bytes(kernel, conns):
 
                        ]
 
-
+@pytest.mark.skipif(sys.platform.startswith("win"),
+                    reason="not supported on Windows")
 def test_connection_from_connection(kernel):
     import multiprocessing
     p1, p2 = multiprocessing.Pipe()
@@ -278,6 +280,7 @@ def test_connection_send_cancel(kernel, conns):
             try:
                 msg = 'x' * 10000000   # Should be large enough to cause send blocking
                 await c.send(msg)
+                await c.send(msg)  # Send twice to get blocking
                 results.append('success')
             except CancelledError:
                 results.append('cancel')
@@ -299,6 +302,7 @@ def test_connection_send_timeout(kernel, conns):
     async def client(c):
         try:
             msg = 'x' * 10000000
+            await timeout_after(1, c.send(msg))
             await timeout_after(1, c.send(msg))
             results.append('success')
         except TaskTimeout:

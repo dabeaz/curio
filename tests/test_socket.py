@@ -5,6 +5,8 @@ import os
 from curio import *
 from curio.socket import *
 from curio import io
+import pytest
+import sys
 
 def test_tcp_echo(kernel, portno):
     results = []
@@ -434,6 +436,8 @@ def test_buffer_stream_into(kernel):
 
     assert all(n == x for n, x in enumerate(results[0]))
 
+@pytest.mark.skipif(sys.platform.startswith("win"),
+                    reason='broken on Windows')
 def test_buffer_makefile_into(kernel):
     from array import array
     results = []
