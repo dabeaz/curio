@@ -8,6 +8,7 @@ __all__ = ['run_in_executor', 'run_in_thread', 'run_in_process', 'block_in_threa
 
 # -- Standard Library
 
+import sys
 import multiprocessing
 import threading
 import traceback
@@ -390,6 +391,40 @@ class ProcessWorker(object):
         except CancelledError:
             self.shutdown()
             raise
+
+# Windows-compatible process worker.  It differs from ProcessWorker in
+# that client communication is handled synchronously by a thread.
+class WinProcessWorker(ProcessWorker):
+    def _launch(self):
+        context = multiprocessing.get_context('spawn')
+        client_ch, server_ch = context.Pipe()
+        self.process = context.Process(
+            target=self.run_server, args=(server_ch, ), daemon=True)
+        self.process.start()
+        server_ch.close()
+        self.client_ch = client_ch
+
+    def _client_communicate(self, msg):
+        self.client_ch.send(msg)
+        return self.client_ch.recv()
+
+    async def apply(self, func, args=()):
+        if self.process is None or not self.process.is_alive():
+            self._launch()
+
+        msg = (func, args)
+        try:
+            success, result = await run_in_thread(self._client_communicate, msg)
+            if success:
+                return result
+            else:
+                raise result
+        except CancelledError:
+            self.shutdown()
+            raise
+
+if sys.platform.startswith('win'):
+    ProcessWorker = WinProcessWorker
 
 # Pool of workers for carrying out jobs on behalf of curio tasks.
 #
