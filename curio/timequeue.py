@@ -52,7 +52,7 @@ class TimeQueue:
         for item in removed:
             del self.far[item]
         self.far_min_deadline = min_deadline
-            
+
     def next_deadline(self, current_clock):
         '''
         Returns the number of seconds to delay until the next deadline

@@ -543,7 +543,6 @@ class Kernel(object):
                 set_timeout(timeout)
                 if old_timeout and current.timeout > old_timeout:
                     current.timeout = old_timeout
-
             current._trap_result = old_timeout
 
         # ----------------------------------------
@@ -558,6 +557,7 @@ class Kernel(object):
             # up with the prior timeout handling and all manner of head-explosion
             # will occur.
 
+            set_timeout(None)
             current._trap_result = now = time_monotonic()
             if previous and previous >= 0 and previous < now:
                 # Perhaps create a TaskTimeout pending exception here.
