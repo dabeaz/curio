@@ -2,6 +2,9 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+09/03/2019 The pointless (and completely unused) name argument to TaskGroup() 
+           has been removed. 
+
 08/09/2019 Exceptions raised inside the Curio kernel itself are no longer 
            reported to tasks.  Instead, they cause Curio to die. The
            kernel is never supposed to raise exceptions on its own--any

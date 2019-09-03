@@ -375,8 +375,7 @@ class TaskGroup(object):
     This might be more useful for more persistent or long-lived 
     task groups.
     '''
-    def __init__(self, tasks=(), *, wait=all, name=None):
-        self._name = name
+    def __init__(self, tasks=(), *, wait=all):
         self._running = set()
         self._finished = deque()
         self._closed = False

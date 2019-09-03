@@ -1,7 +1,7 @@
 Curio Reference Manual
 ======================
 
-This manual describes the basic concepts and functionality provided by curio.
+This manual describes the basic concepts and functionality provided by Curio.
 
 Coroutines
 ----------
@@ -18,22 +18,21 @@ Coroutines call other coroutines using ``await``. For example::
           s = await hello(name)
           print(s)
 
-Unlike a normal function, a coroutine can never run all on its own.
-It always has to execute under the supervision of a manager (e.g., an
-event-loop, a kernel, etc.).  In curio, an initial coroutine is
-executed by a low-level kernel using the ``run()`` function. For
-example::
+Unlike a normal function, a coroutine never runs on its own.
+It always executes under the supervision of a manager (e.g., an
+event-loop, a kernel, etc.).  In Curio, an initial coroutine is
+executed using the ``run()`` function. For example::
 
     import curio
     curio.run(main, 'Guido')
 
-When executed by curio, a coroutine is considered to be a "Task."  Whenever
-the word "task" is used, it refers to the execution of a coroutine.
+When executing, a coroutine is considered to be a "Task."  Whenever
+the word "task" is used, it refers to a running coroutine.
 
 The Kernel
 ----------
 
-All coroutines in curio are executed by an underlying kernel.  Normally, you would
+All coroutines in Curio are executed by an underlying kernel.  Normally, you would
 run a top-level coroutine using the following function:
 
 .. function:: run(corofunc, *args, debug=None, selector=None,
@@ -46,8 +45,8 @@ run a top-level coroutine using the following function:
    it should be an instance of a selector from the :mod:`selectors
    <python:selectors>` module.  *debug* is a list of optional
    debugging features. See the section on debugging for more detail.
-   A ``RuntimeError`` is raised if ``run()`` is invoked more than once
-   from the same thread.
+   ``run() is not reentrant--a ``RuntimeError`` is raised if you try
+   to call it when another coroutine is already running.
 
 If you are going to repeatedly run coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
@@ -55,7 +54,7 @@ them using its ``run()`` method as described below:
 
 .. class:: Kernel(selector=None, debug=None):
 
-   Create an instance of a curio kernel.  The arguments are the same
+   Create an instance of a Curio kernel.  The arguments are the same
    as described above for the :func:`run()` function.  
 
 There is only one method that may be used on a :class:`Kernel` outside of coroutines.
@@ -81,9 +80,9 @@ code, consider using a kernel as a context manager.  For example::
         ...
     # Kernel shuts down here
 
-When submitted a task to the Kernel, you can either provide an async
+When submitting a task to the Kernel, you can either provide an async
 function and calling arguments or you can provide an instantiated
-coroutine.  For example::
+coroutine.  For example, both of these invocations of ``run()`` work::
 
     async def hello(name):
         print('hello', name)
@@ -95,7 +94,7 @@ This convention is observed by nearly all other functions that accept
 coroutines (e.g., spawning tasks, waiting for timeouts, etc.).  As a
 general rule, the first form of providing a function and arguments
 should be preferred. This form of calling is required for certain 
-parts of Curio so you're code will be more consistent if you use it.
+parts of Curio so your code will be more consistent if you use it.
 
 Tasks
 -----
@@ -107,10 +106,11 @@ The following functions are defined to help manage the execution of tasks.
    Create a new task that runs the async function *corofunc*.  *args*
    are the arguments provided to *corofunc*. Returns a :class:`Task`
    instance as a result.  The *daemon* option, if supplied, specifies
-   that the new task will never be joined and that it's result may be
+   that the new task will never be joined and that its result may be
    disregarded.  The *report_crash* option specifies whether or not tasks
    that terminate due to an uncaught exception print a log message or not.
-   The default behavior is ``True``.
+   The default behavior is ``True``.  Resist the urge to turn off crash
+   reporting--doing so can make debugging much more difficult.
 
    Note: ``spawn()`` creates a completely independent task.  The resulting task
    is not placed into any kind of task group as might be managed by :class:`TaskGroup`
@@ -120,10 +120,17 @@ The following functions are defined to help manage the execution of tasks.
 
    Returns a reference to the :class:`Task` instance corresponding to the
    caller.  A coroutine can use this to get a self-reference to its
-   current :class:`Task` instance if needed.
+   own :class:`Task` instance if needed.
+
+
+.. asyncfunction:: schedule()
+
+   Immediately task switch to the next ready task.  Normally you never
+   need to call this, but sometimes it can be useful to force a task
+   switch even no blocking operation has occurred.
 
 The :func:`spawn` and :func:`current_task` both return a :class:`Task` instance
-that serves as a kind of wrapper around the underlying coroutine that's executing.
+that serves as a wrapper around the underlying coroutine that's running.
 
 .. class:: Task
 
@@ -148,7 +155,7 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
 
    Cancels the task. This raises a :exc:`curio.TaskCancelled`
    exception in the task which may choose to handle it in order to
-   perform cleanup actions. If ``blocking=True`` (the default), does
+   perform cleanup actions. If ``blocking=True`` (the default), it does
    not return until the task actually terminates.  Curio only allows a
    task to be cancelled once. If this method is somehow invoked more
    than once on a still running task, the second request will merely
@@ -165,11 +172,11 @@ that serves as a kind of wrapper around the underlying coroutine that's executin
 
 .. method:: Task.traceback()
 
-   Create a stack traceback string for the task.  Useful for debugging.
+   Creates a stack traceback string for the task.  Useful for debugging if you print it out.
 
 .. method:: Task.where()
 
-   Return a (filename, lineno) tuple where the task is executing. For debugging.
+   Return a (filename, lineno) tuple where the task is executing. Useful for debugging and logging.
 
 The following public attributes are available of :class:`Task` instances:
 
@@ -212,28 +219,39 @@ The following public attributes are available of :class:`Task` instances:
 
 .. attribute:: Task.terminated
 
-   A boolean flag that indicates whether or not the task has run to completion.
+   A boolean flag that indicates whether or not the task has terminated.
+
+.. attribute:: Task.cancel_pending
+
+   An instance of any pending cancellation exception.
+
+.. attribute:: Task.allow_cancel
+
+   A boolean flag that indicates whether or not cancellation exceptions can be delivered.
+   This is better controlled using the ``disable_cancellation()`` function as opposed
+   to being set directly.
+
 
 Task Groups
 -----------
 
-Curio provides a mechanism for grouping tasks together and managing their
-execution.  This includes cancelling tasks as a group, waiting for tasks
-to finish, or watching a group of tasks as they finish.   To do this, create
-a ``TaskGroup`` instance.
+Curio provides a mechanism for grouping tasks together, managing their
+execution, and collecting their results.  This is kind of control is 
+sometimes used to implement programming patterns related to "structured concurrency."
+To do this, create a ``TaskGroup`` instance.
 
-.. class:: TaskGroup(tasks=(), *, wait=all, name=None)
+.. class:: TaskGroup(tasks=(), *, wait=all)
 
    A class representing a group of executing tasks.  *tasks* is an
    optional set of existing tasks to put into the group.  New tasks
-   can later be added using the ``spawn()`` method below. *wait*
-   specifies the policy used for waiting for tasks.  If *wait* is
-   ``all``, then wait for all tasks to completee.  If *wait* is
+   can later be added using the ``spawn()`` or ``add_task()`` methods. *wait*
+   specifies the policy used by the ``join()`` method when waiting for tasks.  If *wait* is
+   ``all``, then wait for all tasks to complete.  If *wait* is
    ``any`` then wait for any task to terminate and cancel any
    remaining tasks.  If *wait* is ``object``, then wait for any task
    to terminate and return a non-None object, cancelling all remaining
    tasks afterwards. If any task
-   returns with an error, then all remaining tasks are immediately
+   returns with an error, all remaining tasks are immediately
    cancelled and a ``TaskGroupError`` exception is raised by the
    ``join()`` method.
    Each ``TaskGroup`` is an independent entity.
@@ -287,9 +305,10 @@ The following methods are supported on ``TaskGroup`` instances:
    to ``TaskGroup()``.
 
 
-The preferred way to use a ``TaskGroup`` is as a context manager.  For
-example, here is how you can create a group of tasks, wait for them
-to finish, and collect their results::
+The preferred way to use a ``TaskGroup`` is as a context manager.  This forces
+a lifetime on all of the contained tasks.  Specifically, it is guaranteed that
+all tasks have terminated when control leaves the context-block.  For example:
+
 
     async with TaskGroup() as g:
         t1 = await g.spawn(func1)
@@ -297,12 +316,24 @@ to finish, and collect their results::
         t3 = await g.spawn(func3)
 
     # all tasks done here
+    assert all(t.terminated for t in [t1, t2, t3])
+
+With this in mind, there are some common programming patterns for task groups.
+If you want to launch a collection of tasks that execute concurrently
+and collect their results afterwards, do this:
+
+    async with TaskGroup() as g:
+        t1 = await g.spawn(func1)
+        t2 = await g.spawn(func2)
+        t3 = await g.spawn(func3)
+
+    # Collect all results
     print('t1 got', t1.result)
     print('t2 got', t2.result)
     print('t3 got', t3.result)
 
-Here is how you would launch tasks and collect their results in the
-order that they complete::
+Here is a slight variant that launches a set of tasks and collects their results in the
+order that they finish::
 
     async with TaskGroup() as g:
         t1 = await g.spawn(func1)
@@ -321,8 +352,14 @@ use the ``wait=any`` option like this::
 
     result = g.completed.result    # First completed task
 
+The ``completed`` attribute is a reference to the first task that
+finished.  If you change the task group to use ``wait=object``, then
+the group waits for the first task that successfully returns a
+non-``None`` result.   This is useful with code that returns ``None`` to
+indicate an unsuccessful operation. 
+
 If any exception is raised inside the task group context, all launched
-tasks are cancelled and the exception is reraised.  For example::
+tasks are cancelled and the exception is propagated.  For example::
 
     try:
         async with TaskGroup() as g:
@@ -336,7 +373,7 @@ tasks are cancelled and the exception is reraised.  For example::
         assert t2.terminated
         assert t3.terminated
 
-This behavior also applies to features such as a timeout. For
+This behavior also applies to features such as timeouts. For
 example::
 
     try:
@@ -354,13 +391,13 @@ example::
         assert t2.terminated
         assert t3.terminated
 
-The timeout exception itself is only raised in the code that's using
-the task group.  Child tasks are cancelled using the ``cancel()`` 
+In this case, the timeout exception is only raised in the code that created
+the task  group. Child tasks are still cancelled using the ``cancel()`` 
 method and would receive a ``TaskCancelled`` exception.
 
 If any launched tasks exit with an exception other than
-``TaskCancelled``, a ``TaskGroupError`` exception is raised.  For
-example::
+``TaskCancelled``, a ``TaskGroupError`` exception is raised and all
+other tasks are cancelled.  For example::
 
     async def bad1():
         raise ValueError('bad value')
@@ -396,11 +433,6 @@ The following functions are used by tasks to help manage time.
    Sleep for a specified number of seconds.  If the number of seconds is 0, the
    kernel merely switches to the next task (if any).
 
-.. asyncfunction:: schedule()
-
-   Immediately task switch to the next ready task.  This is the same as
-   ``sleep(0)``.
-
 .. asyncfunction:: wake_at(clock)
 
    Sleep until the monotonic clock reaches the given absolute clock
@@ -416,8 +448,8 @@ The following functions are used by tasks to help manage time.
 
 Timeouts
 --------
-Any blocking operation in curio can be cancelled after a timeout.  The following
-functions can be used for this purpose:
+Any blocking operation in Curio can be cancelled after a timeout.  The following
+functions are used for this purpose:
 
 .. asyncfunction:: timeout_after(seconds, corofunc=None, *args)
 
@@ -428,19 +460,81 @@ functions can be used for this purpose:
    function serves as an asynchronous context manager that applies a
    timeout to a block of statements.
 
-   :func:`timeout_after` may be composed with other :func:`timeout_after`
-   operations (i.e., nested timeouts).   If an outer timeout expires
-   first, then ``curio.TimeoutCancellationError`` is raised
-   instead of :py:exc:`curio.TaskTimeout`.  If an inner timeout
-   expires and fails to properly catch :py:exc:`curio.TaskTimeout`,
-   a ``curio.UncaughtTimeoutError`` is raised in the outer
-   timeout.
-
 .. asyncfunction:: timeout_at(deadline, corofunc=None, *args)
 
    The same as :func:`timeout_after` except that the deadline time is
    given as an absolute clock time.  Use the :func:`clock` function to
    get a base time for computing a deadline.
+
+There is an expectation that every call to ``timeout_after()`` or ``timeout_at()`` 
+will have a matching exception handler to catch the resulting timeout.  Thus,
+the following program pattern is expected::
+
+    try:
+        result = await timeout_after(10, coro, arg1, arg2)
+    except TaskTimeout: 
+        # Timed out
+        ...
+
+    # Alternative (context-manager)
+    try:
+        async with timeout_after(10):
+            result = coro(arg1, arg2)
+            ...
+    except TaskTimeout:
+        # Timed out
+        ...
+
+The presence of a matching exception handler has special significance
+when multiple :func:`timeout_after()` operations are nested.  For
+example, consider this code::
+
+    try:
+        async with timeout_after(5):
+            async with timeout_after(1):    # Expires first
+                await sleep(1000)
+    except TaskTimeout:   # No match!
+        print("Time out")
+
+In this code, the inner ``timeout_after()`` call has no matching
+exception handler.  When it expires, a ``curio.UncaughtTimeoutError``
+is raised by the outer ``timeout_after()`` call as a result. This
+error basically means that an inner timeout occurred, but there
+was no code to properly catch it.
+
+Suppose you flip the timeout periods around and write code like this::
+
+    async with timeout_after(1):        # Expires first
+        async with timeout_after(5):
+            try:
+                await sleep(1000)
+            except TaskTimeout:         # No match!
+                print("Time out")
+
+In this case, the inner ``timeout_after()`` has a matching exception
+handler, but the outer timeout is actually the first one to expire.
+In this case, a ``curio.TimeoutCancellationError`` exception is raised
+instead of ``TaskTimeout``. This indicates the expiration of a timeout
+somewhere, but it's NOT for the time period specified by the
+inner-most ``timeout_after()`` call.   This distinction makes it
+possible to distinguish between long-term and fine-grained timeouts.
+
+In the big picture, the proper way to structure nested timeouts is to make
+sure each timeout has its own except block::
+
+    try:
+        async with timeout_after(s1):
+            try:
+                async with timeout_after(s2):
+                    await some_operation()
+                    ...
+            except TaskTimeout:
+                print("Inner timeout")
+    except TaskTimeout:
+        print("Outer timeout")
+
+Instead of relying upon exception handling, the following functions are
+also available:
 
 .. asyncfunction:: ignore_after(seconds, corofunc=None, *args, timeout_result=None)
 
@@ -463,24 +557,6 @@ functions can be used for this purpose:
    The same as :func:`ignore_after` except that the deadline time is
    given as an absolute clock time. 
 
-Here is an example that shows how these functions can be used::
-
-    # Execute coro(args) with a 5 second timeout
-    try:
-        result = await timeout_after(5, coro, args)
-    except TaskTimeout as e:
-        result = None
-
-    # Execute multiple statements with a 5 second timeout
-    try:
-        async with timeout_after(5):
-             await coro1(args)
-             await coro2(args)
-             ...
-    except TaskTimeout as e:
-        # Handle the timeout
-        ...
-
 The difference between :func:`timeout_after` and :func:`ignore_after` concerns
 the exception handling behavior when time expires.  The latter function
 returns ``None`` instead of raising an exception which might be more
@@ -499,7 +575,7 @@ convenient in certain cases. For example::
     if s.expired:
         # Timeout occurred
 
-It's important to note that every curio operation can be cancelled by timeout.
+It's important to note that every Curio operation can be cancelled by timeout.
 Rather than having every possible call take an explicit *timeout* argument,
 you should wrap the call using :func:`timeout_after` or :func:`ignore_after` as
 appropriate.
@@ -549,7 +625,7 @@ If you only need to shield a single operation, you can write statements like thi
 
     async def coro():
         ...
-        await disabled_cancellation(some_operation, x, y, z)
+        await disable_cancellation(some_operation, x, y, z)
         ...
 
 This is shorthand for writing the following::
@@ -623,7 +699,7 @@ calculations and blocking operations.  Use the following functions to do that:
 When performing external work, it's almost always better to use the
 :func:`run_in_process` and :func:`run_in_thread` functions instead
 of :func:`run_in_executor`.  These functions have no external library
-dependencies, have substantially less communication overhead, and more
+dependencies, have less communication overhead, and more
 predictable cancellation semantics.
 
 The following values in :mod:`curio.workers` define how many
@@ -646,7 +722,7 @@ I/O Layer
 
 .. module:: curio.io
 
-I/O in curio is performed by classes in :mod:`curio.io` that
+I/O in Curio is performed by classes in :mod:`curio.io` that
 wrap around existing sockets and streams.  These classes manage the
 blocking behavior and delegate their methods to an existing socket or
 file.
@@ -656,7 +732,7 @@ Socket
 
 The :class:`Socket` class is used to wrap existing an socket.  It is compatible with
 sockets from the built-in :mod:`socket` module as well as SSL-wrapped sockets created
-by functions by the built-in :mod:`ssl` module.  Sockets in curio should be fully
+by functions by the built-in :mod:`ssl` module.  Sockets in Curio should be fully
 compatible most common socket features.
 
 .. class:: Socket(sockobj)
@@ -760,7 +836,7 @@ exception.
    possible to create a stream with Unicode text encoding/decoding applied to it
    so those options are not available.   If you are trying to put a file-like
    interface on a socket, it is usually better to use the :meth:`Socket.as_stream`
-   method below.
+   method below.  Not supported on Windows.
 
 .. method:: Socket.as_stream()
 
@@ -787,8 +863,9 @@ FileStream
 ^^^^^^^^^^
 
 The :class:`FileStream` class puts a non-blocking wrapper around an
-existing file-like object.  Certain other functions in curio use this
-(e.g., the :meth:`Socket.makefile` method).
+existing file-like object.  Certain other functions in Curio use this
+(e.g., the :meth:`Socket.makefile` method).  This object is not
+supported on Windows. 
 
 .. class:: FileStream(fileobj)
 
@@ -808,6 +885,10 @@ The following methods are available on instances of :class:`FileStream`:
 .. asyncmethod:: FileStream.readall()
 
    Return all of the data that's available on a file up until an EOF is read.
+
+.. asyncmethod:: FileStream.read_exactly(n)
+
+   Read exactly n bytes of data, waiting for all data to arrive if necessary.
 
 .. asyncmethod:: FileStream.readline()
 
@@ -876,7 +957,7 @@ One subtle issue concerns the ``blocking()`` method below.
    operation is a file created ``open(sock.fileno(), 'rb+',
    closefd=False)``.  You can pass this object to code that is
    expecting to work with a file.  The file is not closed when garbage
-   collected.
+   collected.  Not supported on Windows.
 
 socket wrapper module
 ---------------------
@@ -885,7 +966,7 @@ socket wrapper module
 
 The :mod:`curio.socket` module provides a wrapper around the built-in
 :mod:`socket` module--allowing it to be used as a stand-in in
-curio-related code.  The module provides exactly the same
+Curio-related code.  The module provides exactly the same
 functionality except that certain operations have been replaced by
 coroutine equivalents.
 
@@ -896,7 +977,7 @@ coroutine equivalents.
    The resulting :class:`socket` instance is set in non-blocking mode.
 
 The following module-level functions have been modified so that the returned socket
-objects are compatible with curio:
+objects are compatible with Curio:
 
 .. function:: socketpair(family=AF_UNIX, type=SOCK_STREAM, proto=0)
 .. function:: fromfd(fd, family, type, proto=0)
@@ -919,8 +1000,8 @@ ssl wrapper module
 
 .. module:: curio.ssl
 
-The :mod:`curio.ssl` module provides curio-compatible functions for creating an SSL
-layer around curio sockets.  The following functions are redefined (and have the same
+The :mod:`curio.ssl` module provides Curio-compatible functions for creating an SSL
+layer around Curio sockets.  The following functions are redefined (and have the same
 calling signature as their counterparts in the standard :mod:`ssl` module:
 
 .. asyncfunction:: wrap_socket(*args, **kwargs)
@@ -932,12 +1013,12 @@ calling signature as their counterparts in the standard :mod:`ssl` module:
 .. class:: SSLContext
 
    A redefined and modified variant of :class:`ssl.SSLContext` so that the
-   :meth:`wrap_socket` method returns a socket compatible with curio.
+   :meth:`wrap_socket` method returns a socket compatible with Curio.
 
 Don't attempt to use the :mod:`curio.ssl` module without a careful read of Python's official documentation
 at https://docs.python.org/3/library/ssl.html.
 
-For the purposes of curio, it is usually easier to apply SSL to a connection using some of the
+For the purposes of Curio, it is usually easier to apply SSL to a connection using some of the
 high level network functions described in the next section.  For example, here's how you
 make an outgoing SSL connection::
 
@@ -1084,7 +1165,8 @@ The ``connect()`` and ``accept()`` methods of :class:`Channel` instances return 
 
    Represents a connection on which message passing of Python objects is
    supported.  *reader* and *writer* are Curio I/O streams on which reading 
-   and writing are to take place.
+   and writing are to take place (for example, instances of ``SocketStream``
+   or ``FileStream``).
 
 Instances of :class:`Connection` support the following methods:
 
@@ -1169,7 +1251,7 @@ The :mod:`curio.subprocess` module provides a wrapper around the built-in
    context.
 
 Here is an example of using :class:`Popen` to read streaming output off of a
-subprocess with curio::
+subprocess with Curio::
 
     import curio
     from curio import subprocess
@@ -1305,7 +1387,7 @@ Synchronization Primitives
 The following synchronization primitives are available. Their behavior
 is similar to their equivalents in the :mod:`threading` module.  None
 of these primitives are safe to use with threads created by the
-built-in :mod:`threading` module.
+built-in :mod:`threading` module. 
 
 .. class:: Event()
 
@@ -1634,8 +1716,7 @@ lowest priority first::
     curio.run(main())
 
 
-This will output
-::
+This will output::
 
     (0, 'highest priority')
     (3, 'higher priority')
@@ -1660,8 +1741,7 @@ This will output
 
     curio.run(main())
 
-This will output
-::
+This will output::
 
     last
     second
@@ -1744,8 +1824,8 @@ synchronization primitives if you use the :func:`abide` function.
    entire duraction of the context manager.
 
 The main use of this function is in code that wants to safely
-synchronize curio with threads and processes. For example, here is how
-you would synchronize a thread with a curio task using a threading
+synchronize Curio with threads and processes. For example, here is how
+you would synchronize a thread with a Curio task using a threading
 lock::
 
     import curio
@@ -1851,7 +1931,7 @@ take them into account.  Second, if you are using ``async with
 abide(lock)`` with a thread-lock and a cancellation request is
 received while waiting for the ``lock.__enter__()`` method to execute,
 a background thread continues to run waiting for the eventual lock
-acquisition.  Once acquired, curio releases it again.  However, fully
+acquisition.  Once acquired, Curio releases it again.  However, fully
 figuring out what's happening might be mind-bending.
 
 The ``abide()`` function can be used to synchronize with a thread
@@ -2453,7 +2533,7 @@ The following system calls are available, but not typically used
 directly in user code.  They are used to implement higher level
 objects such as locks, socket wrappers, and so forth. If you find
 yourself using these, you're probably doing something wrong--or
-implementing a new curio primitive.   These calls are found in the
+implementing a new Curio primitive.   These calls are found in the
 ``curio.traps`` submodule.
 
 Traps come in two flavors: *blocking* and *synchronous*. A blocking
