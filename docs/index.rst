@@ -30,12 +30,13 @@ Contents:
 Installation:
 -------------
 
-Curio requires Python 3.6 and Unix.  You can install it using ``pip``::
+Curio requires Python 3.6 or newer. It works on both POSIX and
+Windows. You can install it using ``pip``::
 
     bash % python3 -m pip install curio
 
-For best results, however, you'll want to grab the version on Github
-at https://github.com/dabeaz/curio.
+For best results, however, you'll probably want to grab the version on
+Github at https://github.com/dabeaz/curio.
 
 An Example
 ----------
@@ -264,12 +265,8 @@ you shouldn't be using Curio is that you should be using it.
 
 A: Absolutely. Please use the Github page at
 https://github.com/dabeaz/curio as the primary point of discussion
-concerning pull requests, bugs, and feature requests.
+concerning bug reports and feature requests.
 
 About
 -----
-Curio was created by David Beazley (@dabeaz).  http://www.dabeaz.com
-
-It is a young project.  All contributions welcome.
- 
-
+Curio is the creation of David Beazley (@dabeaz).  http://www.dabeaz.com

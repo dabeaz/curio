@@ -10,23 +10,22 @@ cooperative multitasking and existing programming abstractions such as
 threads, sockets, files, subprocesses, locks, and queues.  You'll find
 it to be small, fast, and fun.
 
-Curio has no third-party dependencies and does not use the
-standard asyncio module.  Most users will probably find it to be a bit
-too-low level--it's probably best to think of it as a library for building
-libraries.  Although you might not use it directly, many of its ideas
-have influenced other libraries with similar functionality.
+Curio has no third-party dependencies and does not use the standard
+asyncio module.  Casual users will probably find it to be a bit
+too-low level. However, experts will find that Curio allows you to
+write advanced asynchronous libraries without getting in the way.
 
 Important Disclaimer
 --------------------
 
-Curio is experimental software. Although it is a work in progress, it is
-extensively documented and has a fairly comprehensive test suite.
-Just be aware that the programming API is fluid and could change at
-any time.  Although curio can be installed via pip, the version
-uploaded on PyPI is only updated occasionally.  You'll probably get
-better results using the version cloned from github.  You'll also want
-to make sure you're using Python 3.6 or later. Of course, your mileage might
-vary.
+Curio is still experimental software. Although it is a work in
+progress, it is extensively documented and has a fairly comprehensive
+test suite.  Just be aware that the programming API is fluid and could
+change at any time.  Although curio can be installed via pip, the
+version uploaded on PyPI is only updated occasionally.  You'll
+probably get better results using the version cloned from github.
+You'll also want to make sure you're using Python 3.6 or later. Of
+course, your mileage might vary.
 
 Quick install
 -------------
@@ -434,9 +433,7 @@ Contributors
 
 About
 -----
-Curio was created by David Beazley (@dabeaz).  http://www.dabeaz.com
-
-It is a young project.  All contributions welcome.
+Curio is the creation of David Beazley (@dabeaz).  http://www.dabeaz.com
 
 P.S.
 ----
