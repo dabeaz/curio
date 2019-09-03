@@ -55,7 +55,7 @@ async def _io_waiting(fileobj):
     Return a tuple (rtask, wtask) of tasks currently blocked waiting
     for I/O on fileobj.
     '''
-    return await _kernel_trap(trap_io_waiting, fileobj)
+    return await _kernel_trap('trap_io_waiting', fileobj)
 
 async def _future_wait(future, event=None):
     '''

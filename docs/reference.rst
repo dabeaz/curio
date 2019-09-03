@@ -2513,17 +2513,48 @@ The following exceptions are defined. All are subclasses of the
 .. exception:: TaskTimeout
 
    Exception raised in a coroutine if it has been cancelled by timeout.
+   A subclass of ``CancelledError``.
 
 .. exception:: TimeoutCancellationError
 
    Exception raised in a coroutine if it has been cancelled due to a timeout,
-   but not one related to the inner-most timeout operation.
+   but not one related to the inner-most timeout operation.  A subclass
+   of ``CancelledError``.
+
+.. exception:: UncaughtTimeoutError
+
+   Exception raised if a timeout from an inner timeout operation has
+   propagated to an outer timeout, indicating the lack of a proper
+   try-except block.  A subclass of ``CurioError``. 
 
 .. exception:: TaskError
 
    Exception raised by the :meth:`Task.join` method if an uncaught exception
    occurs in a task.  It is a chained exception. The ``__cause__`` attribute
    contains the exception that causes the task to fail.
+
+.. exception:: TaskGroupError
+
+   Exception raised if one or more tasks in a task group raised an error.
+   The ``failed`` attribute contains a list of all tasks that died.
+   The ``errors`` attribute is a set of all exceptions raised.
+
+.. exception:: SyncIOError
+
+   Exception raised if a task attempts to perform a synchronous I/O operation
+   on an object that only supports asynchronous I/O.
+
+.. exception:: AsyncOnlyError
+
+   Exception raised by the ``AWAIT()`` function if its applied to code not
+   properly running in an async-thread. 
+
+.. exception:: ResourceBusy
+
+   Exception raised in an I/O operation is requested on a resource, but the
+   resource is already busy performing the same operation on behalf of another task.
+   The exceptions ``ReadResourceBusy`` and ``WriteResourceBusy`` are subclasses
+   that provide a more specific cause. 
 
 Low-level Kernel System Calls
 -----------------------------
@@ -2557,6 +2588,7 @@ cancellation point.
    *fileobj* is any file-like object with a `fileno()` method.
 
 .. asyncfunction:: _io_waiting(fileobj)
+
    Synchronous trap.  Returns a tuple `(rtask, wtask)` of tasks
    currently sleeping on *fileobj* (if any).  Returns immediately.
    
