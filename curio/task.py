@@ -23,8 +23,8 @@ from . import meta
 
 __all__ = [
     'Task', 'TaskGroup', 'sleep', 'wake_at', 'current_task',
-    'get_all_tasks', 'spawn', 'gather', 'timeout_after', 'timeout_at',
-    'ignore_after', 'ignore_at', 'clock', 'aside', 'schedule',
+    'spawn', 'timeout_after', 'timeout_at',
+    'ignore_after', 'ignore_at', 'clock', 'schedule',
     'disable_cancellation', 'check_cancellation', 'set_cancellation'
 ]
 
@@ -244,22 +244,6 @@ class Task(object):
             await self.wait()
 
         return True
-
-    async def interrupt(self):
-        '''
-        Interrupt the task by raising an TaskInterrupted exception.  This
-        is a special form of cancellation.  The task can respond by retrying
-        the current operation.  The task does not need to terminate.
-        '''
-        await _cancel_task(self, exc=TaskInterrupted)
-
-    def pdb(self):      # pragma: no cover
-        '''
-        Run a pdb post-mortem on any pending exception information
-        '''
-        import pdb
-        if self.exception:
-            pdb.post_mortem(self.exception.__traceback__)
 
     def traceback(self):    # pragma: no cover
         '''
@@ -606,13 +590,6 @@ async def current_task():
     '''
     return await _get_current()
 
-async def get_all_tasks():
-    '''
-    Returns a list of all active tasks
-    '''
-    kernel = await _get_kernel()
-    return list(kernel._tasks.values())
-
 async def sleep(seconds):
     '''
     Sleep for a specified number of seconds.  Sleeping for 0 seconds
@@ -653,28 +630,6 @@ async def spawn(corofunc, *args, daemon=False, allow_cancel=True, report_crash=T
     task.daemon = daemon
     task.report_crash = report_crash
     return task
-
-async def gather(tasks, *, return_exceptions=False):
-    '''
-    Wait for and gather results from a collection of tasks.  If
-    cancelled, all tasks are cancelled.   Partially computed
-    results are stored in the results attribute of the raised exception.
-    '''
-    results = []
-    for task in tasks:
-        try:
-            results.append(await task.join())
-        except CancelledError as e:
-            for task in tasks:
-                await task.cancel(blocking=False)
-            e.results = await gather(tasks, return_exceptions=True)
-            raise
-        except Exception as e:
-            if return_exceptions:
-                results.append(e)
-            else:
-                raise
-    return results
 
 # Context manager for supervising cancellation masking
 class _CancellationManager(object):
@@ -929,57 +884,9 @@ def ignore_after(seconds, coro=None, *args, timeout_result=None):
         return _timeout_after_func(seconds, False, coro, args, ignore=True, timeout_result=timeout_result)
 
 
+# Here to avoid circular import issues
 from . import queue
 from . import thread
 from . import sync
-
-# Highly experimental.  Launches a curio task in a completely isolated
-# subprocess.  As for the name, well, yeah. "async", "await", "abide",
-# "aside", etc. Work with me here!
-
-async def aside(corofunc, *args):
-    '''
-    Spawn a new task, but run it aside in a newly created process.
-    Returns a Task instance corresponding to a small supervisor task
-    in the caller.  The return value of task.join() is the exit code of
-    the subprocess.  Cancelling the task causes a SIGTERM signal to be
-    sent to the child.  This will be raised as a CancelledError in
-    the child (which is given an opportunity to clean up if it wants).
-
-    The newly created task shares no state with the caller. It is not
-    a process fork.  It is launched in a completely fresh Python
-    interpreter.
-
-    This function also establishes no I/O communication mechanism to
-    the newly created task.  It's not a pipe.  If you need
-    communication, use sockets or create a Channel object.
-
-    Arguments to the called coroutine are pickled and transmitted via
-    a command line arguments.  You should probably only pass small
-    data structures or metadata.  If you need to pass bulk data,
-    set up an I/O channel separately.
-    '''
-    import base64
-    import pickle
-    import sys
-    from . import subprocess
-
-    async def _aside_supervisor():
-        p = subprocess.Popen([sys.executable, '-m', 'curio.side', filename,
-                              base64.b64encode(pickle.dumps((corofunc, args)))],
-                             start_new_session=True)
-        try:
-            return await p.wait()
-        except CancelledError as e:
-            p.terminate()
-            await p.wait()
-            raise
-
-    if sys._getframe(1).f_globals['__name__'] == '__main__':
-        filename = sys.modules['__main__'].__file__
-    else:
-        filename = ''
-
-    return await spawn(_aside_supervisor)
 
 

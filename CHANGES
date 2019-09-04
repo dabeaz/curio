@@ -2,6 +2,17 @@ CHANGES
 -------
 Version 0.10 : In Progress
 --------------------------
+09/03/2019 Removed the experimental aside() functionality.  Too much 
+           magic.  Better left to others.
+
+09/03/2019 Removed the gather() function.  Use TaskGroup instead.
+
+09/03/2019 Removed get_all_tasks() function.
+
+09/03/2019 Removed the Task.pdb() method.
+
+09/03/2019 Removed the Task.interrupt() method.
+
 09/03/2019 The pointless (and completely unused) name argument to TaskGroup() 
            has been removed. 
 

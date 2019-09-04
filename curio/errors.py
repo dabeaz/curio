@@ -4,7 +4,7 @@
 
 __all__ = [
     'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError',
-    'TaskInterrupted', 'TaskGroupError', 'SyncIOError', 
+    'TaskGroupError', 'SyncIOError', 
     'ResourceBusy', 'ReadResourceBusy',
     'WriteResourceBusy', 'TimeoutCancellationError',
     'UncaughtTimeoutError', 'TaskCancelled', 'AsyncOnlyError',
@@ -39,14 +39,6 @@ class TimeoutCancellationError(CancelledError):
 class TaskTimeout(CancelledError):
     '''
     Exception raised if task is cancelled due to timeout.
-    '''
-
-
-class TaskInterrupted(CancelledError):
-    '''
-    Raised if the current operation is interrupted for some
-    reason. It's implied that the task would catch this and
-    retry the operation.
     '''
 
 

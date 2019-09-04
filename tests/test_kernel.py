@@ -782,38 +782,6 @@ def test_task_cancel_timeout(kernel):
     kernel.run(main)
     assert results == [ 'child', 'cancelled', 'done cancel' ]
 
-def test_task_gather(kernel):
-    async def child(period):
-        await sleep(period)
-        return period
-
-    async def main():
-        t1 = await spawn(child, 0.1)
-        t2 = await spawn(child, 0.2)
-        t3 = await spawn(child, 0.3)
-        results = await gather([t1, t2, t3])
-        assert results == [0.1, 0.2, 0.3]
-        
-    kernel.run(main)
-
-def test_task_gather_timeout(kernel):
-    async def child(period):
-        await sleep(period)
-        return period
-
-    async def main():
-        t1 = await spawn(child, 0.1)
-        t2 = await spawn(child, 0.2)
-        t3 = await spawn(child, 0.3)
-        try:
-            async with timeout_after(0.12):
-                results = await gather([t1, t2, t3])
-        except TaskTimeout as e:
-            assert e.results[0] == 0.1
-            assert all(isinstance(r, TaskError) and isinstance(r.__cause__, TaskCancelled) for r in e.results[1:])
-        
-    kernel.run(main)
-
 def test_reentrant_kernel(kernel):
     async def child():
         pass
@@ -849,24 +817,6 @@ def test_pending_cancellation(kernel):
         except TaskTimeout:
             assert False
             
-    kernel.run(main)
-
-def test_interruption(kernel):
-    evt = Event()
-    async def child():
-        try:
-            await evt.wait()
-        except TaskInterrupted:
-            assert True
-        else:
-            assert False
-        return True
-
-    async def main():
-        t = await spawn(child)
-        await t.interrupt()
-        assert await t.join()
-
     kernel.run(main)
 
 from functools import partial
