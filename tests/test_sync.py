@@ -481,25 +481,6 @@ class TestSemaphore:
             'sleep_done',
         ]
 
-    def test_bounded(self, kernel):
-        results = []
-        async def task():
-            sema = BoundedSemaphore(1)
-            assert sema.bound == 1
-            await sema.acquire()
-            await sema.release()
-            try:
-                await sema.release()
-                results.append('not here')
-            except ValueError:
-                results.append('value error')
-
-        kernel.run(task())
-
-        assert results == [
-            'value error',
-        ]
-
 
 class TestCondition:
 
@@ -950,5 +931,5 @@ class TestUniversalEvent:
 
 def test_repr():
     # For test coverage
-    for cls in [Lock, Event, Semaphore, BoundedSemaphore, Condition, RLock, UniversalEvent ]:
+    for cls in [Lock, Event, Semaphore, Condition, RLock, UniversalEvent ]:
         repr(cls())

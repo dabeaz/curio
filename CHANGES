@@ -1,7 +1,19 @@
 CHANGES
 -------
+
 Version 0.10 : In Progress
 --------------------------
+
+**** SPECIAL NOTE ****: For the past few years, Curio has been been an
+experimental project.  However, as it moves towards having a more
+"stable" release, I feel that it is better served by being small as
+opposed to providing every possible feature. Thus, a wide range of
+features are being removed or refactored a bit.  If a feature you are
+using gets removed and you'd like to request its return, please submit
+a bug report!  - Dave
+
+09/08/2019 Removed BoundedSemaphore.
+
 09/03/2019 Removed the experimental aside() functionality.  Too much 
            magic.  Better left to others.
 

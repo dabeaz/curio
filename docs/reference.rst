@@ -1513,11 +1513,6 @@ executes the first line after the context, which might surprise a user::
    than 0, it is decremented and the semaphore is acquired.  Otherwise, the task
    has to wait until the count is incremented by another task.
 
-.. class:: BoundedSemaphore(value=1)
-
-   This class is the same as :class:`Semaphore` except that the
-   semaphore value is not allowed to exceed the initial value.
-
 Semaphores support the following methods:
 
 .. asyncmethod:: Semaphore.acquire()
@@ -1535,10 +1530,6 @@ Semaphores support the following methods:
 .. attribute:: Semaphore.value
 
    A read-only property giving the current value of the semaphore.
-
-.. attribute:: BoundedSemaphore.bound
-
-   A read-only property giving the upper bound of a bounded semaphore.
 
 Like locks, semaphores support the async-with statement.  A common use of semaphores is to
 limit the number of tasks performing an operation.  For example::

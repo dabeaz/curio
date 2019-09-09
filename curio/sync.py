@@ -14,7 +14,7 @@
 # directly.  Instead the _scheduler_wait() and _scheduler_wake()
 # functions must be used.
 
-__all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'abide']
+__all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition', 'abide']
 
 # -- Standard library
 
@@ -195,22 +195,6 @@ class Semaphore(_LockBase):
 
     def locked(self):
         return self._value == 0
-
-
-class BoundedSemaphore(Semaphore):
-
-    def __init__(self, value=1):
-        self._bound = value
-        super().__init__(value)
-
-    @property
-    def bound(self):
-        return self._bound
-
-    async def release(self):
-        if self._value >= self._bound:
-            raise ValueError('BoundedSemaphore released too many times')
-        await super().release()
 
 
 class Condition(_LockBase):

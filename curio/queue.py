@@ -21,12 +21,10 @@ from . import workers
 
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'UniversalQueue']
 
-
-class Queue(object):
+class QueueBase:
     '''
-    A queue for communicating between Curio tasks. It is
-    not safe for communicating between Curio and external
-    threads, processes, etc.
+    Base class for queues used to communicate between Curio tasks.
+    Not safe for use with external threads or processes.
     '''
 
     def __init__(self, maxsize=0):
@@ -41,9 +39,6 @@ class Queue(object):
         res = super().__repr__()
         return '<%s, len=%d>' % (res[1:-1], len(self._queue))
 
-    def _init_internal_queue(self):
-        return deque()
-
     def empty(self):
         return not self._queue
 
@@ -56,14 +51,11 @@ class Queue(object):
             must_wait = False
             await _scheduler_wait(self._get_waiting, 'QUEUE_GET')
 
-        result = self._get()
+        result = self._get_item()
 
         if self._put_waiting:
             await _scheduler_wake(self._put_waiting, n=1)
         return result
-
-    def _get(self):
-        return self._queue.popleft()
 
     async def join(self):
         if self._task_count > 0:
@@ -72,13 +64,10 @@ class Queue(object):
     async def put(self, item):
         while self.full():
             await _scheduler_wait(self._put_waiting, 'QUEUE_PUT')
-        self._put(item)
+        self._put_item(item)
         self._task_count += 1
         if self._get_waiting:
             await _scheduler_wake(self._get_waiting, n=1)
-
-    def _put(self, item):
-        self._queue.append(item)
 
     def qsize(self):
         return len(self._queue)
@@ -95,40 +84,6 @@ class Queue(object):
         return await self.get()
 
 
-class PriorityQueue(Queue):
-    '''
-    A Queue that outputs an item with the lowest priority first
-
-    Items have to be orderable objects
-    '''
-
-    def _init_internal_queue(self):
-        return []
-
-    def _put(self, item):
-        heappush(self._queue, item)
-
-    def _get(self):
-        return heappop(self._queue)
-
-
-class LifoQueue(Queue):
-    '''
-    Last In First Out queue
-
-    Retrieves most recently added items first
-    '''
-
-    def _init_internal_queue(self):
-        return []
-
-    def _put(self, item):
-        self._queue.append(item)
-
-    def _get(self):
-        return self._queue.pop()
-
-
 # UniversalQueue is one of the more interesting, and possibly,
 # diabolical features of Curio.  The goal is to provide a Queue that's
 # compatible with Curio, Threads, and asyncio using an identical API.
@@ -142,7 +97,7 @@ class LifoQueue(Queue):
 # done.  If it doesn't work, you get a Future and you wait on it
 # using whatever mechanism the runtime environment uses to do that.
 
-class UniversalQueue(object):
+class UniversalQueueBase:
     '''
     A queue for communicating between Curio and external threads,
     including foreign event loops running in different threads.
@@ -152,7 +107,7 @@ class UniversalQueue(object):
         self.maxsize = maxsize
 
         # The actual queue of items
-        self._queue = deque()
+        self._queue = self._init_internal_queue()
 
         # A queue of Futures representing getters
         self._getters = deque()
@@ -223,7 +178,7 @@ class UniversalQueue(object):
                 fut.add_done_callback(lambda f: self._get_complete() if not f.cancelled() else None)
                 self._getters.append(fut)
             else:
-                item = self._queue.popleft()
+                item = self._get_item()
                 self._get_complete()
         return item, fut
 
@@ -278,9 +233,11 @@ class UniversalQueue(object):
                 return fut
 
             if requeue:
-                self._queue.appendleft(item)
+                # self._queue.appendleft(item)
+                self._unget_item(item)
             else:
-                self._queue.append(item)
+                self._put_item(item)
+                # self._queue.append(item)
                 self._unfinished_tasks += 1
                 self._put_send()
 
@@ -289,7 +246,7 @@ class UniversalQueue(object):
                 getter = self._getters.popleft()
                 if getter.cancelled():
                     continue
-                getter.set_result(self._queue.popleft())
+                getter.set_result(self._get_item())  # queue.popleft())
                 break
 
     # Synchronous put. For threads.
@@ -361,3 +318,86 @@ class UniversalQueue(object):
 
     def __next__(self):
         return self.get()
+
+
+# The following classes implement the low-level queue data structure
+# and policies for adding and removing items.
+
+class FIFOImpl:
+
+    def _init_internal_queue(self):
+        return deque()
+
+    def _get_item(self):
+        return self._queue.popleft()
+
+    def _unget_item(self, item):
+        self._queue.appendleft(item)
+
+    def _put_item(self, item):
+        self._queue.append(item)
+
+
+class PriorityImpl:
+
+    def _init_internal_queue(self):
+        return []
+    
+    def _get_item(self):
+        return heappop(self._queue)
+
+    def _put_item(self, item):
+        heappush(self._queue, item)
+
+    _unget_item = _put_item
+
+
+class LIFOImpl:
+
+    def _init_internal_queue(self):
+        return []
+
+    def _put_item(self, item):
+        self._queue.append(item)
+
+    def _get_item(self):
+        return self._queue.pop()
+    
+    _unget_item = _put_item
+
+# Concrete Queue implementations
+
+class Queue(QueueBase, FIFOImpl):
+    '''
+    A First-In First-Out queue for communicating between Curio tasks.
+    not safe for communicating between Curio and external
+    threads, processes, etc.
+    '''
+    pass
+
+class PriorityQueue(QueueBase, PriorityImpl):
+    '''
+    A priority queue for communicating between Curio tasks.
+    not safe for communicating between Curio and external
+    threads, processes, etc.
+    '''
+    pass
+
+
+class LifoQueue(QueueBase, LIFOImpl):
+    '''
+    A Last-In First-Out queue for communicating between Curio tasks.
+    Not safe for communicating between Curio and external
+    threads, processes, etc.
+    '''
+    pass
+
+
+class UniversalQueue(UniversalQueueBase, FIFOImpl):
+    '''
+    A FIFO queue for communicating between Curio and external threads,
+    including foreign event loops running in different threads.
+    '''
+    pass
+
+
