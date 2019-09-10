@@ -14,7 +14,7 @@
 # directly.  Instead the _scheduler_wait() and _scheduler_wake()
 # functions must be used.
 
-__all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition', 'abide']
+__all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition' ]
 
 # -- Standard library
 
@@ -244,103 +244,3 @@ class Condition(_LockBase):
     async def notify_all(self):
         await self.notify(len(self._waiting))
 
-
-# Class that adapts a synchronous context-manager to an asynchronous manager
-
-class _contextadapt_basic(object):
-    def __init__(self, manager):
-        self._manager = manager
-
-    async def __aenter__(self):
-        return await workers.block_in_thread(self._manager.__enter__,
-                                             call_on_cancel=lambda fut: self._manager.__exit__(None, None, None))
-
-    async def __aexit__(self, *args):
-        return await workers.run_in_thread(self._manager.__exit__, *args)
-
-# Adapt a synchronous context-manager to an asynchronous manager, but
-# with a reserved backing thread (the same thread is used for the
-# duration of the context manager)
-
-class _contextadapt_reserve(object):
-    def __init__(self, manager):
-        self._manager = manager
-
-    async def __aenter__(self):
-        self._worker = await workers.reserve_thread_worker()
-        self._result = await self._worker.apply(self._manager.__enter__,
-                                                call_on_cancel=lambda fut: self._manager.__exit__(None, None, None))
-        return self
-
-    async def __aexit__(self, *args):
-        try:
-            await self._worker.apply(self._manager.__exit__, args)
-        finally:
-            await self._worker.release()
-
-    def __getattr__(self, name):
-        item = getattr(self._manager, name)
-        if callable(item):
-            async def call(*args, **kwargs):
-                return await self._worker.apply(item, args, kwargs)
-            return call
-        else:
-            return item
-
-def abide(op, *args, reserve_thread=False):
-    '''
-    Make curio abide by the execution requirements of an external
-    synchronization primitive such as a Lock, Semaphore, or Condition
-    variable from the threading library.
-
-    sync should be an object supporting the synchronous context-management
-    protocol.  It is adapted so that the __enter__() and __exit__()
-    methods execute in a background thread.  Cancellation is handled
-    gracefully.
-
-    The reserve_thread flag, if given exposes the background thread for further
-    use.  This may be required for certain kinds of synchronization
-    primitives such as condition variables:
-
-        cond = threading.Condition()
-
-        async with abide(cond, reserve_thread=True) as c:
-            await c.wait()   # Uses same thread as used to acquire the lock
-            ...
-
-    The main use of this function is in code that wants to safely
-    synchronize curio with threads and processes. For example, if you
-    write code this like:
-
-        async with abide(lck):
-            statements
-
-    The code will work correctly if lck is an async lock defined by curio or
-    a foreign lock defined by the threading or multiprocessing modules.
-
-    abide() can be used with simple functions and methods.  For example
-    events,
-
-        evt = threading.Event()
-        ...
-        await abide(evt.wait)
-
-    In this case, the operation is executed using block_in_thread().
-    '''
-
-    # If op is already a coroutine function, return it unmodified
-    if iscoroutinefunction(op):
-        return op(*args)
-
-    # If the object is already an asynchronous context manager, return it unmodified
-    if hasattr(op, '__aexit__'):
-        return op
-
-    if hasattr(op, '__exit__'):
-        return _contextadapt_reserve(op) if reserve_thread else _contextadapt_basic(op)
-
-    # Object must be callable at least
-    if not callable(op):
-        raise TypeError('Must supply a callable')
-
-    return workers.block_in_thread(op, *args)

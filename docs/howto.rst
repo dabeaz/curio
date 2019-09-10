@@ -339,36 +339,6 @@ curio tasks.  The same API is used in both cases.  However,
 when working with coroutines, queue operations must be
 prefaced by an ``await`` keyword.
 
-How can coroutines and threads share a common lock?
----------------------------------------------------
-
-A lock can be shared if the lock in question is one from the
-``threading`` module and you use the curio ``abide()`` function.  For
-example::
-
-    import threading
-    import curio
-
-    lock = threading.Lock()      # Must be a thread-lock
-
-    # Function running in a thread
-    def func():
-        ...
-        with lock:
-             critical_section
-             ...
-
-    # Coroutine running curio
-    async def coro():
-        ...
-        async with curio.abide(lock):
-             critical_section
-             ...
-
-``curio.abide()`` adapts the given lock to work safely inside
-curio.  If given a thread-lock, the various locking operations
-are executed in threads to avoid blocking other curio tasks. 
-
 How can synchronous code set an asynchronous event?
 ---------------------------------------------------
 

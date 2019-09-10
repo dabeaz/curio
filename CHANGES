@@ -12,6 +12,14 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+09/10/2019 Removed the abide() function.  This feature was from the
+           earliest days of Curio when there was initial thinking 
+           about the interaction of async tasks and existing threads.
+           The same functionality can still be implemented using run_in_thread()
+           or block_in_thread() instead.  In the big picture, the problem
+           being solved might not be that common.  So, in the interest
+           of making Curio smaller, abide() has ridden off into the sunset.
+
 09/08/2019 Removed BoundedSemaphore.
 
 09/03/2019 Removed the experimental aside() functionality.  Too much 
