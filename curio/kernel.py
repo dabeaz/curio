@@ -490,12 +490,12 @@ class Kernel(object):
         def trap_sched_wait(sched, state):
             if check_cancellation():
                 return
-            suspend_task(state, sched.add(current))
+            suspend_task(state, sched._kernel_suspend(current))
 
         # ----------------------------------------
         # Reschedule one or more tasks from a scheduler primitive
         def trap_sched_wake(sched, n):
-            tasks = sched.pop(n)
+            tasks = sched._kernel_wake(n)
             for task in tasks:
                 reschedule_task(task)
 
@@ -727,7 +727,7 @@ class Kernel(object):
                             current = None
 
                             # Wake all joining tasks and enter the terminated state.
-                            for wtask in active.joining.pop(len(active.joining)):
+                            for wtask in active.joining._kernel_wake(len(active.joining)):
                                 reschedule_task(wtask)
                             active.terminated = True
                             active.state = 'TERMINATED'

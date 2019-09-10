@@ -2,17 +2,13 @@
 #
 # Implementation of common task synchronization primitives such as
 # events, locks, semaphores, and condition variables. These primitives
-# are only safe to use in the curio framework--they are not thread safe
+# are only safe to use within Curio--they are not thread safe
 # unless otherwise indicated.
 #
 # The general implementation strategy is based on task scheduling.
 # For example, if a task needs to wait on a lock, it goes to sleep on
 # a queue.  When a task releases a lock, it wakes a sleeping task.
-#
-# Internally, task scheduling is provided by the SchedFIFO and
-# SchedBarrier classes in sched.py.  These are never manipulated
-# directly.  Instead the _scheduler_wait() and _scheduler_wake()
-# functions must be used.
+# Task scheduling is provided by the SchedFIFO and SchedBarrier classes in sched.py
 
 __all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition' ]
 
@@ -22,12 +18,12 @@ import threading
 
 # -- Curio
 
-from .traps import _scheduler_wait, _scheduler_wake
 from .sched import SchedFIFO, SchedBarrier
 from . import workers
 from .task import current_task
 from .meta import awaitable, iscoroutinefunction
 from . import thread
+
 
 class Event(object):
 
@@ -49,11 +45,11 @@ class Event(object):
     async def wait(self):
         if self._set:
             return
-        await _scheduler_wait(self._waiting, 'EVENT_WAIT')
+        await self._waiting.suspend('EVENT_WAIT')
 
     async def set(self):
         self._set = True
-        await _scheduler_wake(self._waiting, len(self._waiting))
+        await self._waiting.wake()
 
 class UniversalEvent(object):
     '''
@@ -112,14 +108,14 @@ class Lock(_LockBase):
 
     async def acquire(self):
         if self._acquired:
-            await _scheduler_wait(self._waiting, 'LOCK_ACQUIRE')
+            await self._waiting.suspend('LOCK_ACQUIRE')
         self._acquired = True
         return True
 
     async def release(self):
         assert self._acquired, 'Lock not acquired'
         if self._waiting:
-            await _scheduler_wake(self._waiting, n=1)
+            await self._waiting.wake()
         else:
             self._acquired = False
 
@@ -182,14 +178,14 @@ class Semaphore(_LockBase):
 
     async def acquire(self):
         if self._value <= 0:
-            await _scheduler_wait(self._waiting, 'SEMA_ACQUIRE')
+            await self._waiting.suspend('SEMA_ACQUIRE')
         else:
             self._value -= 1
         return True
 
     async def release(self):
         if self._waiting:
-            await _scheduler_wake(self._waiting, n=1)
+            await self._waiting.wake()
         else:
             self._value += 1
 
@@ -225,7 +221,7 @@ class Condition(_LockBase):
             raise RuntimeError("Can't wait on unacquired lock")
         await self.release()
         try:
-            await _scheduler_wait(self._waiting, 'COND_WAIT')
+            await self._waiting.suspend('COND_WAIT')
         finally:
             await self.acquire()
 
@@ -239,7 +235,7 @@ class Condition(_LockBase):
     async def notify(self, n=1):
         if not self.locked():
             raise RuntimeError("Can't notify on unacquired lock")
-        await _scheduler_wake(self._waiting, n=n)
+        await self._waiting.wake(n)
 
     async def notify_all(self):
         await self.notify(len(self._waiting))

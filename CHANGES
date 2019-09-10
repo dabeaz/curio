@@ -12,6 +12,11 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+09/10/2019 Some refactoring of some internal scheduling operations.
+           The SchedFIFO and SchedBarrier classes are now available
+           for more general use by any code that wants to implement
+           different sorts of synchronization primitives.
+
 09/10/2019 Removed the abide() function.  This feature was from the
            earliest days of Curio when there was initial thinking 
            about the interaction of async tasks and existing threads.

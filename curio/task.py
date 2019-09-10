@@ -4,7 +4,6 @@
 
 # -- Standard library
 
-import warnings
 import logging
 from collections import deque
 import linecache
@@ -189,7 +188,7 @@ class Task(object):
         Wait for a task to terminate. Does not return any value.
         '''
         if not self.terminated:
-            await _scheduler_wait(self.joining, 'TASK_JOIN')
+            await self.joining.suspend('TASK_JOIN')
         
     @property
     def result(self):
