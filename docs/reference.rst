@@ -2241,26 +2241,6 @@ classes would also generate an error::
             pass
 
 
-.. class:: AsyncObject()
-
-   A base class that provides all of the functionality of ``AsyncABC``, but additionally
-   requires instances to be created inside of coroutines.   The ``__init__()`` method
-   must be defined as a coroutine and may call other coroutines.
-
-Here is an example using ``AsyncObject``::
-
-    from curio.meta import AsyncObject
-
-    class Spam(AsyncObject):
-        async def __init__(self, x, y):
-            self.x = x
-            self.y = y
-
-    # To create an instance
-    async def func():
-        s = await Spam(2, 3)
-        ...
-
 .. function:: blocking(func)
 
    A decorator that indicates that the function performs a blocking operation.

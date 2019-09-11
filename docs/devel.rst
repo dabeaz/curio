@@ -3130,8 +3130,7 @@ Asynchronous Instance Creation
 Normally, use of ``async`` and ``await`` is forbidden in the
 ``__init__()`` method of a class.  Honestly, you should probably try to
 avoid asynchronous operations during instance creation, but if you
-can't, there are two approaches.  First, you can define an
-asynchronous class method::
+can't, there is a way.  Define an asynchronous class method::
 
     class Spam(object):
         @classmethod
@@ -3147,28 +3146,6 @@ asynchronous class method::
      
 You'd need to custom-tailor the arguments to ``new()`` to your liking.
 However, as an ``async`` function, you're free to use coroutines inside.
-
-A second approach is to inherit from the Curio ``AsyncObject`` base class
-like this::
-
-    from curio.meta import AsyncObject
-    class Spam(AsyncObject):
-        async def __init__(self):
-            self.val = await coro()
-            ...
-
- 
-     # Example of creating an instance    
-     async def main():
-         s = await Spam()
-
-This latter approach probably looks the most "pythonic" at the risk of
-shattering your co-workers heads as they wonder what kind of
-voodoo-magic you applied to the ``Spam`` class to make it support an
-asynchronous ``__init__()`` method.  If you must know, that magic
-involves metaclasses.  On that subject, the ``AsyncObject`` base uses
-the same metaclass as ``AsyncABC``, enforces async-correctness in
-subclasses, and allows abstract methods to be defined.
 
 Asynchronous Instance Cleanup/Deletion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
