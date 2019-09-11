@@ -306,7 +306,7 @@ class _AsyncContextManager:
         # If the result is not the result of _async_thread_exit() above, then
         # some kind of very bizarre runtime problem has been encountered.
         if result is not _AsyncContextManager:
-            self.task._throw(RuntimeError('yielding not allowed in AsyncThread. Got %r' % result))
+            self.task._throw(RuntimeError(f'yielding not allowed in AsyncThread. Got {result!r}'))
 
         # At this point, the body of the context manager is done.  We simply
         # fall off the end of the function.  The _waiter() coroutine will

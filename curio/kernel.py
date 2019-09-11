@@ -338,9 +338,9 @@ class Kernel(object):
                 key = selector_getkey(fileobj)
                 mask, (rtask, wtask) = key.events, key.data
                 if event == EVENT_READ and rtask:
-                    raise ReadResourceBusy("Multiple tasks can't wait to read on the same file descriptor %r" % fileobj)
+                    raise ReadResourceBusy(f"Multiple tasks can't wait to read on the same file descriptor {fileobj}")
                 if event == EVENT_WRITE and wtask:
-                    raise WriteResourceBusy("Multiple tasks can't wait to write on the same file descriptor %r" % fileobj)
+                    raise WriteResourceBusy(f"Multiple tasks can't wait to write on the same file descriptor {fileobj}")
 
                 selector_modify(fileobj, mask | event,
                                 (task, wtask) if event == EVENT_READ else (rtask, task))
@@ -612,8 +612,6 @@ class Kernel(object):
         def kernel_run(coro):
             nonlocal current
             main_task = new_task(coro) if coro else None
-            if main_task:
-                main_task.report_crash = False
             del coro
 
             while True:
@@ -739,7 +737,7 @@ class Kernel(object):
                             else:
                                 # Abnormal termination (set an exception)
                                 active.exception = e
-                                if active.report_crash and not isinstance(e, (CancelledError, SystemExit)):
+                                if (active != main_task and not isinstance(e, (CancelledError, SystemExit))):
                                     log.error('Task Crash: %r', active, exc_info=True)
                                 if not isinstance(e, Exception):
                                     raise

@@ -74,9 +74,9 @@ def _format_stack(task, complete=False):
         line = linecache.getline(filename, lineno, f.f_globals)
         extracted_list.append((filename, lineno, name, line))
     if not extracted_list:
-        resp = 'No stack for %r' % task
+        resp = f'No stack for {task!r}'
     else:
-        resp = 'Stack for %r (most recent call last):\n' % task
+        resp = f'Stack for {task!r} (most recent call last):\n'
         resp += ''.join(traceback.format_list(extracted_list))
     return resp
 
@@ -108,7 +108,6 @@ class Task(object):
         self.coro = coro              # Underlying generator/coroutine
         self.name = getattr(coro, '__qualname__', str(coro))
         self.daemon = False           # Daemonic flag
-        self.report_crash = True      # Crash reporting
 
         # Attributes updated during execution (safe to inspect)
         self.cycles = 0               # Execution cycles completed
@@ -146,12 +145,12 @@ class Task(object):
         self._deadlines = []          # Timeout deadline stack
 
     def __repr__(self):
-        return 'Task(id=%r, name=%r, state=%r)' % (self.id, self.name, self.state)
+        return f'Task(id={self.id}, name={self.name!r}, state={self.state!r})'
 
     def __str__(self):
         filename, lineno = _where(self)
         if filename:
-            return '%r at %s:%s' % (self, filename, lineno)
+            return f'{self!r} at {filename}:{lineno}'
         else:
             return repr(self)
 
@@ -407,14 +406,14 @@ class TaskGroup(object):
         else:
             self._running.add(task)
 
-    async def spawn(self, coro, *args, report_crash=True):
+    async def spawn(self, coro, *args):
         '''
         Spawn a new task into the task group.
         '''
         if self._closed:
             raise RuntimeError('Task group is closed')
 
-        task = await spawn(coro, *args, report_crash=report_crash)
+        task = await spawn(coro, *args)
         await self.add_task(task)
         return task
 
@@ -616,18 +615,14 @@ async def schedule():
     '''
     await sleep(0)
 
-async def spawn(corofunc, *args, daemon=False, allow_cancel=True, report_crash=True):
+async def spawn(corofunc, *args, daemon=False):
     '''
     Create a new task, running corofunc(*args). Use the daemon=True
-    option if the task runs forever as a background task.  If
-    allow_cancel=False is specified, the task disables the delivery of
-    cancellation related exceptions (including timeouts).
+    option if the task runs forever as a background task. 
     '''
     coro = meta.instantiate_coroutine(corofunc, *args)
     task = await _spawn(coro)
-    task.allow_cancel = allow_cancel
     task.daemon = daemon
-    task.report_crash = report_crash
     return task
 
 # Context manager for supervising cancellation masking

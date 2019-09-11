@@ -48,7 +48,7 @@ try:
     from ssl import SSLWantReadError, SSLWantWriteError
     WantRead = (BlockingIOError, InterruptedError, SSLWantReadError)
     WantWrite = (BlockingIOError, InterruptedError, SSLWantWriteError)
-except ImportError:    # pragma: no cover
+except ImportError:
     WantRead = (BlockingIOError, InterruptedError)
     WantWrite = (BlockingIOError, InterruptedError)
 
@@ -78,7 +78,7 @@ class _Fd(object):
         return self.fd
 
     def __repr__(self):
-        return '<fd=%r>' % self.fd
+        return f'<fd={self.fd!r}>'
 
 
 # There is a certain amount of repetition in this class.  It can
@@ -102,7 +102,7 @@ class Socket(object):
         self._socket_recv = sock.recv
 
     def __repr__(self):
-        return '<curio.Socket %r>' % (self._socket)
+        return f'<curio.Socket {self._socket!r}>'
 
     def __getattr__(self, name):
         return getattr(self._socket, name)
@@ -211,7 +211,7 @@ class Socket(object):
             await _write_wait(self._fileno)
         err = self._socket.getsockopt(SOL_SOCKET, SO_ERROR)
         if err != 0:
-            raise OSError(err, 'Connect call failed %s' % (address,))
+            raise OSError(err, f'Connect call failed {address}')
         if getattr(self, 'do_handshake_on_connect', False):
             await self.do_handshake()
 
@@ -221,7 +221,7 @@ class Socket(object):
                 return self._socket.recvfrom(buffersize, flags)
             except WantRead:
                 await _read_wait(self._fileno)
-            except WantWrite:       # pragma: no cover
+            except WantWrite:
                 await _write_wait(self._fileno)
 
     async def recvfrom_into(self, buffer, bytes=0, flags=0):
@@ -324,7 +324,7 @@ class StreamBase(object):
         self._buffer = bytearray()
 
     def __repr__(self):
-        return '<curio.%s %r>' % (type(self).__name__, self._file)
+        return f'<curio.{type(self).__name__} {self._file!r}>'
 
     def fileno(self):
         return int(self._fileno)
@@ -651,7 +651,7 @@ class SyncSocket(object):
         self._socket_recv = sock.recv
 
     def __repr__(self):
-        return '<curio.SyncSocket %r>' % (self._socket)
+        return f'<curio.SyncSocket {self._socket!r}>'
 
     def __getattr__(self, name):
         return getattr(self._socket, name)
@@ -747,7 +747,7 @@ class SyncSocket(object):
             thread.AWAIT(_write_wait, self._fileno)
         err = self._socket.getsockopt(SOL_SOCKET, SO_ERROR)
         if err != 0:
-            raise OSError(err, 'Connect call failed %s' % (address,))
+            raise OSError(err, f'Connect call failed {address}')
         if getattr(self, 'do_handshake_on_connect', False):
             self.do_handshake()
 
@@ -832,7 +832,7 @@ class SyncStreamBase(object):
         self._buffer = bytearray()
 
     def __repr__(self):
-        return '<curio.%s %r>' % (type(self).__name__, self._file)
+        return f'<curio.{type(self).__name__} {self._file!r}>'
 
     def fileno(self):
         return int(self._fileno)

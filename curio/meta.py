@@ -103,7 +103,7 @@ def instantiate_coroutine(corofunc, *args, **kwargs):
     if not iscoroutinefunction(corofunc) and not getattr(corofunc, '_async_thread', False):
         coro = corofunc(*args, **kwargs)
         if not inspect.iscoroutine(coro):
-            raise TypeError('Could not create coroutine from %s' % corofunc)
+            raise TypeError(f'Could not create coroutine from {corofunc}')
         return coro
 
     async def context():
@@ -158,7 +158,7 @@ def sync_only(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         if _from_coroutine():
-            raise SyncIOError('{} may only be used in synchronous code'.format(func.__name__))
+            raise SyncIOError(f'{func.__name__} may only be used in synchronous code')
         else:
             return func(*args, **kwargs)
     return wrapper
@@ -193,8 +193,7 @@ def awaitable(syncfunc):
     '''
     def decorate(asyncfunc):
         if inspect.signature(syncfunc) != inspect.signature(asyncfunc):
-            raise TypeError('%s and async %s have different signatures' %
-                            (syncfunc.__name__, asyncfunc.__name__))
+            raise TypeError(f'{syncfunc.__name__} and async {asyncfunc.__name__} have different signatures')
 
         @wraps(asyncfunc)
         def wrapper(*args, **kwargs):
@@ -258,7 +257,7 @@ class AsyncABCMeta(ABCMeta):
 
         for name, val in vars(cls).items():
             if name in coros and not iscoroutinefunction(val):
-                raise TypeError('Must use async def %s%s' % (name, inspect.signature(val)))
+                raise TypeError(f'Must use async def {name}{inspect.signature(val)}')
         super().__init__(name, bases, methods)
 
 class AsyncABC(metaclass=AsyncABCMeta):

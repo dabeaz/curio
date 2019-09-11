@@ -34,7 +34,7 @@ class Event(object):
     def __repr__(self):
         res = super().__repr__()
         extra = 'set' if self._set else 'unset'
-        return '<{} [{},waiters:{}]>'.format(res[1:-1], extra, len(self._waiting))
+        return f'<{res[1:-1]} [{extra},waiters:{len(self._waiting)}]>'
 
     def is_set(self):
         return self._set
@@ -57,6 +57,11 @@ class UniversalEvent(object):
     '''
     def __init__(self):
         self._evt = threading.Event()
+
+    def __repr__(self):
+        res = super().__repr__()
+        extra = 'set' if self.is_set() else 'unset'
+        return f'<{res[1:-1]} [{extra}]>'
         
     def is_set(self):
         return self._evt.is_set()
@@ -104,7 +109,7 @@ class Lock(_LockBase):
     def __repr__(self):
         res = super().__repr__()
         extra = 'locked' if self.locked() else 'unlocked'
-        return '<{} [{},waiters:{}]>'.format(res[1:-1], extra, len(self._waiting))
+        return f'<{res[1:-1]} [{extra},waiters:{len(self._waiting)}]>'
 
     async def acquire(self):
         if self._acquired:
@@ -133,7 +138,7 @@ class RLock(_LockBase):
     def __repr__(self):
         res = super().__repr__()
         extra = 'locked' if self.locked() else 'unlocked'
-        return '<{} [{},recursion:{}]>'.format(res[1:-1], extra, self._count)
+        return f'<{res[1:-1]} [{extra},recursion:{self._count}]>'
 
     async def acquire(self):
 
@@ -169,8 +174,7 @@ class Semaphore(_LockBase):
     def __repr__(self):
         res = super().__repr__()
         extra = 'locked' if self.locked() else 'unlocked'
-        return '<{} [{},value:{},waiters:{}]>'.format(
-            res[1:-1], extra, self._value, len(self._waiting))
+        return f'<{res[1:-1]} [{extra},value:{self._value},waiters:{len(self._waiting)}]>'
 
     @property
     def value(self):
@@ -205,7 +209,7 @@ class Condition(_LockBase):
     def __repr__(self):
         res = super().__repr__()
         extra = 'locked' if self.locked() else 'unlocked'
-        return '<{} [{},waiters:{}]>'.format(res[1:-1], extra, len(self._waiting))
+        return f'<{res[1:-1]} [{extra},waiters:{len(self._waiting)}]>'
 
     def locked(self):
         return self._lock.locked()

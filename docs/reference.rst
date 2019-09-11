@@ -101,16 +101,13 @@ Tasks
 
 The following functions are defined to help manage the execution of tasks.
 
-.. asyncfunction:: spawn(corofunc, *args, daemon=False, report_crash=True)
+.. asyncfunction:: spawn(corofunc, *args, daemon=False)
 
    Create a new task that runs the async function *corofunc*.  *args*
    are the arguments provided to *corofunc*. Returns a :class:`Task`
    instance as a result.  The *daemon* option, if supplied, specifies
    that the new task will never be joined and that its result may be
-   disregarded.  The *report_crash* option specifies whether or not tasks
-   that terminate due to an uncaught exception print a log message or not.
-   The default behavior is ``True``.  Resist the urge to turn off crash
-   reporting--doing so can make debugging much more difficult.
+   disregarded. 
 
    Note: ``spawn()`` creates a completely independent task.  The resulting task
    is not placed into any kind of task group as might be managed by :class:`TaskGroup`
@@ -263,11 +260,10 @@ To do this, create a ``TaskGroup`` instance.
 
 The following methods are supported on ``TaskGroup`` instances:
 
-.. asyncmethod:: TaskGroup.spawn(corofunc, *args, report_crash=True)
+.. asyncmethod:: TaskGroup.spawn(corofunc, *args)
 
    Create a new task that's part of the group.  Returns a ``Task``
-   instance.  The *report_crash* flag controls whether a traceback is
-   logged when a task exits with an uncaught exception.
+   instance. 
 
 .. asyncmethod:: TaskGroup.add_task(coro)
 

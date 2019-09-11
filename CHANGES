@@ -12,6 +12,22 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+09/11/2019 I want to use f-strings. Now used for string formatting
+           everywhere except in logging messages. Sorry Python 3.5.
+
+09/11/2019 Removed the allow_cancel optional argument to spawn().
+           If a task wants to disable cancellation, it should 
+           explicitly manage that on its own. 
+
+09/11/2019 Removed the report_crash option to spawn(). Having
+           it as an optional argument is really the wrong place for
+           this.  On-by-default crash logging is extremely useful for
+           debugging.  However, if you want to disable it, it's
+           annoying to have to go change your source code on a task-by-task
+           basis.  A better option is to suppress it via configuration 
+           of the logging module.  Better yet: write your code so that
+           it doesn't crash.
+
 09/10/2019 Some refactoring of some internal scheduling operations.
            The SchedFIFO and SchedBarrier classes are now available
            for more general use by any code that wants to implement

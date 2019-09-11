@@ -127,7 +127,7 @@ class Connection(object):
         size, = struct.unpack('!i', header)
         if maxlength is not None:
             if size > maxlength:
-                raise IOError('Message too large. %d bytes > %d maxlength' % (size, maxlength))
+                raise IOError(f'Message too large. {size} bytes > {maxlength} maxlength')
 
         msg = await self._reader.read_exactly(size)
         return msg
@@ -180,7 +180,7 @@ class Connection(object):
 
     async def _answer_challenge(self, authkey):
         message = await self.recv_bytes(maxlength=256)
-        assert message[:len(CHALLENGE)] == CHALLENGE, 'message = %r' % message
+        assert message[:len(CHALLENGE)] == CHALLENGE, f'message = {message!r}'
         message = message[len(CHALLENGE):]
         digest = hmac.new(authkey, message, 'md5').digest()
         await self.send_bytes(digest)
@@ -206,7 +206,7 @@ class Channel(object):
             self.check_address = check_address
 
     def __repr__(self):
-        return 'Channel(%r, %r)' % (self.address, self.family)
+        return f'Channel({self.address!r}, {self.family!r})'
 
     async def __aenter__(self):
         return self

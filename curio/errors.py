@@ -4,10 +4,10 @@
 
 __all__ = [
     'CurioError', 'CancelledError', 'TaskTimeout', 'TaskError',
-    'TaskGroupError', 'SyncIOError', 
-    'ResourceBusy', 'ReadResourceBusy',
-    'WriteResourceBusy', 'TimeoutCancellationError',
-    'UncaughtTimeoutError', 'TaskCancelled', 'AsyncOnlyError',
+    'TaskGroupError', 'SyncIOError', 'ResourceBusy',
+    'ReadResourceBusy', 'WriteResourceBusy',
+    'TimeoutCancellationError', 'UncaughtTimeoutError',
+    'TaskCancelled', 'AsyncOnlyError',
 ]
 
 

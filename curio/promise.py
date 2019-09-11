@@ -14,7 +14,7 @@ class Promise:
             extra = repr(self._exception) if self._exception else repr(self._data)
         else:
             extra = 'unset'
-        return '<{} [{}]>'.format(res[1:-1], extra)
+        return f'<{res[1:-1]} [{extra}]>'
 
     def is_set(self):
         '''Return `True` if the promise is set'''
