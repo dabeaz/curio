@@ -8,7 +8,7 @@
 __all__ = [
     'iscoroutinefunction', 'finalize', 'blocking', 'cpubound',
     'awaitable', 'asyncioable', 'sync_only', 'AsyncABC',
-    'AsyncObject', 'curio_running', 'instantiate_coroutine',
+    'curio_running', 'instantiate_coroutine',
  ]
 
 # -- Standard Library
@@ -51,16 +51,14 @@ def curio_running():
 
 _CO_NESTED = inspect.CO_NESTED
 _CO_FROM_COROUTINE = inspect.CO_COROUTINE | inspect.CO_ITERABLE_COROUTINE | inspect.CO_ASYNC_GENERATOR
+_isasyncgenfunction = inspect.isasyncgenfunction
 
-try:
-    _isasyncgenfunction = inspect.isasyncgenfunction
-except AttributeError:
-    # Not supported in python 3.5
-    _isasyncgenfunction = lambda func: False
-
-def _from_coroutine(level=2):
+def _from_coroutine(level=2, _cache={}):
     f_code = _getframe(level).f_code
+    if f_code in _cache:
+        return _cache[f_code]
     if f_code.co_flags & _CO_FROM_COROUTINE:
+        _cache[f_code] = True
         return True
     else:
         # Comment:  It's possible that we could end up here if one calls a function
@@ -77,6 +75,7 @@ def _from_coroutine(level=2):
         if (f_code.co_flags & _CO_NESTED and f_code.co_name[0] == '<'):
             return _from_coroutine(level + 2)
         else:
+            _cache[f_code] = False
             return False
 
 def iscoroutinefunction(func):
@@ -261,36 +260,6 @@ class AsyncABCMeta(ABCMeta):
         super().__init__(name, bases, methods)
 
 class AsyncABC(metaclass=AsyncABCMeta):
-    pass
-
-
-class AsyncInstanceType(AsyncABCMeta):
-    '''
-    Metaclass that allows for asynchronous instance initialization and the
-    __init__() method to be defined as a coroutine.   Usage:
-
-    class Spam(metaclass=AsyncInstanceType):
-        async def __init__(self, x, y):
-            self.x = x
-            self.y = y
-
-    async def main():
-         s = await Spam(2, 3)
-         ...
-    '''
-    @staticmethod
-    def __new__(meta, clsname, bases, attributes):
-        if '__init__' in attributes and not inspect.iscoroutinefunction(attributes['__init__']):
-            raise TypeError('__init__ must be a coroutine')
-        return super().__new__(meta, clsname, bases, attributes)
-
-    async def __call__(cls, *args, **kwargs):
-        self = cls.__new__(cls, *args, **kwargs)
-        await self.__init__(*args, **kwargs)
-        return self
-
-
-class AsyncObject(metaclass=AsyncInstanceType):
     pass
 
 

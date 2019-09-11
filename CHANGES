@@ -12,6 +12,10 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+09/11/2019 Removed AsyncObject and AsyncInstanceType. Very specialized.
+           Not used elsewhere in Curio. Involves metaclasses. One
+           less thing to maintain.
+
 09/11/2019 I want to use f-strings. Now used for string formatting
            everywhere except in logging messages. Sorry Python 3.5.
 

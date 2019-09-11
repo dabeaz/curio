@@ -35,27 +35,6 @@ def test_iscoroutinefunc():
 
     assert meta.iscoroutinefunction(partial(spam, 1))
 
-def test_async_instance(kernel):
-
-    class AsyncSpam(meta.AsyncObject):
-        async def __init__(self, x):
-            await sleep(0)
-            self.x = x
-
-    async def main():
-        s = await AsyncSpam(37)
-        assert s.x == 37
-        
-    kernel.run(main)
-
-def test_bad_async_instance():
-
-    with pytest.raises(TypeError):
-        class AsyncSpam(meta.AsyncObject):
-            def __init__(self, x):
-                self.x = x
-
-
 def test_async_abc():
     class AsyncSpam(meta.AsyncABC):
         async def spam(self):
