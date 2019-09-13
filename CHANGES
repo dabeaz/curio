@@ -12,6 +12,14 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+09/13/2019 Support for context-manager use of spawn_thread() has been
+           withdrawn.  It's a neat feature, but the implementation
+           is pretty hairy.  It also creates a situation where async
+           functions partially run in coroutines and partially in threads.
+           All things equal, it's probably more sane to make this 
+           kind of distinction at the function level, not at the level
+           of code blocks.   
+
 09/11/2019 Removed AsyncObject and AsyncInstanceType. Very specialized.
            Not used elsewhere in Curio. Involves metaclasses. One
            less thing to maintain.

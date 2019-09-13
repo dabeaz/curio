@@ -216,6 +216,7 @@ def test_spawn_async_thread(kernel):
     kernel.run(main)
     assert results == [1, 5, 2, 5]
 
+@pytest.mark.skip
 def test_thread_context(kernel):
     results = []
     async def func(x, y):
@@ -233,6 +234,7 @@ def test_thread_context(kernel):
     assert results == [1, 5]
 
 # This test is aimed at testing cancellation/timeouts in async threads
+@pytest.mark.skip
 def test_thread_timeout(kernel):
     evt = Event()
     results = []
@@ -272,6 +274,7 @@ def test_thread_timeout(kernel):
 
 import threading
 
+@pytest.mark.skip
 def test_async_thread_call(kernel):
     # Tests calling between async thread objects
     results = []
@@ -302,6 +305,7 @@ def test_async_thread_call(kernel):
     kernel.run(main)
     assert results == ['func2', 'func1', True, 'coro1', 'func1', True]
 
+@pytest.mark.skip
 def test_async_thread_async_thread_call(kernel):
     # Tests calling between async thread objects
     results = []
