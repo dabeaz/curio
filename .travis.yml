@@ -5,20 +5,14 @@ matrix:
       os: linux
     - os: windows
       language: sh # Python is not yet officially supported
+      before_install:
+        - choco install python3
+        - ln -s $(which py) /usr/bin/python3
   allow_failures:
     - os: windows
-      language: sh
   fast_finish: true
 
-sudo: false
 cache: pip
-
-before_install:
-  - >
-    if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then
-      choco install python3
-      ln -s $(which py) /usr/bin/python3
-    fi
 
 install:
   - travis_retry python3 -m pip install -e .[test]
