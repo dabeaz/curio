@@ -6,9 +6,9 @@ matrix:
     - name: Python 3.7 on Linux
       language: python
       python: 3.7
-    - name: Python 3.7 on macOS
-      os: osx
-      osx_image: xcode11
+    #- name: Python 3.7 on macOS
+    #  os: osx
+    #  osx_image: xcode11
     - name: Python 3.7 on Windows
       os: windows
       before_install:
