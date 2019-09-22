@@ -1,16 +1,19 @@
+language: shell  # 'language: python' does not work on macOS and Windows
+cache: pip
+
 matrix:
   include:
-    - language: python
+    - name: Python 3.7 on Linux
+      language: python
       python: 3.7
-      os: linux
-    - os: windows
-      language: sh # Python is not yet officially supported
+    - name: Python 3.7 on macOS
+      os: osx
+      osx_image: xcode11
+    - name: Python 3.7 on Windows
+      os: windows
       before_install:
         - choco install python3
         - ln -s $(which py) /usr/bin/python3
-  fast_finish: true
-
-cache: pip
 
 install:
   - travis_retry python3 -m pip install -e .[test]
