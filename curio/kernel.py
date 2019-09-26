@@ -54,6 +54,7 @@ import os
 import errno
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque
+import threading
 
 # Logger where uncaught exceptions from crashed tasks are logged
 import logging
@@ -80,6 +81,7 @@ class Kernel(object):
 
     Use the kernel run() method to submit work to the kernel..
     '''
+
     def __init__(self, *, selector=None, debug=None, activations=None):
 
         # Functions to call at shutdown
@@ -495,7 +497,7 @@ class Kernel(object):
         # ----------------------------------------
         # Reschedule one or more tasks from a scheduler primitive
         def trap_sched_wake(sched, n):
-            tasks = sched._kernel_wake(n)
+            tasks = sched._kernel_wake(n) 
             for task in tasks:
                 reschedule_task(task)
 

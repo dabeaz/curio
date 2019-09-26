@@ -12,6 +12,12 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+09/26/2019 Removed support for the Asyncio bridge. It wasn't documented
+           and there are many possible ways in which Curio might 
+           potentially interact with an asyncio event loop. For example,
+           using queues.  Asyncio interaction may be revisited in the
+           future.  
+
 09/13/2019 Support for context-manager use of spawn_thread() has been
            withdrawn.  It's a neat feature, but the implementation
            is pretty hairy.  It also creates a situation where async

@@ -141,8 +141,9 @@ class Task(object):
         # Bound coroutine methods
         self._send = self._run_coro.send   
         self._throw = self._run_coro.throw
-
-        self._deadlines = []          # Timeout deadline stack
+        
+        # Timeout deadline stack
+        self._deadlines = []
 
     def __repr__(self):
         return f'Task(id={self.id}, name={self.name!r}, state={self.state!r})'

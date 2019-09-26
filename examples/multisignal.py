@@ -1,7 +1,6 @@
-# An example of receiving signals in curio, asyncio, and threads
+# An example of receiving signals in curio and threads
 # all at once using Curio's SignalSet functionality.
 
-from curio.bridge import AsyncioLoop
 from curio import *
 import os
 import signal
@@ -26,20 +25,17 @@ def signal_thread(label):
                 break
 
 async def main():
-    loop = AsyncioLoop()
-    # Launch the *same* async function in curio and in asyncio (running in different threads)
+    # Launch the async function in curio
     t1 = await spawn(signal_task, 'curio')
-    t2 = await spawn(loop.run_asyncio(signal_task, 'asyncio'))
 
     # Launch an independent thread
-    t3 = threading.Thread(target=signal_thread, args=('thread',))
-    t3.start()
+    t2 = threading.Thread(target=signal_thread, args=('thread',))
+    t2.start()
                        
     print('Send me signals on PID', os.getpid())
 
     await t1.join()
-    await t2.join()
-    await run_in_thread(t3.join)
+    await run_in_thread(t2.join)
 
 if __name__ == '__main__':
     with enable_signals([signal.SIGUSR1, signal.SIGUSR2, signal.SIGINT]):

@@ -12,7 +12,6 @@ from .workers import *
 from .network import *
 from .file import *
 from .channel import *
-from .bridge import *
 from .thread import *
 from .promise import *
 
@@ -26,6 +25,5 @@ __all__ = [*errors.__all__,
            *network.__all__,
            *file.__all__,
            *channel.__all__,
-           *bridge.__all__,
            *thread.__all__,
            ]

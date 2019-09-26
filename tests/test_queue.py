@@ -4,6 +4,7 @@ from collections import deque
 from curio import *
 import time
 import threading
+import asyncio
 from curio.traps import _read_wait
 
 def test_queue_simple(kernel):
@@ -582,12 +583,13 @@ def test_uqueue_asyncio_iter(kernel):
 
     async def producer():
         queue = UniversalQueue(maxsize=2)
-        async with AsyncioLoop() as loop:
-            t = await spawn(loop.run_asyncio(consumer, queue))
-            for n in range(10):
-                await queue.put(n)
-            await queue.put(None)
-            await t.join()
+        loop = asyncio.new_event_loop()
+        t = threading.Thread(target=loop.run_until_complete, args=(consumer(queue),))
+        t.start()
+        for n in range(10):
+            await queue.put(n)
+        await queue.put(None)
+        t.join()
 
     kernel.run(producer())
 
@@ -595,17 +597,19 @@ def test_uqueue_asyncio_iter(kernel):
 def test_uqueue_asyncio_prod(kernel):
     async def consumer():
         queue = UniversalQueue(maxsize=2)
-        async with AsyncioLoop() as loop:
-            t = await spawn(loop.run_asyncio(producer, queue))
-            results = []
-            async for item in queue:
-                await queue.task_done()
-                if item is None:
-                    break
-                results.append(item)
+        loop = asyncio.new_event_loop()
+        t = threading.Thread(target=loop.run_until_complete, args=(producer(queue),))
+        t.start()
+
+        results = []
+        async for item in queue:
+            await queue.task_done()
+            if item is None:
+                break
+            results.append(item)
             
-            assert results == list(range(10))
-            await t.join()
+        assert results == list(range(10))
+        t.join()
 
     async def producer(queue):
         for n in range(10):

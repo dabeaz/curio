@@ -127,7 +127,6 @@ class Lock(_LockBase):
     def locked(self):
         return self._acquired
 
-
 class RLock(_LockBase):
 
     def __init__(self):
