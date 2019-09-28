@@ -1,6 +1,6 @@
 # test_activation.py
 
-from curio.activation import Activation
+from curio.activation import Activation, trap_patch
 from curio import Kernel, sleep, run
 
 class _TestActivation(Activation):
@@ -68,3 +68,23 @@ def test_activation_count():
     # There should be three tasks. main(), an in-kernel task, and a shutdown task
     assert a.events == { 'main', '_kernel_task', '_shutdown_tasks' }
 
+
+class _TestActivationTrapPatch(Activation):
+    def __init__(self):
+        self.events = []
+
+    def activate(self, kernel):
+        # Check if patching works and that arguments were passed correctly
+        @trap_patch(kernel, "trap_sleep")
+        def trap_sleep(*args, trap):
+            self.events.append(trap.__name__)
+            return trap(*args)
+
+def test_activation_trap_patch():
+    async def main():
+        await sleep(0.001)
+        await sleep(0.001)
+
+    a = _TestActivationTrapPatch()
+    run(main, activations=[a])
+    assert a.events == ["trap_sleep" ,"trap_sleep"]
