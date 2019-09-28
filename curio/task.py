@@ -880,6 +880,7 @@ def ignore_after(seconds, coro=None, *args, timeout_result=None):
 
 
 # Here to avoid circular import issues
+from . import queue
 from . import thread
 from . import sync
 
