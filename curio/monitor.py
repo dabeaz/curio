@@ -5,7 +5,7 @@
 #
 #    k = Kernel()
 #    mon = Monitor(k)
-#    k.run(mon.start())
+#    k.run(mon.start)
 #
 # If using the run() function, you can do this:
 #
@@ -20,7 +20,7 @@
 #
 #    k = Kernel()
 #    mon = Monitor(k, host, port)
-#    k.run(mon)
+#    k.run(mon.start)
 #
 # Where host and port configure the network address on which the monitor
 # operates.
@@ -109,7 +109,6 @@ class Monitor(object):
         self._closing = threading.Event()
         self._ui_thread.start()
         await spawn(self.monitor_task, daemon=True)
-        return
 
     def server(self):
         '''
