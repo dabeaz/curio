@@ -13,7 +13,6 @@ from .network import *
 from .file import *
 from .channel import *
 from .thread import *
-from .promise import *
 
 __all__ = [*errors.__all__,
            *queue.__all__,

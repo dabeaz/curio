@@ -12,6 +12,16 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+09/29/2019 Removed Promise.  Not documented, but also want to rethink the
+           whole design/implementation of it. The "standard" way that
+           Python implements "promises" is through the Future class
+           as found in the concurrent.futures module.  However, Futures
+           are tricky.  They often have callback functions attached to 
+           them and they can be cancelled.  Some further thought needs
+           to be given as to how such features might integrate with the
+           rest of Curio.  Code for the old Promise class can be 
+           found the examples directory.
+
 09/26/2019 Removed support for the Asyncio bridge. It wasn't documented
            and there are many possible ways in which Curio might 
            potentially interact with an asyncio event loop. For example,
