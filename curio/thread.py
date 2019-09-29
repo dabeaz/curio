@@ -11,7 +11,6 @@ from concurrent.futures import Future
 from functools import wraps
 from inspect import iscoroutine, isgenerator
 from contextlib import contextmanager
-from types import coroutine
 import sys
 import logging
 
@@ -21,10 +20,9 @@ log = logging.getLogger(__name__)
 
 from . import sync
 from . import queue
-from .task import spawn, disable_cancellation, check_cancellation, set_cancellation, current_task
+from .task import spawn, disable_cancellation, check_cancellation, set_cancellation
 from .traps import _future_wait
 from . import errors
-from . import io
 from . import meta
 
 _locals = threading.local()

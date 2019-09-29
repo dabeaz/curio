@@ -1,11 +1,11 @@
 # curio/kernel.py
 #
-# Main execution kernel.  
+# Main execution kernel.
 #
 # Curio is based on a few overarching design principles that drive the code
-# you'll find here. 
+# you'll find here.
 #
-# 1. Environmental Isolation.  
+# 1. Environmental Isolation.
 #
 #    Curio strictly separates the environment of async and synchronous
 #    programming.  All functionality related to async operation is
@@ -22,7 +22,7 @@
 #    in async functions. Those programs can request the services of
 #    the kernel. However, they're not granted any further access than
 #    that (there is no API surface or anything that can be used).
-#    
+#
 # 2. Microkernels
 #
 #    The low-level kernel is meant to be small, fast, and minimally
@@ -44,7 +44,7 @@
 #    asyncio where many parts of the implementation are required to
 #    carry a reference to the underlying event loop.
 
-__all__ = ['Kernel', 'run' ]
+__all__ = [ 'Kernel', 'run' ]
 
 # -- Standard Library
 
@@ -79,7 +79,7 @@ class Kernel(object):
         from curio.debug import schedtrace, traptrace
         k = Kernel(debug=[schedtrace, traptrace])
 
-    Use the kernel run() method to submit work to the kernel..
+    Use the kernel run() method to submit work to the kernel.
     '''
 
     def __init__(self, *, selector=None, debug=None, activations=None):
@@ -177,7 +177,7 @@ class Kernel(object):
     # At first glance, this function is going to look giant and
     # insane. It is implementing the kernel runtime as a self-contained
     # black box.  There is no external API.  The only possible 
-    # communication is via traps defined in curio/traps.py.  
+    # communication is via traps defined in curio/traps.py.
     # It's best to think of this as a "program within a program".
 
     def _make_kernel_runtime(kernel):
@@ -306,7 +306,7 @@ class Kernel(object):
             #
             # The code here performs the unregister step for a task that
             # ran, but is now sleeping for a *different* reason than repeating the
-            # prior I/O operation.  There is coordination with code in _trap_io().
+            # prior I/O operation.  There is coordination with code in trap_io().
 
             if current._last_io:
                 unregister_event(*current._last_io)
@@ -368,7 +368,7 @@ class Kernel(object):
         # and there is no public API outside the kernel.  Instead,
         # coroutines use a statement such as
         #
-        #   yield ('_trap_io', sock, EVENT_READ, 'READ_WAIT')
+        #   yield ('trap_io', sock, EVENT_READ, 'READ_WAIT')
         #
         # to invoke a specific trap.
         # ------------------------------------------------------------
@@ -379,10 +379,10 @@ class Kernel(object):
             if check_cancellation():
                 return
 
-            # See comment about deferred unregister in run().  If the requested
-            # I/O operation is *different* than the last I/O operation that was
-            # performed by the task, we need to unregister the last I/O resource used
-            # and register a new one with the selector.
+            # See comment about deferred unregister in suspend_task(). If the
+            # requested I/O operation is *different* than the last I/O operation
+            # that was performed by the task, we need to unregister the last I/O
+            # resource used and register a new one with the selector.
             if current._last_io != (fileobj, event):
                 if current._last_io:
                     unregister_event(*current._last_io)
@@ -497,7 +497,7 @@ class Kernel(object):
         # ----------------------------------------
         # Reschedule one or more tasks from a scheduler primitive
         def trap_sched_wake(sched, n):
-            tasks = sched._kernel_wake(n) 
+            tasks = sched._kernel_wake(n)
             for task in tasks:
                 reschedule_task(task)
 

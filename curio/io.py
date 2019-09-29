@@ -718,7 +718,7 @@ class SyncSocket(object):
                         thread.AWAIT(_write_wait, self._fileno)
                     except WantRead: 
                         thread.AWAIT(_read_wait, self._fileno)
-            except curio.errors.CancelledError as e:
+            except errors.CancelledError as e:
                 e.bytes_sent = total_sent
                 raise
 
@@ -867,7 +867,7 @@ class SyncStreamBase(object):
         while True:
             try:
                 chunk = self.read(maxread)
-            except curio.errors.CancelledError as e:
+            except errors.CancelledError as e:
                 e.bytes_read = b''.join(chunks)
                 raise
             if not chunk:
@@ -881,7 +881,7 @@ class SyncStreamBase(object):
         while nbytes > 0:
             try:
                 chunk = self.read(nbytes)
-            except curio.errors.CancelledError as e:
+            except errors.CancelledError as e:
                 e.bytes_read = b''.join(chunks)
                 raise
             if not chunk:
@@ -947,7 +947,7 @@ class SyncStreamBase(object):
             for line in self:
                 lines.append(line)
             return lines
-        except curio.errors.CancelledError as e:
+        except errors.CancelledError as e:
             e.lines_read = lines
             raise
 
@@ -957,7 +957,7 @@ class SyncStreamBase(object):
             try:
                 self.write(line)
                 nwritten += len(line)
-            except curio.errors.CancelledError as e:
+            except errors.CancelledError as e:
                 e.bytes_written += nwritten
                 raise
 
@@ -1035,7 +1035,7 @@ class SyncFileStream(SyncStreamBase):
                     thread.AWAIT(_read_wait, self._fileno)
             return nwritten
 
-        except curio.errors.CancelledError as e:
+        except errors.CancelledError as e:
             e.bytes_written = nwritten
             raise
 
@@ -1085,7 +1085,7 @@ class SyncSocketStream(SyncStreamBase):
                 except WantRead:
                     thread.AWAIT(_read_wait, self._fileno)
             return nwritten
-        except curio.errors.CancelledError as e:
+        except errors.CancelledError as e:
             e.bytes_written = nwritten
             raise
 

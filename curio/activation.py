@@ -47,16 +47,13 @@ def trap_patch(kernel, trapname):
     use in scheduler activations.  Main use is in debuggers, tracers,
     etc.  Usage looks like this:
 
-    from .traps import Traps
-
     class MyActivation(Activation):
 
         def activate(self, kernel):
 
-            @trap_patch(kernel, '_some_trap')
-            def new_some_trap(*args, trapfunc):
-                 result = trapfunc(*args)     # Call original trap
-                 return result
+            @trap_patch(kernel, 'some_trap')
+            def new_some_trap(*args, trap):
+                trap(*args)     # Call original trap
 
     You can die using this feature.  Tread lightly.
     '''
