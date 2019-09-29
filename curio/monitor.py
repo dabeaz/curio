@@ -60,7 +60,7 @@ import argparse
 import logging
 
 # --- Curio
-from .task import Task, spawn
+from .task import spawn
 from . import queue
 
 # ---
