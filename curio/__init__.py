@@ -3,11 +3,11 @@
 __version__ = '0.10'
 
 from .errors import *
+from .queue import *
 from .task import *
 from .signal import *
 from .kernel import *
 from .sync import *
-from .queue import *
 from .workers import *
 from .network import *
 from .file import *
@@ -16,11 +16,11 @@ from .thread import *
 from .promise import *
 
 __all__ = [*errors.__all__,
+           *queue.__all__,
            *task.__all__,
            *signal.__all__,
            *kernel.__all__,
            *sync.__all__,
-           *queue.__all__,
            *workers.__all__,
            *network.__all__,
            *file.__all__,
