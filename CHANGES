@@ -12,6 +12,9 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+10/15/2019 Refactored task.py into separate files for tasks and time
+           management.
+
 09/29/2019 Removed Promise.  Not documented, but also want to rethink the
            whole design/implementation of it. The "standard" way that
            Python implements "promises" is through the Future class

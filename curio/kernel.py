@@ -222,7 +222,7 @@ class Kernel(object):
 
                 # Process any waking tasks.  These are tasks that have
                 # been awakened externally to the event loop (e.g., by
-                # separate threads, Futures, etc.)
+                # separate threads, Futures, etc.).
                 while wake_queue:
                     task, future = wake_queue_popleft()
                     # If the future associated with wakeup no longer
@@ -253,6 +253,7 @@ class Kernel(object):
         def wake(task=None, future=None):
             if task:
                 wake_queue.append((task, future))
+                
             notify_sock.send(b'\x00')
 
         def init_loopback():

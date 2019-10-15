@@ -23,7 +23,7 @@ from . import socket
 from .errors import CurioError, TaskTimeout
 from .io import StreamBase, FileStream
 from . import thread
-from .task import timeout_after, sleep
+from .time import timeout_after, sleep
 
 # Authentication parameters (copied from multiprocessing)
 

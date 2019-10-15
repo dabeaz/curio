@@ -24,7 +24,8 @@ from subprocess import (
 
 # -- Curio
 
-from .task import spawn, sleep
+from .task import spawn
+from .time import sleep
 from .errors import CancelledError
 from .io import FileStream
 from . import thread

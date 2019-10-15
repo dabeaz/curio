@@ -7,7 +7,7 @@
 
 __all__ = [
     'iscoroutinefunction', 'finalize', 'blocking', 'cpubound',
-    'awaitable', 'asyncioable', 'sync_only', 'AsyncABC',
+    'awaitable', 'asyncioable',  'sync_only', 'AsyncABC',
     'curio_running', 'instantiate_coroutine',
  ]
 
