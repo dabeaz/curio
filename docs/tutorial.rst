@@ -222,7 +222,7 @@ This causes the whole program to die with a rather nasty traceback message simil
     curio.errors.TaskError: Task crash
 
 Not surprisingly, the parent sure didn't like having their child
-process abrubtly killed out of nowhere like that.  The ``join()``
+process abruptly killed out of nowhere like that.  The ``join()``
 method returned with a ``TaskError`` exception to indicate that some
 kind of problem occurred in the child.
 
