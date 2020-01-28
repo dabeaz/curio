@@ -12,6 +12,10 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+01/28/2020 Added support for contextvars.  There is no public API 
+           for this or other changes needed.  However, Curio now requires 
+           Python 3.7 or newer.
+
 10/15/2019 Refactored task.py into separate files for tasks and time
            management.
 

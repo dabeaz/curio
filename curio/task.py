@@ -14,6 +14,7 @@ from collections import deque
 import linecache
 import traceback
 import os.path
+import contextvars
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +142,9 @@ class Task(object):
         
         # Timeout deadline stack
         self._deadlines = []
+
+        # Contextvars support
+        self._context = contextvars.copy_context()
 
     def __repr__(self):
         return f'Task(id={self.id}, name={self.name!r}, state={self.state!r})'

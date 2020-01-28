@@ -4,6 +4,7 @@ import time
 import pytest
 from curio import *
 import sys
+import contextvars
 
 def test_cancel_noblock(kernel):
     cancelled = False
@@ -465,3 +466,19 @@ async def producer(ch):
     for i in range(10):
         await c.send(i)
     await c.send(None)   # Sentinel
+
+x = contextvars.ContextVar('x', default=0)
+
+async def test_contextvars():
+    events = []
+    async def countdown(n):
+        x.set(n)
+        while x.get() > 0:
+            events.append(x.get())
+            await sleep(0)
+            x.set(x.get() - 1)
+    async with TaskGroup() as g:
+        await g.spawn(countdown, 3)
+        await g.spawn(countdown, 6)
+
+    assert events == [3,6,2,5,1,4,3,2,1]
