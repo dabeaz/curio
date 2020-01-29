@@ -471,3 +471,24 @@ Use the ``current_task()`` function like this::
 Once you have a reference to the ``Task``, it can be passed
 around and use in other operations.  For example, a different
 task could use it to cancel.
+
+How do you use contextvars?
+---------------------------
+
+``contextvars`` is a library added in Python 3.7 that can provide access to per-task
+global variables (similar in purpose to features like thread locals).  Curio does not
+support ``contextvars`` by default because its behavior is somewhat ill-defined when
+mixing coroutines and threads.  However, if you know what you're doing, you can opt
+into using it as follows:: 
+
+    from curio.task import ContextTask
+    from curio import run
+
+    async def main():
+        # ... whatever
+        ...
+
+    run(main, taskcls=ContextTask)
+
+In this case, each Curio task will have its own set of context variables.
+
