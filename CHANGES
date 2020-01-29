@@ -12,9 +12,29 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
-01/28/2020 Added support for contextvars.  There is no public API 
-           for this or other changes needed.  However, Curio now requires 
-           Python 3.7 or newer.
+01/29/2020 Added support for contextvars.  The behavior of context 
+           variables in the context of Curio and threads is not
+           always well defined.  As such, this is a feature that
+           requires explicit user opt-in to enable.  To do it, you need
+           provide an alternative Task class definition to the kernel
+           like this:
+
+               from curio.task import ContextTask
+               from curio import Kernel
+
+               with Kernel(taskcls=ContextTask) as kernel:
+                    kernel.run(coro)
+
+           Alternatively, you can use:
+
+               from curio import run
+               run(coro, taskcls=ContextTask)
+
+01/29/2020 Added optional keyword-only argument taskcls to Kernel. This
+           can be used to provide alternative implementations of the
+           internal Task class used to wrap coroutines.  This can be
+           useful if you want to subclass Task or implement certain
+           task-related features in a different way.
 
 10/15/2019 Refactored task.py into separate files for tasks and time
            management.

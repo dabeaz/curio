@@ -82,7 +82,7 @@ class Kernel(object):
     Use the kernel run() method to submit work to the kernel.
     '''
 
-    def __init__(self, *, selector=None, debug=None, activations=None):
+    def __init__(self, *, selector=None, debug=None, activations=None, taskcls=Task):
 
         # Functions to call at shutdown
         self._shutdown_funcs = []
@@ -103,6 +103,9 @@ class Kernel(object):
         # Debugging (activations in disguise)
         if debug:
             self._activations.extend(_create_debuggers(debug))
+
+        # Task creation class
+        self._taskcls = taskcls
 
 
     def __del__(self):
@@ -199,10 +202,11 @@ class Kernel(object):
         selector_modify = selector.modify
         selector_select = selector.select
         selector_getkey = selector.get_key
-
+        
         ready_popleft = ready.popleft
         ready_append = ready.append
         time_monotonic = time.monotonic
+        taskcls = kernel._taskcls
 
         # ------------------------------------------------------------
         # In-kernel task used for processing futures.
@@ -270,7 +274,7 @@ class Kernel(object):
 
         # Create a new task. Putting it on the ready queue
         def new_task(coro):
-            task = Task(coro)
+            task = taskcls(coro)
             tasks[task.id] = task
             reschedule_task(task)
             for a in _activations:
@@ -722,8 +726,7 @@ class Kernel(object):
                     # The current task runs until it suspends or terminates
                     while current:
                         try:
-                            trap = current._context.run(current._send, current._trap_result)
-#                            trap = current._send(current._trap_result)
+                            trap = current.send(current._trap_result)
                         except BaseException as e:
                             # If any exception has occurred, the task is done.
                             current = None

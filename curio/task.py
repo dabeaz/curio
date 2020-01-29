@@ -147,7 +147,7 @@ class Task(object):
         self._context = contextvars.copy_context()
 
     def __repr__(self):
-        return f'Task(id={self.id}, name={self.name!r}, state={self.state!r})'
+        return f'{type(self).__name__}(id={self.id}, name={self.name!r}, state={self.state!r})'
 
     def __str__(self):
         filename, lineno = _where(self)
@@ -161,6 +161,14 @@ class Task(object):
         if not self.joined and not self.cancelled and not self.daemon:
             if not self.daemon and not self.exception:
                 log.warning('%r never joined', self)
+
+    def send(self, value):
+        '''
+        Send the next value into the task coroutine.  This method is
+        a wrapper around the actual method and may be subclassed to
+        implement different kinds of low-level functionality.
+        '''
+        return self._send(value)
 
     async def _task_runner(self, coro):
         try:
@@ -268,6 +276,18 @@ class Task(object):
         self._send = coro.send
         self._throw = coro.throw
         return orig_coro
+
+class ContextTask(Task):
+    '''
+    Task class that provides support for contextvars.  Use with the
+    taskcls keyword argument to the Curio kernel.
+    '''
+    def __init__(self, coro):
+        super().__init__(coro)
+        self._context = contextvars.copy_context()
+
+    def send(self, value):
+        return self._context.run(super().send, value)
 
 class TaskGroup(object):
     '''
