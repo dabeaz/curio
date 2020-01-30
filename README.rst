@@ -248,7 +248,10 @@ Talks Related to Curio
 ----------------------
 
 Most of the principles behind Curio's design and general issues
-related to async programming have been described in various conference talks:
+related to async programming have been described in various conference talks
+and tutorials:
+
+* `Build Your Own Async <https://www.youtube.com/watch?v=Y4Gt3Xjd7G8>'_, Workshop talk by David Beazley at PyCon India, 2019.
 
 * `The Other Async (Threads + Asyncio = Love) <https://www.youtube.com/watch?v=x1ndXuw7S0s>`_, Keynote talk by David Beazley at PyGotham, 2017.
 
@@ -258,10 +261,8 @@ related to async programming have been described in various conference talks:
 
 * `Python Concurrency from the Ground Up (LIVE) <https://www.youtube.com/watch?v=MCs5OvhV9S4>`_, talk by David Beazley at PyCon 2015.
 
-Additional Resources
---------------------
-
-* `Trio <https://github.com/python-trio/trio/>`_ A different I/O library that was initially inspired by Curio.
+Additional Curio-related Resources
+----------------------------------
 
 * `Some thoughts on asynchronous API design in a post-async/await world <https://vorpus.org/blog/some-thoughts-on-asynchronous-api-design-in-a-post-asyncawait-world/>`_, by Nathaniel Smith.
 
@@ -397,9 +398,11 @@ you shouldn't be using Curio is that you should be using it.
 
 **Q: Can I contribute?**
 
-A: Absolutely. Please use the Github page at
-https://github.com/dabeaz/curio as the primary point of discussion
-concerning pull requests, bugs, and feature requests.
+A: Curio is not a community-based project that is seeking developers
+or maintainers.  However, having it work reliably is important. So, if
+you've found a bug or have an idea for making it better, please feel
+free to file an `issue <https://github.com/dabeaz/curio>`_.  Issues
+are always appreciated. 
 
 Documentation
 -------------
@@ -415,12 +418,8 @@ Please go there to ask questions and find out whats happening with the project.
 Contributors
 ------------
 
-- David Beazley
-- Brett Cannon
-- Nathaniel Smith
-- Alexander Zhukov
-- Laura Dickinson
-- Sandeep Gupta
+The following people contributed ideas to early stages of the Curio project:
+Brett Cannon, Nathaniel Smith, Alexander Zhukov, Laura Dickinson, and Sandeep Gupta.
 
 About
 -----
