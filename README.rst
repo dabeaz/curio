@@ -90,8 +90,9 @@ portion of the code:
 A Complex Example
 -----------------
 
-The above example only illustrates a few basics.  You'll find Curio to
-be a bit more interesting if you try something more complicated.
+The above example only illustrates a few basics using a standard echo
+server example.  You'll find Curio to be a bit more interesting if you
+try something more complicated.
 
 As an example, one such problem is that of making a client TCP
 connection on a dual IPv4/IPv6 network.  On such networks, functions
@@ -99,7 +100,7 @@ such as ``socket.getaddrinfo()`` return a series of possible
 connection endpoints.  To make a connection, each endpoint is tried
 until one of them succeeds.  However, serious usability problems
 arise if this is done as a purely sequential process since bad connection
-requests might take a considerable time to fail.  It's better to try
+requests might take a long time to fail.  It's better to try
 several concurrent connection requests and use the first one that
 succeeds.
 
@@ -251,7 +252,7 @@ Most of the principles behind Curio's design and general issues
 related to async programming have been described in various conference talks
 and tutorials:
 
-* `Build Your Own Async <https://www.youtube.com/watch?v=Y4Gt3Xjd7G8>'_, Workshop talk by David Beazley at PyCon India, 2019.
+* `Build Your Own Async <https://www.youtube.com/watch?v=Y4Gt3Xjd7G8>`_, Workshop talk by David Beazley at PyCon India, 2019.
 
 * `The Other Async (Threads + Asyncio = Love) <https://www.youtube.com/watch?v=x1ndXuw7S0s>`_, Keynote talk by David Beazley at PyGotham, 2017.
 
