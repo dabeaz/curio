@@ -384,8 +384,7 @@ class TaskGroup(object):
         self._finished = deque()
         self._closed = False
         self._wait = wait
-        self.completed = None    # First completed task
-
+        self.completed = None       # First completed task
         for task in tasks:
             assert not task.taskgroup
             task.taskgroup = self
@@ -395,6 +394,11 @@ class TaskGroup(object):
                 self._running.add(task)
 
         self._sema = sync.Semaphore(len(self._finished))
+
+    # Convenience property for returning the result of the first completed task
+    @property
+    def result(self):
+        return self.completed.result
 
     # Triggered on task completion. 
     async def _task_done(self, task):

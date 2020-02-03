@@ -489,3 +489,17 @@ def test_contextvars():
         kernel.run(main)
 
     assert events == [3,6,2,5,1,4,3,2,1]
+
+def test_task_group_result(kernel):
+    async def child(x, y):
+        return x + y
+
+    async def main():
+        async with TaskGroup(wait=any) as g:
+            await g.spawn(child, 1, 1)
+            await g.spawn(child, 2, 2)
+            await g.spawn(child, 3, 3)
+
+        assert g.result == 2
+
+    kernel.run(main())

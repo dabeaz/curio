@@ -12,6 +12,19 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+02/03/2020 Added a convenience property for TaskGroup.  If you want the
+           result of the first completed task, use .result like this:
+
+               async with TaskGroup(wait=any) as g:
+                   await g.spawn(coro1)
+                   await g.spawn(coro2)
+                   ...
+ 
+               print('Result:', g.result)
+
+           Note:  This is on the happy path---if any kind of exception 
+           occurs, it still results in a TaskGroupError exception.
+
 01/29/2020 Added support for contextvars.  The behavior of context 
            variables in the context of Curio and threads is not
            always well defined.  As such, this is a feature that
