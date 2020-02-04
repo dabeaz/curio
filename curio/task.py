@@ -175,8 +175,8 @@ class Task(object):
             return await coro
         finally:
             if self.taskgroup:
-                await self.taskgroup._task_done(self)
                 self.joined = True
+                await self.taskgroup._task_done(self)
 
     async def join(self):
         '''
@@ -293,7 +293,7 @@ class TaskGroup(object):
     '''
     A TaskGroup represents a collection of managed tasks.  A group can
     be used to ensure that all tasks terminate together, to monitor
-    tasks as they finish, and to manage error handling.  
+    tasks as they finish, and to collect results.
 
     A TaskGroup can be created from existing tasks.  For example:
 
@@ -306,46 +306,34 @@ class TaskGroup(object):
 
     Alternatively, tasks can be spawned into a task group.
 
-        async with TaskGroup() as g:
+        async with TaskGroup(wait) as g:
             await g.spawn(coro1)
             await g.spawn(coro2)
             await g.spawn(coro3)
 
     When used as a context manager, a TaskGroup will wait until
-    all contained tasks successfully exit before moving on.
+    all contained tasks exit before moving on.   The optional wait argument
+    specifies a strategy.  If wait=all (the default), a task group
+    waits for all tasks to exit.  If wait=any, the group waits
+    for the first task to exit. If wait=object, the group waits for 
+    the first task to return a non-None result.  If wait=None, the
+    group immediately cancels all running tasks.
 
-    If cancelled, all tasks within a TaskGroup are also cancelled.
-
-    If any task exits with an error, all remaining tasks are cancelled
-    and a TaskGroupError exception is raised.  This exception contains
-    more specific information about what happened.  The .errors
-    attribute is a set of all exception types. It may contain multiple
-    values if if multiple failures. The .failed attribute is a list of
-    all tasks that failed.  Here's what exception handling might look
-    like:
-
-        try:
-            async with TaskGroup() as g:
-                ...
-        except TaskGroupError as e:
-            for task in e.failed:
-                # Look at failed task
-                print('FAILED', task, task.exception)
-
-    If tasks are computing results you want to use, you can
-    write this:
+    Task groups are often used to gather results. The following
+    properties are useful:
 
         async with TaskGroup() as g:
-            t1 = await g.spawn(coro1)
-            t2 = await g.spawn(coro2)
-            t3 = await g.spawn(coro3)
+            ...
 
-        # Get results---tasks are guaranteed to be done
-        result1 = t1.result
-        result2 = t2.result
-        result3 = t3.result
+        print(g.result)    # Result of the first task to exit
+        print(g.results)   # List of all results computed
 
-    To obtain tasks in the order that they complete, use iteration:
+    Note: Both of these properties may raise an exception if a task
+    exited in error. The g.tasks property is a list of all
+    managed tasks listed in order of creation. 
+
+    To obtain tasks in the order that they complete as they complete,
+    use iteration:
   
         async with TaskGroup() as g:
             await g.spawn(coro1)
@@ -358,7 +346,7 @@ class TaskGroup(object):
     The cancel_remaining() method can be used to cancel all
     remaining tasks early.  The add_task() method can be
     used to add an already existing task to a group.  Calling
-    .join() on a task removes it from a group. For example:
+    .join() on a specific task removes it from a group. For example:
 
          async with TaskGroup() as g:
              t1 = await g.spawn(coro1)
@@ -378,18 +366,31 @@ class TaskGroup(object):
  
     This might be more useful for more persistent or long-lived 
     task groups.
+
+    If any managed task exits with an error, all remaining tasks 
+    are cancelled.  The handling of task-related errors takes place when
+    the resultof a task group is analyzed.  For example:
+
+        async with TaskGroup(wait=any) as g:
+            await g.spawn(coro1)
+            await g.spawn(coro2)
+            ...
+        try:
+            result = g.result      # Errors reported here
+        except Exception as e:
+            print("FAILED:", e)
     '''
     def __init__(self, tasks=(), *, wait=all):
-        self._running = set()
-        self._finished = deque()
-        self._closed = False
+        self._running = set()        # All running tasks
+        self._finished = deque()     # All finished tasks
+        self._tasks = set()          # Set of all tasks tracked by the group
         self._joined = False
-        self._wait = wait
-        self.completed = None       # First completed task
-        self.all_completed = [ ]    # All tasks completed by join()
+        self._wait = wait            # Wait policy 
+        self.completed = None        # First completed task
         for task in tasks:
-            assert not task.taskgroup
+            assert not task.taskgroup,  "Task already assigned to a task group"
             task.taskgroup = self
+            self._tasks.add(task)
             if task.terminated:
                 self._finished.append(task)
             else:
@@ -397,19 +398,24 @@ class TaskGroup(object):
 
         self._sema = sync.Semaphore(len(self._finished))
 
-    # Convenience property for returning the result of the first completed task
+    # Property that returns all tracked tasks in task creation order
+    @property
+    def tasks(self):
+        return sorted(self._tasks, key=lambda task: task.id)
+
+    # Property that returns the result of the first completed task
     @property
     def result(self):
         if not self._joined:
             raise RuntimeError("Task group not yet terminated")
         return self.completed.result
 
-    # Convenience property for returning all results (in task creation order)
+    # Property that returns all task results (in task creation order)
     @property
     def results(self):
         if not self._joined:
             raise RuntimeError("Task group not yet terminated")
-        return [ task.result for task in self.all_completed ]
+        return [ task.result for task in self.tasks ]
 
     # Triggered on task completion. 
     async def _task_done(self, task):
@@ -418,12 +424,13 @@ class TaskGroup(object):
         await self._sema.release()
 
     # Discards a task from the TaskGroup.  Called implicitly if
-    # if a task is joined while under supervision.
+    # if a task is explicitly joined while under supervision.
     def _task_discard(self, task):
         try:
             self._finished.remove(task)
         except ValueError:
             pass
+        self._tasks.discard(task)
         task.taskgroup = None
         if task == self.completed:
             self.completed = None
@@ -433,11 +440,13 @@ class TaskGroup(object):
         Add an already existing task to the group.
         '''
         if task.taskgroup:
-            raise RuntimeError('Task is already part of a group')
+            raise RuntimeError('Task is already part of a task group')
 
-        if self._closed:
-            raise RuntimeError('Task group is closed')
+        if self._joined:
+            raise RuntimeError("TaskGroup already joined")
+
         task.taskgroup = self
+        self._tasks.add(task)
         if task.terminated:
             await self._task_done(task)
         else:
@@ -447,16 +456,16 @@ class TaskGroup(object):
         '''
         Spawn a new task into the task group.
         '''
-        if self._closed:
-            raise RuntimeError('Task group is closed')
-
+        if self._joined:
+            raise RuntimeError("TaskGroup already joined")
         task = await spawn(coro, *args)
         await self.add_task(task)
         return task
 
     async def next_done(self):
         '''
-        Wait for the next task to finish.
+        Wait for the next task to finish and return it.  This removes it
+        from the group.
         '''
         while not self._finished and self._running:
             await self._sema.acquire()
@@ -465,6 +474,7 @@ class TaskGroup(object):
             task = self._finished.popleft()
             await task.wait()
             task.taskgroup = None
+            self._tasks.discard(task)
         else:
             task = None
 
@@ -484,9 +494,8 @@ class TaskGroup(object):
     async def cancel_remaining(self):
         '''
         Cancel all remaining running tasks. Tasks are removed
-        from the task group when cancelled.
+        from the task group when explicitly cancelled.
         '''
-        self._closed = True
         running = list(self._running)
         for task in running:
             await task.cancel(blocking=False)
@@ -498,91 +507,37 @@ class TaskGroup(object):
     async def join(self):
         '''
         Wait for tasks in a task group to terminate according to the
-        wait policy set for the group.  If the join() operation itself
-        is cancelled, all remaining tasks are cancelled and the
-        cancellation exception is reraised.
+        wait policy set for the group.  
         '''
-
-        # If there are any currently finished tasks, find the ones in error
-        for task in self._finished:
-            await task.wait()
-            self.all_completed.append(task)
-            if self.completed is None and not task.exception:
-                if self._wait is object:
-                    self.completed = task if (task.result is not None) else None
-                else:
-                    self.completed = task
-        
-        # Find all currently finished tasks to collect the ones in error
-        exceptional = [ task for task in self._finished if task.exception ]
-
-        # If there are any tasks in error, or the wait policy dictates
-        # cancellation of remaining tasks, cancel them
-        if exceptional or (self._wait is None) or (self._wait in (any, object) and self.completed):
-            while self._running:
-                task = self._running.pop()
-                await task.cancel()
-
-        self._finished.clear()
-
-        # Spin while things are still running and collect results
-        while self._running:
-            try:
+        if self._wait is None:
+            # Cancel all remaining tasks.
+            await self.cancel_remaining()
+            
+        while self._finished or self._running:
+            # If nothing is finished, we wait for something to complete
+            while not self._finished:
                 await self._sema.acquire()
-            except CancelledError:
-                # If we got cancelled ourselves, we cancel everything remaining.
-                # Must bail out by re-raising the CancelledError exception (oh well)
-                while self._running:
-                    task = self._running.pop()
-                    await task.cancel()
-                    task.taskgroup = None
-                raise
 
-            # If we're here and nothing finished, it means that some task
-            # called its join() method.  We're not concerned about that task anymore.  Carry on.
-            if not self._finished:
-                continue
-
-            # Collect any finished tasks
+            # Examine all currently finished tasks
             while self._finished:
                 task = self._finished.popleft()
-                await task.wait()
-                task.taskgroup = None
-                cancel_remaining = False
-                self.all_completed.append(task)
+                # Check if it's the first completed task
+                if self.completed is None:
+                    # For wait=object, the self.completed attribute is the first non-None result
+                    if not ((self._wait is object) and (not task.exception) and (task.result is None)):
+                        self.completed = task 
 
-                # Check if we're still waiting for the result of the first task
-                if self.completed is None and not task.exception:
-                    if self._wait is object:
-                        self.completed = task if (task.result is not None) else None
-                    else:
-                        self.completed = task
-
-                # If the task is in error state and nothing else is. Cancel everything else
-                if task.exception:
-                    if not exceptional:
-                        cancel_remaining = True
-                    exceptional.append(task)
-                elif (self._wait in (any, object)) and task == self.completed:
-                    cancel_remaining = True
-
-                if cancel_remaining:
+                # What happens next depends on the wait and error handling policies
+                if task.exception or \
+                   (self._wait is any) or \
+                   ((self._wait is object) and (task.result is not None)):
+                    # Cancel all remaining tasks
                     while self._running:
-                        ctask = self._running.pop()
-                        await ctask.cancel()
-
-        self._closed = True
-
-        # We remove any task that was directly cancelled
-        exceptional = [task for task in exceptional if not isinstance(task.exception, TaskCancelled) ]
-
-        # If there are exceptions on any task, we raise a TaskGroupError
-        if exceptional:
-            raise TaskGroupError(exceptional)
-
-        # Sort the all_completed list by task id (creation order)
-        self.all_completed.sort(key=lambda t: t.id)
+                        task = self._running.pop()
+                        await task.cancel()
+            
         self._joined = True
+        return
 
     async def __aenter__(self):
         return self
@@ -591,7 +546,11 @@ class TaskGroup(object):
         if ty:
             await self.cancel_remaining()
         else:
-            await self.join()
+            try:
+                await self.join()
+            except CancelledError:
+                await self.cancel_remaining()
+                raise
 
     def __aiter__(self):
         return self

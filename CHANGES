@@ -12,6 +12,34 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+02/04/2020 Removed TaskGroupError exception and simplified the error
+           handling behavior of task groups.  If tasks exit with an
+           exception, that information is now obtained on the task
+           itself or on the .result attribute of a task group. For
+           example:
+
+               async with TaskGroup() as g:
+                   t1 = await g.spawn(coro1)
+                   t2 = await g.spawn(coro2)
+                   ...
+
+               try:
+                   r = t1.result
+               except WhateverError:
+                   ...
+
+               # Alternatively
+               try:
+                   r = g.result
+               except WhateverError:
+                   ...
+
+           This simplifies both the implementation of task groups as well as 
+           a lot of code that utilizes task groups.  Exceptions are no longer
+           wrapped up in layer-upon-layer of other exceptions.  There is a risk
+           of exceptions passing silently if you don't actually check the result
+           of a task group.  Don't do that. 
+
 02/03/2020 Added convenience properties to TaskGroup.  If you want the
            result of the first completed task, use .result like this:
 

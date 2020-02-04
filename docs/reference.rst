@@ -247,11 +247,11 @@ To do this, create a ``TaskGroup`` instance.
    ``any`` then wait for any task to terminate and cancel any
    remaining tasks.  If *wait* is ``object``, then wait for any task
    to terminate and return a non-None object, cancelling all remaining
-   tasks afterwards. If any task
-   returns with an error, all remaining tasks are immediately
-   cancelled and a ``TaskGroupError`` exception is raised by the
-   ``join()`` method.
-   Each ``TaskGroup`` is an independent entity.
+   tasks afterwards. If *wait* is ``None``, then immediate cancel all running tasks. 
+   If any task returns with an error, all remaining tasks are immediately
+   cancelled.  The error can usually be obtained by examing the ``result`` or ``results``
+   attribute of the task group.
+    Each ``TaskGroup`` is an independent entity.
    Task groups do not form a hierarchy or any kind of relationship to
    other previously created task groups or tasks.  Moreover, Tasks created by
    the top level ``spawn()`` function are not placed into any task group.
@@ -300,6 +300,22 @@ The following methods are supported on ``TaskGroup`` instances:
    when used in combination with the ``wait=any`` or ``wait=object`` options 
    to ``TaskGroup()``.
 
+.. attribute:: TaskGroup.result
+
+   The result of the first task that completed.  Access may raise an
+   exception if the task exited with an exception.  The same as accessing
+   ``TaskGroup.completed.result``.
+
+.. attribute:: TaskGroup.results
+
+   A list of all results returned by tasks created in the group. These
+   results are ordered by task id.  May raise an exception if any task
+   exited with an exception.
+
+.. attribute:: TaskGroup.tasks
+
+   A list of all tasks actively tracked by the group. Can be useful
+   in determining task status after a task group has been joined.
 
 The preferred way to use a ``TaskGroup`` is as a context manager.  This forces
 a lifetime on all of the contained tasks.  Specifically, it is guaranteed that
@@ -328,8 +344,11 @@ and collect their results afterwards, do this:
     print('t2 got', t2.result)
     print('t3 got', t3.result)
 
-Here is a slight variant that launches a set of tasks and collects their results in the
-order that they finish::
+    # Get all results as a list (in task creation order)
+    print('Results:', g.results)
+
+Here is a slight variant that launches a set of tasks and collects their 
+results in the order that they finish as they finish::
 
     async with TaskGroup() as g:
         t1 = await g.spawn(func1)
@@ -346,10 +365,9 @@ use the ``wait=any`` option like this::
         await g.spawn(func2)
         await g.spawn(func3)
 
-    result = g.completed.result    # First completed task
+    result = g.result    # First completed result
 
-The ``completed`` attribute is a reference to the first task that
-finished.  If you change the task group to use ``wait=object``, then
+If you change the task group to use ``wait=object``, then
 the group waits for the first task that successfully returns a
 non-``None`` result.   This is useful with code that returns ``None`` to
 indicate an unsuccessful operation. 
@@ -392,8 +410,9 @@ the task  group. Child tasks are still cancelled using the ``cancel()``
 method and would receive a ``TaskCancelled`` exception.
 
 If any launched tasks exit with an exception other than
-``TaskCancelled``, a ``TaskGroupError`` exception is raised and all
-other tasks are cancelled.  For example::
+``TaskCancelled`` while a task group is being joined, all 
+other tasks are cancelled.  The reporting of an error takes
+place when results are accessed. For example::
 
     async def bad1():
         raise ValueError('bad value')
@@ -401,23 +420,23 @@ other tasks are cancelled.  For example::
     async def bad2():
         raise RuntimeError('bad run')
 
-    try:
-        async with TaskGroup() as g:
-            await g.spawn(bad1)
-            await g.spawn(bad2)
-            await sleep(1)
-    except TaskGroupError as e:
-        print('Failed:', e.errors)   # Print set of exception types
-	for task in e:
-	    print('Task', task, 'failed because of:', task.exception)
+    async with TaskGroup() as g:
+         t1 = await g.spawn(bad1)
+         t2 = await g.spawn(bad2)
+         await sleep(1)
 
-A ``TaskGroupError`` exception contains more information about what happened
-with the tasks.  The ``errors`` attribute is a set of exception types
-that took place.  In this example, it would be the set ``{ ValueError, RuntimeError }``.
-To get more specific information, you can iterate over the exception (or look at its
-``failed`` attribute).   This will produce all of the tasks that failed.  The
-``task.exception`` attribute can be used to get specific exception information 
-for that task.
+    t1.result           # ---> ValueError() raised here
+    t2.result           # ---> RuntimeError() raised here
+    print(g.results)    # --> First exception also raised here
+
+If you want to examine tasks in detail after task group completion, you
+can iterate over the ``tasks`` attribute::
+
+    for t in g.tasks:
+        if t.exception:
+             print("Failed:", t.exception)
+        else:
+             print("Success:", t.result)
 
 Time
 ----
@@ -2357,12 +2376,6 @@ The following exceptions are defined. All are subclasses of the
    Exception raised by the :meth:`Task.join` method if an uncaught exception
    occurs in a task.  It is a chained exception. The ``__cause__`` attribute
    contains the exception that causes the task to fail.
-
-.. exception:: TaskGroupError
-
-   Exception raised if one or more tasks in a task group raised an error.
-   The ``failed`` attribute contains a list of all tasks that died.
-   The ``errors`` attribute is a set of all exceptions raised.
 
 .. exception:: SyncIOError
 

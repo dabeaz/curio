@@ -566,8 +566,6 @@ more fine-grained information, use ``traptrace`` instead of ``schedtrace``.
 More Information
 ----------------
 
-The official Github page at https://github.com/dabeaz/curio should be used for bug reports.
-
 A reference manual can be found at https://curio.readthedocs.io/en/latest/reference.html.
 
 See the HowTo guide at https://curio.readthedocs.io/en/latest/howto.html for more tips and

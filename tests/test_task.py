@@ -65,6 +65,8 @@ def test_task_group(kernel):
         assert t1.result == 2
         assert t2.result == 4
         assert t3.result == 6
+        assert g.results == [2, 4, 6]
+
 
     kernel.run(main())
 
@@ -93,6 +95,7 @@ def test_task_group_existing(kernel):
         assert t2.result == 4
         assert t3.result == 6
         assert t4.result == 8
+        assert g.results == [2,4,6,8]
 
     kernel.run(main())
 
@@ -129,15 +132,19 @@ def test_task_any_error(kernel):
         return x + y
 
     async def main():
+        async with TaskGroup(wait=any) as g:
+            t1 = await g.spawn(child, 1, '1')
+            t2 = await g.spawn(child2, 2, 2)
+            t3 = await g.spawn(child2, 3, 3)
         try:
-            async with TaskGroup(wait=any) as g:
-                t1 = await g.spawn(child, 1, '1')
-                t2 = await g.spawn(child2, 2, 2)
-                t3 = await g.spawn(child2, 3, 3)
-        except TaskGroupError as e:
-            assert e.failed == [t1]
+            result = g.result
+            assert False
+        except TypeError:
+            assert True
         else:
             assert False
+
+        assert t1.exception
         assert t2.cancelled
         assert t3.cancelled
 
@@ -158,6 +165,7 @@ def test_task_group_iter(kernel):
                 results.add(task.result)
 
         assert results == { 2, 4, 6 }
+        assert g.results == []    # Explicit collection of results prevents collections on the group
 
     kernel.run(main())
 
@@ -169,16 +177,13 @@ def test_task_group_error(kernel):
         await evt.wait()
 
     async def main():
-        try:
-            async with TaskGroup() as g:
-                t1 = await g.spawn(child, 1, 1)
-                t2 = await g.spawn(child, 2, 2)
-                t3 = await g.spawn(child, 3, 'bad')
-        except TaskGroupError as e:
-            assert TypeError in e.errors
-            assert e.failed == [t3]
-        else:
-            assert False
+        async with TaskGroup() as g:
+            t1 = await g.spawn(child, 1, 1)
+            t2 = await g.spawn(child, 2, 2)
+            t3 = await g.spawn(child, 3, 'bad')
+
+        assert isinstance(t3.exception, TypeError)
+        assert g.completed == t3
         assert t1.cancelled
         assert t2.cancelled
 
@@ -228,8 +233,9 @@ def test_task_group_join(kernel):
                 with pytest.raises(TypeError):
                     t1.result
             else:
-                assert Fail
+                assert False
 
+            # These assert that the error has not cancelled other tasks
             with pytest.raises(RuntimeError):
                 t2.result
 
@@ -238,33 +244,11 @@ def test_task_group_join(kernel):
 
             await evt.set()
 
+        # Assert that other tasks ran to completion
         assert not t2.cancelled
         assert not t3.cancelled
+        assert g.results == [4, 6]
 
-    kernel.run(main())
-
-def test_task_group_multierror(kernel):
-    evt = Event()
-    async def child(exctype):
-        if exctype:
-            raise exctype('Died')
-        await evt.wait()
-
-    async def main():
-        try:
-            async with TaskGroup() as g:
-                t1 = await g.spawn(child, RuntimeError)
-                t2 = await g.spawn(child, ValueError)
-                t3 = await g.spawn(child, None)
-                await schedule()
-                await evt.set()
-        except TaskGroupError as e:
-            assert e.errors == { RuntimeError, ValueError }
-            assert e.failed == [t1, t2]
-            assert list(e) == [t1, t2]
-            str(e)
-        else:
-            assert False
 
     kernel.run(main())
 
