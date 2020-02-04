@@ -12,7 +12,7 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
-02/03/2020 Added a convenience property for TaskGroup.  If you want the
+02/03/2020 Added convenience properties to TaskGroup.  If you want the
            result of the first completed task, use .result like this:
 
                async with TaskGroup(wait=any) as g:
@@ -22,8 +22,19 @@ a bug report!  - Dave
  
                print('Result:', g.result)
 
-           Note:  This is on the happy path---if any kind of exception 
-           occurs, it still results in a TaskGroupError exception.
+           If you want a list of all results *in task creation order*
+           use the .results property:
+
+               async with TaskGroup(wait=all) as g:
+                   await g.spawn(coro1)
+                   await g.spawn(coro2)
+                   ...
+ 
+               print('Results:', g.results)
+
+           Note: Both of these are on the happy path.  If any kind of
+           exception occurs, task groups still produce a
+           TaskGroupError exception.
 
 01/29/2020 Added support for contextvars.  The behavior of context 
            variables in the context of Curio and threads is not

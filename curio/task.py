@@ -383,8 +383,10 @@ class TaskGroup(object):
         self._running = set()
         self._finished = deque()
         self._closed = False
+        self._joined = False
         self._wait = wait
         self.completed = None       # First completed task
+        self.all_completed = [ ]    # All tasks completed by join()
         for task in tasks:
             assert not task.taskgroup
             task.taskgroup = self
@@ -398,7 +400,16 @@ class TaskGroup(object):
     # Convenience property for returning the result of the first completed task
     @property
     def result(self):
+        if not self._joined:
+            raise RuntimeError("Task group not yet terminated")
         return self.completed.result
+
+    # Convenience property for returning all results (in task creation order)
+    @property
+    def results(self):
+        if not self._joined:
+            raise RuntimeError("Task group not yet terminated")
+        return [ task.result for task in self.all_completed ]
 
     # Triggered on task completion. 
     async def _task_done(self, task):
@@ -495,6 +506,7 @@ class TaskGroup(object):
         # If there are any currently finished tasks, find the ones in error
         for task in self._finished:
             await task.wait()
+            self.all_completed.append(task)
             if self.completed is None and not task.exception:
                 if self._wait is object:
                     self.completed = task if (task.result is not None) else None
@@ -537,6 +549,7 @@ class TaskGroup(object):
                 await task.wait()
                 task.taskgroup = None
                 cancel_remaining = False
+                self.all_completed.append(task)
 
                 # Check if we're still waiting for the result of the first task
                 if self.completed is None and not task.exception:
@@ -566,6 +579,10 @@ class TaskGroup(object):
         # If there are exceptions on any task, we raise a TaskGroupError
         if exceptional:
             raise TaskGroupError(exceptional)
+
+        # Sort the all_completed list by task id (creation order)
+        self.all_completed.sort(key=lambda t: t.id)
+        self._joined = True
 
     async def __aenter__(self):
         return self

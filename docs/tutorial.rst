@@ -1,12 +1,12 @@
 Curio - A Tutorial Introduction
 ===============================
 
-Curio is a library for concurrent systems programming. It
+Curio is a library for concurrent systems programming that
 uses coroutines and the async/await syntax introduced in Python
 3.5. Most of Curio is based on existing abstractions such
 as threads, sockets, files, locks, and queues. However, it also
 implements a task model that provides for cancellation, task groups,
-and other features.  This tutorial will take you through the basics of
+and other features.  This tutorial takes you through the basics of
 the concurrency model.  Consult the "howto" guide at
 https://curio.readthedocs.io/en/latest/howto.html for cookbook-style information
 on specific programming tasks.
@@ -28,10 +28,10 @@ Consider a simple program that prints a countdown::
     if __name__ == '__main__':
         curio.run(countdown, 10)
 
-Run it and you'll see a countdown printed.  Curio requires the use of
+Curio requires the use of
 ``async`` functions (or coroutine functions). To run a program, you
 provide a function along with its arguments to the ``run()``
-function. When the function completes, ``run()`` returns its result.
+function. When the function completes its result is returned.
 
 Tasks and Concurrency
 ---------------------
@@ -111,7 +111,7 @@ View the status of each task by typing ``ps``::
     5      TIME_SLEEP   1          None    970.186 kid                                               
     curio > 
 
-You can now see that the parent is waiting to join and that the kid is
+You can see that the parent is waiting to join and that the kid is
 sleeping.  You can get the stack trace of any active task using the
 ``where`` command::
 
@@ -124,35 +124,6 @@ sleeping.  You can get the stack trace of any active task using the
       File "hello.py", line 14, in kid
         await curio.sleep(1000)
     curio >
-
-Debugging is an important feature of Curio and by using the monitor,
-you see what's happening.  You can also insert debugging statements
-into the code itself. Change the parent task to include a timeout and
-some debugging print statements like this::
-
-    async def parent():
-        kid_task = await curio.spawn(kid, 37, 42)
-        count_task = await curio.spawn(countdown, 10)
-
-        await count_task.join()
-
-        print("Are you done yet?")
-        try:
-            result = await curio.timeout_after(10, kid_task.join)
-            print("Result:", result)
-        except curio.TaskTimeout as e:
-            print("Where are you?")
-            print(kid_task.traceback())
-            raise SystemExit()
-
-    if __name__ == '__main__':
-        curio.run(parent, with_monitor=True)
-
-Here, the parent will wait 10 seconds for the child to join.  If not,
-a debugging traceback for the child task is printed and the program
-quits.  Use the ``traceback()`` method of a task to create a traceback
-string.  Raising ``SystemExit()`` causes Curio to quit in the same
-manner as normal Python programs.
 
 Tasks can be forcefully cancelled. Change the program as follows::
 
@@ -170,7 +141,7 @@ Tasks can be forcefully cancelled. Change the program as follows::
             print("We've got to go!")
             await kid_task.cancel()
 
-Cancellation is something a task can catch. For example::
+Likewise, cancellation can be caught. For example::
 
     async def kid(x, y):
         try:
@@ -181,7 +152,7 @@ Cancellation is something a task can catch. For example::
             print("Guess I'll fail!")
             raise
 
-Now your program should produce output like this::
+Now the program should produce output like this::
 
     bash % python3 hello.py
     Getting around to doing my homework
@@ -195,8 +166,8 @@ Now your program should produce output like this::
     Guess I'll fail!
    bash %
 
-By now, you have the basic gist of tasks. You can create
-tasks, join tasks, and cancel tasks.  You have a lot of control.
+This is the basic gist of tasks. You can create
+tasks, join tasks, and cancel tasks.  
 
 Task Groups
 -----------
@@ -204,7 +175,7 @@ Task Groups
 Suppose you want to put the ``countdown()`` and the ``kid()`` task in
 a race. That is, have the two tasks run concurrently, but whichever
 one finishes first wins--cancelling the other task.  This kind of coordination
-can be handled using a ``TaskGroup``.  Change the ``parent()`` function like this::
+can be handled using a ``TaskGroup``.  Change the ``parent()`` function to this::
 
     async def parent():
         async with curio.TaskGroup(wait=any) as g:
@@ -216,12 +187,12 @@ can be handled using a ``TaskGroup``.  Change the ``parent()`` function like thi
         else:
             print("Result:", g.result)
 
-In this code, a task group waits for any task to finish (the ``wait=any``
+Here, a task group waits for any spawned task to finish (the ``wait=any``
 argument). When this occurs, the losing task is 
 automatically cancelled.  The ``result`` attribute of the group
 contains the result of the task that finished first.
 
-Running this code, you will either get output like this::
+Running this code, you will either get output similar to this::
 
     Getting around to doing my homework
     T-minus 10
@@ -244,11 +215,10 @@ or you will get this if the ``kid()`` takes too long::
 A critical feature of a task group is that when used as a context
 manager (as shown), no child task survives--all created tasks will
 have either completed or have been cancelled when control-flow leaves
-the managed block. This kind of task control is an example of a
-programming style sometimes known as "structured concurrency."  
+the managed block. 
 
-Number Crunching and Blocking Operations
-----------------------------------------
+Blocking Operations
+-------------------
 
 Suppose that the ``kid()`` task now requires the computation of
 Fibonacci numbers using an algorithm with exponential complexity like
@@ -273,23 +243,22 @@ this::
             await g.spawn(kid, 37, 42)
             await g.spawn(countdown, 10)
 
-        result = g.completed.result
-        if result is None:
+        if g.result is None:
             print("Why didn't you finish?")
         else:
-            print("Result:", result)
+            print("Result:", g.result)
 
     if __name__ == '__main__':
         curio.run(parent, with_monitor=True)
 
 If you run this version, you'll find that everything becomes
 unresponsive.  For example, you won't see the ``countdown()`` task
-running.  The problem is that the kid takes the CPU and
+running.  The problem is that the ``fib()`` function takes the CPU and
 never yields.  Important lesson: Curio DOES NOT provide preemptive
 scheduling. If a task decides to compute large Fibonacci numbers or
 mine bitcoins, everything blocks until it's done. Don't do that.
 
-For the other tasks to make progress, you need to modify ``kid()``
+For other tasks to make progress, you need to modify ``kid()``
 to carry out computationally intensive work in a separate process.
 Change the code to use ``curio.run_in_process()`` like this::
 
@@ -304,18 +273,18 @@ Change the code to use ``curio.run_in_process()`` like this::
             raise
 
 With this change, you'll now see the countdown task running and
-the kid task will be cancelled.  To see it finish, you might need
-to greatly increase the countdown duration.   Coincidentally, you
+the kid task will be cancelled if it takes too long (to see it finish, you might need
+to greatly increase the countdown duration).   Coincidentally, you
 could modify the code to carry the computation in parallel on
-two CPUs.  You can do this using a task group::
+two CPUs.  You can also do this using a task group::
 
     async def kid(x, y):
         try:
             print('Getting around to doing my homework')
             async with curio.TaskGroup() as g:
-                t1 = await g.spawn(curio.run_in_process, fib, x)
-                t2 = await g.spawn(curio.run_in_process, fib, y)
-            return t1.result * t2.result
+                tx = await g.spawn(curio.run_in_process, fib, x)
+                ty = await g.spawn(curio.run_in_process, fib, y)
+            return tx.result * ty.result
         except curio.CancelledError:
             print("Guess I'll fail!")
             raise
@@ -351,7 +320,7 @@ instead. Modify the code like this::
 The problem of blocking is a common issue with all async
 frameworks. Unless you can rewrite the code to be fully async, running
 code in a separate thread or process is really your only option to
-avoid stalls.  The Curio ``run_in_process()`` and ``run_in_thread()``
+avoid stalls.  The ``run_in_process()`` and ``run_in_thread()``
 functions are used to do just this.  As a rule of thumb, use processes
 for computationally intensive tasks and use threads for tasks that
 are mostly performing I/O.  
@@ -388,7 +357,7 @@ connections and see that it handles multiple client connections::
     ^C
     bash %
 
-In this program, ``client`` argument to ``echo_client()`` is a
+In this program, the ``client`` argument to ``echo_client()`` is a
 socket. However, all I/O operations are now asynchronous and must use
 ``await``.  In some cases, it is easier to work with the data
 presented with a file-like interface--especially if you must work with
@@ -578,6 +547,12 @@ The monitor can show you the state of each task and you can get stack
 traces. Remember that you enter the monitor by running ``python3 -m curio.monitor``
 in a separate window.
 
+The stack trace of any task can be produced using its ``traceback()`` method. For
+example::
+
+    print("Where are you?")
+    print(task.traceback())
+
 You can also turn on scheduler tracing with code like this::
 
     from curio.debug import schedtrace
@@ -585,15 +560,8 @@ You can also turn on scheduler tracing with code like this::
     logging.basicConfig(level=logging.DEBUG)
     run(..., debug=schedtrace)
 
-This will write log information about the scheduling of tasks.  If you want even
-more fine-grained information, you can enable trap tracing using this::
-
-    from curio.debug import traptrace
-    import logging
-    logging.basicConfig(level=logging.DEBUG)
-    run(..., debug=traptrace)
-
-This will write a log of every low-level operation being performed by Curio.
+This will write detailed log information showing the scheduling of tasks.  If you want even
+more fine-grained information, use ``traptrace`` instead of ``schedtrace``.
 
 More Information
 ----------------
