@@ -25,7 +25,6 @@ Contents:
    tutorial
    howto
    reference
-   devel
 
 Installation:
 -------------
