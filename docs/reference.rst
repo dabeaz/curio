@@ -1,13 +1,11 @@
 Curio Reference Manual
 ======================
 
-This manual describes the basic concepts and functionality provided by Curio.
-
 Coroutines
 ----------
 
-Curio is solely concerned with the execution of coroutines.  A coroutine
-is a function defined using ``async def``.  For example::
+Curio executes coroutines.  A coroutine is a function defined using
+``async def``.  For example::
 
     async def hello(name):
           return 'Hello ' + name
@@ -21,58 +19,53 @@ Coroutines call other coroutines using ``await``. For example::
 Unlike a normal function, a coroutine never runs on its own.
 It always executes under the supervision of a manager (e.g., an
 event-loop, a kernel, etc.).  In Curio, an initial coroutine is
-executed using the ``run()`` function. For example::
+executed using ``run()``.  For example::
 
     import curio
     curio.run(main, 'Guido')
 
-When executing, a coroutine is considered to be a "Task."  Whenever
+When it's executing, a coroutine is encapsulated inside a "Task."  Whenever
 the word "task" is used, it refers to a running coroutine.
 
-The Kernel
-----------
+The Execution Kernel
+--------------------
 
-All coroutines in Curio are executed by an underlying kernel.  Normally, you would
-run a top-level coroutine using the following function:
+Coroutines are executed by an underlying kernel.  Normally, you run
+a coroutine using the following:
 
-.. function:: run(corofunc, *args, debug=None, selector=None,
-              with_monitor=False, **other_kernel_args)
+.. function:: run(corofunc, *args, debug=None, selector=None, with_monitor=False, taskcls=Task)
 
-   Run the async function *corofunc* to completion and return its
-   final return value.  *args* are the arguments provided to
-   *corofunc*.  If *with_monitor* is ``True``, then the monitor
-   debugging task executes in the background.  If *selector* is given,
-   it should be an instance of a selector from the :mod:`selectors
-   <python:selectors>` module.  *debug* is a list of optional
+   Run *corofunc* to completion and return its result.  *args* are the
+   arguments provided to *corofunc*.  *with_monitor* enables the task
+   monitor.  *selector* is an instance of a selector from the
+   :mod:`selectors <python:selectors>` module. *debug* is a list of optional
    debugging features. See the section on debugging for more detail.
-   ``run() is not reentrant--a ``RuntimeError`` is raised if you try
-   to call it when another coroutine is already running.
+   *taskcls* is the class used to instantiate tasks.  If ``run()`` is called 
+   when a task is already running, a ``RuntimeError`` is raised.
 
-If you are going to repeatedly run coroutines one after the other, it
+If you are going to repeatedly execute coroutines one after the other, it
 will be more efficient to create a ``Kernel`` instance and submit
 them using its ``run()`` method as described below:
 
-.. class:: Kernel(selector=None, debug=None):
+.. class:: Kernel(selector=None, debug=None, taskcls=Task):
 
    Create an instance of a Curio kernel.  The arguments are the same
    as described above for the :func:`run()` function.  
 
-There is only one method that may be used on a :class:`Kernel` outside of coroutines.
+There is only one method that may be used on a :class:`Kernel` instance.
 
 .. method:: Kernel.run(corofunc=None, *args, shutdown=False)
 
-   Runs the kernel until the supplied async function *corofunc*
-   completes execution.The final result of this function, if supplied,
-   is returned. *args* are the arguments given to *corofunc*.  If
-   *shutdown* is ``True``, the kernel will cancel all remaining tasks
-   and perform a clean shutdown. Calling this method with *corofunc*
+   Runs async function *corofunc* and return its reself.
+   *args* are the arguments given to *corofunc*.  If
+   *shutdown* is ``True``, the kernel cancels all remaining tasks
+   and performs a clean shutdown. Calling this method with *corofunc*
    set to ``None`` causes the kernel to run through a single check for
    task activity before returning immediately.  Raises a
-   `RuntimeError` if a task is submitted to an already running kernel
+   ``RuntimeError`` if a task is submitted to an already running kernel
    or if an attempt is made to run more than one kernel in a thread.
 
-If submitting multiple tasks, one after another, from synchronous
-code, consider using a kernel as a context manager.  For example::
+A kernel may be used as a context manager. For example::
 
     with Kernel() as kernel:
         kernel.run(corofunc1)
@@ -80,8 +73,8 @@ code, consider using a kernel as a context manager.  For example::
         ...
     # Kernel shuts down here
 
-When submitting a task to the Kernel, you can either provide an async
-function and calling arguments or you can provide an instantiated
+When submitting a task, you can either provide an async
+function and calling arguments or you can provide an already instantiated
 coroutine.  For example, both of these invocations of ``run()`` work::
 
     async def hello(name):
@@ -105,67 +98,45 @@ The following functions are defined to help manage the execution of tasks.
 
    Create a new task that runs the async function *corofunc*.  *args*
    are the arguments provided to *corofunc*. Returns a :class:`Task`
-   instance as a result.  The *daemon* option, if supplied, specifies
+   instance as a result.  The *daemon* option specifies
    that the new task will never be joined and that its result may be
    disregarded. 
 
-   Note: ``spawn()`` creates a completely independent task.  The resulting task
-   is not placed into any kind of task group as might be managed by :class:`TaskGroup`
-   instances described later.
-
 .. asyncfunction:: current_task()
 
-   Returns a reference to the :class:`Task` instance corresponding to the
-   caller.  A coroutine can use this to get a self-reference to its
-   own :class:`Task` instance if needed.
-
+   Returns the :class:`Task` instance corresponding to the caller.  
 
 .. asyncfunction:: schedule()
 
-   Immediately task switch to the next ready task.  Normally you never
-   need to call this, but sometimes it can be useful to force a task
-   switch even no blocking operation has occurred.
+   Immediately switch to the next ready task.  
 
-The :func:`spawn` and :func:`current_task` both return a :class:`Task` instance
-that serves as a wrapper around the underlying coroutine that's running.
-
-.. class:: Task
-
-   A class representing an executing coroutine. This class cannot be
-   created directly.
+:func:`spawn` and :func:`current_task` return a :class:`Task` instance 
+that provides the following methods::
 
 .. asyncmethod:: Task.join()
 
-   Wait for the task to terminate.  Returns the value returned by the task or
-   raises a :exc:`curio.TaskError` exception if the task failed with an
-   exception. This is a chained exception.  The ``__cause__`` attribute of this
-   exception contains the actual exception raised by the task when it crashed.
-   If called on a task that has been cancelled, the ``__cause__``
-   attribute is set to :exc:`curio.TaskCancelled`.
+   Wait for the task to terminate and return its result.
+   Raises :exc:`curio.TaskError` if the task failed with an
+   exception. This is a chained exception.  The ``__cause__`` attribute 
+   contains the actual exception raised by the task when it crashed.
 
 .. asyncmethod:: Task.wait()
 
-   Like ``join()`` but doesn't return any value.  The caller must obtain the
-   result of the task separately via the ``result`` or ``exception`` attribute.
+   Waits for task to terminate, but returns no value. 
 
 .. asyncmethod:: Task.cancel(blocking=True)
 
-   Cancels the task. This raises a :exc:`curio.TaskCancelled`
-   exception in the task which may choose to handle it in order to
-   perform cleanup actions. If ``blocking=True`` (the default), it does
-   not return until the task actually terminates.  Curio only allows a
-   task to be cancelled once. If this method is somehow invoked more
-   than once on a still running task, the second request will merely
-   wait until the task is cancelled from the first request.  If the
-   task has already run to completion, this method does nothing and
-   returns immediately.  Returns ``True`` if the task was actually
-   cancelled. ``False`` is returned if the task was already finished
-   prior to the cancellation request.  Cancelling a task also cancels
-   any previously set timeout.  Note: uncaught exceptions that occur
-   as a result of cancellation are logged, but not propagated
-   out of the ``Task.cancel()`` method.   If you need to inspect a
-   task to see how it terminated, use ``Task.join()`` or inspect
-   the value of ``Task.result``. 
+   Cancels the task by raising a :exc:`curio.TaskCancelled` exception
+   at its next blocking operation.  If ``blocking=True`` (the
+   default), waits for the task to actually terminate.  A task may
+   only be cancelled once.  If this method is invoked more than once,
+   the second request will wait until the task is cancelled from the
+   first request.  If the task has already terminated, this method
+   does nothing and returns immediately.  Returns ``True`` if the task
+   was actually cancelled and ``False`` if the task was already
+   terminated.  Note: uncaught exceptions that occur as a result of
+   cancellation are logged, but not propagated out of the
+   ``Task.cancel()`` method.
 
 .. method:: Task.traceback()
 
@@ -175,11 +146,11 @@ that serves as a wrapper around the underlying coroutine that's running.
 
    Return a (filename, lineno) tuple where the task is executing. Useful for debugging and logging.
 
-The following public attributes are available of :class:`Task` instances:
+The following attributes and properties are defined on :class:`Task` instances:
 
 .. attribute:: Task.id
 
-   The task's integer id.
+   The task's integer id.  Monotonically increases. 
 
 .. attribute:: Task.coro
 
@@ -191,24 +162,21 @@ The following public attributes are available of :class:`Task` instances:
 
 .. attribute:: Task.state
 
-   The name of the task's current state.  Printing it can be potentially useful
-   for debugging.
+   The name of the task's current state.  Useful for debugging.
 
 .. attribute:: Task.cycles
 
-   The number of scheduling cycles the task has completed. This might be useful
-   if you're trying to figure out if a task is running or not. Or if you're
-   trying to monitor a task's progress.
+   The number of scheduling cycles the task has completed. 
 
 .. attribute:: Task.result
 
-   The result of a task, if completed.  If accessed before the task terminated,
-   a ``RuntimeError`` exception is raised.  If the task crashed with an exception,
+   A property holding the task result. If accessed before the task terminates,
+   a ``RuntimeError`` exception is raised. If the task crashed with an exception,
    that exception is reraised on access.
 
 .. attribute:: Task.exception
 
-   Exception raised by a task, if any.
+   Exception raised by a task, if any.  ``None`` otherwise. 
 
 .. attribute:: Task.cancelled
 
@@ -220,7 +188,7 @@ The following public attributes are available of :class:`Task` instances:
 
 .. attribute:: Task.cancel_pending
 
-   An instance of any pending cancellation exception.
+   An instance of a pending cancellation exception. Raised on the next blocking operation.
 
 .. attribute:: Task.allow_cancel
 
@@ -232,10 +200,8 @@ The following public attributes are available of :class:`Task` instances:
 Task Groups
 -----------
 
-Curio provides a mechanism for grouping tasks together, managing their
-execution, and collecting their results.  This is kind of control is 
-sometimes used to implement programming patterns related to "structured concurrency."
-To do this, create a ``TaskGroup`` instance.
+Tasks may be grouped together to better manage their execution and
+collect results.  To do this, create a ``TaskGroup`` instance.
 
 .. class:: TaskGroup(tasks=(), *, wait=all)
 
@@ -246,12 +212,8 @@ To do this, create a ``TaskGroup`` instance.
    ``all``, then wait for all tasks to complete.  If *wait* is
    ``any`` then wait for any task to terminate and cancel any
    remaining tasks.  If *wait* is ``object``, then wait for any task
-   to terminate and return a non-None object, cancelling all remaining
-   tasks afterwards. If *wait* is ``None``, then immediate cancel all running tasks. 
-   If any task returns with an error, all remaining tasks are immediately
-   cancelled.  The error can usually be obtained by examing the ``result`` or ``results``
-   attribute of the task group.
-    Each ``TaskGroup`` is an independent entity.
+   return a non-None object, cancelling all remaining
+   tasks afterwards. If *wait* is ``None``, then immediately cancel all running tasks. 
    Task groups do not form a hierarchy or any kind of relationship to
    other previously created task groups or tasks.  Moreover, Tasks created by
    the top level ``spawn()`` function are not placed into any task group.
@@ -272,107 +234,83 @@ The following methods are supported on ``TaskGroup`` instances:
 .. asyncmethod:: TaskGroup.next_done()
 
    Returns the next completed task.  Returns ``None`` if no more tasks remain.
-   A ``TaskGroup`` may also be used as an asynchronous iterator. 
 
 .. asyncmethod:: TaskGroup.next_result()
 
    Returns the result of the next completed task.  If the task failed with an
    exception, that exception is raised.  A ``RuntimeError`` exception is raised
-   if this is called when no remaining tasks are available. 
+   if called when no remaining tasks are available. 
 
 .. asyncmethod:: TaskGroup.join()
 
-   Wait for tasks in the group to terminate according to the wait policy
-   set for the group.  If the ``join()`` operation itself is cancelled, all 
-   remaining tasks in the group are also cancelled.  If a ``TaskGroup`` is used as a
-   context manager, the ``join()`` method is called on context-exit.
+   Wait for all tasks in the group to terminate according to the wait policy
+   set for the group.  If any of the monitored tasks exits with an exception or
+   if the ``join()`` operation itself is cancelled, all remaining tasks in the 
+   group are cancelled. If a ``TaskGroup`` is used as a
+   context manager, the ``join()`` method is called on block-exit.
 
 .. asyncmethod:: TaskGroup.cancel_remaining()
 
    Cancel all remaining tasks.  Cancelled tasks are disregarded by the task
-   group when reporting results.  Note: if any uncaught exceptions occur in
-   a Task as a result of cancellation, those exceptions are logged, but 
-   discarded.  
+   group when reporting results.  
 
 .. attribute:: TaskGroup.completed
 
-   The first task that completed with a result in the group.  Useful
-   when used in combination with the ``wait=any`` or ``wait=object`` options 
-   to ``TaskGroup()``.
+   The first task that completed with a valid result when joining. Typically used
+   in combination with the ``wait=any`` or ``wait=object`` options to
+   ``TaskGroup()``.
 
 .. attribute:: TaskGroup.result
 
-   The result of the first task that completed.  Access may raise an
+   The result of the first task that completed. Access may raise an
    exception if the task exited with an exception.  The same as accessing
    ``TaskGroup.completed.result``.
 
 .. attribute:: TaskGroup.results
 
-   A list of all results returned by tasks created in the group. These
-   results are ordered by task id.  May raise an exception if any task
-   exited with an exception.
+   A list of all results returned by tasks created in the group,
+   ordered by task id. May raise an exception if one of the tasks
+   exited with an exception.  Typically used with the ``wait=all`` option
+   to ``TaskGroup()``. 
 
 .. attribute:: TaskGroup.tasks
 
-   A list of all tasks actively tracked by the group. Can be useful
-   in determining task status after a task group has been joined.
+   A list of all tasks actively tracked by the group. Can be useful in
+   determining task status after a task group has been joined.  Does
+   not include tasks where the ``Task.join()`` method has already been
+   called.
 
-The preferred way to use a ``TaskGroup`` is as a context manager.  This forces
-a lifetime on all of the contained tasks.  Specifically, it is guaranteed that
-all tasks have terminated when control leaves the context-block.  For example:
+The preferred way to use a ``TaskGroup`` is as a context manager.  When
+used in this manner, all tasks are guanteeed to be terminated/cancelled
+upon block exit.  Here are a few common usage patterns::
 
-
-    async with TaskGroup() as g:
-        t1 = await g.spawn(func1)
-        t2 = await g.spawn(func2)
-        t3 = await g.spawn(func3)
-
-    # all tasks done here
-    assert all(t.terminated for t in [t1, t2, t3])
-
-With this in mind, there are some common programming patterns for task groups.
-If you want to launch a collection of tasks that execute concurrently
-and collect their results afterwards, do this:
-
-    async with TaskGroup() as g:
-        t1 = await g.spawn(func1)
-        t2 = await g.spawn(func2)
-        t3 = await g.spawn(func3)
-
-    # Collect all results
-    print('t1 got', t1.result)
-    print('t2 got', t2.result)
-    print('t3 got', t3.result)
-
-    # Get all results as a list (in task creation order)
+    # Spawn multiple tasks and collect all of their results
+    async with TaskGroup(wait=all) as g:
+        await g.spawn(coro1)
+        await g.spawn(coro2)
+        await g.spawn(coro3)
     print('Results:', g.results)
 
-Here is a slight variant that launches a set of tasks and collects their 
-results in the order that they finish as they finish::
+    # Spawn multiple tasks and collect the result of the first one
+    # that completes--cancelling other tasks
+    async with TaskGroup(wait=any) as g:
+        await g.spawn(coro1)
+        await g.spawn(coro2)
+        await g.spawn(coro3)
+    print('Result:', g.result)
 
+    # Spawn multiple tasks and collect their results as they complete
     async with TaskGroup() as g:
-        t1 = await g.spawn(func1)
-        t2 = await g.spawn(func2)
-        t3 = await g.spawn(func3)
+        await g.spawn(coro1)
+        await g.spawn(coro2)
+        await g.spawn(coro3)
         async for task in g:
             print(task, 'completed.', task.result)
 
-If you wanted to launch tasks and exit when the first one has returned a result,
-use the ``wait=any`` option like this::
+In all of these examples, access to the ``result`` or ``results`` attribute
+may raise an exception if a task failed for some reason. 
 
-    async with TaskGroup(wait=any) as g:
-        await g.spawn(func1)
-        await g.spawn(func2)
-        await g.spawn(func3)
-
-    result = g.result    # First completed result
-
-If you change the task group to use ``wait=object``, then
-the group waits for the first task that successfully returns a
-non-``None`` result.   This is useful with code that returns ``None`` to
-indicate an unsuccessful operation. 
-
-If any exception is raised inside the task group context, all launched
+If ann exception is raised inside the task group context, all managed
 tasks are cancelled and the exception is propagated.  For example::
 
     try:
@@ -382,13 +320,12 @@ tasks are cancelled and the exception is propagated.  For example::
             t3 = await g.spawn(func3)
             raise RuntimeError()
     except RuntimeError:
-        # All launched tasks will have terminated or been cancelled
+        # All launched tasks will have terminated or been cancelled here
         assert t1.terminated
         assert t2.terminated
         assert t3.terminated
 
-This behavior also applies to features such as timeouts. For
-example::
+This behavior also applies to timeouts.  For example::
 
     try:
         async with timeout_after(10):
@@ -396,7 +333,6 @@ example::
                 t1 = await g.spawn(func1)
                 t2 = await g.spawn(func2)
                 t3 = await g.spawn(func3)
-
             # All tasks cancelled here on timeout
 
     except TaskTimeout:
@@ -406,64 +342,32 @@ example::
         assert t3.terminated
 
 In this case, the timeout exception is only raised in the code that created
-the task  group. Child tasks are still cancelled using the ``cancel()`` 
+the task group. Child tasks are still cancelled using the ``cancel()`` 
 method and would receive a ``TaskCancelled`` exception.
-
-If any launched tasks exit with an exception other than
-``TaskCancelled`` while a task group is being joined, all 
-other tasks are cancelled.  The reporting of an error takes
-place when results are accessed. For example::
-
-    async def bad1():
-        raise ValueError('bad value')
-
-    async def bad2():
-        raise RuntimeError('bad run')
-
-    async with TaskGroup() as g:
-         t1 = await g.spawn(bad1)
-         t2 = await g.spawn(bad2)
-         await sleep(1)
-
-    t1.result           # ---> ValueError() raised here
-    t2.result           # ---> RuntimeError() raised here
-    print(g.results)    # --> First exception also raised here
-
-If you want to examine tasks in detail after task group completion, you
-can iterate over the ``tasks`` attribute::
-
-    for t in g.tasks:
-        if t.exception:
-             print("Failed:", t.exception)
-        else:
-             print("Success:", t.result)
 
 Time
 ----
 
-The following functions are used by tasks to help manage time.
-
 .. asyncfunction:: sleep(seconds)
 
    Sleep for a specified number of seconds.  If the number of seconds is 0, the
-   kernel merely switches to the next task (if any).
+   kernel switches to the next task (if any). Returns the current clock value.
 
 .. asyncfunction:: wake_at(clock)
 
    Sleep until the monotonic clock reaches the given absolute clock
    value.  Returns the value of the monotonic clock at the time the
-   task awakes.  Use this function if you need to have more precise
-   interval timing.
+   task awakes.  
 
 .. asyncfunction:: clock()
 
-   Returns the current value of the kernel clock.   This is often used in
+   Returns the current value of the monotonic clock.   This is often used in
    conjunction with the ``wake_at()`` function (you'd use this to get
-   an initial clock value for passing an argument).  
+   an base clock value).
 
 Timeouts
 --------
-Any blocking operation in Curio can be cancelled after a timeout.  The following
+Any blocking operation can be cancelled by a timeout.  The following
 functions are used for this purpose:
 
 .. asyncfunction:: timeout_after(seconds, corofunc=None, *args)
@@ -481,9 +385,9 @@ functions are used for this purpose:
    given as an absolute clock time.  Use the :func:`clock` function to
    get a base time for computing a deadline.
 
-There is an expectation that every call to ``timeout_after()`` or ``timeout_at()`` 
-will have a matching exception handler to catch the resulting timeout.  Thus,
-the following program pattern is expected::
+It is assumed that every call to ``timeout_after()`` or
+``timeout_at()`` has a matching exception handler to catch the
+resulting timeout.  Thus, the following program pattern is required::
 
     try:
         result = await timeout_after(10, coro, arg1, arg2)
@@ -509,7 +413,7 @@ example, consider this code::
             async with timeout_after(1):    # Expires first
                 await sleep(1000)
     except TaskTimeout:   # No match!
-        print("Time out")
+        print("Timeout")
 
 In this code, the inner ``timeout_after()`` call has no matching
 exception handler.  When it expires, a ``curio.UncaughtTimeoutError``
@@ -524,7 +428,7 @@ Suppose you flip the timeout periods around and write code like this::
             try:
                 await sleep(1000)
             except TaskTimeout:         # No match!
-                print("Time out")
+                print("Timeout")
 
 In this case, the inner ``timeout_after()`` has a matching exception
 handler, but the outer timeout is actually the first one to expire.

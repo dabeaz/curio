@@ -509,34 +509,37 @@ class TaskGroup(object):
         Wait for tasks in a task group to terminate according to the
         wait policy set for the group.  
         '''
-        if self._wait is None:
-            # Cancel all remaining tasks.
-            await self.cancel_remaining()
-            
-        while self._finished or self._running:
-            # If nothing is finished, we wait for something to complete
-            while not self._finished:
-                await self._sema.acquire()
+        try:
+            if self._wait is None:
+                # We wait for no-one. Tasks get cancelled on return.
+                return
 
-            # Examine all currently finished tasks
-            while self._finished:
-                task = self._finished.popleft()
-                # Check if it's the first completed task
-                if self.completed is None:
-                    # For wait=object, the self.completed attribute is the first non-None result
-                    if not ((self._wait is object) and (not task.exception) and (task.result is None)):
-                        self.completed = task 
+            while self._finished or self._running:
+                # If nothing is finished, we wait for something to complete
+                while not self._finished:
+                    await self._sema.acquire()
 
-                # What happens next depends on the wait and error handling policies
-                if task.exception or \
-                   (self._wait is any) or \
-                   ((self._wait is object) and (task.result is not None)):
-                    # Cancel all remaining tasks
-                    while self._running:
-                        task = self._running.pop()
-                        await task.cancel()
-            
-        self._joined = True
+                # Examine all currently finished tasks
+                while self._finished:
+                    task = self._finished.popleft()
+                    # Check if it's the first completed task
+                    if self.completed is None:
+                        # For wait=object, the self.completed attribute is the first non-None result
+                        if not ((self._wait is object) and (not task.exception) and (task.result is None)):
+                            self.completed = task 
+
+                    # What happens next depends on the wait and error handling policies
+                    if task.exception or \
+                       (self._wait is any) or \
+                       ((self._wait is object) and (task.result is not None)):
+                        return
+
+        # Task groups guarantee all tasks cancelled/terminated upon join()
+        finally:
+            while self._running:
+                task = self._running.pop()
+                await task.cancel()
+            self._joined = True
         return
 
     async def __aenter__(self):
@@ -546,11 +549,7 @@ class TaskGroup(object):
         if ty:
             await self.cancel_remaining()
         else:
-            try:
-                await self.join()
-            except CancelledError:
-                await self.cancel_remaining()
-                raise
+            await self.join()
 
     def __aiter__(self):
         return self
