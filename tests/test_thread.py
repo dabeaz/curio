@@ -2,7 +2,7 @@
 
 import pytest
 from curio import *
-from curio.thread import AWAIT, async_thread, spawn_thread
+from curio.thread import AWAIT, spawn_thread
 from curio.file import aopen
 import time
 import pytest
@@ -10,11 +10,6 @@ import pytest
 
 def simple_func(x, y):
     AWAIT(sleep(0.5))     # Execute a blocking operation
-    return x + y
-
-@async_thread
-def simple_func2(x, y):
-    time.sleep(0.5)
     return x + y
 
 async def simple_coro(x, y):
@@ -54,25 +49,25 @@ def test_cancel_result(kernel):
     kernel.run(main)
 
 def test_thread_good_result(kernel):
-    @async_thread
     def coro():
         result = AWAIT(simple_coro(2, 3))
         return result
 
     async def main():
-        result = await coro()
+        t = await spawn_thread(coro)
+        result = await t.join()
         assert result == 5
 
     kernel.run(main)
 
 def test_thread_bad_result(kernel):
-    @async_thread
     def coro():
         with pytest.raises(TypeError):
             result = AWAIT(simple_coro(2, '3'))
 
     async def main():
-        await coro()
+        t = await spawn_thread(coro)
+        await t.join()
             
     kernel.run(main)
 
@@ -109,14 +104,14 @@ def test_thread_sync(kernel):
 
 def test_thread_timeout(kernel):
 
-    @async_thread
     def func():
         with pytest.raises(TaskTimeout):
             with timeout_after(1):
                 AWAIT(sleep(2))
 
     async def main():
-        await func()
+        t = await spawn_thread(func)
+        await t.join()
         
     kernel.run(main)
 
@@ -199,23 +194,6 @@ def test_task_group_thread(kernel):
     kernel.run(main)
     assert results == [2, 4, 6]
 
-# Tests the use of the spawn function on async thread functions.
-# should run as a proper coroutine
-            
-def test_spawn_async_thread(kernel):
-    results = []
-    
-    async def main():
-        t = await spawn(simple_func2(2,3))
-        results.append(1)
-        results.append(await t.join())
-        t = await spawn(simple_func2, 2, 3)
-        results.append(2)
-        results.append(await t.join())
-
-    kernel.run(main)
-    assert results == [1, 5, 2, 5]
-
 @pytest.mark.skip
 def test_thread_context(kernel):
     results = []
@@ -233,105 +211,4 @@ def test_thread_context(kernel):
     kernel.run(main)
     assert results == [1, 5]
 
-# This test is aimed at testing cancellation/timeouts in async threads
-@pytest.mark.skip
-def test_thread_timeout(kernel):
-    evt = Event()
-    results = []
-
-    @async_thread
-    def worker1():
-        AWAIT(evt.wait)
-        results.append('worker1')
-
-    async def worker2():
-        async with spawn_thread():
-            AWAIT(evt.wait)
-            results.append('worker2')
-
-    async def setter():
-        await sleep(1)
-        await evt.set()
-
-    async def main():
-        t = await spawn(setter)
-        try:
-            await timeout_after(0.1, worker1)
-            results.append('bad')
-        except TaskTimeout:
-            results.append('timeout1')
-        await t.join()
-        evt.clear()
-        t = await spawn(setter)
-        try:
-            await timeout_after(0.1, worker2)
-            results.append('bad')
-        except TaskTimeout:
-            results.append('timeout2')
-
-    kernel.run(main)
-    assert results == ['timeout1', 'timeout2']
-
-import threading
-
-@pytest.mark.skip
-def test_async_thread_call(kernel):
-    # Tests calling between async thread objects
-    results = []
-    
-    @async_thread
-    def func1(t):
-        results.append('func1')
-        results.append(t == threading.currentThread())
-
-    @async_thread
-    def func2():
-        results.append('func2')
-        # Calling an async_thread function from another async_thread function should
-        # work like a normal synchronous function call
-        func1(threading.currentThread())
-
-    async def coro1():
-        results.append('coro1')
-        async with spawn_thread():
-             # Calling an async_thread function from a thread context block should 
-             # work like a normal sync function call
-             func1(threading.currentThread())
-
-    async def main():
-        await func2()
-        await coro1()
-        
-    kernel.run(main)
-    assert results == ['func2', 'func1', True, 'coro1', 'func1', True]
-
-@pytest.mark.skip
-def test_async_thread_async_thread_call(kernel):
-    # Tests calling between async thread objects
-    results = []
-    
-    @async_thread
-    def func1(t):
-        results.append('func1')
-        results.append(t == threading.currentThread())
-
-    @async_thread
-    def func2():
-        results.append('func2')
-        # Awaiting on an async-thread function should work, but it should stay in the same thread
-        AWAIT(func1, threading.currentThread())
-
-    async def coro1():
-        results.append('coro1')
-        async with spawn_thread():
-             # Calling an async_thread function from a thread context block should 
-             # work like a normal sync function call
-             func1(threading.currentThread())
-
-    async def main():
-        await func2()
-        await coro1()
-        
-    kernel.run(main)
-    assert results == ['func2', 'func1', True, 'coro1', 'func1', True]
 

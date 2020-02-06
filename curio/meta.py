@@ -6,8 +6,7 @@
 #
 
 __all__ = [
-    'iscoroutinefunction', 'finalize', 'blocking', 'cpubound',
-    'awaitable', 'asyncioable',  'sync_only', 'AsyncABC',
+    'iscoroutinefunction', 'finalize', 'awaitable', 'asyncioable',  'sync_only', 
     'curio_running', 'instantiate_coroutine',
  ]
 
@@ -17,7 +16,6 @@ from sys import _getframe
 import sys
 import inspect
 from functools import wraps, partial
-from abc import ABCMeta, abstractmethod
 import dis
 import asyncio
 import threading
@@ -113,43 +111,6 @@ def instantiate_coroutine(corofunc, *args, **kwargs):
     except StopIteration as e:
         return e.value
 
-def blocking(func):
-    '''
-    Decorator indicating that a function performs a blocking operation.
-    If called from synchronous Python code, the function runs normally.
-    However, if called from a coroutine, curio arranges for it to run
-    in a thread.
-    '''
-    from . import workers
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if _from_coroutine():
-            return workers.run_in_thread(func, *args, **kwargs)
-        else:
-            return func(*args, **kwargs)
-    return wrapper
-
-
-def cpubound(func):
-    '''
-    Decorator indicating that a function performs a cpu-intensive operation.
-    If called from synchronous Python code, the function runs normally.
-    However, if called from a coroutine, curio arranges for it to run
-    in a process.
-    '''
-    from . import workers
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if _from_coroutine():
-            # The use of wrapper in the next statement is not a typo.
-            return workers.run_in_process(wrapper, *args, **kwargs)
-        else:
-            return func(*args, **kwargs)
-    return wrapper
-
-
 def sync_only(func):
     '''
     Decorator indicating that a function is only valid in synchronous code.
@@ -240,28 +201,6 @@ def asyncioable(awaitablefunc):
         wrapper._awaitable = True
         return wrapper
     return decorate
-
-class AsyncABCMeta(ABCMeta):
-    '''
-    Metaclass that gives all of the features of an abstract base class, but
-    additionally enforces coroutine correctness on subclasses. If any method
-    is defined as a coroutine in a parent, it must also be defined as a
-    coroutine in any child.
-    '''
-    def __init__(cls, name, bases, methods):
-        coros = {}
-        for base in reversed(cls.__mro__):
-            coros.update((name, val) for name, val in vars(base).items()
-                         if iscoroutinefunction(val))
-
-        for name, val in vars(cls).items():
-            if name in coros and not iscoroutinefunction(val):
-                raise TypeError(f'Must use async def {name}{inspect.signature(val)}')
-        super().__init__(name, bases, methods)
-
-class AsyncABC(metaclass=AsyncABCMeta):
-    pass
-
 
 def safe_generator(func):
     '''

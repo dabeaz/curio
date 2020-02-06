@@ -144,9 +144,11 @@ def test_task_any_error(kernel):
         else:
             assert False
 
+        assert isinstance(g.exception, TypeError)
         assert t1.exception
         assert t2.cancelled
         assert t3.cancelled
+        assert all(g.exceptions)
 
     kernel.run(main())
 

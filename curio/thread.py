@@ -41,7 +41,7 @@
 #   |________| result |___________| Event  |_________|
 #
 
-__all__ = [ 'AWAIT', 'async_thread', 'spawn_thread' ]
+__all__ = [ 'AWAIT', 'spawn_thread' ]
 
 # -- Standard Library
 
@@ -251,7 +251,7 @@ def spawn_thread(func, *args, daemon=False):
 
     return runner(args, daemon)
 
-def async_thread(func=None, *, daemon=False):
+def async_thrad(func=None, *, daemon=False):
     '''
     Decorator that is used to mark a callable as running in an asynchronous thread
     '''

@@ -266,12 +266,21 @@ The following methods are supported on ``TaskGroup`` instances:
    exception if the task exited with an exception.  The same as accessing
    ``TaskGroup.completed.result``.
 
+.. attribute:: TaskGroup.exception
+
+   The exception raised by the first task that completed (if any).
+   The same as accessing ``TaskGroup.completed.exception``.
+
 .. attribute:: TaskGroup.results
 
    A list of all results returned by tasks created in the group,
    ordered by task id. May raise an exception if one of the tasks
    exited with an exception.  Typically used with the ``wait=all`` option
    to ``TaskGroup()``. 
+
+.. attribute:: TaskGroup.exceptions
+
+   A list of all exceptions raised by tasks managed by the group.
 
 .. attribute:: TaskGroup.tasks
 
@@ -1769,75 +1778,6 @@ Curio queue::
 
     run(main())
 
-Asynchronous threads can also be created using the following decorator.
-
-.. function:: async_thread(callable)
-
-   A decorator that adapts a synchronous callable into an asynchronous
-   function that runs an asynchronous thread.
-
-Using this decorator, you can write a function like this::
-
-    @async_thread
-    def consumer(queue):
-        try:
-            while True:
-                item = AWAIT(queue.get())
-                if item is None:
-                    break
-                print('Got:', item)
-                AWAIT(queue.task_done())
-
-        except CancelledError:
-            print('Consumer goodbye!')
-            raise
-
-Now, whenever the code executes (e.g., ``await consumer(q)``), a
-thread will automatically be created.  One amazing thing about such
-functions is that they can still be used in traditional synchronous
-code.  For example, you could use the above ``consumer`` function with
-normal threaded code::
-
-    import threading
-    import queue
-
-    def producer(queue):
-        for i in range(10):
-            queue.put(i)
-        queue.put(None)
-
-    def main():
-        q = queue.Queue()
-        t1 = threading.Thread(target=consumer, args=(q,))
-	t1.start()
-        producer(q)
-        t1.join()
-
-    main()
-
-Asynchronous threads can use all of Curio's features including
-coroutines, asynchronous context managers, asynchronous iterators,
-timeouts and more.  For coroutines, use the ``AWAIT()`` function.  For
-context managers and iterators, use the synchronous counterpart.  For
-example, you could write this::
-
-    from curio.thread import async_thread, AWAIT
-    from curio import run, tcp_server
-
-    @async_thread
-    def echo_client(client, addr):
-        print('Connection from:', addr)
-        with client:
-            f = client.as_stream()
-            for line in f:
-                AWAIT(client.sendall(line))
-        print('Client goodbye')
-
-    run(tcp_server('', 25000, echo_client))
-
-In this code, the ``with client`` and ``for line in f`` statements are
-actually executing asynchronous code behind the scenes.
-
 Asynchronous threads can perform any combination of blocking operations
 including those that might involve normal thread-related primitives such
 as locks and queues.  These operations will block the thread itself, but
@@ -1958,103 +1898,8 @@ Asynchronous Metaprogramming
 ----------------------------
 .. module:: curio.meta
 
-The :mod:`curio.meta` module provides some decorators and metaclasses that might
-be useful if writing larger programs involving coroutines.
-
-.. class:: AsyncABC()
-
-   A base class that provides the functionality of a normal abstract base class,
-   but additionally enforces coroutine-correctness on methods in subclasses. That is,
-   if a method is defined as a coroutine in a parent class, then it must also be
-   a coroutine in child classes.
-
-Here is an example::
-
-    from abc import abstractmethod
-    from curio.meta import AsyncABC
-
-    class Base(AsyncABC):
-        @abstractmethod
-        async def spam(self):
-            pass
-
-        @abstractmethod
-        async def grok(self):
-            pass
-
-    class Child(Base):
-        async def spam(self):
-            pass
-
-    c = Child()   # Error -> grok() not defined
-
-    class Child2(Base):
-        def spam(self):     # Error -> Not defined using async def
-            pass
-
-        async def grok(self):
-            pass
-
-The enforcement of coroutines is applied to all methods.  Thus, the following
-classes would also generate an error::
-
-    class Base(AsyncABC):
-        async def spam(self):
-            pass
-
-        async def grok(self):
-            pass
-
-    class Child(Base):
-        def spam(self):     # Error -> Not defined using async def
-            pass
-
-
-.. function:: blocking(func)
-
-   A decorator that indicates that the function performs a blocking operation.
-   If the function is called from within a coroutine, the function is executed
-   in a separate thread and ``await`` is used to obtain the result.  If the
-   function is called from normal synchronous code, then the function executes
-   normally.  The Curio ``run_in_thread()`` coroutine is used to execute the
-   function in a thread.
-
-.. function:: cpubound(func)
-
-   A decorator that indicates that the function performs CPU intensive work.
-   If the function is called from within a coroutine, the function is executed
-   in a separate process and ``await`` is used to obtain the result.  If the
-   function is called from normal synchronous code, then the function executes
-   normally.  The Curio ``run_in_process()`` coroutine is used to execute the
-   function in a process.
-
-The ``@blocking`` and ``@cpubound`` decorators are interesting in that they make
-normal Python functions usable from both asynchronous and synchronous code.
-For example, consider this example::
-
-    import curio
-    from curio.meta import blocking
-    import time
-
-    @blocking
-    def slow(name):
-        time.sleep(30)
-        return 'Hello ' + name
-
-    async def main():
-        result = await slow('Dave')      # Async execution
-        print(result)
-
-    if __name__ == '__main__':
-        result = slow('Guido')           # Sync execution
-        print(result)
-        curio.run(main())
-
-In this example, the ``slow()`` function can be used from both
-coroutines and normal synchronous code.  However, when called in
-a coroutine, ``await`` must be used.  Behind the scenes, the function
-runs in a thread--preventing the function from blocking the
-execution of other coroutines.
+The :mod:`curio.meta` module provides some functions that might be useful if
+writing more complex programs involving coroutines.
 
 .. function:: awaitable(syncfunc)
 

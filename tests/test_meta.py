@@ -4,51 +4,11 @@ from functools import partial
 import pytest
 import sys
 
-def test_blocking(kernel):
-    @meta.blocking
-    def func():
-        return 1
-
-    async def main():
-         r = await func()
-         assert r == 1
-
-    assert func() == 1
-
-    kernel.run(main)
-
-@meta.cpubound
-def cpufunc():
-    return 1
-
-def test_cpubound(kernel):
-    async def main():
-         r = await cpufunc()
-         assert r == 1
-
-    assert cpufunc() == 1
-    kernel.run(main)
-
 def test_iscoroutinefunc():
     async def spam(x, y):
         pass
 
     assert meta.iscoroutinefunction(partial(spam, 1))
-
-def test_async_abc():
-    class AsyncSpam(meta.AsyncABC):
-        async def spam(self):
-            pass
-    
-    with pytest.raises(TypeError):
-        class Child(AsyncSpam):
-            def spam(self):
-                pass
-
-    class Child2(AsyncSpam):
-        async def spam(self):
-            pass
-
 
 def test_sync_only(kernel):
     @meta.sync_only

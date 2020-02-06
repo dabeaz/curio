@@ -12,6 +12,30 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+02/06/2020 Removed metaprogramming features not used in the implementation
+           of Curio itself.  These include:
+
+               @async_thread
+               @cpubound
+               @blocking
+               AsyncABC
+
+           Libraries/frameworks that use Curio should be responsible
+           for their own metaprogramming.  Their removal is meant to
+           make Curio smaller and easier to reason about.
+
+02/06/2020 Added exception and exceptions attributes to TaskGroup.
+           Can be used to check for errors.  For example:
+
+               async with TaskGroup(wait=all) as g:
+                   await g.spawn(coro1)
+                   await g.spawn(coro2)
+                   ...
+               if any(g.exceptions):
+                   print("An error occurred")
+
+           Obviously, you could expand that to be more detailed. 
+
 02/04/2020 Removed TaskGroupError exception and simplified the error
            handling behavior of task groups.  If tasks exit with an
            exception, that information is now obtained on the task

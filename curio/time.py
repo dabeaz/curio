@@ -225,3 +225,4 @@ def ignore_after(seconds, coro=None, *args, timeout_result=None):
     else:
         return _timeout_after_func(seconds, False, coro, args, ignore=True, timeout_result=timeout_result)
 
+from . import thread

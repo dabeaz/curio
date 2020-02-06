@@ -2,7 +2,7 @@
 
 import pytest
 from curio import *
-from curio.meta import finalize, awaitable, AsyncABC, abstractmethod
+from curio.meta import finalize, awaitable
 
 
 # Test to make sure a simple async generator runs
@@ -94,14 +94,3 @@ def test_awaitable_agen(kernel):
 
     nums = [ add(n,n) for n in range(5,0,-1) ]
     assert nums == [10, 8, 6, 4, 2]
-
-def test_asyncapc_generator_function():
-    class Parent(AsyncABC):
-        @abstractmethod
-        async def foo(self):
-            raise NotImplementedError
-
-    class Child(Parent):
-        async def foo(self):
-            yield 1
-            return

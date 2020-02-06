@@ -410,6 +410,13 @@ class TaskGroup(object):
             raise RuntimeError("Task group not yet terminated")
         return self.completed.result
 
+    # Property that returns the exception of the first completed task
+    @property
+    def exception(self):
+        if not self._joined:
+            raise RuntimeError("Task group not yet terminated")
+        return self.completed.exception
+
     # Property that returns all task results (in task creation order)
     @property
     def results(self):
@@ -417,6 +424,12 @@ class TaskGroup(object):
             raise RuntimeError("Task group not yet terminated")
         return [ task.result for task in self.tasks ]
 
+    @property
+    def exceptions(self):
+        if not self._joined:
+            raise RuntimeError("Task group not yet terminated")
+        return [ task.exception for task in self.tasks ]
+        
     # Triggered on task completion. 
     async def _task_done(self, task):
         self._running.discard(task)
