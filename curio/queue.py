@@ -16,7 +16,7 @@ import asyncio
 from .traps import _future_wait
 from .sched import SchedFIFO, SchedBarrier
 from .errors import CurioError, CancelledError
-from .meta import awaitable, asyncioable, sync_only
+from .meta import awaitable, asyncioable
 from . import workers
 
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'UniversalQueue']
@@ -76,12 +76,6 @@ class QueueBase:
         self._task_count -= 1
         if self._task_count == 0 and self._join_waiting:
             await self._join_waiting.wake()
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        return await self.get()
 
 
 # UniversalQueue is one of the more interesting, and possibly,
@@ -305,19 +299,6 @@ class UniversalQueueBase:
     async def join(self):
         loop = asyncio.get_event_loop()
         return loop.run_in_executor(None, self.join_sync)
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        return await self.get()
-
-    @sync_only
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        return self.get()
 
 
 # The following classes implement the low-level queue data structure

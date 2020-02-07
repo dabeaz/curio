@@ -10,19 +10,6 @@ def test_iscoroutinefunc():
 
     assert meta.iscoroutinefunction(partial(spam, 1))
 
-def test_sync_only(kernel):
-    @meta.sync_only
-    def func():
-        return 1
-
-    async def main():
-         with pytest.raises(SyncIOError):
-             r = func()
-
-    assert func() == 1
-
-    kernel.run(main)
-
 def test_bad_awaitable():
     def spam(x, y):
         pass

@@ -12,12 +12,16 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+02/07/2020 Removed iteration support from queues.  Queues in the
+           standard library don't support iteration.
+
 02/06/2020 Removed metaprogramming features not used in the implementation
            of Curio itself.  These include:
 
                @async_thread
                @cpubound
                @blocking
+               @sync_only
                AsyncABC
 
            Libraries/frameworks that use Curio should be responsible

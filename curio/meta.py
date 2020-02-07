@@ -6,7 +6,7 @@
 #
 
 __all__ = [
-    'iscoroutinefunction', 'finalize', 'awaitable', 'asyncioable',  'sync_only', 
+    'iscoroutinefunction', 'finalize', 'awaitable', 'asyncioable',  
     'curio_running', 'instantiate_coroutine',
  ]
 
@@ -110,19 +110,6 @@ def instantiate_coroutine(corofunc, *args, **kwargs):
         context().send(None)
     except StopIteration as e:
         return e.value
-
-def sync_only(func):
-    '''
-    Decorator indicating that a function is only valid in synchronous code.
-    '''
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if _from_coroutine():
-            raise SyncIOError(f'{func.__name__} may only be used in synchronous code')
-        else:
-            return func(*args, **kwargs)
-    return wrapper
-
 
 def awaitable(syncfunc):
     '''
