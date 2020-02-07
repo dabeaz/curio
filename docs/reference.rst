@@ -1786,7 +1786,37 @@ Asynchronous Metaprogramming
 .. module:: curio.meta
 
 The :mod:`curio.meta` module provides some functions that might be useful if
-writing more complex programs involving coroutines.
+implementing more complex programs and APIs involving coroutines.
+
+.. function:: curio_running():
+
+   Return ``True`` if Curio is running in the current thread.
+
+.. function:: iscoroutinefunction(func)
+
+   True ``True`` if the supplied *func* is a coroutine function or is known
+   to resolve into a coroutine.   Unlike a similar function in ``inspect``,
+   this function knows about ``functools.partial()``, awaitable objects, 
+   and async generators.
+
+.. function:: instantiate_coroutine(corofunc, *args, **kwargs)
+
+   Instantiate a coroutine from *corofunc*. If *corofunc* is already
+   a coroutine object, it is returned unmodified.  If it's a coroutine
+   function, it's executed within an async context using the given 
+   arguments.  If it's not a coroutine, *corofunc* is called 
+   with the given arguments with the expectation that whatever is
+   returned will be a coroutine instance.
+
+.. function:: from_coroutine(level=2)
+
+   Returns ``True`` if the caller is calling function is being invoked
+   from inside a coroutine or not.  This is primarily of use when 
+   writing decorators and other advanced metaprogramming features. 
+   The implementation requires stack-frame inspection.  The *level*
+   argument controls the stack frame in which information is obtained
+   and might need to be adjusted depending on the nature of code calling
+   this function.
 
 .. function:: awaitable(syncfunc)
 

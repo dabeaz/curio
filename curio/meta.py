@@ -7,7 +7,7 @@
 
 __all__ = [
     'iscoroutinefunction', 'finalize', 'awaitable', 'asyncioable',  
-    'curio_running', 'instantiate_coroutine',
+    'curio_running', 'instantiate_coroutine', 'from_coroutine',
  ]
 
 # -- Standard Library
@@ -51,7 +51,7 @@ _CO_NESTED = inspect.CO_NESTED
 _CO_FROM_COROUTINE = inspect.CO_COROUTINE | inspect.CO_ITERABLE_COROUTINE | inspect.CO_ASYNC_GENERATOR
 _isasyncgenfunction = inspect.isasyncgenfunction
 
-def _from_coroutine(level=2, _cache={}):
+def from_coroutine(level=2, _cache={}):
     f_code = _getframe(level).f_code
     if f_code in _cache:
         return _cache[f_code]
@@ -71,7 +71,7 @@ def _from_coroutine(level=2, _cache={}):
         # Where func() is some function that we've wrapped with one of the decorators
         # below.  If so, the code object is nested and has a name such as <listcomp> or <genexpr>
         if (f_code.co_flags & _CO_NESTED and f_code.co_name[0] == '<'):
-            return _from_coroutine(level + 2)
+            return from_coroutine(level + 2)
         else:
             _cache[f_code] = False
             return False
@@ -95,6 +95,7 @@ def instantiate_coroutine(corofunc, *args, **kwargs):
     for the best.
     '''
     if inspect.iscoroutine(corofunc) or inspect.isgenerator(corofunc):
+        assert not args and not kwargs, "arguments can't be passed to an already instantiated coroutine"
         return corofunc
 
     if not iscoroutinefunction(corofunc) and not getattr(corofunc, '_async_thread', False):
@@ -144,7 +145,7 @@ def awaitable(syncfunc):
 
         @wraps(asyncfunc)
         def wrapper(*args, **kwargs):
-            if _from_coroutine():
+            if from_coroutine():
                 return asyncfunc(*args, **kwargs)
             else:
                 return syncfunc(*args, **kwargs)
@@ -177,7 +178,7 @@ def asyncioable(awaitablefunc):
     def decorate(asyncfunc):
         @wraps(asyncfunc)
         def wrapper(*args, **kwargs):
-            if _from_coroutine():
+            if from_coroutine():
                 # Check if we're Curio or not
                 if curio_running():
                     return awaitablefunc._asyncfunc(*args, **kwargs)
