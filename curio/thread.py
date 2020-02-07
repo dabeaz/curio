@@ -251,45 +251,6 @@ def spawn_thread(func, *args, daemon=False):
 
     return runner(args, daemon)
 
-def async_thrad(func=None, *, daemon=False):
-    '''
-    Decorator that is used to mark a callable as running in an asynchronous thread
-    '''
-    if func is None:
-        return lambda func: async_thread(func, daemon=daemon)
-
-    if meta.iscoroutinefunction(func):
-        raise TypeError("async_thread can't be applied to coroutines.")
-        
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if meta._from_coroutine() and not is_async_thread():
-            async def runner(*args, **kwargs):
-                # Launching async threads could result in a situation where 
-                # synchronous code gets executed,  but there is no opportunity
-                # for Curio to properly check for cancellation.  This next
-                # call is a sanity check--if there's pending cancellation, don't
-                # even bother to launch the associated thread.
-                await check_cancellation()
-                t = AsyncThread(func, args=args, kwargs=kwargs, daemon=daemon)
-                await t.start()
-                try:
-                    return await t.join()
-                except errors.CancelledError as e:
-                    await t.cancel(exc=e)
-                    await set_cancellation(t._task.cancel_pending)
-                    if t._coro_exc:
-                        raise t._coro_exc from None
-                    else:
-                        return t._coro_result
-                except errors.TaskError as e:
-                    raise e.__cause__ from None
-            return runner(*args, **kwargs)
-        else:
-            return func(*args, **kwargs)
-    wrapper._async_thread = True
-    return wrapper
-
 def is_async_thread():
     '''
     Returns True if current thread is an async thread.
