@@ -1,5 +1,4 @@
-import signal
-from curio import run, spawn, SignalQueue, TaskGroup, Queue, tcp_server, CancelledError
+from curio import run, spawn, TaskGroup, Queue, tcp_server, CancelledError
 from curio.socket import *
 
 import logging
@@ -56,15 +55,6 @@ async def chat_server(host, port):
         await g.spawn(dispatcher)
         await g.spawn(tcp_server, host, port, chat_handler)
 
-async def main(host, port):
-    async with SignalQueue(signal.SIGHUP) as restart:
-        while True:
-            log.info('Starting the server')
-            serv_task = await spawn(chat_server, host, port)
-            await restart.get()
-            log.info('Server shutting down')
-            await serv_task.cancel()
-
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    run(main('', 25000))
+    run(chat_server('', 25000))

@@ -12,6 +12,30 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+02/07/2020 Removed all support for signal handling.  Signal handling,
+           by its very nature, is a tricky affair. For instance,
+           signals can only be handled in the main execution thread
+           and there are all sorts of other issues that can arise 
+           when mixed with threads, subprocesses, locks, and other
+           things.  Curio already provides all of the necessary support
+           to implement signal handling if you rely on UniversalEvent
+           or UniversalQueue objects.   Here is a simple example::
+
+               import signal
+               import curio
+
+               evt = curio.UniversalEvent()
+
+               def signal_handler(signo, frame):
+                   evt.set()
+
+               async def wait_for_signal():
+                   await evt.wait()
+                   print("Got a signal!")
+
+               signal.signal(signal.SIGHUP, signal_handler)
+               curio.run(wait_for_signal)
+
 02/07/2020 Removed iteration support from queues.  Queues in the
            standard library don't support iteration.
 

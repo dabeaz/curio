@@ -6,7 +6,6 @@ from .errors import *
 from .queue import *
 from .task import *
 from .time import *
-from .signal import *
 from .kernel import *
 from .sync import *
 from .workers import *
@@ -19,7 +18,6 @@ __all__ = [*errors.__all__,
            *queue.__all__,
            *task.__all__,
            *time.__all__,
-           *signal.__all__,
            *kernel.__all__,
            *sync.__all__,
            *workers.__all__,
