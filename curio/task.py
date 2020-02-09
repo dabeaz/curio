@@ -235,23 +235,17 @@ class Task(object):
         '''
         Cancel a task by raising a CancelledError exception.
 
-        If blocking=False, schedules the cancellation and returns
-        synchronously.
+        If blocking=False, schedules the cancellation and returns immediately.
 
         If blocking=True (the default), then does not
         return until the task actually terminates.
-
-        Returns True if the task was actually cancelled. False is returned if
-        the task was already completed.
         '''
         if self.terminated:
             self.joined = True
-            return False
+            return
         await _cancel_task(self, exc=exc)
         if blocking:
             await self.wait()
-
-        return True
 
     def traceback(self):
         '''

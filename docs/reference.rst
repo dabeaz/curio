@@ -5,67 +5,65 @@ Coroutines
 ----------
 
 Curio executes coroutines.  A coroutine is a function defined using
-``async def``.  For example::
+``async def``::
 
     async def hello(name):
           return 'Hello ' + name
 
-Coroutines call other coroutines using ``await``. For example::
+Coroutines call other coroutines using ``await``::
 
     async def main(name):
           s = await hello(name)
           print(s)
 
-Unlike a normal function, a coroutine never runs on its own.
-It always executes under the supervision of a manager (e.g., an
-event-loop, a kernel, etc.).  In Curio, an initial coroutine is
-executed using ``run()``.  For example::
+Coroutines never run on their own.
+They always execute under the supervision of a manager (e.g., an
+event-loop, a kernel, etc.).  In Curio, the initial coroutine is
+executed using ``run()``::
 
     import curio
     curio.run(main, 'Guido')
 
-When it's executing, a coroutine is encapsulated inside a "Task."  Whenever
-the word "task" is used, it refers to a running coroutine.
+When executing, a coroutine is encapsulated by a "Task."  
 
 The Execution Kernel
 --------------------
 
-Coroutines are executed by an underlying kernel.  Normally, you run
-a coroutine using the following:
+The following function runs a coroutine:
 
 .. function:: run(corofunc, *args, debug=None, selector=None, with_monitor=False, taskcls=Task)
 
-   Run *corofunc* to completion and return its result.  *args* are the
-   arguments provided to *corofunc*.  *with_monitor* enables the task
-   monitor.  *selector* is an instance of a selector from the
-   :mod:`selectors <python:selectors>` module. *debug* is a list of optional
-   debugging features. See the section on debugging for more detail.
-   *taskcls* is the class used to instantiate tasks.  If ``run()`` is called 
+   Run *corofunc* and return its result.  *args* are the arguments
+   provided to *corofunc*.  *with_monitor* enables the task monitor.
+   *selector* is a selector from the :mod:`selectors
+   <python:selectors>` standard library. *debug* is a list of
+   debugging features (see the section on debugging).  *taskcls* is
+   the class used to encapsulate coroutines.  If ``run()`` is called
    when a task is already running, a ``RuntimeError`` is raised.
 
 If you are going to repeatedly execute coroutines one after the other, it
-will be more efficient to create a ``Kernel`` instance and submit
-them using its ``run()`` method as described below:
+is more efficient to create a ``Kernel`` instance and submit
+them using its ``run()`` method.
 
 .. class:: Kernel(selector=None, debug=None, taskcls=Task):
 
-   Create an instance of a Curio kernel.  The arguments are the same
-   as described above for the :func:`run()` function.  
+   Create runtime kernel. The arguments are the same
+   as described above for :func:`run()`.
 
 There is only one method that may be used on a :class:`Kernel` instance.
 
 .. method:: Kernel.run(corofunc=None, *args, shutdown=False)
 
-   Runs async function *corofunc* and return its reself.
+   Run *corofunc* and return its reself.
    *args* are the arguments given to *corofunc*.  If
    *shutdown* is ``True``, the kernel cancels all remaining tasks
-   and performs a clean shutdown. Calling this method with *corofunc*
-   set to ``None`` causes the kernel to run through a single check for
-   task activity before returning immediately.  Raises a
-   ``RuntimeError`` if a task is submitted to an already running kernel
-   or if an attempt is made to run more than one kernel in a thread.
+   and performs a clean shutdown upon return. Calling this method with *corofunc*
+   set to ``None`` executes a single scheduling cycle of background tasks 
+   before returning immediately. Raises a
+   ``RuntimeError`` called on an already running kernel or if an attempt is
+   made to run more than one kernel in a thread.
 
-A kernel may be used as a context manager. For example::
+A kernel is commonly used as a context manager. For example::
 
     with Kernel() as kernel:
         kernel.run(corofunc1)
@@ -73,9 +71,9 @@ A kernel may be used as a context manager. For example::
         ...
     # Kernel shuts down here
 
-When submitting a task, you can either provide an async
-function and calling arguments or you can provide an already instantiated
-coroutine.  For example, both of these invocations of ``run()`` work::
+When submitting work, you can either provide an async
+function and arguments or you can provide an already instantiated
+coroutine.  Both of these ``run()`` invocations work::
 
     async def hello(name):
         print('hello', name)
@@ -84,22 +82,19 @@ coroutine.  For example, both of these invocations of ``run()`` work::
     run(hello('Guido'))    # Ok
 
 This convention is observed by nearly all other functions that accept
-coroutines (e.g., spawning tasks, waiting for timeouts, etc.).  As a
-general rule, the first form of providing a function and arguments
-should be preferred. This form of calling is required for certain 
-parts of Curio so your code will be more consistent if you use it.
+coroutines (e.g., spawning tasks, waiting for timeouts, etc.).
 
 Tasks
 -----
 
-The following functions are defined to help manage the execution of tasks.
+The following functions manage the execution of tasks.
 
 .. asyncfunction:: spawn(corofunc, *args, daemon=False)
 
-   Create a new task that runs the async function *corofunc*.  *args*
+   Create a new task that concurrently executes the async function *corofunc*.  *args*
    are the arguments provided to *corofunc*. Returns a :class:`Task`
    instance as a result.  The *daemon* option specifies
-   that the new task will never be joined and that its result may be
+   that the task is never joined and that its result may be
    disregarded. 
 
 .. asyncfunction:: current_task()
@@ -110,92 +105,62 @@ The following functions are defined to help manage the execution of tasks.
 
    Immediately switch to the next ready task.  
 
-:func:`spawn` and :func:`current_task` return a :class:`Task` instance 
-that provides the following methods::
+:func:`spawn` and :func:`current_task` return a :class:`Task` instance ``t``
+with the following methods and attributes:
 
-.. asyncmethod:: Task.join()
+.. list-table:: 
+   :widths: 40 60
+   :header-rows: 0
 
-   Wait for the task to terminate and return its result.
-   Raises :exc:`curio.TaskError` if the task failed with an
-   exception. This is a chained exception.  The ``__cause__`` attribute 
-   contains the actual exception raised by the task when it crashed.
+   * - ``await t.join()``
+     - Wait for the task to terminate and return its result.
+       Raises :exc:`curio.TaskError` if the task failed with an
+       exception. This is a chained exception.  The ``__cause__`` attribute 
+       contains the actual exception raised by the task when it crashed.
+   * - ``await t.wait()``
+     - Waits for task to terminate, but returns no value. 
 
-.. asyncmethod:: Task.wait()
+   * - ``await t.cancel(*, blocking=True, exc=TaskCancelled)``
+     - Cancels the task by raising a :exc:`curio.TaskCancelled` exception
+       (or the exception specified by *exc*) at its next blocking operation.  If ``blocking=True`` (the
+       default), waits for the task to actually terminate.  A task may
+       only be cancelled once.  If invoked more than once, the second
+       request waits until the task is cancelled from the first request.
+       If the task has already terminated, this method does nothing and
+       returns immediately.  Note: uncaught exceptions that occur as a
+       result of cancellation are logged, but not propagated out of the
+       ``Task.cancel()`` method.
 
-   Waits for task to terminate, but returns no value. 
-
-.. asyncmethod:: Task.cancel(blocking=True)
-
-   Cancels the task by raising a :exc:`curio.TaskCancelled` exception
-   at its next blocking operation.  If ``blocking=True`` (the
-   default), waits for the task to actually terminate.  A task may
-   only be cancelled once.  If this method is invoked more than once,
-   the second request will wait until the task is cancelled from the
-   first request.  If the task has already terminated, this method
-   does nothing and returns immediately.  Returns ``True`` if the task
-   was actually cancelled and ``False`` if the task was already
-   terminated.  Note: uncaught exceptions that occur as a result of
-   cancellation are logged, but not propagated out of the
-   ``Task.cancel()`` method.
-
-.. method:: Task.traceback()
-
-   Creates a stack traceback string for the task.  Useful for debugging if you print it out.
-
-.. method:: Task.where()
-
-   Return a (filename, lineno) tuple where the task is executing. Useful for debugging and logging.
-
-The following attributes and properties are defined on :class:`Task` instances:
-
-.. attribute:: Task.id
-
-   The task's integer id.  Monotonically increases. 
-
-.. attribute:: Task.coro
-
-   The underlying coroutine associated with the task.
-
-.. attribute:: Task.daemon
-
-   Boolean flag that indicates whether or not a task is daemonic.
-
-.. attribute:: Task.state
-
-   The name of the task's current state.  Useful for debugging.
-
-.. attribute:: Task.cycles
-
-   The number of scheduling cycles the task has completed. 
-
-.. attribute:: Task.result
-
-   A property holding the task result. If accessed before the task terminates,
-   a ``RuntimeError`` exception is raised. If the task crashed with an exception,
-   that exception is reraised on access.
-
-.. attribute:: Task.exception
-
-   Exception raised by a task, if any.  ``None`` otherwise. 
-
-.. attribute:: Task.cancelled
-
-   A boolean flag that indicates whether or not the task was cancelled.
-
-.. attribute:: Task.terminated
-
-   A boolean flag that indicates whether or not the task has terminated.
-
-.. attribute:: Task.cancel_pending
-
-   An instance of a pending cancellation exception. Raised on the next blocking operation.
-
-.. attribute:: Task.allow_cancel
-
-   A boolean flag that indicates whether or not cancellation exceptions can be delivered.
-   This is better controlled using the ``disable_cancellation()`` function as opposed
-   to being set directly.
-
+   * - ``t.traceback()``
+     -  Creates a stack traceback string.  Useful for debugging.
+   * - ``t.where()``
+     - Return a (filename, lineno) tuple where the task is executing. Useful for debugging.
+   * - ``t.id``
+     - The task's integer id. Monotonically increases.
+   * - ``t.coro``
+     - The coroutine associated with the task.
+   * - ``t.daemon``
+     - Boolean flag that indicates whether or not a task is daemonic.
+   * - ``t.state``
+     - The name of the task's current state.  Useful for debugging.
+   * - ``t.cycles``
+     - The number of scheduling cycles the task has completed. 
+   * - ``t.result``
+     - A property holding the task result. If accessed before the a terminates,
+       a ``RuntimeError`` exception is raised. If a task crashed with an exception,
+       that exception is reraised on access.
+   * - ``t.exception``
+     - Exception raised by a task, if any.  ``None`` otherwise. 
+   * - ``t.cancelled``
+     - A boolean flag that indicates whether or not the task was cancelled.
+   * - ``t.terminated``
+     - A boolean flag that indicates whether or not the task has terminated.
+   * - ``t.cancel_pending``
+     - An instance of a pending cancellation exception. Raised on the next blocking operation.
+   * - ``t.allow_cancel``
+     - A boolean flag that indicates whether or not cancellation exceptions can be delivered.
+       This is better controlled using the ``disable_cancellation()`` function as opposed
+       to being set directly.
 
 Task Groups
 -----------
@@ -206,92 +171,62 @@ collect results.  To do this, create a ``TaskGroup`` instance.
 .. class:: TaskGroup(tasks=(), *, wait=all)
 
    A class representing a group of executing tasks.  *tasks* is an
-   optional set of existing tasks to put into the group.  New tasks
-   can later be added using the ``spawn()`` or ``add_task()`` methods. *wait*
-   specifies the policy used by the ``join()`` method when waiting for tasks.  If *wait* is
+   optional set of existing tasks to put into the group.  
+   *wait* specifies the policy used by ``join()`` to wait for tasks. If *wait* is
    ``all``, then wait for all tasks to complete.  If *wait* is
    ``any`` then wait for any task to terminate and cancel any
    remaining tasks.  If *wait* is ``object``, then wait for any task
-   return a non-None object, cancelling all remaining
+   to return a non-None object, cancelling all remaining
    tasks afterwards. If *wait* is ``None``, then immediately cancel all running tasks. 
-   Task groups do not form a hierarchy or any kind of relationship to
+   Task groups do not form a hierarchy or have any kind of relationship to
    other previously created task groups or tasks.  Moreover, Tasks created by
    the top level ``spawn()`` function are not placed into any task group.
    To create a task in a group, it should be created using ``TaskGroup.spawn()``
    or explicitly added using ``TaskGroup.add_task()``.
 
-The following methods are supported on ``TaskGroup`` instances:
+The following methods and attributes are supported on a ``TaskGroup`` instance ``g``:
 
-.. asyncmethod:: TaskGroup.spawn(corofunc, *args)
+.. list-table:: 
+   :widths: 40 60
+   :header-rows: 0
 
-   Create a new task that's part of the group.  Returns a ``Task``
-   instance. 
+   * - ``await g.spawn(corofunc, *args)``
+     - Create a new task in the group. Returns a ``Task`` instance.
+   * - ``await g.add_task(task)``
+     - Add an already existing task to the group.
+   * - ``await g.next_done()``
+     - Wait for and return the next completed task. Return ``None`` if no more tasks remain.
+   * - ``await g.next_result()``
+     - Wait for and return the result of the next completed task.
+       If the task failed with an exception, the exception is raised.  
+   * - ``await g.join()``
+     - Wait for all tasks in the group to terminate according to the wait policy
+       set for the group.  If any of the monitored tasks exits with an exception or
+       if the ``join()`` operation itself is cancelled, all remaining tasks in the 
+       group are cancelled. If a ``TaskGroup`` is used as a
+       context manager, the ``join()`` method is called on block exit.
+   * - ``await g.cancel_remaining()``
+     - Cancel and remove all remaining tasks from the group.
+   * - ``g.completed``
+     - The first task that completed with a valid result after calling ``join()``.
+   * - ``g.result``
+     - The result of the first task that completed after calling ``join()``. 
+       May raise an exception if the task exited with an exception.  
+   * - ``g.exception``
+     - Exception raised by the first task that completed (if any).
+   * - ``g.results``
+     - A list of all results collected by ``join()``, 
+       ordered by task id. May raise an exception if any task
+       exited with an exception.  
+   * - ``g.exceptions``
+     - A list of all exceptions collected by ``join()``.
+   * - ``g.tasks``
+     - A list of all tasks managed by the group, ordered by task id.
+       Does not include tasks where ``Task.join()`` or ``Task.cancel()``
+       was directly called.
 
-.. asyncmethod:: TaskGroup.add_task(coro)
-
-   Adds an already existing task to the task group. 
-
-.. asyncmethod:: TaskGroup.next_done()
-
-   Returns the next completed task.  Returns ``None`` if no more tasks remain.
-
-.. asyncmethod:: TaskGroup.next_result()
-
-   Returns the result of the next completed task.  If the task failed with an
-   exception, that exception is raised.  A ``RuntimeError`` exception is raised
-   if called when no remaining tasks are available. 
-
-.. asyncmethod:: TaskGroup.join()
-
-   Wait for all tasks in the group to terminate according to the wait policy
-   set for the group.  If any of the monitored tasks exits with an exception or
-   if the ``join()`` operation itself is cancelled, all remaining tasks in the 
-   group are cancelled. If a ``TaskGroup`` is used as a
-   context manager, the ``join()`` method is called on block-exit.
-
-.. asyncmethod:: TaskGroup.cancel_remaining()
-
-   Cancel all remaining tasks.  Cancelled tasks are disregarded by the task
-   group when reporting results.  
-
-.. attribute:: TaskGroup.completed
-
-   The first task that completed with a valid result when joining. Typically used
-   in combination with the ``wait=any`` or ``wait=object`` options to
-   ``TaskGroup()``.
-
-.. attribute:: TaskGroup.result
-
-   The result of the first task that completed. Access may raise an
-   exception if the task exited with an exception.  The same as accessing
-   ``TaskGroup.completed.result``.
-
-.. attribute:: TaskGroup.exception
-
-   The exception raised by the first task that completed (if any).
-   The same as accessing ``TaskGroup.completed.exception``.
-
-.. attribute:: TaskGroup.results
-
-   A list of all results returned by tasks created in the group,
-   ordered by task id. May raise an exception if one of the tasks
-   exited with an exception.  Typically used with the ``wait=all`` option
-   to ``TaskGroup()``. 
-
-.. attribute:: TaskGroup.exceptions
-
-   A list of all exceptions raised by tasks managed by the group.
-
-.. attribute:: TaskGroup.tasks
-
-   A list of all tasks actively tracked by the group. Can be useful in
-   determining task status after a task group has been joined.  Does
-   not include tasks where the ``Task.join()`` method has already been
-   called.
-
-The preferred way to use a ``TaskGroup`` is as a context manager.  When
-used in this manner, all tasks are guanteeed to be terminated/cancelled
-upon block exit.  Here are a few common usage patterns::
+The preferred way to use a ``TaskGroup`` is as a context manager.  
+Here are a few common usage patterns::
 
     # Spawn multiple tasks and collect all of their results
     async with TaskGroup(wait=all) as g:
@@ -316,10 +251,10 @@ upon block exit.  Here are a few common usage patterns::
         async for task in g:
             print(task, 'completed.', task.result)
 
-In all of these examples, access to the ``result`` or ``results`` attribute
+In these examples, access to the ``result`` or ``results`` attribute
 may raise an exception if a task failed for some reason. 
 
-If ann exception is raised inside the task group context, all managed
+If an exception is raised inside the task group context, all managed
 tasks are cancelled and the exception is propagated.  For example::
 
     try:
@@ -334,33 +269,16 @@ tasks are cancelled and the exception is propagated.  For example::
         assert t2.terminated
         assert t3.terminated
 
-This behavior also applies to timeouts.  For example::
-
-    try:
-        async with timeout_after(10):
-            async with TaskGroup() as g:
-                t1 = await g.spawn(func1)
-                t2 = await g.spawn(func2)
-                t3 = await g.spawn(func3)
-            # All tasks cancelled here on timeout
-
-    except TaskTimeout:
-        # All launched tasks will have terminated or been cancelled
-        assert t1.terminated
-        assert t2.terminated
-        assert t3.terminated
-
-In this case, the timeout exception is only raised in the code that created
-the task group. Child tasks are still cancelled using the ``cancel()`` 
-method and would receive a ``TaskCancelled`` exception.
-
 Time
 ----
 
+Curio manages time with an internal monotonic clock.  The following functions
+are provided:
+
 .. asyncfunction:: sleep(seconds)
 
-   Sleep for a specified number of seconds.  If the number of seconds is 0, the
-   kernel switches to the next task (if any). Returns the current clock value.
+   Sleep for a specified number of seconds.  If the number of seconds is 0, 
+   execution switches to the next ready task (if any). Returns the current clock value.
 
 .. asyncfunction:: wake_at(clock)
 
@@ -370,9 +288,8 @@ Time
 
 .. asyncfunction:: clock()
 
-   Returns the current value of the monotonic clock.   This is often used in
-   conjunction with the ``wake_at()`` function (you'd use this to get
-   an base clock value).
+   Returns the current value of the monotonic clock.  Use this to get a 
+   base clock value for the ``wake_at()`` function.
 
 Timeouts
 --------
@@ -380,7 +297,7 @@ Any blocking operation can be cancelled by a timeout.
 
 .. asyncfunction:: timeout_after(seconds, corofunc=None, *args)
 
-   Execute a coroutine and return its result. If no result is returned
+   Execute ``corofunc(*args)`` and return its result. If no result is returned
    before *seconds* have elapsed, a :py:exc:`curio.TaskTimeout`
    exception is raised.  If *corofunc* is ``None``, the function 
    returns an asynchronous context manager that applies a timeout
@@ -392,7 +309,7 @@ Any blocking operation can be cancelled by a timeout.
    given as an absolute clock time.  Use the :func:`clock` function to
    get a base time for computing a deadline.
 
-Every call to ``timeout_after()`` should have a matching exception handler
+Every call to ``timeout_after()`` must have a matching exception handler
 to catch the resulting timeout. For example::
 
     try:
@@ -427,23 +344,23 @@ produced it.  Consider this subtle example::
 
 If you run this, you will see output of "Outer timeout" from the
 exception handler at (b). This is because the outer timeout is the one
-that expired.  The exception handler at (a) does not match because at
-that point, the exception being reported is
+that expired.  The exception handler at (a) does not match.  At that
+point, the exception being reported is
 :py:exc:`curio.TimeoutCancellationError`.  This exception indicates
 that a timeout/cancellation has occurred somewhere, but that it is NOT
 due to the inner-most timeout.
 
 If a nested ``timeout_after()`` is used without a matching except
-clause, a timeout might get reported as a
+clause, a timeout is reported as a
 :py:exc:`curio.UncaughtTimeoutError` exception.  Remember that all
-timeouts should have a matching exception handler--even if nested.
+timeouts should have a matching exception handler.
 
 If you don't care about exception handling, you can also use the following
 functions:
 
 .. asyncfunction:: ignore_after(seconds, corofunc=None, *args, timeout_result=None)
 
-   Executes a coroutine and returns its result. If *seconds* elapse, the
+   Execute ``corofunc(*args)`` and return its result. If *seconds* elapse, the
    operation is cancelled with a :py:exc:`curio.TaskTimeout` exception, but
    the exception is discarded and the value of *timeout_result* is returned.
    If *corofunc* is ``None``, returns an asynchronous context manager that 
@@ -479,17 +396,17 @@ together in any configuration and it should still work.
 Cancellation Control
 --------------------
 
-Sometimes it is necessary to disabled cancellation on critical operations. The
-following functions can control this::
+Sometimes it is necessary to disable cancellation on critical operations. The
+following functions can control this:
 
-.. function:: disable_cancellation(corofunc=None, *args)
+.. asyncfunction:: disable_cancellation(corofunc=None, *args)
 
    Disables the delivery of cancellation-related exceptions while
-   executing *corofunc*.  *args* are arguments supplied to *corofunc*.
+   executing *corofunc*.  *args* are the arguments to *corofunc*.
    The result of *corofunc* is returned.  Any pending cancellation
-   will be delivered to the first-blocking operation that is performed
-   once cancellations are reenabled.  If *corofunc* is ``None`` a
-   context manager is returned that can be used to shield a block of
+   is delivered to the first-blocking operation after
+   cancellation is reenabled.  If *corofunc* is ``None``, a
+   context manager is returned that shields a block of
    statements from cancellation.
 
 .. asyncfunction:: check_cancellation(exc=None)
@@ -510,14 +427,15 @@ following functions can control this::
    exception.
 
 A common use of these functions is to more precisely control cancellation
-points. Here is an example that shows a common use case::
+points. Here is an example that shows how to check for cancellation at 
+a specific code location (a)::
 
     async def coro():
         async with disable_cancellation():
             while True:
                 await coro1()
                 await coro2()
-                if await check_cancellation():
+                if await check_cancellation():    # (a)
                     break   # Bail out!
 
         await check_cancellation()  # Cancellation (if any) delivered here
@@ -529,8 +447,8 @@ If you only need to shield a single operation, you can write statements like thi
         await disable_cancellation(some_operation, x, y, z)
         ...
 
-It is not possible for a function executing inside a block where cancellation has been
-disabled to reenable it.
+Note: It is not possible for cancellation to be reenabled inside code
+where it has been disabled.
 
 Synchronization Primitives
 --------------------------
@@ -545,30 +463,27 @@ built-in :mod:`threading` module.
 
    An event object.
 
-:class:`Event` instances support the following methods:
+An :class:`Event` instance ``e`` supports the following methods:
 
-.. method:: Event.is_set()
+.. list-table:: 
+   :widths: 40 60
+   :header-rows: 0
 
-   Return ``True`` if the event is set.
+   * - ``e.is_set()``
+     - Return ``True`` if set
+   * - ``e.clear()``
+     - Clear the event value
+   * - ``await e.wait()``
+     - Wait for the event to be set
+   * - ``await e.set()``
+     - Set the event. Wake all waiting tasks (if any)
 
-.. method:: Event.clear()
-
-   Clear the event value.
-
-.. asyncmethod:: Event.wait()
-
-   Wait for the event.
-
-.. asyncmethod:: Event.set()
-
-   Set the event. Wake all waiting tasks (if any).
-
-Curio provides ``Lock``, ``RLock``, ``Semaphore`` classes that allow for mutual exclusion and
+``Lock``, ``RLock``, ``Semaphore`` classes that allow for mutual exclusion and
 inter-task coordination. 
 
 .. class:: Lock()
 
-   This class provides a mutex lock.  It can only be used in tasks. It is not thread safe.
+   A mutual exclusion lock. 
 
 .. class:: RLock()
 
@@ -583,19 +498,18 @@ inter-task coordination.
    attribute of a semaphore is a read-only property holding the current value of the internal 
    counter.
 
-Instances of any of the above lock classes support the following methods:
+An instance ``lock`` of any of the above classes supports the following methods:
 
-.. asyncmethod:: Lock.acquire()
+.. list-table:: 
+   :widths: 40 60
+   :header-rows: 0
 
-   Acquire the lock.
-
-.. asyncmethod:: Lock.release()
-
-   Release the lock.
-
-.. method:: Lock.locked()
-
-   Return ``True`` if the lock is currently held.
+   * - ``await lock.acquire()``
+     - Acquire the lock
+   * - ``await lock.release()``
+     - Release the lock.
+   * - ``lock.locked()``
+     - Return ``True`` if the lock is currently held.
 
 The preferred way to use a Lock is as an asynchronous context manager. For example::
 
@@ -611,43 +525,34 @@ The following :class:`Condition` class is used to implement inter-task signaling
 
 .. class:: Condition(lock=None)
 
-   Condition variable.  *lock* is the underlying lock to use. If none is provided, then
+   Condition variable.  *lock* is the underlying lock to use. If ``None``, then
    a :class:`Lock` object is used.
 
-:class:`Condition` objects support the following methods:
+An instance ``cv`` of :class:`Condition`  supports the following methods:
 
-.. method:: Condition.locked()
 
-   Return ``True`` if the condition variable is locked.
+.. list-table:: 
+   :widths: 40 60
+   :header-rows: 0
 
-.. asyncmethod:: Condition.acquire()
+   * - ``await cv.acquire()``
+     - Acquire the underlying lock
+   * - ``await cv.release()``
+     - Release the underlying lock.
+   * - ``cv.locked()``
+     - Return ``True`` if the lock is currently held.
+   * - ``await cv.wait()``
+     - Wait on the condition variable. Releases the underlying lock.
+   * - ``await cv.wait_for(pred)``
+     - Wait on the condition variable until a supplied predicate function returns ``True``.
+       ``pred`` is a callable that takes no arguments.
+   * - ``await cv.notify(n=1)``
+     - Notify one or more tasks, cause them to wake from ``cv.wait()``.
+   * - ``await cv.notify_all()``
+     - Notify all waiting tasks.
 
-   Acquire the condition variable lock.
-
-.. asyncmethod:: Condition.release()
-
-   Release the condition variable lock.
-
-.. asyncmethod:: Condition.wait()
-
-   Wait on the condition variable. This releases the underlying lock.
-
-.. asyncmethod:: Condition.wait_for(predicate)
-
-   Wait on the condition variable until a supplied predicate function returns ``True``. *predicate* is
-   a callable that takes no arguments.
-
-.. asyncmethod:: notify(n=1)
-
-   Notify one or more tasks, causing them to wake from the
-   :meth:`Condition.wait` method.
-
-.. asyncmethod:: notify_all()
-
-   Notify all tasks waiting on the condition.
-
-Proper use of a condition variable is tricky. The following example shows how to implement a
-produce-consumer problem::
+Proper use of a condition variable is tricky. The following example shows how to implement
+producer-consumer synchronization::
 
     import curio
     from collections import deque
@@ -687,45 +592,36 @@ awakes, the condition no longer holds).
 Queues
 ------
 
-To communicate between tasks, you can use a :class:`Queue`.  
+To communicate between tasks, use a :class:`Queue`.  
 
 .. class:: Queue(maxsize=0)
 
    Creates a queue with a maximum number of elements in *maxsize*.  If not
    specified, the queue can hold an unlimited number of items.
 
-A :class:`Queue` instance supports the following methods:
+An instance ``q`` of :class:`Queue` supports the following methods:
 
-.. method:: Queue.empty()
+.. list-table:: 
+   :widths: 40 60
+   :header-rows: 0
 
-   Returns ``True`` if the queue is empty.
-
-.. method:: Queue.full()
-
-   Returns ``True`` if the queue is full.
-
-.. method:: Queue.qsize()
-
-   Return the number of items currently in the queue.
-
-.. asyncmethod:: Queue.get()
-
-   Returns an item from the queue.  Blocks if no items are available.
-
-.. asyncmethod:: Queue.put(item)
-
-   Puts an item on the queue. Blocks if the queue is at capacity.
-
-.. asyncmethod:: Queue.join()
-
-   Wait for all of the elements put onto a queue to be processed. Consumers
-   must call :meth:`Queue.task_done` to indicate completion.
-
-.. asyncmethod:: Queue.task_done()
-
-   Indicate that processing has finished for an item.  If all items have
-   been processed and there are tasks waiting on :meth:`Queue.join` they
-   will be awakened.
+   * - ``q.empty()``
+     - Return ``True`` if the queue is empty.
+   * - ``q.full()``
+     - Return ``True`` if the queue is full.
+   * - ``q.size()``
+     - Return number of items currently in the queue.
+   * - ``await q.get()``
+     - Return an item from the queue. Block if no items are available.
+   * - ``await q.put(item)``
+     - Put an item on the queue. Blocks if the queue is at capacity.
+   * - ``await q.join()``
+     - Wait for all elements to be processed.  Consumers must call 
+       ``q.task_done()`` to indicate the completion of each element.
+   * - ``await q.task_done()``
+     - Indicate that the processing has finished for an item.  If all
+       items have been processed and there are tasks waiting on 
+       ``q.join()``, they will be awakened.
 
 Here is an example of using queues in a producer-consumer problem::
 
@@ -771,7 +667,7 @@ Universal Synchronizaton
 Sometimes it is necessary to synchronize with threads and foreign event loops.
 For this, Curio provides the following queue and event classes.
 
-.. class: UniversalQueue(maxsize=0, withfd=False)
+.. class:: UniversalQueue(maxsize=0, withfd=False)
 
    A queue that can be safely used from both Curio tasks and threads.  
    The same programming API is used for both, but ``await`` is
@@ -782,6 +678,12 @@ For this, Curio provides the following queue and event classes.
    allows it to be polled by a foreign event loop.  When ``withfd`` is
    ``True``, adding something to the queue writes a byte of data to the
    I/O loopback.  
+
+.. class:: UniversalEvent()
+
+   An event object that can be used in both Curio tasks and threads.
+   The same programming interface is used in both. Asynchronous operations
+   must be prefaced by ``await``.
 
 Here is an example of a producer-consumer problem with a ``UniversalQueue``::
 
@@ -916,8 +818,8 @@ in normal synchronous Python code.
 Socket
 ^^^^^^
 
-The :class:`Socket` class wraps an existing socket-like object as might 
-be created by the built in :mod:`socket` module.
+The :class:`Socket` class wraps an existing socket-like object with
+an async interface.
 
 .. class:: Socket(sockobj)
 
@@ -926,122 +828,61 @@ be created by the built in :mod:`socket` module.
    the created ``Socket`` instance is explicitly closed or used as a 
    context manager.
 
-The following methods are redefined on :class:`Socket` objects to be
-compatible with coroutines.  Any socket method not listed here will be
+The following methods are redefined on an instance ``s`` of :class:`Socket`.
+
+.. list-table:: 
+   :widths: 60 40
+   :header-rows: 0
+
+   * - ``await s.recv(maxbytes, flags=0)``
+     - Receive up to *maxbytes* of data.
+   * - ``await s.recv_into(buffer, nbytes=0, flags=0)``
+     - Receive up to *nbytes* of data into a buffer.
+   * - ``await s.recvfrom(maxsize, flags=0)``
+     - Receive up to *maxbytes* of data. Returns a tuple ``(data, client_address)``.
+   * - ``await s.recvfrom_into(buffer, nbytes=0, flags=0)``
+     - Receive up to *nbytes* of data into a buffer.
+   * - ``await s.recvmsg(bufsize, ancbufsize=0, flags=0)``
+     - Receive normal and ancillary data.
+   * - ``await s.recvmsg_into(buffers, ancbufsize=0, flags=0)``
+     - Receive normal and ancillary data into a buffer.
+   * - ``await s.send(data, flags=0)``
+     - Send data.  Returns the number of bytes sent.
+   * - ``await s.sendall(data, flags=0)``
+     - Send all of the data in *data*. If cancelled, the ``bytes_sent`` attribute of the
+       exception contains the number of bytes sent.
+   * - ``await s.sendto(data, address)``
+     - Send data to the specified address.
+   * - ``await s.sendto(data, flags, address)``
+     - Send data to the specified address (alternate).
+   * - ``await s.sendmsg(buffers, ancdata=(), flags=0, address=None)``
+     - Send normal and ancillary data to the socket.
+   * - ``await s.accept()``
+     - Wait for a new connection.  Returns a tuple ``(sock, address)`` where ``sock``
+       is an instance of ``Socket``.
+   * - ``await s.connect(address)``
+     - Make a connection.   
+   * - ``await s.connect_ex(address)``
+     - Make a connection and return an error code instead of raising an exception.
+   * - ``await s.close()``
+     - Close the connection.  
+   * - ``await s.shutdown(how)``
+     - Shutdown the socket.  *how* is one of
+       ``SHUT_RD``, ``SHUT_WR``, or ``SHUT_RDWR``.
+   * - ``await s.do_handshake()``
+     - Perform an SSL client handshake (only on SSL sockets).
+   * - ``s.makefile(mode, buffering=0)``
+     - Make a :class:`curio.io.FileStream` instance wrapping the socket.
+       Prefer to use :meth:`Socket.as_stream` instead. Not supported on Windows.
+   * - ``s.as_stream()``
+     - Wrap the socket as a stream using :class:`curio.io.SocketStream`. 
+   * - ``s.blocking()``
+     -  A context manager that returns the internal socket placed into blocking mode.
+
+Any socket method not listed here (e.g., ``s.setsockopt()``) will be
 delegated directly to the underlying socket as an ordinary method.
-
-.. asyncmethod:: Socket.recv(maxbytes, flags=0)
-
-   Receive up to *maxbytes* of data.
-
-.. asyncmethod:: Socket.recv_into(buffer, nbytes=0, flags=0)
-
-   Receive up to *nbytes* of data into a buffer object.
-
-.. asyncmethod:: Socket.recvfrom(maxsize, flags=0)
-
-   Receive up to *maxbytes* of data.  Returns a tuple `(data, client_address)`.
-
-.. asyncmethod:: Socket.recvfrom_into(buffer, nbytes=0, flags=0)
-
-   Receive up to *nbytes* of data into a buffer object.
-
-.. asyncmethod:: Socket.recvmsg(bufsize, ancbufsize=0, flags=0)
-
-   Receive normal and ancillary data.
-
-.. asyncmethod:: Socket.recvmsg_into(buffers, ancbufsize=0, flags=0)
-
-   Receive normal and ancillary data.
-
-.. asyncmethod:: Socket.send(data, flags=0)
-
-   Send data.  Returns the number of bytes of data actually sent (which may be
-   less than provided in *data*).
-
-.. asyncmethod:: Socket.sendall(data, flags=0)
-
-   Send all of the data in *data*. If cancelled, the ``bytes_sent`` attribute of the
-   resulting exception contains the actual number of bytes sent.
-
-.. asyncmethod:: Socket.sendto(data, address)
-.. asyncmethod:: Socket.sendto(data, flags, address)
-
-   Send data to the specified address.
-
-.. asyncmethod:: Socket.sendmsg(buffers, ancdata=(), flags=0, address=None)
-
-   Send normal and ancillary data to the socket.
-
-.. asyncmethod:: Socket.accept()
-
-   Wait for a new connection.  Returns a tuple `(sock, address)` where `sock`
-   is an instance of ``Socket``.
-
-.. asyncmethod:: Socket.connect(address)
-
-   Make a connection.   
-
-.. asyncmethod:: Socket.connect_ex(address)
-
-   Make a connection and return an error code instead of raising an exception.
-
-.. asyncmethod:: Socket.close()
-
-   Close the connection.  This method is not called on garbage
-   collection.  Warning: You know that scene from Star Wars where
-   they're taking a fun joy-ride through hyperspace, there's a sudden
-   disturbance in the force, and they emerge into the middle of an
-   asteroid debris field?  That's kind of what it will be like if a task
-   chooses to use a giant "death laser" to close a socket being
-   used by another task.  Only instead of it being a disturbance in
-   the force, it will be more like dropping a huge amount of acid and
-   having your debugger emerge from the trip into the middle of that
-   scene from The Matrix Reloaded.  Yeah, THAT scene.  Don't do that.
-   Consider using `Socket.shutdown()` or cancelling a task instead.
-
-.. asyncmethod:: Socket.shutdown(how)
-
-   Shutdown the socket.  *how* indicates which end of the connection
-   to shutdown and is one of ``SHUT_RD``, ``SHUT_WR``, or ``SHUT_RDWR``.
-   
-.. asyncmethod:: do_handshake()
-
-   Perform an SSL client handshake. The underlying socket must have already
-   be wrapped by SSL using the :mod:`curio.ssl` module.
-
-.. method:: Socket.makefile(mode, buffering=0)
-
-   Make a file-like object that wraps the socket.  The resulting file
-   object is a :class:`curio.io.FileStream` instance that supports
-   non-blocking I/O.  *mode* specifies the file mode which must be one
-   of ``'rb'`` or ``'wb'``.  *buffering* specifies the buffering
-   behavior. By default unbuffered I/O is used.  Note: It is not currently
-   possible to create a stream with Unicode text encoding/decoding applied to it
-   so those options are not available.   If you are trying to put a file-like
-   interface on a socket, it is usually better to use the :meth:`Socket.as_stream`
-   method below.  Not supported on Windows.
-
-.. method:: Socket.as_stream()
-
-   Wrap the socket as a stream using :class:`curio.io.SocketStream`. The
-   result is a file-like object that can be used for both reading and
-   writing on the socket.
-
-.. method:: Socket.blocking()
-
-   A context manager that temporarily places the socket into blocking mode and
-   returns the raw socket object used internally.  This can be used if you need
-   to pass the socket to existing synchronous code.
-
 :class:`Socket` objects may be used as an asynchronous context manager
-which cause the underlying socket to be closed when done. For
-example::
-
-    async with sock:
-        # Use the socket
-        ...
-    # socket closed here
+which cause the underlying socket to be closed when done. 
 
 Streams
 ^^^^^^^
@@ -1065,88 +906,57 @@ Curio implements two basic classes:
    Create a file-like wrapper around a socket.  *sockobj* is an
    existing socket-like object.  The socket is put into non-blocking mode.
    *sockobj* is not closed unless the resulting instance is explicitly
-   closed or used as a context manager.
+   closed or used as a context manager.  Instantiated by ``Socket.as_stream()``.
 
-Instances of either class implement the following methods:
+An instance ``s`` of either stream class implement the following methods:
 
-.. asyncmethod:: Stream.read(maxbytes=-1)
 
-   Read up to *maxbytes* of data on the file. If omitted, reads as
-   much data as is currently available and returns it.
+.. list-table:: 
+   :widths: 40 60
+   :header-rows: 0
 
-.. asyncmethod:: Stream.readall()
-
-   Return all of the data that's available on a file up until an EOF is read.
-
-.. asyncmethod:: Stream.read_exactly(n)
-
-   Read exactly n bytes of data, waiting for all data to arrive if necessary.
-
-.. asyncmethod:: Stream.readline()
-
-   Read a single line of data from a file.  
-
-.. asyncmethod:: Stream.readlines()
-
-   Read all of the lines from a file. If cancelled, the ``lines_read`` attribute of
-   the resulting exception contains all of the lines that were read so far.
-
-.. asyncmethod:: Stream.write(bytes)
-
-   Write all of the data in *bytes* to the file.
-
-.. asyncmethod:: Stream.writelines(lines)
-
-   Writes all of the lines in *lines* to the file.  If cancelled, the ``bytes_written``
-   attribute of the exception contains the total bytes written so far.
-
-.. asyncmethod:: Stream.flush()
-
-   Flush any unwritten data from buffers to the file.
-
-.. asyncmethod:: Stream.close()
-
-   Flush any unwritten data and close the file.  This method is not
-   called on garbage collection.
-
-.. method:: Stream.blocking()
-
-   A context manager that temporarily places the stream into blocking mode and
-   returns the raw file object used internally.  This can be used if you need
-   to pass the file to existing synchronous code.  Note: for ``SocketStream``
-   this creates a file using  ``open(sock.fileno(), 'rb+',
-   closefd=False)`` which is not supported on Windows.
+   * - ``await s.read(maxbytes=-1)``
+     - Read up to *maxbytes* of data on the file. If omitted, reads as
+       much data as is currently available.
+   * - ``await s.readall()``
+     - Return all data up to EOF.
+   * - ``await s.read_exactly(n)``
+     - Read exactly n bytes of data.
+   * - ``await s.readline()``
+     - Read a single line of data.
+   * - ``await s.readlines()``
+     - Read all of the lines.  If cancelled, the ``lines_read`` attribute of
+       the exception contains all lines read.
+   * - ``await s.write(bytes)``
+     - Write all of the data in *bytes*.
+   * - ``await s.writelines(lines)``
+     - Writes all of the lines in *lines*. If cancelled, the ``bytes_written``
+       attribute of the exception contains the total bytes written so far.
+   * - ``await s.flush()``
+     - Flush any unwritten data from buffers.
+   * - ``await s.close()``
+     - Flush any unwritten data and close the file.  Not called on garbage collection.
+   * - ``s.blocking()``
+     -  A context manager that temporarily places the stream into blocking mode and
+        returns the raw file object used internally.  Note: for
+        ``SocketStream`` this creates a file using
+        ``open(sock.fileno(), 'rb+', closefd=False)`` which is not
+        supported on Windows.
 
 Other methods (e.g., ``tell()``, ``seek()``, ``setsockopt()``, etc.) are available
-if underlying ``fileobj`` or ``sockobj`` provides them.
-
-A ``Stream`` may be used as an asynchronous context manager.  For example::
-
-    async with stream:
-        #  Use the stream object
-        ...
-    # stream closed here
+if underlying ``fileobj`` or ``sockobj`` provides them. A ``Stream`` may be used as an asynchronous context manager. 
 
 Files
 ^^^^^
 
 .. module:: curio.file
 
-One problem with coroutines concerns the use of file-like objects that
-can't properly be used in non-blocking mode.  A common example is
-files on the normal file system that were opened with the built-in
-``open()`` function.  Internally, the operating system might have to
-access a disk drive or perform networking of its own.  Either way, the
-operation might take a long time to complete and while it does, all of
-Curio will be blocked. You really don't want that--especially if the
-system is under heavy load.
-
 The :mod:`curio.file` module provides an asynchronous compatible
 replacement for the built-in ``open()`` function and associated file
-objects, should you want to read and write traditional files on the
-filesystem. The underlying implementation avoids blocking.  How this
-is accomplished is an implementation detail (although threads are used
-in the initial version).
+objects.  You use this to read and write traditional files on the
+filesystem while avoiding blocking. How this is accomplished is an
+implementation detail (although threads are used in the initial
+version).
 
 .. function:: aopen(*args, **kwargs)
 
@@ -1193,7 +1003,7 @@ For example::
 :class:`AsyncFile` objects may also be used with asynchronous iteration.
 For example::
 
-    async with open(filename) as f:
+    async with aopen(filename) as f:
         async for line in f:
             ...
 
@@ -1264,9 +1074,8 @@ socket-based servers.
    :data:`socket.AF_INET6`.  *backlog* is the argument to the
    :py:meth:`socket.socket.listen` method.  *ssl* specifies an
    :class:`curio.ssl.SSLContext` instance to use. *reuse_address*
-   specifies whether to reuse a previously used port. *reuse_port*
-   specifies whether to use the ``SO_REUSEPORT`` socket option
-   prior to binding. 
+   specifies whether to use the ``SO_REUSEADDR`` socket option.  *reuse_port*
+   specifies whether to use the ``SO_REUSEPORT`` socket option.
 
 .. asyncfunction:: unix_server(path, client_connected_task, *, backlog=100, ssl=None)
 
@@ -1306,7 +1115,8 @@ Message Passing and Channels
 .. module:: curio.channel
 
 Curio provides a :class:`Channel` class that can be used to perform message
-passing between interpreters running in separate processes.  
+passing between interpreters running in separate processes.  Message passing
+uses the same protocol as the ``multiprocessing`` standard library.
 
 .. class:: Channel(address, family=socket.AF_INET)
 
@@ -1314,35 +1124,29 @@ passing between interpreters running in separate processes.
    *address* is the address and *family* is the protocol
    family.
 
-The following methods are used to establish a connection on a :class:`Channel` instance.
+The following methods are used to establish a connection on a :class:`Channel` instance ``ch``.
 
-.. asyncmethod:: Channel.accept(*, authkey=None)
+.. list-table:: 
+   :widths: 50 50
+   :header-rows: 0
 
-   Wait for an incoming connection.  *authkey* is an optional authentication
-   key that can be used to authenticate the client.  Authentication involves
-   computing an HMAC-based cryptographic digest. The key itself is not 
-   transmitted.  Returns an :class:`Connection` instance.
+   * - ``await ch.accept(*, authkey=None)``
+     - Wait for an incoming connection and return a
+       :class:`Connection` instance.  *authkey* is an optional
+       authentication key.
+   * - ``await ch.connect(*, authkey=None)``
+     - Make an outgoing connection and return a :class:`Connection` instance. 
+       *authkey* is an optional authentication key.
+   * - ``ch.bind()``
+     - Performs the address binding step of the ``accept()`` method.
+       Use this to have the host operating system to assign a port
+       number.  For example, use an address of ``('localhost', socket.INADDR_ANY)`` and call ``bind()``. 
+       Afterwards,  ``ch.address`` contains the assigned address.
+   * - ``await ch.close()``
+     - Close the channel.
 
-.. asyncmethod:: Channel.connect(*, authkey=None)
-
-   Make an outgoing connection. *authkey* is an optional authentication key.
-   Returns a :class:`Connection` instance.
-
-.. method:: Channel.bind()
-
-   Performs the address binding step of the ``accept()`` method and returns.
-   Can use this if you want the host operating system to assign a port
-   number for you.  For example, you can supply an initial address
-   of ``('localhost', socket.INADDR_ANY)`` and call ``bind()``. Afterwards,
-   the ``address`` attribute of the ``Channel`` instance contains
-   the assigned address.
-
-.. asyncmethod:: Channel.close()
-
-   Close the channel.
-
-The ``connect()`` and ``accept()`` methods of :class:`Channel` instances return a
-:class:`Connection` instance.
+The ``connect()`` and ``accept()`` methods of :class:`Channel` instances return an
+instance of the :class:`Connection` class:
 
 .. class:: Connection(reader, writer)
 
@@ -1351,37 +1155,27 @@ The ``connect()`` and ``accept()`` methods of :class:`Channel` instances return 
    and writing are to take place (for example, instances of ``SocketStream``
    or ``FileStream``).
 
-Instances of :class:`Connection` support the following methods:
+An instance ``c`` of :class:`Connection` supports the following methods:
 
-.. asyncmethod:: close()
+.. list-table:: 
+   :widths: 55 45
+   :header-rows: 0
 
-   Close the connection by closing both the reader and writer streams.
-
-.. asyncmethod:: recv()
-
-   Receive a Python object. The received object is unserialized using the ``pickle`` module.
-
-.. asyncmethod:: recv_bytes(maxlength=None)
-
-   Receive a raw message of bytes.  *maxlength* specifies a maximum message size.
-   By default messages may be of arbitrary size.
-
-.. asyncmethod:: send(obj)
-
-   Send a Python object.  The object must be compatible with the ``pickle`` module.
-
-.. asyncmethod:: send_bytes(buf, offset=0, size=None)
-   
-   Send a buffer of bytes as a single message.  *offset* and *size* specify
-   an optional byte offset and size into the underlying memory buffer. 
-
-.. asyncmethod:: authenticate_server(authkey)
-
-   Authenticate the connection for a server.
-
-.. asyncmethod:: authenticate_client(authkey)
-
-   Authenticate the connection for a client.
+   * - ``await c.close()``
+     - Close the connection.
+   * - ``await c.recv()``
+     - Receive a Python object.
+   * - ``await c.recv_bytes()``
+     - Receive a raw message of bytes. 
+   * - ``await c.send(obj)``
+     - Send a Python object.
+   * - ``await c.send_bytes(buf, offset=0, size=None)``
+     - Send a buffer of bytes as a single message.  *offset* and *size* specify
+       an optional byte offset and size into the underlying memory buffer. 
+   * - ``await c.authenticate_server(authkey)``
+     - Authenticate server endpoint.
+   * - ``await c.authenticate_client(authkey)``
+     - Authenticate client endpoint.
 
 A :class:`Connection` instance may also be used as a context manager.
 
@@ -1422,7 +1216,7 @@ socket module
 
 .. module:: curio.socket
 
-The :mod:`curio.socket` module provides a wrapper around the built-in
+The :mod:`curio.socket` module provides a wrapper around selected functions in the built-in
 :mod:`socket` module--allowing it to be used as a stand-in in
 Curio-related code.  The module provides exactly the same
 functionality except that certain operations have been replaced by
@@ -1460,7 +1254,7 @@ ssl module
 .. module:: curio.ssl
 
 The :mod:`curio.ssl` module provides Curio-compatible functions for creating an SSL
-layer around Curio sockets.  The following functions are redefined (and have the same
+wrapped Curio socket.  The following functions are redefined (and have the same
 calling signature as their counterparts in the standard :mod:`ssl` module:
 
 .. asyncfunction:: wrap_socket(*args, **kwargs)
@@ -1477,15 +1271,15 @@ calling signature as their counterparts in the standard :mod:`ssl` module:
 Don't attempt to use the :mod:`curio.ssl` module without a careful read of Python's official documentation
 at https://docs.python.org/3/library/ssl.html.
 
-For the purposes of Curio, it is usually easier to apply SSL to a
-connection using some of the high level network functions previously described.
+It is usually easier to apply SSL to a
+connection using the high level network functions previously described.
 For example, here's how you make an outgoing SSL connection::
 
     sock = await curio.open_connection('www.python.org', 443,
                                        ssl=True,
                                        server_hostname='www.python.org')
 
-Here's how you might define a server that uses SSL::
+Here's how you create a server that uses SSL::
 
     import curio
     from curio import ssl
@@ -1497,10 +1291,9 @@ Here's how you might define a server that uses SSL::
         ...
 
     if __name__ == '__main__':
-        kernel = curio.Kernel()
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
-        kernel.run(curio.tcp_server('', 10000, handler, ssl=ssl_context))
+        curio.run(curio.tcp_server('', 10000, handler, ssl=ssl_context))
 
 
 Subprocesses
@@ -1518,22 +1311,6 @@ The :mod:`curio.subprocess` module implements the same functionality as the buil
    :attr:`~subprocess.Popen.stderr` file attributes have been wrapped by the
    :class:`curio.io.FileStream` class. You can use these in an asynchronous
    context.
-
-Here is an example of using :class:`Popen` to read streaming output off of a
-subprocess with Curio::
-
-    import curio
-    from curio import subprocess
-
-    async def main():
-        p = subprocess.Popen(['ping', 'www.python.org'], stdout=subprocess.PIPE)
-        async for line in p.stdout:
-            print('Got:', line.decode('ascii'), end='')
-
-    if __name__ == '__main__':
-        kernel = curio.Kernel()
-        kernel.add_task(main())
-        kernel.run()
 
 The following methods of :class:`Popen` have been replaced by asynchronous equivalents:
 
@@ -1565,78 +1342,83 @@ equivalents in the :mod:`subprocess` module:
    :py:exc:`subprocess.CalledProcessError` exception if an error occurred.
    The behavior on cancellation is the same as for ``run()``. 
 
+Here is an example of using :class:`Popen` to read streaming output off of a
+subprocess with Curio::
+
+    import curio
+    from curio import subprocess
+
+    async def main():
+        p = subprocess.Popen(['ping', 'www.python.org'], stdout=subprocess.PIPE)
+        async for line in p.stdout:
+            print('Got:', line.decode('ascii'), end='')
+
+    if __name__ == '__main__':
+        kernel = curio.Kernel()
+        kernel.add_task(main())
+        kernel.run()
+
 Asynchronous Threads
 --------------------
 
+.. module:: curio.thread
+
 If you need to perform a lot of synchronous operations, but still
-interact with Curio, you might consider launching an asynchronous
-thread. An asynchronous thread flips the whole world around--instead
-of executing synchronous operations using ``run_in_thread()``, you
-kick everything out to a thread and selectively perform the asynchronous
-operations using a magic ``AWAIT()`` function. 
+interact with Curio, you can launch an async-thread.
+An asynchronous thread flips the whole world around--instead
+of executing selected synchronous operations using ``run_in_thread()``, you
+run everything in a thread and perform selected async operations using the
+``AWAIT()`` function.
 
-.. class:: AsyncThread(target, args=(), kwargs={}, daemon=True)
+To create an asynchronous thread, use ``spawn_thread()``:
 
-   Creates an asynchronous thread.  The arguments are the same as
-   for the ``threading.Thread`` class.  ``target`` is a synchronous
-   callable.  ``args`` and ``kwargs`` are its arguments. ``daemon``
-   specifies if the thread runs in daemonic mode.
-
-.. asyncmethod:: AsyncThread.start()
-
-   Starts the asynchronous thread.
-
-.. asyncmethod:: join()
-
-   Waits for the thread to terminate, returning the callables final result.
-   The final result is returned in the same manner as the usual ``Task.join()``
-   method used on Curio tasks.
-
-.. asyncmethod:: wait()
-   
-   Waits for the thread to terminate, but do not result any result.
-
-.. attribute:: AsyncThread.result
-
-   The result of the thread, if completed.  If accessed before the thread
-   terminates, a ``RuntimeError`` exception is raised.  If the task crashed
-   with an exception, that exception is reraised on access.
-   
-.. asyncmethod:: cancel()
-
-   Cancels the asynchronous thread.  The behavior is the same as cancellation
-   performed on Curio tasks.  Note: An asynchronous thread can only be cancelled
-   when it performs blocking operations on asynchronous objects (e.g.,
-   using ``AWAIT()``.
-
-As a shortcut for creating an asynchronous thread, you can use ``spawn_thread()`` instead.
-
-.. asyncfunction:: spawn_thread(func=None, *args, daemon=False)
+.. asyncfunction:: spawn_thread(func, *args, daemon=False)
 
    Launch an asynchronous thread that runs the callable ``func(*args)``.
-   ``daemon`` specifies if the thread runs in daemonic mode.   This
-   function may also be used as a context manager if ``func`` is ``None``.
-   In that case, the body of the context manager executes in a separate
-   thread. For the context manager case, the body is not allowed to perform
-   any asynchronous operation involving ``async`` or ``await``.  However,
-   the ``AWAIT()`` function may be used to delegate asynchronous operations
-   back to Curio's main thread.
+   ``daemon`` specifies if the thread runs in daemonic mode. 
+   Returns an ``AsyncThread`` instance.
 
-Within a thread, the following function can be used to execute a coroutine.
+An instance ``t`` of ``AsyncThread`` supports the following methods.
+
+.. list-table:: 
+   :widths: 55 45
+   :header-rows: 0
+
+   * - ``await t.join()``
+     - Waits for the thread to terminate, returning the final result.
+       The final result is returned in the same manner as ``Task.join()``.
+   * - ``await t.wait()``
+     - Waits for the thread to terminate, but does not return any result.
+   * - ``await t.cancel(*, blocking=True, exc=TaskCancelled)``
+     - Cancels the asynchronous thread.  The behavior is the same as with ``Task``.
+       Note: An asynchronous thread can only be cancelled when it performs 
+       operations using ``AWAIT()``.
+   * - ``t.result``
+     - The final result of the thread. If the thread crashed
+       with an exception, that exception is reraised on access.
+   * - ``t.exception``
+     - The final exception (if any)
+   * - ``t.id``
+     - Thread ID. A monotonically increasing integer.
+   * - ``t.terminated``
+     - ``True`` if the thread is terminated.
+   * - ``t.cancelled``
+     - ``True`` if the thread was cancelled.
+
+Within a thread, the following function is used to execute any coroutine.
 
 .. function:: AWAIT(coro)
 
    Execute a coroutine on behalf of an asynchronous thread.  The requested
-   coroutine always executes in Curio's main execution thread.  The caller is
+   coroutine executes in Curio's main execution thread.  The caller is
    blocked until it completes.  If used outside of an asynchronous thread,
    an ``AsyncOnlyError`` exception is raised.  If ``coro`` is not a 
    coroutine, it is returned unmodified.   The reason ``AWAIT`` is all-caps
    is to make it more easily heard when there are all of these coders yelling
    at you to just use pure async code instead of launching a thread. Also, 
-   ``await`` is likely to be a reserved keyword in Python 3.7.
+   ``await`` is a reserved keyword in Python 3.7.
 
-Here is a simple example of an asynchronous thread that reads data off a
-Curio queue::
+Here is an example of an asynchronous thread reading off a Curio queue::
 
     from curio import run, Queue, sleep, CancelledError
     from curio.thread import spawn_thread, AWAIT
@@ -1674,87 +1456,42 @@ protected.   Asynchronous threads can be cancelled in the same manner
 as normal Curio tasks.  However, the same rules apply--an asynchronous
 thread can only be cancelled on blocking operations involving ``AWAIT()``.
 
-A final curious thing about async threads is that the ``AWAIT()``
-function is no-op if you don't give it a coroutine.  This means that
-code, in many cases, can be made to be compatible with regular Python
-threads.  For example, this code involving normal threads actually runs::
-
-    from curio.thread import AWAIT
-    from curio import CancelledError
-    from threading import Thread
-    from queue import Queue
-    from time import sleep
-
-    def consumer(queue):
-        try:
-            while True:
-                item = AWAIT(queue.get())
-                print('Got:', item)
-                AWAIT(queue.task_done())
-
-        except CancelledError:
-            print('Consumer goodbye!')
-            raise
- 
-    def main():
-        q = Queue()
-        t = Thread(target=consumer, args=(q,), daemon=True)
-        t.start()
-
-        for i in range(10):
-            q.put(i)
-            sleep(1)
-        q.join()
-
-    main()
-
-In this code, ``consumer()`` is simply launched in a regular thread
-with a regular thread queue.  The ``AWAIT()`` operations do
-nothing--the queue operations aren't coroutines and their results
-return unmodified.  Certain Curio features such as cancellation aren't
-supported by normal threads so that would be ignored.  However, it's
-interesting that you can write a kind of hybrid code that works in
-both a threaded and asynchronous world.
-
 Scheduler Activations
 ---------------------
 .. module:: curio.activation
 
-Each task in Curio goes through a life-cycle of creation, running,
-suspension, and eventual termination.   These can be monitored by
-external tools by defining classes that inherit from :class:`Activation`.
+Every task in Curio goes through a life-cycle of creation, running,
+suspension, and termination.  These steps are managed by an internal
+scheduler.  A scheduler activation is a mechanism for monitoring these
+steps.  To do this, you define a class that inherits from 
+:class:`Activation`.
 
 .. class:: Activation
 
    Base class for defining scheduler activations.
 
-The following methods are executed as callback-functions by the kernel:
+An instance ``a`` of :class:`Activation` implements the following methods:
 
-.. method:: activate(kernel)
+.. list-table:: 
+   :widths: 55 45
+   :header-rows: 0
 
-   Executed once upon initialization of the Curio kernel. *kernel* is
-   a reference to the ``Kernel`` instance.
+   * - ``a.activate(kernel)``
+     - Executed once upon initialization of the Curio kernel. *kernel* is
+       a reference to the ``Kernel`` instance.
+   * - ``a.created(task)``
+     - Called when a new task is created.  *task* is the newly created ``Task`` instance.
+   * - ``a.running(task)``
+     - Called immediately prior to the execution cycle of a task.
+   * - ``a.suspended(task)``
+     - Called when a task has suspended execution.
+   * - ``a.terminated(task)``
+     - Called when a task has terminated execution. Note: the
+       ``suspended()`` method is always called immediately prior to a task being terminated.
 
-.. method:: created(task)
-
-   Called when a new task is created.  *task* is the newly created ``Task`` instance.
-
-.. method:: running(task)
-
-   Called immediately prior to the execution of a task.
-
-.. method:: suspended(task)
-
-   Called when a task has suspended execution.
-
-.. method:: terminated(task)
-
-   Called when a task has terminated execution. Note: the
-   ``suspended()`` method is always called prior to a task being
-   terminated.
-
-As an example, here is a scheduler activation that monitors for long-execution times
-and reports warnings::
+Activations are used to implement debugging and diagnostic tools. As
+an example, here is a scheduler activation that monitors for
+long-execution times and reports warnings::
 
     from curio.activation import Activation
     import time
@@ -1779,7 +1516,7 @@ top-level ``run()`` function::
         kern.run(coro)
 
     # Alternative
-    run(activations=[LongBlock(0.05)])
+    run(coro, activations=[LongBlock(0.05)])
 
 Asynchronous Metaprogramming
 ----------------------------
@@ -1851,60 +1588,46 @@ Exceptions
 The following exceptions are defined. All are subclasses of the
 :class:`CurioError` base class.
 
-.. exception:: CurioError
 
-   Base class for all Curio-specific exceptions.
+.. list-table:: 
+   :widths: 40 60
+   :header-rows: 0
 
-.. exception:: CancelledError
-
-   Base class for all cancellation-related exceptions.
-
-.. exception:: TaskCancelled
-
-   Exception raised in a coroutine if it has been cancelled using the :meth:`Task.cancel` method.  If ignored, the
-   coroutine is silently terminated.  If caught, a coroutine can continue to
-   run, but should work to terminate execution.  Ignoring a cancellation
-   request and continuing to execute will likely cause some other task to hang.
-
-.. exception:: TaskTimeout
-
-   Exception raised in a coroutine if it has been cancelled by timeout.
-   A subclass of ``CancelledError``.
-
-.. exception:: TimeoutCancellationError
-
-   Exception raised in a coroutine if it has been cancelled due to a timeout,
-   but not one related to the inner-most timeout operation.  A subclass
-   of ``CancelledError``.
-
-.. exception:: UncaughtTimeoutError
-
-   Exception raised if a timeout from an inner timeout operation has
-   propagated to an outer timeout, indicating the lack of a proper
-   try-except block.  A subclass of ``CurioError``. 
-
-.. exception:: TaskError
-
-   Exception raised by the :meth:`Task.join` method if an uncaught exception
-   occurs in a task.  It is a chained exception. The ``__cause__`` attribute
-   contains the exception that causes the task to fail.
-
-.. exception:: SyncIOError
-
-   Exception raised if a task attempts to perform a synchronous I/O operation
-   on an object that only supports asynchronous I/O.
-
-.. exception:: AsyncOnlyError
-
-   Exception raised by the ``AWAIT()`` function if its applied to code not
-   properly running in an async-thread. 
-
-.. exception:: ResourceBusy
-
-   Exception raised in an I/O operation is requested on a resource, but the
-   resource is already busy performing the same operation on behalf of another task.
-   The exceptions ``ReadResourceBusy`` and ``WriteResourceBusy`` are subclasses
-   that provide a more specific cause. 
+   * - ``CurioError``
+     - Base class for all Curio-specific exceptions.
+   * - ``CancelledError``
+     - Base class for all cancellation-related exceptions.
+   * - ``TaskCancelled``
+     - Exception raised in a coroutine if it has been cancelled using the :meth:`Task.cancel` method.  If ignored, the
+       coroutine is silently terminated.  If caught, a coroutine can continue to
+       run, but should work to terminate execution.  Ignoring a cancellation
+       request and continuing to execute will likely cause some other task to hang.
+   * - ``TaskTimeout``
+     - Exception raised in a coroutine if it has been cancelled by timeout.
+       A subclass of ``CancelledError``.
+   * - ``TimeoutCancellationError``
+     - Exception raised in a coroutine if it has been cancelled due to a timeout,
+       but not one related to the inner-most timeout operation.  A subclass
+       of ``CancelledError``.
+   * - ``UncaughtTimeoutError``
+     - Exception raised if a timeout from an inner timeout operation has
+       propagated to an outer timeout, indicating the lack of a proper
+       try-except block.  A subclass of ``CurioError``. 
+   * - ``TaskError``
+     - Exception raised by the :meth:`Task.join` method if an uncaught exception
+       occurs in a task.  It is a chained exception. The ``__cause__`` attribute
+       contains the exception that causes the task to fail.
+   * - ``SyncIOError``
+     - Exception raised if a task attempts to perform a synchronous I/O operation
+       on an object that only supports asynchronous I/O.
+   * - ``AsyncOnlyError``
+     - Exception raised by the ``AWAIT()`` function if its applied to code not
+       properly running in an async-thread. 
+   * - ``ResourceBusy``
+     - Exception raised in an I/O operation is requested on a resource, but the
+       resource is already busy performing the same operation on behalf of another task.
+       The exceptions ``ReadResourceBusy`` and ``WriteResourceBusy`` are subclasses
+       that provide a more specific cause. 
 
 Low-level Kernel System Calls
 -----------------------------
@@ -1920,68 +1643,48 @@ implementing a new Curio primitive.   These calls are found in the
 Unless otherwise indicated, all traps are potentially blocking and
 may raise a cancellation exception.
 
-.. asyncfunction:: _read_wait(fileobj)
+.. list-table:: 
+   :widths: 50 50
+   :header-rows: 0
 
-   Sleep until data is available for reading on
-   *fileobj*.  *fileobj* is any file-like object with a `fileno()`
-   method.
-
-.. asyncfunction:: _write_wait(fileobj)
-
-   Sleep until data can be written on *fileobj*.
-   *fileobj* is any file-like object with a `fileno()` method.
-
-.. asyncfunction:: _io_waiting(fileobj)
-
-   Returns a tuple `(rtask, wtask)` of tasks currently sleeping on
-   *fileobj* (if any).  Returns immediately.
-   
-.. asyncfunction:: _future_wait(future)
-
-   Sleep until a result is set on *future*.  *future*
-   is an instance of :py:class:`concurrent.futures.Future`.
-
-.. asyncfunction:: _cancel_task(task)
-
-   Cancel the indicated *task*.  Returns immediately.
-
-.. asyncfunction:: _scheduler_wait(sched, state_name)
-
-   Go to sleep on a kernel scheduler primitive. *sched* is an instance of
-   ``curio.sched.SchedBase``. *state_name* is the name of the wait state (used in
-   debugging).
-
-.. asyncfunction:: _scheduler_wake(sched, n=1, value=None, exc=None)
-
-   Reschedule one or more tasks from a
-   kernel scheduler primitive. *n* is the
-   number of tasks to release. *value* and *exc* specify the return
-   value or exception to raise in the task when it resumes execution.
-   Returns immediately.
-
-.. asyncfunction:: _get_kernel()
-
-   Get a reference to the running ``Kernel`` object. Returns immediately.
-
-.. asyncfunction:: _get_current()
-
-   Get a reference to the currently running ``Task`` instance. Returns immediately.
-
-.. asyncfunction:: _set_timeout(seconds)
-
-   Set a timeout in the currently running task. Returns immediately
-   with the previous timeout (if any)
-
-.. asyncfunction:: _unset_timeout(previous)
-
-   Unset a timeout in the currently running task. *previous* is the
-   value returned by the _set_timeout() call used to set the timeout.
-   Returns immediately.
-
-.. asyncfunction:: _clock():
-
-   Immediately returns the current time according to the Curio
-   kernel's clock.
+   * - ``await _read_wait(fileobj)``
+     - Sleep until data is available for reading on
+       *fileobj*.  *fileobj* is any file-like object with a `fileno()`
+       method.
+   * - ``await _write_wait(fileobj)``
+     - Sleep until data can be written on *fileobj*.
+       *fileobj* is any file-like object with a `fileno()` method.
+   * - ``await _io_waiting(fileobj)``
+     - Returns a tuple `(rtask, wtask)` of tasks currently sleeping on
+       *fileobj* (if any).  Returns immediately.
+   * - ``await _future_wait(fut)``   
+     - Sleep until a result is set on *fut*.  *fut*
+       is an instance of :py:class:`concurrent.futures.Future`.
+   * - ``await _cancel_task(task, exc=TaskCancelled, val=None)``
+     - Cancel *task*.  Returns immediately. *exc* and *val*
+       specify the exception type and value.
+   * - ``await _scheduler_wait(sched, state_name)``
+     - Go to sleep on a kernel scheduler primitive. *sched* is an 
+       instance of ``curio.sched.SchedBase``. *state_name* is the name of 
+       the wait state (used in debugging).
+   * - ``await _scheduler_wake(sched, n=1, value=None, exc=None)``
+     -  Reschedule one or more tasks from a kernel scheduler primitive. *n* is the
+        number of tasks to release. *value* and *exc* specify the return
+        value or exception to raise in the task when it resumes execution.
+        Returns immediately.
+   * - ``await _get_kernel()``
+     - Get a reference to the running ``Kernel`` object. Returns immediately.
+   * - ``await _get_current()``
+     - Get a reference to the currently running ``Task`` instance. Returns immediately.
+   * - ``await _set_timeout(seconds)``
+     - Set a timeout in the currently running task. Returns immediately
+       with the previous timeout (if any)
+   * - ``await _unset_timeout(previous)``
+     - Unset a timeout in the currently running task. *previous* is the
+       value returned by the _set_timeout() call used to set the timeout.
+       Returns immediately.
+   * - ``await _clock()``
+     - Immediately returns the current monotonic clock value.
 
 Again, you're unlikely to use any of these functions directly.  However, here's a small taste
 of how they're used.  For example, the :meth:`curio.io.Socket.recv` method

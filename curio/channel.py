@@ -119,16 +119,14 @@ class Connection(object):
             await self._writer.write(msg)
         return size
 
-    async def recv_bytes(self, maxlength=None):
+    async def recv_bytes(self,maxlength=None):
         '''
         Receive a message of bytes as a single message.
         '''
         header = await self._reader.read_exactly(4)
         size, = struct.unpack('!i', header)
-        if maxlength is not None:
-            if size > maxlength:
-                raise IOError(f'Message too large. {size} bytes > {maxlength} maxlength')
-
+        if maxlength and size > maxlength:
+            raise IOError("Message too large")
         msg = await self._reader.read_exactly(size)
         return msg
 

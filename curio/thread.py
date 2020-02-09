@@ -100,7 +100,7 @@ class AsyncThread(object):
         # A reference to the associated thread (from threading module)
         self._thread = None
 
-        # A reference to the associated backing coroutine
+        # A reference to the associated backing task
         self._task = None
 
     async def _coro_runner(self):
@@ -203,6 +203,9 @@ class AsyncThread(object):
         if blocking:
             await self.wait()
 
+    @property
+    def id(self):
+        return self._task.id
 
 def AWAIT(coro, *args, **kwargs):
     '''
