@@ -706,7 +706,6 @@ In this code, the ``consumer()`` is a Curio task and ``producer()`` is a thread.
 
 Blocking Operations and External Work
 -------------------------------------
-.. module:: curio.workers
 
 Sometimes you need to perform work that takes a long time to complete
 or otherwise blocks the progress of other tasks. This includes
@@ -787,8 +786,6 @@ change these values, do it before any tasks are executed.
 I/O Classes
 -----------
 
-.. module:: curio.io
-
 I/O in Curio is managed by a collection of classes in :mod:`curio.io`.
 These classes act as asynchronous proxies around sockets, streams, and
 ordinary files.  The programming interface is meant to be the same as
@@ -866,9 +863,9 @@ which cause the underlying socket to be closed when done.
 Streams
 ^^^^^^^
 
-A stream is an asynchronous file-like object that wraps around an existing
-I/O primitive that natively implements proper non-blocking I/O.
-Curio implements two basic classes:
+A stream is an asynchronous file-like object that wraps around an
+object that natively implements non-blocking I/O.  Curio implements
+two basic classes:
 
 .. class:: FileStream(fileobj)
 
@@ -923,16 +920,14 @@ An instance ``s`` of either stream class implement the following methods:
         supported on Windows.
 
 Other methods (e.g., ``tell()``, ``seek()``, ``setsockopt()``, etc.) are available
-if underlying ``fileobj`` or ``sockobj`` provides them. A ``Stream`` may be used as an asynchronous context manager. 
+if the underlying ``fileobj`` or ``sockobj`` provides them. A ``Stream`` may be used as an asynchronous context manager. 
 
 Files
 ^^^^^
 
-.. module:: curio.file
-
 The :mod:`curio.file` module provides an asynchronous compatible
 replacement for the built-in ``open()`` function and associated file
-objects.  You use this to read and write traditional files on the
+objects.  Use this to read and write traditional files on the
 filesystem while avoiding blocking. How this is accomplished is an
 implementation detail (although threads are used in the initial
 version).
@@ -948,8 +943,7 @@ version).
 
    This class represents an asynchronous file as returned by the ``aopen()``
    function.  Normally, instances are created by the ``aopen()`` function.
-   However, it can be wrapped around an already-existing file object that
-   was opened using the built-in ``open()`` function.
+   However, it can be wrapped around an already-existing file object.
 
 The following methods are redefined on :class:`AsyncFile` objects to be
 compatible with coroutines.  Any method not listed here will be
@@ -958,19 +952,40 @@ as the underlying file object.  Be aware that not all of these methods are
 available on all kinds of files (e.g., ``read1()``, ``readinto()`` and similar
 methods are only available in binary-mode files).
 
-.. asyncmethod:: AsyncFile.read(*args, **kwargs)
-.. asyncmethod:: AsyncFile.read1(*args, **kwargs)
-.. asyncmethod:: AsyncFile.readline(*args, **kwargs)
-.. asyncmethod:: AsyncFile.readlines(*args, **kwargs)
-.. asyncmethod:: AsyncFile.readinto(*args, **kwargs)
-.. asyncmethod:: AsyncFile.readinto1(*args, **kwargs)
-.. asyncmethod:: AsyncFile.write(*args, **kwargs)
-.. asyncmethod:: AsyncFile.writelines(*args, **kwargs)
-.. asyncmethod:: AsyncFile.truncate(*args, **kwargs)
-.. asyncmethod:: AsyncFile.seek(*args, **kwargs)
-.. asyncmethod:: AsyncFile.tell(*args, **kwargs)
-.. asyncmethod:: AsyncFile.flush()
-.. asyncmethod:: AsyncFile.close()
+.. list-table:: 
+   :widths: 50 50
+   :header-rows: 0
+
+   * - ``await f.read(maxbytes=-1)``
+     - Read up to *maxbytes* of data on the file. If omitted, reads as
+       much data as is currently available.
+   * - ``await f.read1(maxbytes=-1)``
+     - Same as ``read()``, but uses a single system call.
+   * - ``await f.readline(maxbytes=-1)``
+     - Read a line of input.
+   * - ``await f.readlines(maxbytes=-1)``
+     - Read all lines of input data
+   * - ``await f.readinto(buffer)``
+     - Read data into a buffer.
+   * - ``await f.readinto1(buffer)``
+     - Read data into a buffer using a single system call.
+   * - ``await f.readall()``
+     - Read all available data up to EOF.
+   * - ``await f.write(data)``
+     - Write data
+   * - ``await f.writelines(lines)``
+     - Write all lines.
+   * - ``await f.truncate(pos=None)``
+     - Truncate the file to a given size/position. If ``None``, file is truncated at position
+       of current file pointer.
+   * - ``await f.seek(offset, whence=os.SEEK_SET)``
+     - Seek to a new file position.
+   * - ``await f.tell()``
+     - Report current file pointer.
+   * - ``await f.flush()``
+     - Flush data to a file
+   * - ``await f.close()``
+     - Flush remaining data and close.
 
 The preferred way to use an :class:`AsyncFile` object is as an asynchronous context manager.
 For example::
@@ -1017,8 +1032,6 @@ programming.
 
 High Level Networking
 ^^^^^^^^^^^^^^^^^^^^^
-
-.. currentmodule:: curio
 
 The following functions are use to make network connections and implement
 socket-based servers.
@@ -1091,8 +1104,6 @@ socket-based servers.
 Message Passing and Channels
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. module:: curio.channel
-
 Curio provides a :class:`Channel` class that can be used to perform message
 passing between interpreters running in separate processes.  Message passing
 uses the same protocol as the ``multiprocessing`` standard library.
@@ -1130,7 +1141,7 @@ instance of the :class:`Connection` class:
 .. class:: Connection(reader, writer)
 
    Represents a connection on which message passing of Python objects is
-   supported.  *reader* and *writer* are Curio I/O streams on which reading 
+   supported.  *reader* and *writer* are I/O streams on which reading 
    and writing are to take place (for example, instances of ``SocketStream``
    or ``FileStream``).
 
@@ -1193,8 +1204,6 @@ Here is an example of a corresponding consumer program using a channel::
 socket module
 ^^^^^^^^^^^^^
 
-.. module:: curio.socket
-
 The :mod:`curio.socket` module provides a wrapper around selected functions in the built-in
 :mod:`socket` module--allowing it to be used as a stand-in in
 Curio-related code.  The module provides exactly the same
@@ -1229,8 +1238,6 @@ the use of threads.
 
 ssl module
 ^^^^^^^^^^
-
-.. module:: curio.ssl
 
 The :mod:`curio.ssl` module provides Curio-compatible functions for creating an SSL
 wrapped Curio socket.  The following functions are redefined (and have the same
@@ -1277,7 +1284,6 @@ Here's how you create a server that uses SSL::
 
 Subprocesses
 ------------
-.. module:: curio.subprocess
 
 The :mod:`curio.subprocess` module implements the same functionality as the built-in
 :mod:`subprocess` module.
@@ -1339,8 +1345,6 @@ subprocess with Curio::
 
 Asynchronous Threads
 --------------------
-
-.. module:: curio.thread
 
 If you need to perform a lot of synchronous operations, but still
 interact with Curio, you can launch an async-thread.
@@ -1437,13 +1441,12 @@ thread can only be cancelled on blocking operations involving ``AWAIT()``.
 
 Scheduler Activations
 ---------------------
-.. module:: curio.activation
 
 Every task in Curio goes through a life-cycle of creation, running,
 suspension, and termination.  These steps are managed by an internal
 scheduler.  A scheduler activation is a mechanism for monitoring these
 steps.  To do this, you define a class that inherits from 
-:class:`Activation`.
+:class:`Activation` in the submodule ``curio.activation``. 
 
 .. class:: Activation
 
@@ -1499,7 +1502,6 @@ top-level ``run()`` function::
 
 Asynchronous Metaprogramming
 ----------------------------
-.. module:: curio.meta
 
 The :mod:`curio.meta` module provides some functions that might be useful if
 implementing more complex programs and APIs involving coroutines.
@@ -1562,7 +1564,6 @@ Here is an example that illustrates::
 
 Exceptions
 ----------
-.. module:: curio
 
 The following exceptions are defined. All are subclasses of the
 :class:`CurioError` base class.
@@ -1608,16 +1609,14 @@ The following exceptions are defined. All are subclasses of the
        The exceptions ``ReadResourceBusy`` and ``WriteResourceBusy`` are subclasses
        that provide a more specific cause. 
 
-Low-level Kernel System Calls
------------------------------
-.. module:: curio.traps
+Low-level Traps and Scheduling
+------------------------------
 
-The following system calls are available, but not typically used
+The following system calls are available in ``curio.traps``, but not typically used
 directly in user code.  They are used to implement higher level
 objects such as locks, socket wrappers, and so forth. If you find
 yourself using these, you're probably doing something wrong--or
-implementing a new Curio primitive.   These calls are found in the
-``curio.traps`` submodule.
+implementing a new Curio primitive.   
 
 Unless otherwise indicated, all traps are potentially blocking and
 may raise a cancellation exception.
@@ -1667,11 +1666,11 @@ may raise a cancellation exception.
    * - ``await _clock()``
      - Immediately returns the current monotonic clock value.
 
-Again, you're unlikely to use any of these functions directly.  However, here's a small taste
-of how they're used.  For example, the :meth:`curio.io.Socket.recv` method
-looks roughly like this::
+Again, you're unlikely to use any of these functions directly.
+However, here's a small taste of how they get used.  For example, the
+:meth:`curio.io.Socket.recv` method looks roughly like this::
 
-    class Socket(object):
+    class Socket:
         ...
         def recv(self, maxbytes):
             while True:
@@ -1686,6 +1685,51 @@ This method first tries to receive data.  If none is available, the
 can be performed. When it awakes, the receive operation is
 retried. Just to emphasize, the :func:`_read_wait` doesn't actually
 perform any I/O. It's just scheduling a task for it.
+
+The ``_scheduler_wait()`` and ``_scheduler_wake()`` traps are used to 
+implement high-level synchronization and queuing primitives.  The
+``sched`` argument to these calls is an instance of a class that 
+inherits from ``SchedBase`` defined in the ``curio.sched`` submodule.
+The following specific classes are defined:
+
+.. class:: SchedFIFO
+
+   A scheduling FIFO queue.  Used to implement locks and queues.
+
+.. class:: SchedBarrier
+
+   A scheduling barrier.  Used to implement events.
+
+The following public methods are defined on an instance ``s`` of these classes:
+
+.. list-table:: 
+   :widths: 40 60
+   :header-rows: 0
+
+   * - ``await s.suspend(reason)``
+     - Suspend the calling task. ``reason`` is a string describing why.
+   * - ``await s.wake(n=1)``
+     - Wake one or more suspended tasks.
+   * - ``len(s)``
+     - Number of tasks suspended.
+
+Here is an example of how a scheduler primitive is used to implement an ``Event``::
+
+    from curio.sched import SchedBarrier
+
+    class Event:
+        def __init__(self):
+            self._value = 0
+            self._sched = SchedBarrier()
+        
+        async def wait(self):
+            if self._value == 0:
+                await self._sched.suspend('EVENT_WAIT')
+
+        async def set(self):
+            self._value = 1
+            await self._sched.wake(len(self._sched))
+
 
 Debugging and Diagnostics
 -------------------------
