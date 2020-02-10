@@ -207,6 +207,10 @@ class AsyncThread(object):
     def id(self):
         return self._task.id
 
+    @property
+    def state(self):
+        return self._task.state
+
 def AWAIT(coro, *args, **kwargs):
     '''
     Await for a coroutine in an asynchronous thread.  If coro is

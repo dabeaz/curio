@@ -63,14 +63,12 @@ async def _future_wait(future, event=None):
     '''
     return await _kernel_trap('trap_future_wait', future, event)
 
-async def _sleep(clock, absolute):
+async def _sleep(clock):
     '''
     Sleep until the monotonic clock reaches the specified clock value.
     If clock is 0, forces the current task to yield to the next task (if any).
-    absolute is a boolean flag that indicates whether or not the clock
-    period is an absolute time or relative.
     '''
-    return await _kernel_trap('trap_sleep', clock, absolute)
+    return await _kernel_trap('trap_sleep', clock)
 
 async def _spawn(coro):
     '''

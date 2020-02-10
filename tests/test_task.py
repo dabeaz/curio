@@ -46,6 +46,23 @@ def test_task_group(kernel):
 
     kernel.run(main())
 
+
+def test_task_group_daemon(kernel):
+    async def child(x, y):
+        return x + y
+
+    async def main():
+        async with TaskGroup(wait=all) as g:
+            t1 = await g.spawn(child, 1, 1)
+            t2 = await g.spawn(child, 2, 2, daemon=True)
+            t3 = await g.spawn(child, 3, "3", daemon=True)
+
+        assert t1.result == 2
+        assert g.results == [2]
+
+
+    kernel.run(main())
+
 def test_task_group_existing(kernel):
     evt = Event()
     async def child(x, y):

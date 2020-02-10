@@ -41,17 +41,6 @@ def test_sleep(kernel):
     elapsed = end - start
     assert elapsed > 0.5
 
-def test_wakeat(kernel):
-    async def main():
-        clock = await kernel_clock()
-        newclock = await wake_at(clock+0.5)
-        assert (newclock - clock) >= 0.5
-
-    start = time.time()
-    kernel.run(main)
-    end = time.time()
-    assert (end - start) > 0.5
-
 
 def test_sleep_cancel(kernel):
     cancelled = False
@@ -90,44 +79,6 @@ def test_sleep_timeout(kernel):
     kernel.run(main)
     assert cancelled
 
-def test_sleep_timeout_absolute(kernel):
-    cancelled = False
-
-    async def sleeper():
-        nonlocal cancelled
-        try:
-            await timeout_at((await kernel_clock()) + 0.1, sleep, 1)
-            assert False
-        except TaskTimeout:
-            cancelled = True
-
-    async def main():
-        task = await spawn(sleeper)
-        await task.join()
-
-    kernel.run(main)
-    assert cancelled
-
-
-def test_sleep_timeout_absolute_context(kernel):
-    cancelled = False
-
-    async def sleeper():
-        nonlocal cancelled
-        try:
-            async with timeout_at((await kernel_clock()) + 0.1):
-                await sleep(1)
-            assert False
-        except TaskTimeout:
-            cancelled = True
-
-    async def main():
-        task = await spawn(sleeper)
-        await task.join()
-
-    kernel.run(main)
-    assert cancelled
-
 def test_sleep_ignore_timeout(kernel):
     async def sleeper():
         cancelled = False
@@ -142,28 +93,6 @@ def test_sleep_ignore_timeout(kernel):
         if s.result is None:
             cancelled = True
 
-        assert cancelled
-
-    async def main():
-        task = await spawn(sleeper)
-        await task.join()
-
-    kernel.run(main)
-
-def test_sleep_ignore_timeout_absolute(kernel):
-    async def sleeper():
-        cancelled = False
-        if await ignore_at((await kernel_clock()) + 0.1, sleep(1)) is None:
-            cancelled = True
-
-        assert cancelled
-
-        cancelled = False
-        async with ignore_at((await kernel_clock()) + 0.1) as s:
-            await sleep(1)
-
-        if s.result is None:
-            cancelled = True
         assert cancelled
 
     async def main():

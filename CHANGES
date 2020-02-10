@@ -12,6 +12,19 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+02/10/2020 Removed absolute time-related functions wake_at(), timeout_at(),
+           and ignore_at().  This kind of functionality (if needed) can
+           be reimplemented using the other sleep/timeout functions. 
+
+02/10/2020 Added daemon flag to TaskGroup.spawn().  This can be used
+           to create a disregarded task that is ignored for the
+           purpose of reporting results, but which is cancelled when
+           the TaskGroup goes away. 
+
+02/10/2020 Added spawn_thread() method to TaskGroup.  Can be used
+           to create an AsyncThread that's attached to the group.
+           AsyncThreads follow the same semantics as tasks.
+         
 02/09/2020 Removed schedule() function. Use sleep(0). 
 
 02/07/2020 Removed all support for signal handling.  Signal handling,

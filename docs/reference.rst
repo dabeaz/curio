@@ -111,7 +111,7 @@ with the following methods and attributes:
    * - ``await t.join()``
      - Wait for the task to terminate and return its result.
        Raises :exc:`curio.TaskError` if the task failed with an
-       exception. This is a chained exception.  The ``__cause__`` attribute 
+       exception. The ``__cause__`` attribute 
        contains the actual exception raised by the task when it crashed.
    * - ``await t.wait()``
      - Waits for task to terminate, but returns no value. 
@@ -180,8 +180,11 @@ The following methods and attributes are supported on a ``TaskGroup`` instance `
    :widths: 40 60
    :header-rows: 0
 
-   * - ``await g.spawn(corofunc, *args)``
+   * - ``await g.spawn(corofunc, *args, daemon=False)``
      - Create a new task in the group. Returns a ``Task`` instance.
+       *daemon* specifies whether or not the result of the task is
+       disregarded.  Daemonic tasks are both ignored and cancelled by the ``join()``
+       method.
    * - ``await g.add_task(task)``
      - Add an already existing task to the group.
    * - ``await g.next_done()``
@@ -196,7 +199,7 @@ The following methods and attributes are supported on a ``TaskGroup`` instance `
        group are cancelled. If a ``TaskGroup`` is used as a
        context manager, the ``join()`` method is called on block exit.
    * - ``await g.cancel_remaining()``
-     - Cancel and remove all remaining tasks from the group.
+     - Cancel and remove all remaining non-daemonic tasks from the group.
    * - ``g.completed``
      - The first task that completed with a valid result after calling ``join()``.
    * - ``g.result``
@@ -207,13 +210,13 @@ The following methods and attributes are supported on a ``TaskGroup`` instance `
    * - ``g.results``
      - A list of all results collected by ``join()``, 
        ordered by task id. May raise an exception if any task
-       exited with an exception.  
+       exited with an exception. 
    * - ``g.exceptions``
      - A list of all exceptions collected by ``join()``.
    * - ``g.tasks``
-     - A list of all tasks managed by the group, ordered by task id.
+     - A list of all non-daemonic tasks managed by the group, ordered by task id.
        Does not include tasks where ``Task.join()`` or ``Task.cancel()``
-       was directly called.
+       has been directly called already.
 
 The preferred way to use a ``TaskGroup`` is as a context manager.  
 Here are a few common usage patterns::
@@ -259,6 +262,10 @@ tasks are cancelled and the exception is propagated.  For example::
         assert t2.terminated
         assert t3.terminated
 
+It is important to emphasize that no tasks placed in a task group survive past
+the ``join()`` operation or exit from a context manager.  This includes
+any daemonic tasks running in the background.
+
 Time
 ----
 
@@ -269,12 +276,6 @@ are provided:
 
    Sleep for a specified number of seconds.  If the number of seconds is 0, 
    execution switches to the next ready task (if any). Returns the current clock value.
-
-.. asyncfunction:: wake_at(clock)
-
-   Sleep until the monotonic clock reaches the given absolute clock
-   value.  Returns the value of the monotonic clock at the time the
-   task awakes.  
 
 .. asyncfunction:: clock()
 
@@ -287,17 +288,12 @@ Any blocking operation can be cancelled by a timeout.
 
 .. asyncfunction:: timeout_after(seconds, corofunc=None, *args)
 
-   Execute ``corofunc(*args)`` and return its result. If no result is returned
-   before *seconds* have elapsed, a :py:exc:`curio.TaskTimeout`
-   exception is raised.  If *corofunc* is ``None``, the function 
-   returns an asynchronous context manager that applies a timeout
-   to a block of statements.
-
-.. asyncfunction:: timeout_at(deadline, corofunc=None, *args)
-
-   The same as :func:`timeout_after` except that the deadline time is
-   given as an absolute clock time.  Use the :func:`clock` function to
-   get a base time for computing a deadline.
+   Execute ``corofunc(*args)`` and return its result. If no result is
+   returned before *seconds* have elapsed, a
+   :py:exc:`curio.TaskTimeout` exception is raised on the current
+   blocking operation.  If *corofunc* is ``None``, the function
+   returns an asynchronous context manager that applies a timeout to a
+   block of statements.
 
 Every call to ``timeout_after()`` must have a matching exception handler
 to catch the resulting timeout. For example::
@@ -334,11 +330,11 @@ produced it.  Consider this subtle example::
 
 If you run this, you will see output of "Outer timeout" from the
 exception handler at (b). This is because the outer timeout is the one
-that expired.  The exception handler at (a) does not match.  At that
+that expired.  The exception handler at (a) does not match (at that
 point, the exception being reported is
-:py:exc:`curio.TimeoutCancellationError`.  This exception indicates
+:py:exc:`curio.TimeoutCancellationError` which indicates
 that a timeout/cancellation has occurred somewhere, but that it is NOT
-due to the inner-most timeout.
+due to the inner-most timeout).
 
 If a nested ``timeout_after()`` is used without a matching except
 clause, a timeout is reported as a
@@ -358,11 +354,6 @@ functions:
    context manager object has an ``expired`` attribute set to ``True`` if
    time expired.
 
-.. asyncfunction:: ignore_at(deadline, corofunc=None, *args)
-
-   The same as :func:`ignore_after` except that the deadline time is
-   given as an absolute clock time. 
-
 Here are some examples::
 
     result = await ignore_after(5, coro, args)
@@ -379,14 +370,14 @@ Here are some examples::
         # Timeout occurred
         ...
 
-The ``ignore_*`` functions are just a convenience layer to simplify exception
+The ``ignore_after()`` function is just a convenience layer to simplify exception
 handling. All of the timeout-related functions can be composed and layered
 together in any configuration and it should still work.
 
 Cancellation Control
 --------------------
 
-Sometimes it is necessary to disable cancellation on critical operations. The
+Sometimes it is necessary to disable or control cancellation on critical operations. The
 following functions can control this:
 
 .. asyncfunction:: disable_cancellation(corofunc=None, *args)
@@ -445,9 +436,8 @@ Synchronization Primitives
 .. currentmodule:: None
 
 The following synchronization primitives are available. Their behavior
-is identical to their equivalents in the :mod:`threading` module.  None
-of these primitives are safe to use with threads created by the
-built-in :mod:`threading` module. 
+is identical to their equivalents in the :mod:`threading` module.  However, none
+of these primitives are safe to use with threads.
 
 .. class:: Event()
 
@@ -482,9 +472,9 @@ inter-task coordination.
 
 .. class:: Semaphore(value=1)
 
-   Create a semaphore instance.  Semaphores are based on a counter.  ``acquire()`` and ``release()``
-   operations decrement and increment the counter respectively.  If the counter is 0, 
-   ``acquire()`` operations block until the value is incremented by another task.  The ``value`` 
+   Semaphores are based on a counter.  ``acquire()`` and ``release()``
+   decrement and increment the counter respectively.  If the counter is 0, 
+   ``acquire()`` blocks until the value is incremented by another task.  The ``value`` 
    attribute of a semaphore is a read-only property holding the current value of the internal 
    counter.
 
@@ -511,7 +501,6 @@ The preferred way to use a Lock is as an asynchronous context manager. For examp
             print("Have the lock")
             ...
 
-The following :class:`Condition` class is used to implement inter-task signaling:
 
 .. class:: Condition(lock=None)
 
@@ -542,13 +531,12 @@ An instance ``cv`` of :class:`Condition`  supports the following methods:
      - Notify all waiting tasks.
 
 Proper use of a condition variable is tricky. The following example shows how to implement
-producer-consumer synchronization::
+producer-consumer synchronization on top of a ``collections.deque`` object::
 
     import curio
     from collections import deque
 
-    items = deque()
-    async def consumer(cond):
+    async def consumer(items, cond):
         while True:
             async with cond:
                 while not items:         # (a) 
@@ -556,7 +544,7 @@ producer-consumer synchronization::
                 item = items.popleft()
             print('Got', item)
 
-     async def producer(cond):
+     async def producer(items, cond):
          for n in range(10):
               async with cond:
                   items.append(n)
@@ -564,9 +552,10 @@ producer-consumer synchronization::
               await curio.sleep(1)
 
      async def main():
+         items = deque()
          cond = curio.Condition()
-         await curio.spawn(producer(cond))
-         await curio.spawn(consumer(cond))
+         await curio.spawn(producer, items, cond)
+         await curio.spawn(consumer, items, cond)
 
      curio.run(main())
 
@@ -648,14 +637,14 @@ The following variants of the basic :class:`Queue` class are also provided:
 
 .. class:: LifoQueue(maxsize=0)
 
-   A queue with "Last In First Out" retrieving policy. In other words, a stack.
+   A queue with "Last In First Out" retrieval policy. In other words, a stack.
 
 
 Universal Synchronizaton
 ------------------------
 
 Sometimes it is necessary to synchronize with threads and foreign event loops.
-For this, Curio provides the following queue and event classes.
+For this, use the following queue and event classes.
 
 .. class:: UniversalQueue(maxsize=0, withfd=False)
 
@@ -1666,6 +1655,8 @@ may raise a cancellation exception.
      - Get a reference to the running ``Kernel`` object. Returns immediately.
    * - ``await _get_current()``
      - Get a reference to the currently running ``Task`` instance. Returns immediately.
+   * - ``await _sleep(seconds)``
+     - Sleep for a given number of seconds.
    * - ``await _set_timeout(seconds)``
      - Set a timeout in the currently running task. Returns immediately
        with the previous timeout (if any)

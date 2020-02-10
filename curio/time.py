@@ -3,8 +3,7 @@
 # Functionality related to time handling including timeouts and sleeping
 
 __all__ = [
-    'clock', 'sleep', 'wake_at', 'timeout_after', 'ignore_after',
-    'timeout_at', 'ignore_at'
+    'clock', 'sleep', 'timeout_after', 'ignore_after',
     ]
 
 # -- Standard library
@@ -32,15 +31,7 @@ async def sleep(seconds):
     makes a task immediately switch to the next ready task (if any).
     Returns the value of the kernel clock when awakened.
     '''
-    return await _sleep(seconds, False)
-
-async def wake_at(clock):
-    '''
-    Sleep until the kernel clock reaches the specified value of clock.
-    Returns the value of the kernel clock when awakened.
-    '''
-    return await _sleep(clock, True)
-
+    return await _sleep(seconds)
 
 class _TimeoutAfter(object):
     '''
@@ -52,9 +43,8 @@ class _TimeoutAfter(object):
             ...
     '''
 
-    def __init__(self, clock, absolute, ignore=False, timeout_result=None):
+    def __init__(self, clock, ignore=False, timeout_result=None):
         self._clock = clock
-        self._absolute = absolute
         self._ignore = ignore
         self._timeout_result = timeout_result
         self.expired = False
@@ -62,9 +52,9 @@ class _TimeoutAfter(object):
 
     async def __aenter__(self):
         task = await current_task()
-        if not self._absolute and self._clock:
+        # Clock adjusted to absolute time
+        if self._clock is not None:
             self._clock += await _clock()
-            self._absolute = False
         self._deadlines = task._deadlines
         self._deadlines.append(self._clock)
         self._prior = await _set_timeout(self._clock)
@@ -142,22 +132,11 @@ class _TimeoutAfter(object):
     def __exit__(self, *args):
         return thread.AWAIT(self.__aexit__(*args))
 
-async def _timeout_after_func(clock, absolute, coro, args, 
+async def _timeout_after_func(clock, coro, args, 
                               ignore=False, timeout_result=None):
     coro = meta.instantiate_coroutine(coro, *args)
-    async with _TimeoutAfter(clock, absolute, ignore=ignore, timeout_result=timeout_result):
+    async with _TimeoutAfter(clock, ignore=ignore, timeout_result=timeout_result):
         return await coro
-
-def timeout_at(clock, coro=None, *args):
-    '''
-    Raise a TaskTimeout exception in the calling task after the clock
-    reaches the specified value. Usage is the same as for timeout_after().
-    '''
-    if coro is None:
-        return _TimeoutAfter(clock, True)
-    else:
-        return _timeout_after_func(clock, True, coro, args)
-
 
 def timeout_after(seconds, coro=None, *args):
     '''
@@ -176,21 +155,9 @@ def timeout_after(seconds, coro=None, *args):
              ...
     '''
     if coro is None:
-        return _TimeoutAfter(seconds, False)
+        return _TimeoutAfter(seconds)
     else:
-        return _timeout_after_func(seconds, False, coro, args)
-
-
-def ignore_at(clock, coro=None, *args, timeout_result=None):
-    '''
-    Stop the enclosed task or block of code at an absolute
-    clock value. Same usage as ignore_after().
-    '''
-    if coro is None:
-        return _TimeoutAfter(clock, True, ignore=True, timeout_result=timeout_result)
-    else:
-        return _timeout_after_func(clock, True, coro, args, ignore=True, timeout_result=timeout_result)
-
+        return _timeout_after_func(seconds, coro, args)
 
 def ignore_after(seconds, coro=None, *args, timeout_result=None):
     '''
@@ -221,8 +188,8 @@ def ignore_after(seconds, coro=None, *args, timeout_result=None):
     the timeout_result keyword argument.
     '''
     if coro is None:
-        return _TimeoutAfter(seconds, False, ignore=True, timeout_result=timeout_result)
+        return _TimeoutAfter(seconds, ignore=True, timeout_result=timeout_result)
     else:
-        return _timeout_after_func(seconds, False, coro, args, ignore=True, timeout_result=timeout_result)
+        return _timeout_after_func(seconds, coro, args, ignore=True, timeout_result=timeout_result)
 
 from . import thread

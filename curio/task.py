@@ -377,6 +377,7 @@ class TaskGroup(object):
     def __init__(self, tasks=(), *, wait=all):
         self._running = set()        # All running tasks
         self._finished = deque()     # All finished tasks
+        self._daemonic = set()       # All running daemon tasks
         self._tasks = set()          # Set of all tasks tracked by the group
         self._joined = False
         self._wait = wait            # Wait policy 
@@ -426,9 +427,12 @@ class TaskGroup(object):
         
     # Triggered on task completion. 
     async def _task_done(self, task):
-        self._running.discard(task)
-        self._finished.append(task)
-        await self._sema.release()
+        if task.daemon:
+            self._daemonic.discard(task)
+        else:
+            self._running.discard(task)
+            self._finished.append(task)
+            await self._sema.release()
 
     # Discards a task from the TaskGroup.  Called implicitly if
     # if a task is explicitly joined while under supervision.
@@ -453,30 +457,33 @@ class TaskGroup(object):
             raise RuntimeError("TaskGroup already joined")
 
         task.taskgroup = self
-        self._tasks.add(task)
+        if not task.daemon:
+            self._tasks.add(task)
         if task.terminated:
             await self._task_done(task)
+        elif task.daemon:
+            self._daemonic.add(task)
         else:
             self._running.add(task)
 
-    async def spawn(self, coro, *args):
+    async def spawn(self, coro, *args, daemon=False):
         '''
         Spawn a new task into the task group.
         '''
         if self._joined:
             raise RuntimeError("TaskGroup already joined")
-        task = await spawn(coro, *args)
+        task = await spawn(coro, *args, daemon=daemon)
         await self.add_task(task)
         return task
 
-    async def spawn_thread(self, func, *args):
+    async def spawn_thread(self, func, *args, daemon=False):
         '''
         Spawn a new async thread into a task group
         '''
         from . import thread
         if self._joined:
             raise RuntimeError("TaskGroup already joined")
-        thr = await thread.spawn_thread(func, *args)
+        thr = await thread.spawn_thread(func, *args, daemon=daemon)
         await self.add_task(thr)
         return thr
 
@@ -511,7 +518,7 @@ class TaskGroup(object):
 
     async def cancel_remaining(self):
         '''
-        Cancel all remaining running tasks. Tasks are removed
+        Cancel all remaining non-daemonic tasks. Tasks are removed
         from the task group when explicitly cancelled.
         '''
         running = list(self._running)
@@ -556,6 +563,9 @@ class TaskGroup(object):
         finally:
             while self._running:
                 task = self._running.pop()
+                await task.cancel()
+            while self._daemonic:
+                task = self._daemonic.pop()
                 await task.cancel()
             self._joined = True
         return
