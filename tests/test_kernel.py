@@ -282,7 +282,7 @@ def test_task_cancel_join(kernel):
 
     async def main():
         task = await spawn(child)
-        await schedule()
+        await sleep(0)
         await task.cancel()
 
         # Try joining with a cancelled task. Should raise a TaskError

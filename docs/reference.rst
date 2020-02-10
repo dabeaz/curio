@@ -26,16 +26,16 @@ executed using ``run()``::
 
 When executing, a coroutine is encapsulated by a "Task."  
 
-The Execution Kernel
---------------------
+Basic Execution
+---------------
 
-The following function runs a coroutine:
+The following function runs an initial coroutine:
 
 .. function:: run(corofunc, *args, debug=None, selector=None, with_monitor=False, taskcls=Task)
 
    Run *corofunc* and return its result.  *args* are the arguments
    provided to *corofunc*.  *with_monitor* enables the task monitor.
-   *selector* is a selector from the :mod:`selectors
+   *selector* is an optional selector from the :mod:`selectors
    <python:selectors>` standard library. *debug* is a list of
    debugging features (see the section on debugging).  *taskcls* is
    the class used to encapsulate coroutines.  If ``run()`` is called
@@ -43,25 +43,25 @@ The following function runs a coroutine:
 
 If you are going to repeatedly execute coroutines one after the other, it
 is more efficient to create a ``Kernel`` instance and submit
-them using its ``run()`` method.
+them using the ``run()`` method.
 
 .. class:: Kernel(selector=None, debug=None, taskcls=Task):
 
-   Create runtime kernel. The arguments are the same
+   Create a runtime kernel. The arguments are the same
    as described above for :func:`run()`.
 
 There is only one method that may be used on a :class:`Kernel` instance.
 
 .. method:: Kernel.run(corofunc=None, *args, shutdown=False)
 
-   Run *corofunc* and return its reself.
+   Run *corofunc* and return its result.
    *args* are the arguments given to *corofunc*.  If
    *shutdown* is ``True``, the kernel cancels all remaining tasks
    and performs a clean shutdown upon return. Calling this method with *corofunc*
    set to ``None`` executes a single scheduling cycle of background tasks 
    before returning immediately. Raises a
-   ``RuntimeError`` called on an already running kernel or if an attempt is
-   made to run more than one kernel in a thread.
+   ``RuntimeError`` if called on an already running kernel or if an attempt is
+   made to run more than one kernel in the same thread.
 
 A kernel is commonly used as a context manager. For example::
 
@@ -87,7 +87,7 @@ coroutines (e.g., spawning tasks, waiting for timeouts, etc.).
 Tasks
 -----
 
-The following functions manage the execution of tasks.
+The following functions manage the execution of concurrent tasks.
 
 .. asyncfunction:: spawn(corofunc, *args, daemon=False)
 
@@ -100,10 +100,6 @@ The following functions manage the execution of tasks.
 .. asyncfunction:: current_task()
 
    Returns the :class:`Task` instance corresponding to the caller.  
-
-.. asyncfunction:: schedule()
-
-   Immediately switch to the next ready task.  
 
 :func:`spawn` and :func:`current_task` return a :class:`Task` instance ``t``
 with the following methods and attributes:
@@ -122,7 +118,7 @@ with the following methods and attributes:
 
    * - ``await t.cancel(*, blocking=True, exc=TaskCancelled)``
      - Cancels the task by raising a :exc:`curio.TaskCancelled` exception
-       (or the exception specified by *exc*) at its next blocking operation.  If ``blocking=True`` (the
+       (or the exception specified by *exc*). If ``blocking=True`` (the
        default), waits for the task to actually terminate.  A task may
        only be cancelled once.  If invoked more than once, the second
        request waits until the task is cancelled from the first request.
@@ -134,7 +130,7 @@ with the following methods and attributes:
    * - ``t.traceback()``
      -  Creates a stack traceback string.  Useful for debugging.
    * - ``t.where()``
-     - Return a (filename, lineno) tuple where the task is executing. Useful for debugging.
+     - Return (filename, lineno) where the task is executing.
    * - ``t.id``
      - The task's integer id. Monotonically increases.
    * - ``t.coro``
@@ -155,12 +151,6 @@ with the following methods and attributes:
      - A boolean flag that indicates whether or not the task was cancelled.
    * - ``t.terminated``
      - A boolean flag that indicates whether or not the task has terminated.
-   * - ``t.cancel_pending``
-     - An instance of a pending cancellation exception. Raised on the next blocking operation.
-   * - ``t.allow_cancel``
-     - A boolean flag that indicates whether or not cancellation exceptions can be delivered.
-       This is better controlled using the ``disable_cancellation()`` function as opposed
-       to being set directly.
 
 Task Groups
 -----------

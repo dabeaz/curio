@@ -3,7 +3,7 @@
 # Task class and task related functions such as spawning and cancellation.
 
 __all__ = [
-    'Task', 'TaskGroup', 'current_task', 'spawn', 'schedule',
+    'Task', 'TaskGroup', 'current_task', 'spawn', 
     'disable_cancellation', 'check_cancellation', 'set_cancellation'
 ]
 
@@ -469,6 +469,17 @@ class TaskGroup(object):
         await self.add_task(task)
         return task
 
+    async def spawn_thread(self, func, *args):
+        '''
+        Spawn a new async thread into a task group
+        '''
+        from . import thread
+        if self._joined:
+            raise RuntimeError("TaskGroup already joined")
+        thr = await thread.spawn_thread(func, *args)
+        await self.add_task(thr)
+        return thr
+
     async def next_done(self):
         '''
         Wait for the next task to finish and return it.  This removes it
@@ -596,7 +607,7 @@ async def current_task():
     '''
     return await _get_current()
 
-async def schedule():
+async def schedule2():
     '''
     Preempt the calling task.  Forces the scheduling of other tasks.
     '''

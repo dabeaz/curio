@@ -12,6 +12,8 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+02/09/2020 Removed schedule() function. Use sleep(0). 
+
 02/07/2020 Removed all support for signal handling.  Signal handling,
            by its very nature, is a tricky affair. For instance,
            signals can only be handled in the main execution thread

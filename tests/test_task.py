@@ -28,30 +28,6 @@ def test_cancel_noblock(kernel):
     kernel.run(main)
     assert child_exit
 
-def test_task_schedule(kernel):
-    n = 0
-    async def child():
-        nonlocal n
-        assert n == 1
-        n += 1
-        await schedule()
-        assert n == 3
-        n += 1
-        await schedule()
-
-    async def parent():
-        nonlocal n
-        t = await spawn(child)
-        assert n == 0
-        n += 1
-        await schedule()
-        assert n == 2
-        n += 1
-        await schedule()
-        assert n == 4
-
-    kernel.run(parent)
-
 def test_task_group(kernel):
     async def child(x, y):
         return x + y
