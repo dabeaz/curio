@@ -1,5 +1,5 @@
-Curio How-To
-============
+How-To
+======
 
 This document provides some recipes for common programming tasks.
 

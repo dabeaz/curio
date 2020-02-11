@@ -1,5 +1,5 @@
-Curio - A Tutorial Introduction
-===============================
+A Tutorial Introduction
+=======================
 
 Curio is a library for concurrent systems programming that uses
 coroutines and common programming abstractions such as threads,

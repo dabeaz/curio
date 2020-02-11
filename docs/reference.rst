@@ -1,5 +1,5 @@
-Curio Reference Manual
-======================
+Reference Manual
+================
 
 Coroutines
 ----------
