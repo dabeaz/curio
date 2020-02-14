@@ -15,6 +15,7 @@ __all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition' 
 # -- Standard library
 
 import threading
+from concurrent.futures import Future
 
 # -- Curio
 
@@ -23,7 +24,7 @@ from . import workers
 from .task import current_task
 from .meta import awaitable, iscoroutinefunction
 from . import thread
-
+from .traps import _future_wait
 
 class Event(object):
 
@@ -56,32 +57,37 @@ class UniversalEvent(object):
     An event that's safe to use from Curio and threads.
     '''
     def __init__(self):
-        self._evt = threading.Event()
+        self._fut = Future()
+        self._set = False
 
     def __repr__(self):
         res = super().__repr__()
-        extra = 'set' if self.is_set() else 'unset'
+        extra = 'set' if self._set else 'unset'
         return f'<{res[1:-1]} [{extra}]>'
         
     def is_set(self):
-        return self._evt.is_set()
+        return self._set
 
     def clear(self):
-        self._evt.clear()
+        self._fut = Future()
+        self._set = False
 
     def wait(self):
-        self._evt.wait()
+        self._fut.result()
 
     @awaitable(wait)
     async def wait(self):
-        await workers.block_in_thread(self._evt.wait)
+        if not self._set:
+            await _future_wait(self._fut)
 
     def set(self):
-        self._evt.set()
+        self._set = True
+        self._fut.set_result(True)
 
     @awaitable(set)
     async def set(self):
-        self._evt.set()
+        self._set = True
+        self._fut.set_result(True)
 
 # Base class for all synchronization primitives that operate as context managers.
 
