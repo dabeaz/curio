@@ -372,6 +372,70 @@ code.  You can flip the roles around as well::
 Note: Waiting on an event in a synchronous function should take place in a separate
 thread to avoid blocking the kernel loop.
 
+How do you catch signals?
+-------------------------
+
+In Python, signals can only be caught and processed in the main thread
+by a signal handler installed via the ``signal`` built-in module.  To
+communicate a signal to Curio, you can use a ``UniversalEvent`` as shown
+in the previous recipe.  For example::
+
+    from curio import UniversalEvent, run
+    import signal
+
+    # Set up signal handling   
+    sigint_evt = UniversalEvent()
+    
+    def handle_sigint(signo, frame):
+        sigint_evt.set()
+    
+    signal.signal(signal.SIGINT, handle_sigint)
+
+    # Wait for a single in Curio code
+    async def main():
+        print("Waiting for a signal")
+        await sigint_evt.wait()
+        print("Got it!")
+
+    run(main)
+
+Many of these features can be abstracted into classes if you wish. For
+example, here is a class (courtesy of Keith Dart)::
+
+    class SignalEvent(UniversalEvent):
+        def __init__(self, *signos):
+            super().__init__()
+            self._old = old = {}
+            for signo in signos:
+                orig = signal.signal(signo, self._handler)
+                old[signo] = orig
+
+        def _handler(self, signo, frame):
+            self.set()
+
+        def __del__(self):
+            while self._old:
+                signo, handler = self._old.popitem()
+                try:
+                    signal.signal(signo, handler)
+                except TypeError:  # spurious TypeError happens during shutdown.
+                    pass
+        
+    sigint_evt = SignalEvent(signal.SIGINT)
+
+    async def main():
+        print("Waiting for a signal")
+        await sigint_evt.wait()
+        print("Got it!")
+
+    run(main)
+
+In general, signal handling can be an extremely complicated affair
+that interacts strangely with the rest of the environment.  Because of
+this, Curio chooses to stay out of the way entirely.  Instead, you can
+use ``UniversalEvent`` or ``UniversalQueue`` to communicate from a
+signal handler to code running in Curio.
+
 How do you run external commands in a subprocess?
 -------------------------------------------------
 
