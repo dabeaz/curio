@@ -7,6 +7,7 @@ from curio import *
 import pytest
 import threading
 import time
+import asyncio
 
 # ---- Synchronization primitives
 
@@ -766,6 +767,83 @@ class TestUniversalEvent:
             True,
             False
         ]
+
+    def test_uevent_get_asyncio_set(self, kernel):
+        results = []
+        async def event_setter(evt, seconds):
+            results.append('sleep')
+            await asyncio.sleep(seconds)
+            results.append('event_set')
+            await evt.set()
+
+        async def event_waiter(evt):
+            results.append('wait_start')
+            results.append(evt.is_set())
+            await evt.wait()
+            results.append('wait_done')
+            results.append(evt.is_set())
+            evt.clear()
+            results.append(evt.is_set())
+
+        async def main():
+            evt = UniversalEvent()
+            t1 = await spawn(event_waiter, evt)
+            t2 = threading.Thread(target=asyncio.run, args=[event_setter(evt, 1)])
+            t2.start()
+            await t1.join()
+            await run_in_thread(t2.join)
+
+        kernel.run(main())
+        assert results == [
+            'wait_start',
+            False,
+            'sleep',
+            'event_set',
+            'wait_done',
+            True,
+            False
+        ]
+
+
+    def test_uevent_get_asyncio_wait(self, kernel):
+        results = []
+        async def event_setter(evt, seconds):
+            results.append('sleep')
+            await sleep(seconds)
+            results.append('event_set')
+            await evt.set()
+
+        async def event_waiter(evt):
+            results.append('wait_start')
+            results.append(evt.is_set())
+            await evt.wait()
+            results.append('wait_done')
+            results.append(evt.is_set())
+            evt.clear()
+            results.append(evt.is_set())
+
+        async def main():
+            evt = UniversalEvent()
+            t1 = threading.Thread(target=asyncio.run, args=[event_waiter(evt)])
+            t1.start()
+            await sleep(0.1)
+            t2 = await spawn(event_setter, evt, 1)
+            await run_in_thread(t1.join)
+            await t2.join()
+
+        kernel.run(main())
+        assert results == [
+            'wait_start',
+            False,
+            'sleep',
+            'event_set',
+            'wait_done',
+            True,
+            False
+        ]
+
+
+
 
 def test_repr():
     # For test coverage

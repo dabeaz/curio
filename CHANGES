@@ -12,6 +12,10 @@ features are being removed or refactored a bit.  If a feature you are
 using gets removed and you'd like to request its return, please submit
 a bug report!  - Dave
 
+02/14/2020 Modified UniversalEvent to also support asyncio for completness
+           with UniversalQueue.  This requires Curio and asyncio to be
+           running in separate threads.
+
 02/10/2020 Removed absolute time-related functions wake_at(), timeout_at(),
            and ignore_at().  This kind of functionality (if needed) can
            be reimplemented using the other sleep/timeout functions. 

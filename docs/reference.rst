@@ -643,44 +643,50 @@ The following variants of the basic :class:`Queue` class are also provided:
 Universal Synchronizaton
 ------------------------
 
-Sometimes it is necessary to synchronize with threads and foreign event loops.
+Sometimes it is necessary to synchronize Curio with threads and foreign event loops.
 For this, use the following queue and event classes.
 
 .. class:: UniversalQueue(maxsize=0, withfd=False)
 
-   A queue that can be safely used from both Curio tasks and threads.  
-   The same programming API is used for both, but ``await`` is
-   required for asynchronous operations.  When the queue is no longer
-   in use, the ``shutdown()`` method should be called to terminate
-   an internal helper-task.   The ``withfd`` option specifies whether
-   or not the queue should optionally set up an I/O loopback that
-   allows it to be polled by a foreign event loop.  When ``withfd`` is
-   ``True``, adding something to the queue writes a byte of data to the
-   I/O loopback.  
+   A queue that can be simultaneously used from Curio tasks, threads,
+   and ``asyncio``. The same programming API is used in all
+   environments, but ``await`` is required for asynchronous
+   operations.  If used to coordinate Curio and ``asyncio``, they must
+   be executing in separate threads.  The ``withfd`` option specifies
+   whether or not the queue should optionally set up an I/O loopback
+   that allows it to be polled by a foreign event loop.  When
+   ``withfd`` is ``True``, adding something to the queue writes a
+   single byte of data to the I/O loopback.  Removing an item with ``get()``
+   reads this byte.
 
 .. class:: UniversalEvent()
 
-   An event object that can be used in both Curio tasks and threads.
-   The same programming interface is used in both. Asynchronous operations
-   must be prefaced by ``await``.
+   An event object that can be used from Curio tasks, threads, and
+   ``asyncio``. The same programming interface is used in both. 
+   Asynchronous operations must be prefaced by ``await``.  If used
+   to coordinate Curio and ``asyncio``, they must be executing in
+   separate threads.
 
-Here is an example of a producer-consumer problem with a ``UniversalQueue``::
+Here is an example of a producer-consumer problem with a ``UniversalQueue``
+involving Curio, threads, and ``asyncio`` all running at once::
 
     from curio import run, UniversalQueue, spawn, run_in_thread
 
     import time
     import threading
+    import asyncio
 
     # An async task
-    async def consumer(q):
-        print('Consumer starting')
+    async def consumer(name, q):
+        print(f'{name} consumer starting')
         while True:
             item = await q.get()
             if item is None:
                 break
-            print('Got:', item)
+            print(f'{name} got: {item}')
             await q.task_done()
-        print('Consumer done')
+        print(f'{name} consumer done')
+        await q.put(None)
 
     # A threaded producer
     def producer(q):
@@ -692,17 +698,31 @@ Here is an example of a producer-consumer problem with a ``UniversalQueue``::
 
     async def main():
         q = UniversalQueue()
-        t1 = await spawn(consumer(q))
-        t2 = threading.Thread(target=producer, args=(q,))
+        # A Curio consumer
+        t1 = await spawn(consumer('curio', q))
+
+        # An asyncio consumer
+        t2 = threading.Thread(target=asyncio.run, args=[consumer('asyncio', q)])
         t2.start()
-        await run_in_thread(t2.join)
+
+        # A threaded producer
+        t3 = threading.Thread(target=producer, args=[q])
+        t3.start()
+        await run_in_thread(t3.join)
+
+        # Shutdown with a sentinel
         await q.put(None)
         await t1.join()
-        await q.shutdown()
+        await run_in_thread(t2.join)
 
     run(main())
 
-In this code, the ``consumer()`` is a Curio task and ``producer()`` is a thread.
+In this code, the ``consumer()`` coroutine is used simultaneously in
+Curio and ``asyncio``. ``producer()`` is an ordinary thread.
+
+When in doubt, queues and events are the preferred mechanism of
+coordinating Curio with foreign environments.  Higher-level
+abstractions can often be built from these.
 
 Blocking Operations and External Work
 -------------------------------------

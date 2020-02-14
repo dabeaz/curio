@@ -16,13 +16,14 @@ __all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition' 
 
 import threading
 from concurrent.futures import Future
+import asyncio
 
 # -- Curio
 
 from .sched import SchedFIFO, SchedBarrier
 from . import workers
 from .task import current_task
-from .meta import awaitable, iscoroutinefunction
+from .meta import awaitable, asyncioable, iscoroutinefunction
 from . import thread
 from .traps import _future_wait
 
@@ -80,11 +81,21 @@ class UniversalEvent(object):
         if not self._set:
             await _future_wait(self._fut)
 
+    @asyncioable(wait)
+    async def wait(self):
+        if not self._set:
+            await asyncio.wrap_future(self._fut)
+
     def set(self):
         self._set = True
         self._fut.set_result(True)
 
     @awaitable(set)
+    async def set(self):
+        self._set = True
+        self._fut.set_result(True)
+
+    @asyncioable(set)
     async def set(self):
         self._set = True
         self._fut.set_result(True)
