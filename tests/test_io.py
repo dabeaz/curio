@@ -901,3 +901,42 @@ def test_stream_bad_iter(kernel, portno):
     kernel.run(main())
 
     assert results == [ True ]
+
+def test_io_waiting(kernel):
+    async def handler(sock):
+        result = await sock.recvfrom(1000)
+
+    async def main():
+        from curio.traps import _io_waiting
+
+        sock = socket(AF_INET, SOCK_DGRAM)
+        async with sock:
+            t1 = await spawn(handler, sock)
+            await sleep(0.1)
+            r, w = await _io_waiting(sock)
+            assert t1 == r
+            assert w == None
+            await t1.cancel()
+
+        r,w = await _io_waiting(0)
+        assert (r, w) == (None, None)
+        
+    kernel.run(main())
+
+def test_io_unregister(kernel):
+    # This is purely a code coverage test
+    async def reader(sock):
+        from curio.traps import _read_wait
+        await _read_wait(sock.fileno())
+        
+    async def main():
+        from curio.traps import _write_wait
+        sock = socket(AF_INET, SOCK_DGRAM)
+        sock.bind(('', 26000))
+        t = await spawn(reader(sock))
+        await sleep(0.1)
+        await _write_wait(sock.fileno())
+        await t.cancel()
+        await sock.close()
+    kernel.run(main())
+    assert True

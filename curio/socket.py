@@ -64,7 +64,7 @@ async def create_connection(address, timeout=None, source_address=None):
     if err is not None:
         raise err
     else:
-        raise error("getaddrinfo returns an empty list")
+        raise OSError("getaddrinfo returns an empty list")
 
 @wraps(_socket.getaddrinfo)
 async def getaddrinfo(*args, **kwargs):

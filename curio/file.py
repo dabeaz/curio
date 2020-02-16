@@ -152,20 +152,7 @@ class AsyncFile(object):
         return getattr(self._file, name)
 
     # Compatibility with io.FileStream
-    async def readall(self):
-        chunks = []
-        maxread = 65536
-        while True:
-            try:
-                chunk = await self.read(maxread)
-            except CancelledError as e:
-                e.bytes_read = b''.join(chunks)
-                raise
-            if not chunk:
-                return b''.join(chunks)
-            chunks.append(chunk)
-            if len(chunk) == maxread:
-                maxread *= 2
+    readall = read
 
 def aopen(*args, **kwargs):
     '''

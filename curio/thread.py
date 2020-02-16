@@ -129,6 +129,7 @@ class AsyncThread(object):
         if self.taskgroup:
             await self.taskgroup._task_done(self)
             self.joined = True
+        await self._terminate_evt.set()
 
     def _func_runner(self):
         _locals.thread = self
@@ -143,7 +144,6 @@ class AsyncThread(object):
                 
         finally:
             self._request.set_result(None)
-            self._terminate_evt.set()
 
     async def start(self):
         if self.target is None:
@@ -169,7 +169,6 @@ class AsyncThread(object):
     async def join(self):
         await self.wait()
         self.joined = True
-
         if self.taskgroup:
             self.taskgroup._task_discard(self)
 

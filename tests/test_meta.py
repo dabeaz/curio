@@ -3,12 +3,33 @@ from curio import *
 from functools import partial
 import pytest
 import sys
+import inspect
 
 def test_iscoroutinefunc():
     async def spam(x, y):
         pass
 
     assert meta.iscoroutinefunction(partial(spam, 1))
+
+def test_instantiate_coroutine():
+    async def coro(x, y):
+        pass
+
+    def func(x, y):
+        pass
+
+    c = meta.instantiate_coroutine(coro(2,3))
+    assert inspect.iscoroutine(c)
+
+    d = meta.instantiate_coroutine(coro, 2, 3)
+    assert inspect.iscoroutine(d)
+
+    with pytest.raises(TypeError):
+        meta.instantiate_coroutine(func(2,3))
+
+    with pytest.raises(TypeError):
+        meta.instantiate_coroutine(func, 2, 3)
+
 
 def test_bad_awaitable():
     def spam(x, y):
@@ -85,3 +106,26 @@ if sys.version_info >= (3,7):
 
         kernel.run(main)
         assert results == ['coro', 'result', 'cleanup']
+
+
+    def test_missing_asynccontextmanager(kernel):
+        results = []
+        async def manager():
+             try:
+                 yield (await coro())
+             finally:
+                 await cleanup()
+
+        async def coro():
+            results.append('coro')
+            return 'result'
+
+        async def cleanup():
+            results.append('cleanup')
+
+        async def main():
+             async for x in manager():
+                  break
+
+        kernel.run(main)
+        assert results == ['coro']

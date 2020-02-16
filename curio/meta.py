@@ -190,12 +190,6 @@ def asyncioable(awaitablefunc):
         return wrapper
     return decorate
 
-def safe_generator(func):
-    '''
-    Deprecated. For backwards compatibility only.
-    '''
-    return func
-
 class finalize(object):
     '''
     Context manager that safely finalizes an asynchronous generator.

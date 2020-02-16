@@ -523,6 +523,29 @@ def test_uqueue_asyncio_prod(kernel):
 
     kernel.run(consumer())
 
+def test_uqueue_asyncio_consumer(kernel):
+    results = []
+    async def consumer(queue):
+        while True:
+            item = await queue.get()
+            await queue.task_done()
+            if item is None:
+                break
+            results.append(item)
+
+    async def producer(queue):
+        for n in range(10):
+            await queue.put(n)
+        await queue.put(None)
+        await queue.join()
+
+    queue = UniversalQueue(maxsize=2)
+    t1 = threading.Thread(target=asyncio.run, args=[consumer(queue)])
+    t1.start()
+    kernel.run(producer, queue)
+    t1.join()
+    assert results == list(range(10))
+
 def test_uqueue_withfd_corner(kernel):
     async def main():
         queue = UniversalQueue(withfd=True)

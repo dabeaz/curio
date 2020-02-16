@@ -2,14 +2,16 @@
 
 import pytest
 from curio import *
-from curio.thread import AWAIT, spawn_thread
+from curio.thread import AWAIT, spawn_thread, is_async_thread
 from curio.file import aopen
 import time
 import pytest
 
 
 def simple_func(x, y):
-    AWAIT(sleep(0.5))     # Execute a blocking operation
+    assert is_async_thread()
+    AWAIT(sleep(0.25))     # Execute a blocking operation
+    AWAIT(sleep, 0.25)     # Alternative
     return x + y
 
 async def simple_coro(x, y):
@@ -21,6 +23,8 @@ def test_good_result(kernel):
         t = await spawn_thread(simple_func, 2, 3)
         result = await t.join()
         assert result == 5
+        assert t.result == 5
+        assert t.exception is None
 
     kernel.run(main)
 
@@ -33,6 +37,17 @@ def test_bad_result(kernel):
         except TaskError as e:
             assert isinstance(e.__cause__, TypeError)
             assert True
+        else:
+            assert False
+
+        try:
+            result = await t.result
+            assert False
+        except TypeError as e:
+            assert True
+        else:
+            assert False
+
     kernel.run(main)
 
 def test_cancel_result(kernel):
@@ -194,6 +209,22 @@ def test_task_group_thread(kernel):
     kernel.run(main)
     assert results == [2, 4, 6]
 
+def test_task_group_spawn_thread(kernel):
+    def add(x, y):
+        return x + y
+
+    async def task():
+        async with TaskGroup(wait=all) as w:
+            await w.spawn_thread(add, 1, 1)
+            await w.spawn_thread(add, 2, 2)
+            t3 = await w.spawn_thread(add, 3, 3)
+            r3 = await t3.join()
+            assert r3 == 6
+
+        assert w.results == [2, 4]
+
+    kernel.run(task)
+
 @pytest.mark.skip
 def test_thread_context(kernel):
     results = []
@@ -210,5 +241,49 @@ def test_thread_context(kernel):
 
     kernel.run(main)
     assert results == [1, 5]
+
+def test_await_passthrough(kernel):
+    import time
+    def add(x, y):
+        AWAIT(time.sleep(0.1))
+        AWAIT(time.sleep, 0.1)
+        return x + y
+    async def main():
+        t = await spawn_thread(add, 2, 3)
+        await t.wait()
+        assert t.result == 5
+    kernel.run(main)
+
+def test_errors(kernel):
+    # spawn_thread used on a coroutine
+    async def main():
+        with pytest.raises(TypeError):
+            t = await spawn_thread(simple_coro, 2, 3)
+
+    kernel.run(main)
+
+    # AWAIT used on coroutine outside of async-thread
+    with pytest.raises(AsyncOnlyError):
+        AWAIT(simple_coro(2,3))
+
+    # Premature result
+    async def f():
+        t = await spawn_thread(simple_func, 2, 3)
+        assert t.state != 'TERMINATED'
+        with pytest.raises(RuntimeError):
+            r = t.result
+        with pytest.raises(RuntimeError):
+            e = t.exception
+
+    kernel.run(f)
+
+    # Launching a thread with no target
+    async def g():
+        from curio.thread import AsyncThread
+        t = AsyncThread()
+        with pytest.raises(RuntimeError):
+            await t.start()
+
+    kernel.run(g)
 
 

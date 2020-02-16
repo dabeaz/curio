@@ -19,6 +19,17 @@ def test_read(kernel):
     kernel.run(main())
 
 
+def test_readall(kernel):
+    async def main():
+        async with aopen(testinput, 'r') as f:
+            data = await f.readall()
+            assert f.closed == False
+
+        assert data == 'line 1\nline 2\nline 3\n'
+
+    kernel.run(main())
+
+
 def test_read1(kernel):
     async def main():
         async with aopen(testinput, 'rb') as f:

@@ -119,7 +119,6 @@ class Task(object):
         self.terminated = False       # Has the task actually Terminated?
         self.cancel_pending = None    # Deferred cancellation exception pending (if any)
         self.allow_cancel = True      # Can cancellation exceptions be delivered?
-        self.suspend_func = None      # Optional suspension callback (called when task suspends)
         self.taskgroup = None         # Containing task group (if any)
         self.joined = False           # Set if the task has actually been joined or result collected
 
@@ -258,18 +257,6 @@ class Task(object):
         Return a tuple (filename, lineno) where task is executing
         '''
         return _where(self)
-
-    def _switch(self, coro):
-        '''
-        Switch the underlying coroutine being executed by the task.
-        For wizards only--this is used to coordinate some of Curio's
-        coroutine-thread interaction.
-        '''
-        orig_coro = self._run_coro
-        self._run_coro = coro
-        self._send = coro.send
-        self._throw = coro.throw
-        return orig_coro
 
 class ContextTask(Task):
     '''
@@ -443,8 +430,6 @@ class TaskGroup(object):
             pass
         self._tasks.discard(task)
         task.taskgroup = None
-        if task == self.completed:
-            self.completed = None
 
     async def add_task(self, task):
         '''
@@ -616,12 +601,6 @@ async def current_task():
     Returns a reference to the current task
     '''
     return await _get_current()
-
-async def schedule2():
-    '''
-    Preempt the calling task.  Forces the scheduling of other tasks.
-    '''
-    await _sleep(0, False)
 
 async def spawn(corofunc, *args, daemon=False):
     '''

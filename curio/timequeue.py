@@ -79,8 +79,6 @@ class TimeQueue:
         '''
         Push a new item onto the time queue.  
         '''
-        if expires is None:
-            return
         # If the expiration time is closer than the current near deadline,
         # it gets pushed onto a heap in order to preserve order
         if expires <= self.near_deadline:
@@ -97,10 +95,11 @@ class TimeQueue:
         An iterator that returns all items that have expired up to a given deadline
         '''
         near = self.near
-        if deadline > self.far_min_deadline:
+        if deadline >= self.far_min_deadline:
+            self.near_deadline = deadline + self.cutoff
             self._far_to_near()
 
-        while near and near[0][0] < deadline:
+        while near and near[0][0] <= deadline:
             yield  heapq.heappop(near)
 
     def cancel(self, item, expires):

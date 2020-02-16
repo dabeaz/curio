@@ -351,6 +351,7 @@ class Kernel(object):
 
                 selector_modify(fileobj, mask | event,
                                 (task, wtask) if event == EVENT_READ else (rtask, task))
+                selector_getkey(fileobj)
             except KeyError:
                 selector_register(fileobj, event,
                                   (task, None) if event == EVENT_READ else (None, task))
@@ -632,6 +633,7 @@ class Kernel(object):
                 # Reschedule tasks with completed I/O
                 for key, mask in events:
                     rtask, wtask = key.data
+                    emask = key.events
                     intfd = isinstance(key.fileobj, int)
                     if mask & EVENT_READ:
                         # Discussion: If the associated fileobj is *not* a
@@ -649,20 +651,20 @@ class Kernel(object):
                         # leave the fd on the event loop.
                         rtask._last_io = None if intfd else (key.fileobj, EVENT_READ)
                         reschedule_task(rtask)
-                        mask &= ~EVENT_READ
+                        emask &= ~EVENT_READ
                         rtask = None
 
                     if mask & EVENT_WRITE:
                         wtask._last_io = None if intfd else (key.fileobj, EVENT_WRITE)
                         reschedule_task(wtask)
-                        mask &= ~EVENT_WRITE
+                        emask &= ~EVENT_WRITE
                         wtask = None
 
                     # Unregister the task if fileobj is not an integer fd (see
                     # note above).
                     if intfd:
-                        if mask:
-                            selector_modify(key.fileobj, mask, (rtask, wtask))
+                        if emask:
+                            selector_modify(key.fileobj, emask, (rtask, wtask))
                         else:
                             selector_unregister(key.fileobj)
 
@@ -752,13 +754,6 @@ class Kernel(object):
                             raise
 
                     # --- The active task has suspended
-
-                    # Some tricky task/thread interactions require knowing when
-                    # a coroutine has suspended. If suspend_func has been set, 
-                    # trigger it and clear.
-                    if active.suspend_func:
-                        active.suspend_func()
-                        active.suspend_func = None
 
                     # Unregister any prior I/O listening
                     if active._last_io:

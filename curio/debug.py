@@ -87,6 +87,9 @@ class traptrace(schedtrace):
         self.report = False
 
     def activate(self, kernel):
+        if self.traps is None:
+            self.traps = list(kernel._traps)
+
         for trapname in self.traps:
             @trap_patch(kernel, trapname)
             def trapfunc(*args, trap, trapname=trapname):
@@ -112,9 +115,6 @@ def _create_debuggers(debug):
     '''
     Create debugger objects.  Called by the kernel to instantiate the objects.
     '''
-    if debug is None or debug is False:
-        return []
-
     if debug is True:
         # Set a default set of debuggers
         debug = [ schedtrace ]
