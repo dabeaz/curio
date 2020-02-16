@@ -24,7 +24,6 @@ def test_readall(kernel):
         async with aopen(testinput, 'r') as f:
             data = await f.readall()
             assert f.closed == False
-
         assert data == 'line 1\nline 2\nline 3\n'
 
     kernel.run(main())

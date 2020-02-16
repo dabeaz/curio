@@ -904,12 +904,15 @@ def test_stream_bad_iter(kernel, portno):
 
 def test_io_waiting(kernel):
     async def handler(sock):
-        result = await sock.recvfrom(1000)
+        result = await sock.accept()
 
     async def main():
         from curio.traps import _io_waiting
 
-        sock = socket(AF_INET, SOCK_DGRAM)
+        sock = socket(AF_INET, SOCK_STREAM)
+        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
+        sock.bind(('',25000))
+        sock.listen(1)
         async with sock:
             t1 = await spawn(handler, sock)
             await sleep(0.1)

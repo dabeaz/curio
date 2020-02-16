@@ -587,7 +587,8 @@ def test_create_connection(kernel):
     async def main():
         async with TaskGroup() as g:
             await g.spawn(server, ('', 25000))
-            await g.spawn(client, ('', 25000), ('localhost', 25001))
+            await sleep(0.1)
+            await g.spawn(client, ('localhost', 25000), ('localhost', 25001))
         assert not any(g.exceptions)
  
     kernel.run(main)

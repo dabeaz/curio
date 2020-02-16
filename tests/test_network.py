@@ -326,10 +326,10 @@ def test_errors(kernel):
             await network.tcp_server('localhost', 25000, None, ssl=True)
 
 
-        with pytest.raises(OSError):
-            await network.tcp_server('localhost', 80, None)
+        if not sys.platform.startswith('win'):
+            with pytest.raises(OSError):
+                await network.tcp_server('localhost', 0, None)
 
-        if not sys.platform.startswith('win'): 
             with pytest.raises(OSError):
                 await network.unix_server('/tmp', None)
 
