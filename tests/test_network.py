@@ -328,7 +328,7 @@ def test_errors(kernel):
 
         if not sys.platform.startswith('win'):
             with pytest.raises(OSError):
-                await network.tcp_server('localhost', 0, None)
+                await network.tcp_server('localhost', 80, None)
 
             with pytest.raises(OSError):
                 await network.unix_server('/tmp', None)
