@@ -4,7 +4,7 @@
 # as a normal threaded application
 
 import threading
-from curio import run, spawn_thread, async_thread, AWAIT
+from curio import run, spawn_thread, AWAIT
 
 # This is a normal synchronous function.  It is used in both synchronous
 # and asynchronous code.

@@ -16,7 +16,4 @@ async def main(addr):
 
 
 if __name__ == '__main__':
-    try:
-        curio.run(main, ('', 26000))
-    except KeyboardInterrupt:
-        pass
+    curio.run(main, ('', 26000))

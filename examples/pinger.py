@@ -11,7 +11,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    try:
-        curio.run(main)
-    except KeyboardInterrupt:
-        pass
+    curio.run(main)

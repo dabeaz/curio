@@ -19,7 +19,4 @@ async def main(addr):
 
 
 if __name__ == '__main__':
-    try:
-        curio.run(main, ('localhost', 26000))
-    except KeyboardInterrupt:
-        pass
+    curio.run(main, ('localhost', 26000))

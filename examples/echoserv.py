@@ -28,7 +28,4 @@ async def echo_client(client):
 
 
 if __name__ == '__main__':
-    try:
-        run(echo_server, ('', 25000))
-    except KeyboardInterrupt:
-        pass
+    run(echo_server, ('', 25000))

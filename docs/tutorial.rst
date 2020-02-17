@@ -409,7 +409,8 @@ Combining sockets and queues, you can implement a small chat server.  For exampl
     subscribers = set()
 
     async def dispatcher():
-        async for msg in messages:
+        while True:
+            msg = await messages.get()
             for q in subscribers:
                 await q.put(msg)
 
@@ -421,7 +422,8 @@ Combining sockets and queues, you can implement a small chat server.  For exampl
         queue = Queue()
         try:
             subscribers.add(queue)
-            async for name, msg in queue:
+            while True:
+                name, msg = await queue.get()
                 await client_stream.write(name + b':' + msg)
         finally:
             subscribers.discard(queue)

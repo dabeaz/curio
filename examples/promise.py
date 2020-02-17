@@ -1,3 +1,6 @@
+# Example of implementing a Promise class using
+# built-in synchronization primitives.
+
 from curio import Event
 
 class Promise:

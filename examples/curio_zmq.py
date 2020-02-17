@@ -1,6 +1,11 @@
 # curio_zmq.py
 #
-# Curio support for ZeroMQ.   Requires pyzmq.
+# Curio support for ZeroMQ.   Requires pyzmq.  The following test programs
+# can be used to try it out:
+#
+#    zmq_puller.py/zmq_pusher.py    - Push/pull socket example
+#    zmq_rpclient.py/zmq_rpcserv.py - RPC Server
+#
 '''
 ZeroMQ wrapper module
 ---------------------

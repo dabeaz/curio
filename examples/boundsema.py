@@ -1,6 +1,8 @@
 # boundsema.py
 #
-# Example of implementing a bound semaphore
+# Curio can often be extended to implement more specialized forms
+# of basic concurrency primitives.  For example, here is how
+# you could implement a bound semaphore.
 
 from curio import Semaphore
 

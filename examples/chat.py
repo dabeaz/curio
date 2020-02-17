@@ -1,5 +1,4 @@
-from curio import run, spawn, TaskGroup, Queue, tcp_server, CancelledError
-from curio.socket import *
+from curio import run, spawn, TaskGroup, Queue, tcp_server
 
 import logging
 log = logging.getLogger(__name__)
@@ -8,7 +7,8 @@ messages = Queue()
 subscribers = set()
 
 async def dispatcher():
-    async for msg in messages:
+    while True:
+        msg = await messages.get()
         for q in subscribers:
             await q.put(msg)
 
@@ -20,18 +20,15 @@ async def outgoing(client_stream):
     queue = Queue()
     try:
         subscribers.add(queue)
-        async for name, msg in queue:
+        while True:
+            name, msg = await queue.get()
             await client_stream.write(name + b':' + msg)
     finally:
         subscribers.discard(queue)
 
 async def incoming(client_stream, name, local):
-    try:
-        async for line in client_stream:
-            await publish((name, line), local)
-    except CancelledError:
-        await client_stream.write(b'SERVER IS GOING DOWN!\n')
-        raise
+    async for line in client_stream:
+        await publish((name, line), local)
 
 async def chat_handler(client, addr):
     log.info('Connection from %r', addr) 

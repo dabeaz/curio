@@ -1,32 +1,19 @@
-# Example: A simple echo server written using streams
+# echoserv.py
+#
+# Echo server using the run_server() function
 
-from curio import run, spawn
-from curio.socket import *
-
-
-async def echo_server(address):
-    sock = socket(AF_INET, SOCK_STREAM)
-    sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-    sock.bind(address)
-    sock.listen(5)
-    print('Server listening at', address)
-    async with sock:
-        while True:
-            client, addr = await sock.accept()
-            print('Connection from', addr)
-            await spawn(echo_client, client)
+from curio import run, tcp_server
 
 
-async def echo_client(client):
-    s = client.as_stream()
-    async for line in s:
-        await s.write(line)
-    await client.close()
+async def echo_client(client, addr):
+    print('Connection from', addr)
+    while True:
+        data = await client.recv(1000)
+        if not data:
+            break
+        await client.sendall(data)
     print('Connection closed')
 
 
 if __name__ == '__main__':
-    try:
-        run(echo_server, ('', 25000))
-    except KeyboardInterrupt:
-        pass
+    run(tcp_server, '', 25000, echo_client)

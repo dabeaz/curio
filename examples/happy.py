@@ -38,8 +38,9 @@ async def open_tcp_stream(hostname, port, delay=0.3):
         for *sockargs, _, addr in targets:
             await group.spawn(try_connect, sockargs, addr, errors)
             async with ignore_after(delay):
-                sock = await group.next_result()
-                if sock:
+                task = await group.next_done()
+                if not task.exception:
+                    group.completed = task
                     break
 
     if group.completed:

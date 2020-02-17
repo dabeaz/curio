@@ -3,7 +3,6 @@
 
 from curio import run, run_in_process, tcp_server
 
-
 def fib(n):
     if n <= 2:
         return 1
@@ -27,7 +26,4 @@ async def fib_handler(client, addr):
 
 
 if __name__ == '__main__':
-    try:
-        run(tcp_server, '', 25000, fib_handler)
-    except KeyboardInterrupt:
-        pass
+    run(tcp_server, '', 25000, fib_handler)

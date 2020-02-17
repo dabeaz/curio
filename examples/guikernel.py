@@ -27,7 +27,7 @@ from time import monotonic
 from curio.errors import CurioError
 from curio.kernel import run as curio_run, Kernel
 from curio.sched import SchedBarrier
-from curio.task import current_task, ignore_after, schedule, spawn
+from curio import current_task, ignore_after, spawn
 from curio.thread import spawn_thread, AWAIT
 from curio.traps import _get_kernel, _scheduler_wait
 
@@ -291,7 +291,8 @@ class TkKernel(Kernel):
                     # Run using `schedule()`. Supplying `None` as the argument
                     # means a task doing `while True: await schedule()` can block
                     # the loop as the ready queue will never be empty.
-                    _, exc = runner_send(schedule())
+                    print("HERE")
+                    _, exc = runner_send(sleep(0))
                     if exc:
                         raise exc
 
@@ -541,5 +542,8 @@ async def test():
 
 
 if __name__ == "__main__":
-    with TkKernel() as ttk:
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    from curio.debug import schedtrace
+    with TkKernel(debug=[schedtrace]) as ttk:
         ttk.run(test)

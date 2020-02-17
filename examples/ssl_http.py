@@ -35,7 +35,4 @@ if __name__ == '__main__':
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
     print('Connect to https://localhost:10000 to see if it works')
-    try:
-        curio.run(curio.tcp_server('', 10000, handler, ssl=ssl_context))
-    except KeyboardInterrupt:
-        pass
+    curio.run(curio.tcp_server('', 10000, handler, ssl=ssl_context))
