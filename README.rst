@@ -126,6 +126,10 @@ talks and tutorials:
 
 Questions and Answers
 ---------------------
+**Q: What is the point of Curio?**
+
+A: Curio is async programming, reimagined to be simpler, faster, and easier 
+to reason about. 
 
 **Q: Is Curio implemented using asyncio?**
 
