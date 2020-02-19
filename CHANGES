@@ -13,7 +13,9 @@ your code, sorry. Some features have been moved to the examples
 directory.   If something got removed and you'd like to lobby for its 
 return, please submit a bug report. -- Dave
 
-02/14/2020 Modified UniversalEvent to also support asyncio for completness
+02/19/2020 The Activation base class has been moved into curio.kernel.
+
+02/14/2020 Modified UniversalEvent to also support asyncio for completeness
            with UniversalQueue.  This requires Curio and asyncio to be
            running in separate threads.
 

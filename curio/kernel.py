@@ -66,9 +66,8 @@ from .errors import *
 from .task import Task
 from .traps import _read_wait
 from . import meta
-from .debug import _create_debuggers
 from .timequeue import TimeQueue
-from .activation import Activation
+
 
 class Kernel(object):
     '''
@@ -102,6 +101,7 @@ class Kernel(object):
         
         # Debugging (activations in disguise)
         if debug:
+            from .debug import _create_debuggers
             self._activations.extend(_create_debuggers(debug))
 
         # Task creation class
@@ -610,6 +610,7 @@ class Kernel(object):
             nonlocal current
             main_task = new_task(coro) if coro else None
             del coro
+            trap = None
 
             while True:
                 # ------------------------------------------------------------
@@ -762,10 +763,10 @@ class Kernel(object):
 
                     # Trigger scheduler activations (if any)
                     for a in _activations:
-                        a.suspended(active)
+                        a.suspended(active, trap)
                         if active.terminated:
                             a.terminated(active)
-                    current = active = None
+                    current = active = trap = None
 
                 # If the main task has terminated, we're done.
                 if main_task:
@@ -804,3 +805,37 @@ def run(corofunc, *args, with_monitor=False, selector=None,
 
     with kernel:
         return kernel.run(corofunc, *args)
+
+# An Activation is used to monitor and effect what happens
+# during task execution in the Curio kernel. They are often used to 
+# implement tracers, debuggers, and other diagonistic tools.
+# See curio/debug.py for some specific examples.
+
+class Activation:
+    
+    def activate(self, kernel):
+        '''
+        Called each time the kernel sets up its environment and is ready to run.
+        kernel is an instance of the kernel that's executing.
+        '''
+
+    def created(self, task):
+        '''
+        Called immediately after a task has been created.
+        '''
+
+    def running(self, task):
+        '''
+        Called right before the next execution cycle of a task.
+        '''
+
+    def suspended(self, task, trap):
+        '''
+        Called after the task has suspended due to a trap.
+        '''
+
+    def terminated(self, task):
+        '''
+        Called after a task has terminated, but prior to the task
+        being collected by any associated join() operation.
+        '''

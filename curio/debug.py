@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 
 # -- Curio
 
-from .activation import Activation, trap_patch
+from .kernel import Activation
 from .errors import TaskCancelled
 
 class DebugBase(Activation):
@@ -36,7 +36,7 @@ class longblock(DebugBase):
         if self.check_filter(task):
             self.start = time.monotonic()
 
-    def suspended(self, task):
+    def suspended(self, task, trap):
         if self.check_filter(task):
             duration = time.monotonic() - self.start
             if duration > self.max_time:
@@ -49,7 +49,7 @@ class logcrash(DebugBase):
     def __init__(self, level=logging.ERROR, **kwargs):
         super().__init__(level=level, **kwargs)
 
-    def suspended(self, task):
+    def suspended(self, task, trap):
         if task.terminated and self.check_filter(task):
             if task.exception and not isinstance(task.exception, (StopIteration, TaskCancelled, KeyboardInterrupt, SystemExit)):
                 self.log.log(self.level, '%r crashed', task, exc_info=task.exception)
@@ -69,7 +69,7 @@ class schedtrace(DebugBase):
         if self.check_filter(task):
             self.log.log(self.level, 'RUN:%f:%r', time.time(), task)
 
-    def suspended(self, task):
+    def suspended(self, task, trap):
         if self.check_filter(task):
             self.log.log(self.level, 'SUSPEND:%f:%r', time.time(), task)
 
@@ -81,35 +81,11 @@ class traptrace(schedtrace):
     '''
     Report traps executed
     '''
-    def __init__(self, *, traps=None, **kwargs):
-        super().__init__(**kwargs)
-        self.traps = traps
-        self.report = False
-
-    def activate(self, kernel):
-        if self.traps is None:
-            self.traps = list(kernel._traps)
-
-        for trapname in self.traps:
-            @trap_patch(kernel, trapname)
-            def trapfunc(*args, trap, trapname=trapname):
-                if self.report:
-                    self.log.log(self.level, 'TRAP:%f:Task(id=%r, name=%r):%s:%r', 
-                            time.time(),
-                            self.task.id,
-                            self.task.name,
-                            trapname,
-                            args)
-                return trap(*args)
-
-    def running(self, task):
+    def suspended(self, task, trap):
         if self.check_filter(task):
-            self.report = True
-            self.task = task
-
-    def suspended(self, task):
-        self.report = False
-
+            if trap:
+                self.log.log(self.level, 'TRAP:%r', trap)
+            super().suspended(task, trap)
 
 def _create_debuggers(debug):
     '''
