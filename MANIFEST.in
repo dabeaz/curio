@@ -5,3 +5,4 @@ recursive-exclude __pycache__ *.pyc *.pyo
 include README.rst
 include LICENSE
 include CHANGES
+include CONTRIBUTING.md

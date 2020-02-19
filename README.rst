@@ -3,14 +3,13 @@ Curio
 
 Curio is a coroutine-based library for concurrent Python systems
 programming.  It provides standard programming abstractions such as as
-tasks, sockets, files, locks, and queues. You'll find it to be
-familiar, small, fast, and fun
+tasks, sockets, files, locks, and queues. It works on Unix and Windows. 
+You'll find it to be familiar, small, fast, and fun
 
 A Simple Example
 -----------------
 
-Here is a concurrent TCP echo server implemented using sockets and
-Curio:
+Here is a concurrent TCP echo server directly implemented using sockets:
 
 .. code:: python
 
@@ -43,63 +42,19 @@ Curio:
     if __name__ == '__main__':
         run(echo_server, ('',25000))
 
-If you have programmed with threads, you'll find that Curio looks similar.
-You'll also find that the above server can handle thousands of simultaneous 
-client connections even though no threads are being used under the hood.
+If you've done network programming with threads, it looks almost
+identical. Moreover, it can handle thousands of clients even though no
+threads are being used inside.
 
-Thread Interoperability Example
--------------------------------
-
-A notable aspect of Curio are features that allow it to interoperate
-with existing code.  For example, suppose you have a standard function
-that reads off a thread-queue like this:
-
-.. code:: python
-
-    def consumer(queue):
-        while True:
-            item = queue.get()
-            if item is None:
-                break
-            print('Got:', item)
-
-If you want to send this function data from an asynchronous task, you can use
-Curio's ``UniversalQueue`` like this:
-
-.. code:: python
-   
-    from curio import UniversalQueue, run, sleep, spawn
-    from threading import Thread
-
-    async def producer(n, queue):
-        for x in range(n):
-            await queue.put(x)
-            await sleep(1)
-        await queue.put(None)
-
-    async def main():
-        q = UniversalQueue()
-        Thread(target=consumer, args=(q,)).start()
-        t = await spawn(producer, 10, q)
-        await t.join()
-
-    run(main)
-
-As the name implies, ``UniversalQueue`` is a queue that can be used in
-both synchronous and asynchronous code.  The API is the same. It just
-works.
-
-Additional Features
--------------------
+Core Features
+-------------
 
 Curio supports standard synchronization primitives (events, locks,
 recursive locks, semaphores, and condition variables), queues,
-signals, subprocesses, as well as running tasks in threads and
-processes. The task model fully supports cancellation, task groups,
-timeouts, monitoring, and other features critical to writing reliable
-code.
+subprocesses, as well as running tasks in threads and processes.  The
+task model fully supports cancellation, task groups, timeouts,
+monitoring, and other features critical to writing reliable code.
 
-The two examples shown are only a small sample of what's possible.
 Read the `official documentation <https://curio.readthedocs.io>`_ for
 more in-depth coverage.  The `tutorial
 <https://curio.readthedocs.io/en/latest/tutorial.html>`_ is a good
@@ -110,9 +65,9 @@ carry out common programming tasks.
 Talks Related to Curio
 ----------------------
 
-Most of the principles behind Curio's design and general issues
-related to async programming have been described in various conference
-talks and tutorials:
+Concepts related to Curio's design and general issues related to async
+programming have been described by Curio's creator in various
+conference talks and tutorials:
 
 * `Build Your Own Async <https://www.youtube.com/watch?v=Y4Gt3Xjd7G8>`_, Workshop talk by David Beazley at PyCon India, 2019.
 
@@ -126,16 +81,15 @@ talks and tutorials:
 
 Questions and Answers
 ---------------------
-**Q: What is the point of Curio?**
 
-A: Curio is async programming, reimagined to be simpler, faster, and easier 
-to reason about. 
+**Q: What is the point of the Curio project?**
+
+A: Curio is async programming, reimagined as something smaller, faster, and easier 
+to reason about. It is meant to be both educational and practical.
 
 **Q: Is Curio implemented using asyncio?**
 
-A: No. Curio is a standalone library. Although the core of the library
-uses the same basic machinery as ``asyncio`` to poll for I/O events,
-the internals of the library are completely different and far less complex.
+A: No. Curio is a standalone library directly created from low-level I/O primitives.
 
 **Q: Is Curio meant to be a clone of asyncio?**
 
@@ -164,28 +118,14 @@ programs.
 
 A: No. It's best to think of Curio as a low-level library of 
 primitives related to concurrent systems programming.  You could
-certainly use it to build a framework. 
+use it to build a framework. 
 
 **Q: Can I contribute?**
 
-A: Curio is not a community-based project that is seeking developers
-or maintainers.  However, having it work reliably is important. So, if
-you've found a bug or have an idea for making it better, please feel
-file an `issue <https://github.com/dabeaz/curio>`_.  Issues
-are always appreciated. 
-
-Testing
--------
-
-Curio provides an extensive set of unit tests that can be executed using
-pytest. Before using Curio on your project, you should run the tests
-on your machine.  Type ``python -m pytest`` in the top-level ``curio/`` directory
-to run the tests.
-
-Documentation
--------------
-
-Read the official docs here: https://curio.readthedocs.io
+A: Curio is not a community-based project seeking developers
+or maintainers.  However, having it work reliably is important. If you've
+found a bug or have an idea for making it better, please feel
+file an `issue <https://github.com/dabeaz/curio>`_. 
 
 Contributors
 ------------
@@ -193,14 +133,14 @@ Contributors
 The following people contributed ideas to early stages of the Curio project:
 Brett Cannon, Nathaniel Smith, Alexander Zhukov, Laura Dickinson, and Sandeep Gupta.
 
-About
------
+Who
+---
 Curio is the creation of David Beazley (@dabeaz) who is also
 responsible for its maintenance.  http://www.dabeaz.com
 
 P.S.
 ----
-If you want to learn more about concurrent programming, you should
+If you want to learn more about concurrent programming more generally, you should
 come take a `course <https://www.dabeaz.com/courses.html>`_!
 
 .. |--| unicode:: U+2013   .. en dash

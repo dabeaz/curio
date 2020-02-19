@@ -6,12 +6,12 @@ except ImportError:
 tests_require = ['pytest', 'Sphinx']
 
 long_description = """
-Curio is a library for performing concurrent I/O with coroutines in Python 3.
+Curio is a coroutine-based library for concurrent systems programming.
 """
 
 
 setup(name="curio",
-      description="Curio - Concurrent I/O",
+      description="Curio",
       long_description=long_description,
       license="BSD",
       version="0.10",

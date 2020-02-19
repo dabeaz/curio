@@ -7,10 +7,11 @@ Version 0.10 : In Progress
 **** SPECIAL NOTE ****: For the past few years, Curio has been been an
 experimental project.  However, as it moves towards having a more
 "stable" release, I feel that it is better served by being small as
-opposed to providing every possible feature. Thus, a wide range of
-features are being removed or refactored a bit.  If a feature you are
-using gets removed and you'd like to request its return, please submit
-a bug report!  - Dave
+opposed to providing every possible feature like a framework. Thus, a wide range of
+minor features have either been removed or refactored. If this broke 
+your code, sorry. Some features have been moved to the examples
+directory.   If something got removed and you'd like to lobby for its 
+return, please submit a bug report. -- Dave
 
 02/14/2020 Modified UniversalEvent to also support asyncio for completness
            with UniversalQueue.  This requires Curio and asyncio to be

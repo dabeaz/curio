@@ -1,6 +1,6 @@
 Contributing to Curio
 =====================
 
-At this time, the Curio project does not accept pull requests except
-by invitation.  However, if you have found a bug, a typo, or have an
-idea for making it better, please submit an issue instead.
+As a general rule, The Curio project does not accept pull requests
+except by invitation.  However, if you have found a bug, a typo, or
+have ideas for improvement, please submit an issue instead.
