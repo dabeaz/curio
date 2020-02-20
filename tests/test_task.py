@@ -48,7 +48,7 @@ def test_cancel_custom_exception(kernel):
     async def main():
         t = await spawn(child)
         await t.cancel(exc=MyException)
-        
+
     kernel.run(main)
     assert child_exit
 
@@ -73,7 +73,7 @@ def test_cancel_custom_exception_instance(kernel):
     async def main():
         t = await spawn(child)
         await t.cancel(exc=exc)
-        
+
     kernel.run(main)
     assert child_exit
 
@@ -465,7 +465,7 @@ def test_explicit_raise_cancel_disable(kernel):
                 async with disable_cancellation():
                     await e1.set()
                     await e2.wait()
-                    raise TaskCancelled()  
+                    raise TaskCancelled()
                 # Even if TaskCancelled is raised explicitly, it should not propagate out.
                 # Instead, it gets defer until cancellation is enabled
                 assert await check_cancellation()
@@ -597,7 +597,7 @@ def test_task_group_result(kernel):
 def test_task_diag(kernel):
     async def child():
         await sleep(0.25)
- 
+
     async def main():
         t = await spawn(child)
         s = str(t)
@@ -657,7 +657,7 @@ def test_errors(kernel):
         await g.join()
 
     kernel.run(f)
-           
+
 def test_diag(kernel):
     # Test ability to get stack traces from different contexts
     from curio.task import _get_stack

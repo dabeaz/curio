@@ -33,7 +33,7 @@ from .workers import run_in_thread
 
 if sys.platform.startswith('win'):
     from .file import AsyncFile as FileStream
-    
+
 class Popen(object):
     '''
     Curio wrapper around the Popen class from the subprocess module. All of the

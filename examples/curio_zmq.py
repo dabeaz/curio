@@ -76,7 +76,7 @@ from curio.traps import _read_wait, _write_wait
 
 # Pull all ZMQ constants and exceptions into our namespace
 globals().update((key, val) for key, val in vars(zmq).items()
-                 if key.isupper() or 
+                 if key.isupper() or
                     (isinstance(val, type) and issubclass(val, zmq.ZMQBaseError)))
 
 class CurioZMQSocket(zmq.Socket):

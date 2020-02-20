@@ -40,7 +40,7 @@
 # is that it allows curio to be monitored even if the curio kernel is
 # completely deadlocked, occupied with a large CPU-bound task, or
 # otherwise hosed in the some way.  At a minimum, you can connect,
-# look at the task table, and see what the tasks are doing.  
+# look at the task table, and see what the tasks are doing.
 #
 # The internal monitor loop implemented on curio itself is presently
 # used to implement external task cancellation.  Manipulating any part
@@ -102,7 +102,7 @@ class Monitor(object):
         '''
         # The monitor launches both a separate thread and helper task
         # that runs inside curio itself to manage cancellation events
-                                               
+
         log.info('Starting Curio monitor at %s', self.address)
 
         self._ui_thread = threading.Thread(target=self.server, args=(), daemon=True)

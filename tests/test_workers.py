@@ -44,7 +44,7 @@ def test_cpu(kernel):
 #                    reason='broken on Windows')
 def test_bad_cpu(kernel):
     async def main():
-        with pytest.raises(TypeError): 
+        with pytest.raises(TypeError):
             r = await run_in_process(fib, '1')
 
     kernel.run(main())

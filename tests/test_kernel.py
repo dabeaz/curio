@@ -738,7 +738,7 @@ def test_pending_cancellation(kernel):
         with pytest.raises(CancelledError):
             await _read_wait(None)
 
-        self.cancel_pending = CancelledError()        
+        self.cancel_pending = CancelledError()
         with pytest.raises(CancelledError):
             await _future_wait(None)
 
@@ -752,7 +752,7 @@ def test_pending_cancellation(kernel):
             assert True
         except TaskTimeout:
             assert False
-            
+
     kernel.run(main)
 
 from functools import partial
@@ -781,7 +781,7 @@ def test_io_registration(kernel):
     s1, s2 = socket.socketpair()
     s1.setblocking(False)
     s2.setblocking(False)
-    
+
     # Fill the send buffer
     while True:
         try:
@@ -823,7 +823,7 @@ def test_coro_partial(kernel):
         assert y == 2
         assert z == 3
         return True
-        
+
     async def main():
         assert await func(1, 2, 3)
         assert await ignore_after(1, func(1,2,3))
@@ -864,7 +864,7 @@ def test_custom_cancel(kernel):
     async def main():
         t = await spawn(child)
         await t.cancel(exc=CustomCancelled)
-    
+
     kernel.run(main)
 
 def test_timeout_badness(kernel):
@@ -950,7 +950,7 @@ def test_kernel_debug():
     with Kernel(debug=schedtrace(filter='none')) as k:
         k.run(hello)
 
-        
 
 
-            
+
+

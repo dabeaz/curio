@@ -29,7 +29,7 @@ class EchoApp(object):
         self.update_bytes()
 
         # Disconnect all button
-        self.disconnect_button = tk.Button(text='Disconnect all', 
+        self.disconnect_button = tk.Button(text='Disconnect all',
                                            command=lambda: self.coro_ops.put(self.disconnect_all()))
         self.disconnect_button.pack()
 
@@ -38,7 +38,7 @@ class EchoApp(object):
 
     def incr_clients(self, delta=1):
         self.nclients += delta
-        self.clients_label.configure(text='Number Clients %d' % self.nclients)            
+        self.clients_label.configure(text='Number Clients %d' % self.nclients)
 
     def update_bytes(self):
         self.bytes_label.configure(text='Bytes received %d' % self.bytes_received)

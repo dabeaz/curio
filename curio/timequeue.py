@@ -1,7 +1,7 @@
 # timequeue.py
 #
 # A Discussion About Time.
-# 
+#
 # Internally, Curio must manage time for two different reasons,
 # sleeping and for timeouts.  Aside from toy examples, most real-world
 # code isn't going to sit around making a lot of sleep() calls.
@@ -17,8 +17,8 @@
 # list, or ordering them on a heap in a priority queue.  Although
 # operations on these kinds of data structures can be managed in O(log N)
 # steps, they might not be necessary at all if you make some slightly
-# different assumptions about time management. 
-# 
+# different assumptions about time management.
+#
 # The queue implementation here is based on the idea that expiration
 # times in the distant future don't need to be precisely sorted.
 # Instead, you can merely drop expiration times in a dict with the
@@ -72,12 +72,12 @@ class TimeQueue:
             delta = self.far_min_deadline - current_clock
             return delta if delta > 0 else 0
 
-        # There are no sleeping tasks of any kind. 
+        # There are no sleeping tasks of any kind.
         return None
 
     def push(self, item, expires):
         '''
-        Push a new item onto the time queue.  
+        Push a new item onto the time queue.
         '''
         # If the expiration time is closer than the current near deadline,
         # it gets pushed onto a heap in order to preserve order

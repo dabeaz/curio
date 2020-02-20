@@ -44,7 +44,7 @@ class SchedBase(ABC):
 
     async def suspend(self, reason='SUSPEND'):
         '''
-        Suspend the calling task. reason is a string containing 
+        Suspend the calling task. reason is a string containing
         descriptive text to indicate why (used to set the task state).
         '''
         await _scheduler_wait(self, reason)
@@ -122,4 +122,4 @@ class SchedBarrier(SchedBase):
         '''
         n = len(self._tasks) if n is None else n
         await _scheduler_wake(self, n)
-        
+

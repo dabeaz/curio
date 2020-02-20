@@ -115,12 +115,12 @@ class _TimeoutAfter(object):
             elif ty is None:
                 if current_clock > self._deadlines[-1]:
                     # Further discussion.  In the presence of threads and blocking
-                    # operations, it's possible that a timeout has expired, but 
+                    # operations, it's possible that a timeout has expired, but
                     # there was simply no opportunity to catch it because there was
-                    # no suspension point.  
+                    # no suspension point.
                     badness = current_clock - self._deadlines[-1]
                     log.warning('%r. Operation completed successfully, '
-                                'but it took longer than an enclosing timeout. Badness delta=%r.', 
+                                'but it took longer than an enclosing timeout. Badness delta=%r.',
                                 await current_task(), badness)
 
         finally:
@@ -132,7 +132,7 @@ class _TimeoutAfter(object):
     def __exit__(self, *args):
         return thread.AWAIT(self.__aexit__(*args))
 
-async def _timeout_after_func(clock, coro, args, 
+async def _timeout_after_func(clock, coro, args,
                               ignore=False, timeout_result=None):
     coro = meta.instantiate_coroutine(coro, *args)
     async with _TimeoutAfter(clock, ignore=ignore, timeout_result=timeout_result):

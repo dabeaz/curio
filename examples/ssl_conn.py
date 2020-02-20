@@ -4,9 +4,9 @@ import curio
 
 async def main():
     sock = await curio.open_connection(
-        'www.python.org', 
-        443, 
-        ssl=True, 
+        'www.python.org',
+        443,
+        ssl=True,
         server_hostname='www.python.org'
         )
     async with sock:

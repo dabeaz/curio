@@ -62,7 +62,7 @@ def test_tcp_echo(kernel):
         'handler done'
     ]
 
-if not sys.platform.startswith('win'): 
+if not sys.platform.startswith('win'):
     def test_unix_echo(kernel):
         results = []
 
@@ -157,7 +157,7 @@ def test_ssl_server(kernel):
 
     kernel.run(main())
 
-if not sys.platform.startswith('win'): 
+if not sys.platform.startswith('win'):
     def test_unix_ssl_server(kernel):
         async def client(address, context):
             sock = await network.open_unix_connection(address, ssl=context)
@@ -224,7 +224,7 @@ def test_ssl_wrapping(kernel):
         except Exception:
             sock._socket.close()
             raise
-        
+
     async def main():
         # It might be desirable to move these out of the examples
         # directory, as this test are now relying on them being around
@@ -289,7 +289,7 @@ def test_ssl_manual_wrapping(kernel):
         except Exception:
             sock._socket.close()
             raise
-        
+
     async def main():
         # It might be desirable to move these out of the examples
         # directory, as this test are now relying on them being around

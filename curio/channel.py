@@ -132,7 +132,7 @@ class Connection(object):
 
     async def recv_bytes_into(self, buf, offset=0):
         '''
-        Receive bytes into a writable memory buffer.  The buffer must be large enough to 
+        Receive bytes into a writable memory buffer.  The buffer must be large enough to
         hold the message.  The number of bytes received in the message is returned.
         '''
         header = await self._reader.read_exactly(4)
@@ -240,7 +240,7 @@ class Channel(object):
                 await client.close()
                 del client
                 continue
-                
+
             client_stream = client.as_stream()
             c = Connection(client_stream, client_stream)
             c.address = addr
@@ -272,7 +272,7 @@ class Channel(object):
             await c.close()
             del c
             del sock_stream
-            # Note: Raising an OSError.  
+            # Note: Raising an OSError.
             raise TimeoutError("Connection timed out")
 
     async def close(self):

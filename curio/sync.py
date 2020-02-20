@@ -65,7 +65,7 @@ class UniversalEvent(object):
         res = super().__repr__()
         extra = 'set' if self._set else 'unset'
         return f'<{res[1:-1]} [{extra}]>'
-        
+
     def is_set(self):
         return self._set
 
@@ -259,4 +259,7 @@ class Condition(_LockBase):
 
     async def notify_all(self):
         await self.notify(len(self._waiting))
+
+
+
 

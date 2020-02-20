@@ -389,7 +389,7 @@ class StreamBase(object):
             remaining = len(view)
             total_read = 0
 
-            # It's possible that there is data already buffered on this stream. 
+            # It's possible that there is data already buffered on this stream.
             # If so, we have to copy into the memory buffer first.
             buffered = len(self._buffer)
             tocopy = remaining if (remaining < buffered) else buffered
@@ -418,7 +418,7 @@ class StreamBase(object):
                 except WantWrite:
                     await _write_wait(self._fileno)
             return total_read
-        
+
     async def readline(self, maxlen=None):
         while True:
             nl_index = self._buffer.find(b'\n')

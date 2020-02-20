@@ -688,7 +688,7 @@ class TestCondition:
             c = Condition()
             with pytest.raises(RuntimeError):
                 await c.notify()
-                
+
             with pytest.raises(RuntimeError):
                 await c.wait()
 

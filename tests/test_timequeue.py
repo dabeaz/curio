@@ -3,7 +3,7 @@ from curio.timequeue import TimeQueue
 
 def test_timequeue_expired():
     q = TimeQueue()
-    
+
     delta = q.next_deadline(10)
     assert delta == None
 

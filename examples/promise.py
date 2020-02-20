@@ -83,7 +83,7 @@ def test_promise_exception(kernel):
 
         with pytest.raises(RuntimeError):
             await consumer(promise)
-            
+
         await producer_task.join()
 
     kernel.run(main())

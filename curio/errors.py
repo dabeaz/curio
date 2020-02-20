@@ -32,7 +32,7 @@ class TaskCancelled(CancelledError):
 class TimeoutCancellationError(CancelledError):
     '''
     Exception raised if task is being cancelled due to a timeout, but
-    it's not the inner-most timeout in effect. 
+    it's not the inner-most timeout in effect.
     '''
 
 
@@ -51,7 +51,7 @@ class UncaughtTimeoutError(CurioError):
 
 class TaskError(CurioError):
     '''
-    Raised if a task launched via spawn() or similar function 
+    Raised if a task launched via spawn() or similar function
     terminated due to an exception.  This is a chained exception.
     The __cause__ attribute contains the actual exception that
     occurred in the task.
@@ -67,7 +67,7 @@ class SyncIOError(CurioError):
 
 class AsyncOnlyError(CurioError):
     '''
-    Raised by the AWAIT() function if its applied to code not 
+    Raised by the AWAIT() function if its applied to code not
     properly running in an async-thread.
     '''
 

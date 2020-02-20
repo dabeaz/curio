@@ -31,7 +31,7 @@ async def incoming(client_stream, name, local):
         await publish((name, line), local)
 
 async def chat_handler(client, addr):
-    log.info('Connection from %r', addr) 
+    log.info('Connection from %r', addr)
     local = { 'address': addr }
     async with client:
         client_stream = client.as_stream()

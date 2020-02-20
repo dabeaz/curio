@@ -91,14 +91,14 @@ class Kernel(object):
         self._call_at_shutdown(self._selector.close)
 
         # Task table
-        self._tasks = {}                  
+        self._tasks = {}
 
         # Coroutine runner function (created upon first call to run())
         self._runner = None
 
         # Activations
         self._activations = activations if activations else []
-        
+
         # Debugging (activations in disguise)
         if debug:
             from .debug import _create_debuggers
@@ -179,7 +179,7 @@ class Kernel(object):
     #
     # At first glance, this function is going to look giant and
     # insane. It is implementing the kernel runtime as a self-contained
-    # black box.  There is no external API.  The only possible 
+    # black box.  There is no external API.  The only possible
     # communication is via traps defined in curio/traps.py.
     # It's best to think of this as a "program within a program".
 
@@ -202,7 +202,7 @@ class Kernel(object):
         selector_modify = selector.modify
         selector_select = selector.select
         selector_getkey = selector.get_key
-        
+
         ready_popleft = ready.popleft
         ready_append = ready.append
         time_monotonic = time.monotonic
@@ -212,7 +212,7 @@ class Kernel(object):
         # In-kernel task used for processing futures.
         #
         # Internal task that monitors the loopback socket--allowing the kernel to
-        # awake for non-I/O events. 
+        # awake for non-I/O events.
 
         # Loop-back sockets
         notify_sock = None
@@ -257,7 +257,7 @@ class Kernel(object):
         def wake(task=None, future=None):
             if task:
                 wake_queue.append((task, future))
-                
+
             notify_sock.send(b'\x00')
 
         def init_loopback():
@@ -292,7 +292,7 @@ class Kernel(object):
             nonlocal current
             current.state = state
             current.cancel_func = cancel_func
-            
+
             # Unregister previous I/O request. Discussion follows:
             #
             # When a task performs I/O, it registers itself with the underlying
@@ -414,7 +414,7 @@ class Kernel(object):
                 current._trap_result = (rtask, wtask)
             except KeyError:
                 current._trap_result = (None, None)
-            
+
         # ----------------------------------------
         # Wait on a Future
         def trap_future_wait(future, event):
@@ -526,7 +526,7 @@ class Kernel(object):
                 return
 
             set_timeout(clock + time_monotonic(), 'sleep')
-            suspend_task('TIME_SLEEP', 
+            suspend_task('TIME_SLEEP',
                           lambda task=current: (sleepq.cancel((task.id, 'sleep'), task.sleep), setattr(task, 'sleep', None)))
 
         # ----------------------------------------
@@ -777,7 +777,7 @@ class Kernel(object):
                     return None
 
         return kernel_run
-                        
+
 
 def run(corofunc, *args, with_monitor=False, selector=None,
         debug=None, activations=None, **kernel_extra):
@@ -807,12 +807,12 @@ def run(corofunc, *args, with_monitor=False, selector=None,
         return kernel.run(corofunc, *args)
 
 # An Activation is used to monitor and effect what happens
-# during task execution in the Curio kernel. They are often used to 
+# during task execution in the Curio kernel. They are often used to
 # implement tracers, debuggers, and other diagonistic tools.
 # See curio/debug.py for some specific examples.
 
 class Activation:
-    
+
     def activate(self, kernel):
         '''
         Called each time the kernel sets up its environment and is ready to run.

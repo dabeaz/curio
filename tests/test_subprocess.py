@@ -119,7 +119,7 @@ def test_no_input_cancel(kernel):
         t = await spawn(child)
         await sleep(0.1)
         await t.cancel()
-        
+
     kernel.run(main())
 
 def test_popen_join(kernel):
@@ -139,4 +139,4 @@ def test_io_error(kernel):
     kernel.run(main)
 
 
-         
+

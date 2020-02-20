@@ -164,7 +164,7 @@ def unix_server_socket(path, backlog=100):
         sock._socket.close()
         raise
     return sock
-    
+
 async def unix_server(path, client_connected_task, *, backlog=100, ssl=None):
     sock = unix_server_socket(path, backlog)
     await run_server(sock, client_connected_task, ssl)

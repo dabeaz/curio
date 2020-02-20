@@ -177,8 +177,8 @@ def test_seek_tell(kernel):
             n2 = f.tell()
             assert n2 == 10
             data2 = f.read()
-            
-        assert data == data2 
+
+        assert data == data2
 
     kernel.run(main())
 

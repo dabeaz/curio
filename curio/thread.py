@@ -1,10 +1,10 @@
 # curio/thread.py
 #
-# Support for threads implemented on top of the Curio kernel. 
+# Support for threads implemented on top of the Curio kernel.
 #
 # Theory of operation:
 # --------------------
-# Curio has the ability to safely wait for Futures as defined 
+# Curio has the ability to safely wait for Futures as defined
 # in the concurrent.futures module.  A notable feature of coroutines
 # is that when called, their evaluation is delayed--instead you get
 # a "coroutine" object that must be executed by a kernel or event loop.
@@ -30,13 +30,13 @@
 #       result = await coro(*args, **kwargs)
 #
 # From the standpoint of the thread, it appears to be executing a
-# normal synchronous call. 
+# normal synchronous call.
 #
 # Here is a picture diagram of the parts
 #
 #    ________          ___________          _________
 #   |        | await  |           | Future |         |
-#   | Curio  |<-------| backing   |<-------| Thread  |        
+#   | Curio  |<-------| backing   |<-------| Thread  |
 #   | Kernel |------->| coroutine |------->|         |
 #   |________| result |___________| Event  |_________|
 #
@@ -141,7 +141,7 @@ class AsyncThread(object):
             self._final_exc = e
             if not isinstance(e, errors.CancelledError):
                 log.warning("Unexpected exception in cancelled async thread", exc_info=True)
-                
+
         finally:
             self._request.set_result(None)
 

@@ -356,7 +356,7 @@ def test_univ_queue_async_sync(kernel):
     kernel.run(main())
 
 def test_univ_queue_cancel(kernel):
-    result = [] 
+    result = []
 
     async def consumer(q):
         while True:
@@ -456,7 +456,7 @@ def test_univ_queue_multiple_kernels(kernel):
         await q.put(None)
         await q.put(None)
         await q.put(None)
-        
+
         t1.join()
         t2.join()
         t3.join()
@@ -494,7 +494,7 @@ def test_univ_queue_withfd(kernel):
         assert result == [0,1,2,3,4,5,6,7,8,9]
 
     kernel.run(main())
-    
+
 
 
 def test_uqueue_asyncio_prod(kernel):
@@ -511,7 +511,7 @@ def test_uqueue_asyncio_prod(kernel):
             if item is None:
                 break
             results.append(item)
-            
+
         assert results == list(range(10))
         t.join()
 
@@ -583,9 +583,9 @@ def test_uqueue_put_cancel(kernel):
 
 
 
-    
 
-    
-    
+
+
+
 
 

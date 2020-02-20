@@ -233,7 +233,7 @@ def test_read_partial(kernel, portno):
     done = Event()
     results = []
     async def handler(client, addr):
-        try:        
+        try:
             await client.send(b'OK')
             s = client.as_stream()
             line = await s.readline()
@@ -923,7 +923,7 @@ def test_io_waiting(kernel):
 
         r,w = await _io_waiting(0)
         assert (r, w) == (None, None)
-        
+
     kernel.run(main())
 
 def test_io_unregister(kernel):
@@ -931,7 +931,7 @@ def test_io_unregister(kernel):
     async def reader(sock):
         from curio.traps import _read_wait
         await _read_wait(sock.fileno())
-        
+
     async def main():
         from curio.traps import _write_wait
         sock = socket(AF_INET, SOCK_DGRAM)

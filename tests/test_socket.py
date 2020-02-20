@@ -590,7 +590,7 @@ def test_create_connection(kernel):
             await sleep(0.1)
             await g.spawn(client, ('localhost', 25000), ('localhost', 25001))
         assert not any(g.exceptions)
- 
+
     kernel.run(main)
 
 def test_create_bad_connection(kernel):

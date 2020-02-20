@@ -82,11 +82,11 @@ class QueueBase:
 # diabolical features of Curio.  The goal is to provide a Queue that's
 # compatible with Curio, Threads, and asyncio using an identical API.
 # The underlying operation is based on a combination of non-blocking
-# queuing coupled with Futures.   Basically, each underlying operation 
+# queuing coupled with Futures.   Basically, each underlying operation
 # such as get() and put() completes immediately or else a Future
 # is created for obtaining the result when it becomes available.
 # This works because all of these runtime environments have a mechanism
-# for waiting on a Future.   So, the general idea for each queuing 
+# for waiting on a Future.   So, the general idea for each queuing
 # operation is that you first try the operation.  If it works, you're
 # done.  If it doesn't work, you get a Future and you wait on it
 # using whatever mechanism the runtime environment uses to do that.
@@ -109,8 +109,8 @@ class UniversalQueueBase:
         # A queue of Futures representing putters
         self._putters = deque()
 
-        # Internal synchronization.  
-        # 
+        # Internal synchronization.
+        #
         # This is one of the only thread locks that's used inside
         # Curio and used from async code.  It's use here is avoid
         # a race condition on a few attributes.  It is only held
@@ -162,7 +162,7 @@ class UniversalQueueBase:
             except BlockingIOError:
                 pass
         self._put_notify()
-            
+
     def _get(self):
         fut = item = None
         with self._mutex:
@@ -176,14 +176,14 @@ class UniversalQueueBase:
                 self._get_complete()
         return item, fut
 
-    # Synchronous queue get.   
+    # Synchronous queue get.
     def get(self):
         item, fut = self._get()
         if fut:
             item = fut.result()
         return item
 
-    # Asynchronous queue get (Curio) 
+    # Asynchronous queue get (Curio)
     @awaitable(get)
     async def get(self):
         item, fut = self._get()
@@ -290,7 +290,7 @@ class UniversalQueueBase:
         with self._all_tasks_done:
             while self._unfinished_tasks:
                 self._all_tasks_done.wait()
-    
+
     @awaitable(join_sync)
     async def join(self):
         await workers.block_in_thread(self.join_sync)
@@ -323,7 +323,7 @@ class PriorityImpl:
 
     def _init_internal_queue(self):
         return []
-    
+
     def _get_item(self):
         return heappop(self._queue)
 
@@ -343,7 +343,7 @@ class LIFOImpl:
 
     def _get_item(self):
         return self._queue.pop()
-    
+
     _unget_item = _put_item
 
 # Concrete Queue implementations

@@ -9,7 +9,7 @@
 # interface that is easier to use (e.g., Socket, File, Queue, etc.).
 # ----------------------------------------------------------------------
 
-__all__ = [ 
+__all__ = [
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
     '_cancel_task', '_scheduler_wait', '_scheduler_wake',
     '_get_kernel', '_get_current', '_set_timeout', '_unset_timeout',
@@ -26,7 +26,7 @@ from selectors import EVENT_READ, EVENT_WRITE
 from . import errors
 
 # This is the only entry point to the Curio kernel and the
-# only place where the @types.coroutine decorator is used. 
+# only place where the @types.coroutine decorator is used.
 @coroutine
 def _kernel_trap(*request):
     result = yield request
@@ -39,7 +39,7 @@ def _kernel_trap(*request):
 async def _read_wait(fileobj):
     '''
     Wait until reading can be performed.  If another task is waiting
-    on the same file, a ResourceBusy exception is raised. 
+    on the same file, a ResourceBusy exception is raised.
     '''
     return await _kernel_trap('trap_io', fileobj, EVENT_READ, 'READ_WAIT')
 

@@ -51,7 +51,7 @@ def test_awaitable_partial(kernel):
         assert y == 2
         assert z == 3
         return True
-        
+
     async def main():
         assert await func(1, 2, 3)
         assert await ignore_after(1, func(1,2,3))

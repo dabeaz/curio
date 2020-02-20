@@ -83,7 +83,7 @@ def test_thread_bad_result(kernel):
     async def main():
         t = await spawn_thread(coro)
         await t.join()
-            
+
     kernel.run(main)
 
 def test_thread_cancel_result(kernel):
@@ -112,7 +112,7 @@ def test_thread_sync(kernel):
             await sleep(0.5)
             results.append('main done')
         await t.join()
-        
+
     kernel.run(main())
     assert results == [ 'main', 'main done', 'func' ]
 
@@ -127,7 +127,7 @@ def test_thread_timeout(kernel):
     async def main():
         t = await spawn_thread(func)
         await t.join()
-        
+
     kernel.run(main)
 
 
@@ -205,7 +205,7 @@ def test_task_group_thread(kernel):
     async def main():
         t = await spawn_thread(task)
         await t.join()
-    
+
     kernel.run(main)
     assert results == [2, 4, 6]
 

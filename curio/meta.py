@@ -6,7 +6,7 @@
 #
 
 __all__ = [
-    'iscoroutinefunction', 'finalize', 'awaitable', 'asyncioable',  
+    'iscoroutinefunction', 'finalize', 'awaitable', 'asyncioable',
     'curio_running', 'instantiate_coroutine', 'from_coroutine',
  ]
 
