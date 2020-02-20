@@ -114,11 +114,13 @@ the performance of a simple echo server so your mileage might
 vary. See the ``examples/benchmark`` directory for various testing
 programs.
 
-**Q: Is Curio going to evolve into a framework?**
+**Q: What is the future of Curio?**
 
-A: No. It's best to think of Curio as a low-level library of 
-primitives related to concurrent systems programming.  You could
-use it to build a framework. 
+A: Curio should be viewed as a library of primitives related to
+concurrent systems programming.  At this time, it is considered
+to be feature-complete--meaning that it is not expected to
+sprout new capabilities.  It may be updated from time to time to
+fix bugs or support new versions of Python.
 
 **Q: Can I contribute?**
 
