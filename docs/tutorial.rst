@@ -523,7 +523,7 @@ Scheduler tracing can be enabled with code like this::
     logging.basicConfig(level=logging.DEBUG)
     run(..., debug=schedtrace)
 
-If you want more detail, use ``traptrace`` instead of ``schedtrace``.
+If you want even more detail, use ``traptrace`` instead of ``schedtrace``.
 
 More Information
 ----------------

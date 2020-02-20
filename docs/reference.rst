@@ -1485,8 +1485,8 @@ An instance ``a`` of :class:`Activation` implements the following methods:
      - Called when a new task is created.  *task* is the newly created ``Task`` instance.
    * - ``a.running(task)``
      - Called immediately prior to the execution cycle of a task.
-   * - ``a.suspended(task)``
-     - Called when a task has suspended execution.
+   * - ``a.suspended(task, trap)``
+     - Called when a task has suspended execution. *trap* is the trap executed.
    * - ``a.terminated(task)``
      - Called when a task has terminated execution. Note: the
        ``suspended()`` method is always called immediately prior to a task being terminated.
@@ -1505,7 +1505,7 @@ long-execution times and reports warnings::
         def running(self, task):
             self.start = time.time()
   
-        def suspended(self, task):
+        def suspended(self, task, trap):
             end = time.time()
             if end - self.start > self.maxtime:
                 print(f'Long blocking in {task.name}: {end - self.start}')
@@ -1779,7 +1779,8 @@ all task scheduling events, use the ``schedtrace`` debugger as follows::
     from curio.debug import schedtrace
     run(coro, debug=schedtrace)
 
-To trace all low-level kernel traps, use the ``traptrace`` debugger::
+To additionally include information on low-level kernel traps, use the ``traptrace`` debugger
+instead::
 
     from curio.debug import traptrace
     run(coro, debug=traptrace)
