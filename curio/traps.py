@@ -13,7 +13,7 @@ __all__ = [
     '_read_wait', '_write_wait', '_future_wait', '_sleep', '_spawn',
     '_cancel_task', '_scheduler_wait', '_scheduler_wake',
     '_get_kernel', '_get_current', '_set_timeout', '_unset_timeout',
-    '_clock', '_io_waiting',
+    '_clock', '_io_waiting', '_io_release',
     ]
 
 # -- Standard library
@@ -49,6 +49,12 @@ async def _write_wait(fileobj):
     to write on the same file, a ResourceBusy exception is raised.
     '''
     return await _kernel_trap('trap_io', fileobj, EVENT_WRITE, 'WRITE_WAIT')
+
+async def _io_release(fileobj):
+    '''
+    Release kernel resources associated with a file
+    '''
+    return await _kernel_trap('trap_io_release', fileobj)
 
 async def _io_waiting(fileobj):
     '''

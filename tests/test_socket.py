@@ -171,7 +171,7 @@ def test_udp_echo(kernel):
         'client close'
     ]
 
-@pytest.mark.skipif(True,
+@pytest.mark.skipif(sys.platform.startswith("win"),
                     reason='currently broken')
 
 def test_fromfd_tcp_echo(kernel, portno):

@@ -1,5 +1,14 @@
 CHANGES
 -------
+Version 1.1 - In Progress
+
+02/24/2020 Fixed a very subtle edge case involving epoll() and duplicated
+           file descriptors on Linux. The fix required a new trap
+           _io_release() to explitly unregister a file descriptor
+           before closing. This must be embedded in any close()
+           implementation prior to actually calling close() on a real
+           file object.  No changes should be necessary in existing
+           user-level Curio code.  Bug #313 reported by Ondřej Súkup.
 
 Version 1.0 - February 20, 2020
 -------------------------------

@@ -283,6 +283,8 @@ class Kernel(object):
 
         # Reschedule a task, putting it back on the ready queue.
         def reschedule_task(task):
+            assert task not in ready
+
             ready_append(task)
             task.state = 'READY'
             task.cancel_func = None
@@ -402,6 +404,14 @@ class Kernel(object):
             # for the task.  Otherwise, I/O will be unregistered.
             current._last_io = None
             suspend_task(state, lambda: unregister_event(fileobj, event))
+
+        # ----------------------------------------
+        # Release any kernel resources associated with fileobj.
+        def trap_io_release(fileobj):
+            if current._last_io:
+                unregister_event(*current._last_io)
+                current._last_io = None
+            current._trap_result = None
 
         # ----------------------------------------
         # Return tasks currently waiting on a file obj.

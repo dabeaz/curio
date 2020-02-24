@@ -36,7 +36,7 @@ import os
 
 # -- Curio
 
-from .traps import _read_wait, _write_wait
+from .traps import _read_wait, _write_wait, _io_release
 from . import errors
 from . import thread
 
@@ -286,6 +286,7 @@ class Socket(object):
 
     async def close(self):
         if self._socket:
+            await _io_release(self._fileno)
             self._socket.close()
         self._socket = None
         self._fileno = -1
@@ -462,6 +463,7 @@ class StreamBase(object):
     async def close(self):
         await self.flush()
         if self._file:
+            await _io_release(self.fileno)
             self._file.close()
         self._file = None
         self._fileno = -1
