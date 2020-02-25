@@ -160,6 +160,7 @@ class Task(object):
         if not self.joined and not self.cancelled and not self.daemon:
             if not self.daemon and not self.exception:
                 log.warning('%r never joined', self)
+        assert not self._last_io
 
     def send(self, value):
         '''
