@@ -49,6 +49,13 @@ a lot about Python concurrency in general.
    async concurrency library from scratch using both callbacks and
    coroutines.
 
+* `Die Threads <https://www.youtube.com/watch?v=U66KuyD3T0M>`_
+   Keynote talk at EuroPython, 2018. 
+   Asynchronous programming is most commonly described as an alternative to
+   thread programming.  But what if you reinvented thread programming run on top
+   of asynchronous programming?  This talk explores this concept. It
+   might be the most "experimental" talk related to Curio.
+
 * `The Other Async (Threads + Asyncio = Love) <https://www.youtube.com/watch?v=x1ndXuw7S0s>`_ 
    Keynote talk at PyGotham, 2017.
    This talk steps through the thinking and design of building a so-called

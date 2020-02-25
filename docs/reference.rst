@@ -1653,7 +1653,7 @@ may raise a cancellation exception.
      - Sleep until data can be written on *fileobj*.
        *fileobj* is any file-like object with a `fileno()` method.
    * - ``await _io_release(fileobj)``
-       Release any kernel resources associated with *fileobj*.  Should
+     - Release any kernel resources associated with *fileobj*.  Should
        be called prior to closing any file.
    * - ``await _io_waiting(fileobj)``
      - Returns a tuple `(rtask, wtask)` of tasks currently sleeping on
