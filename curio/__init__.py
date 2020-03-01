@@ -1,6 +1,6 @@
 # curio/__init__.py
 
-__version__ = '1.0'
+__version__ = '1.1'
 
 from .errors import *
 from .queue import *

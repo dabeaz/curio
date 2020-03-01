@@ -1,6 +1,6 @@
 CHANGES
 -------
-Version 1.1 - In Progress
+Version 1.1 - March 1, 2020
 
 02/24/2020 Fixed a very subtle edge case involving epoll() and duplicated
            file descriptors on Linux. The fix required a new trap
