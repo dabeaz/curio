@@ -25,6 +25,7 @@ setup(name="curio",
       extras_require={
           'test': tests_require,
       },
+      python_requires='>= 3.6',
       classifiers=[
           'Programming Language :: Python :: 3',
       ])
