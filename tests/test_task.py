@@ -445,6 +445,8 @@ def test_task_group_empty(kernel):
             pass
 
         assert g.exception is None
+        assert g.exceptions == []
+        assert g.results == []
         with pytest.raises(RuntimeError):
              g.result
 
