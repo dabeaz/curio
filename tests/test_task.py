@@ -439,6 +439,17 @@ def test_task_group_use_error(kernel):
 
     kernel.run(main())
 
+def test_task_group_empty(kernel):
+    async def main():
+        async with TaskGroup() as g:
+            pass
+
+        assert g.exception is None
+        with pytest.raises(RuntimeError):
+             g.result
+
+    kernel.run(main())
+
 def test_defer_cancellation(kernel):
     async def cancel_me(e1, e2):
         with pytest.raises(CancelledError):

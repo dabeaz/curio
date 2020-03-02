@@ -391,6 +391,8 @@ class TaskGroup(object):
     def result(self):
         if not self._joined:
             raise RuntimeError("Task group not yet terminated")
+        if not self.completed:
+            raise RuntimeError("No task successfully completed")
         return self.completed.result
 
     # Property that returns the exception of the first completed task
@@ -398,7 +400,7 @@ class TaskGroup(object):
     def exception(self):
         if not self._joined:
             raise RuntimeError("Task group not yet terminated")
-        return self.completed.exception
+        return self.completed.exception if self.completed else None
 
     # Property that returns all task results (in task creation order)
     @property

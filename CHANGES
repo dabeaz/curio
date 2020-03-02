@@ -1,7 +1,15 @@
 CHANGES
 -------
-Version 1.1 - March 1, 2020
+Version 1.2 - In Progress
 
+03/02/2020 Slight refinement to TaskGroup result reporting. If no tasks
+           are spawned in a TaskGroup g, then g.exception will return None
+           to indicate no errors.  g.result will raise an exception
+           indicating that no successful result was obtained. Addresses
+           issue #314.
+
+Version 1.1 - March 1, 2020
+---------------------------
 02/24/2020 Fixed a very subtle edge case involving epoll() and duplicated
            file descriptors on Linux. The fix required a new trap
            _io_release() to explitly unregister a file descriptor
