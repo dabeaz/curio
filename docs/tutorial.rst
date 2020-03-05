@@ -361,7 +361,8 @@ of a publish-subscribe service::
 
     # Dispatch task that forwards incoming messages to subscribers
     async def dispatcher():
-        async for msg in messages:
+        while True:
+            msg = await messages.get()
             for q in list(subscribers):
                 await q.put(msg)
 
@@ -374,7 +375,8 @@ of a publish-subscribe service::
         queue = Queue()
         subscribers.add(queue)
         try:
-            async for msg in queue:
+            while True:
+                msg = await queue.get()
                 print(name, 'got', msg)
         finally:
             subscribers.discard(queue)
