@@ -1,7 +1,5 @@
 # python3.7
 
-# Copyright Ouster, Inc.
-
 """Plugin module for pytest.
 
 This enables easier unit tests for applications that use both Curio and Pytest. If you have Curio
@@ -9,8 +7,6 @@ installed, you have the plugin and can write unit tests per the example below.
 
 Provides a fixture named `kernel`, and a marker (pytest.mark.curio) that will run a bare coroutine
 in a new Kernel instance.
-
-@pytest.mark.curio
 
 Example:
 
