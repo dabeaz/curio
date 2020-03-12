@@ -67,10 +67,10 @@ _locals = threading.local()
 
 class AsyncThread(object):
 
-    def __init__(self, target=None, args=(), kwargs={}, daemon=False):
+    def __init__(self, target=None, args=None, kwargs=None, daemon=False):
         self.target = target
-        self.args = args
-        self.kwargs = kwargs
+        self.args = args if args is not None else tuple()
+        self.kwargs = kwargs if kwargs is not None else {}
         self.daemon = daemon
 
         # The following attributes are provided to make a thread mimic a Task
