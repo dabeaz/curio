@@ -250,6 +250,7 @@ def test_ssl_wrapping(kernel):
 
     kernel.run(main())
 
+@pytest.mark.internet
 def test_ssl_outgoing(kernel):
     async def main():
         c = await network.open_connection('google.com', 443, ssl=True, server_hostname='google.com')
@@ -312,6 +313,7 @@ def test_ssl_manual_wrapping(kernel):
 
     kernel.run(main())
 
+@pytest.mark.internet
 def test_errors(kernel):
     async def main():
         with pytest.raises(ValueError):
