@@ -2,6 +2,9 @@ CHANGES
 -------
 Version 1.2 - In Progress
 
+03/24/2020 Added a pytest plugin for Curio. Contributed by Keith Dart.
+           See curio/pytest_plugin.py.
+
 03/02/2020 Slight refinement to TaskGroup result reporting. If no tasks
            are spawned in a TaskGroup g, then g.exception will return None
            to indicate no errors.  g.result will raise an exception
