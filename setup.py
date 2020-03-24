@@ -26,6 +26,8 @@ setup(name="curio",
           'test': tests_require,
       },
       python_requires='>= 3.6',
+      entry_points={"pytest11": ["curio = curio.pytest_plugin"]},
       classifiers=[
           'Programming Language :: Python :: 3',
+          "Framework :: Pytest",
       ])
