@@ -2,6 +2,16 @@ CHANGES
 -------
 Version 1.2 - In Progress
 
+04/04/2020 First crack at a Curio repl.  Idea borrowed from the asyncio
+           REPL.  For example:
+
+              bash $ python -m curio
+              Use "await" directly instead of "curio.run()".
+              Type "help", "copyright", "credits" or "license" for more information.
+              >>> import curio
+              >>> await curio.sleep(4)
+	      >>>
+
 03/24/2020 Added a pytest plugin for Curio. Contributed by Keith Dart.
            See curio/pytest_plugin.py.
 
