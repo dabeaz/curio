@@ -6,6 +6,8 @@ import sys
 import types
 import warnings
 import threading
+import signal
+import os
 
 class CurioIOInteractiveConsole(code.InteractiveConsole):
 
@@ -16,24 +18,46 @@ class CurioIOInteractiveConsole(code.InteractiveConsole):
         self.response = curio.UniversalQueue()
 
     def runcode(self, code):
+        # This coroutine is handed from the thread running the REPL to the
+        # task runner in the main thread.
         async def run_it():
             func = types.FunctionType(code, self.locals)
             try:
-                coro = func()
+                # We restore the default REPL signal handler for running normal code
+                hand = signal.signal(signal.SIGINT, signal.default_int_handler)
+                try:
+                    coro = func()
+                finally:
+                    signal.signal(signal.SIGINT, hand)
             except BaseException as ex:
                 await self.response.put((None, ex))
                 return
             if not inspect.iscoroutine(coro):
                 await self.response.put((coro, None))
                 return
+
+            # For a coroutine... We're going to try and do some magic to intercept
+            # Control-C in an Event/Task.
+            async def watch_ctrl_c(evt, repl_task):
+                await evt.wait()
+                await repl_task.cancel()
+            evt = curio.UniversalEvent()
             try:
-                result = await coro
-                await self.response.put((result, None))
-            except SystemExit:
-                raise
-            except BaseException as ex:
-                await self.response.put((None, ex))
-            
+                hand = signal.signal(signal.SIGINT, lambda signo, frame: evt.set())
+                repl_task = await curio.spawn(coro)
+                watch_task = await curio.spawn(watch_ctrl_c, evt, repl_task)
+                try:
+                    result = await repl_task.join()
+                    response = (result, None)
+                except SystemExit:
+                    raise
+                except BaseException as e:
+                    await repl_task.wait()
+                    response = (None, e.__cause__)
+                await watch_task.cancel()
+            finally:
+                signal.signal(signal.SIGINT, hand)
+            await self.response.put(response)
 
         self.requests.put(run_it())
         # Get the result here...
@@ -48,11 +72,15 @@ class CurioIOInteractiveConsole(code.InteractiveConsole):
 
     # Task that runs in the main thread, executing input fed to it from above
     async def runmain(self):
-        while True:
-            coro = await self.requests.get()
-            if coro is None:
-                break
-            await coro
+        try:
+            hand = signal.signal(signal.SIGINT, signal.SIG_IGN)
+            while True:
+                coro = await self.requests.get()
+                if coro is None:
+                    break
+                await coro
+        finally:
+            signal.signal(signal.SIGINT, hand)
 
 def run_repl(console):
     try:
