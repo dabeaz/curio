@@ -569,10 +569,9 @@ async def producer(ch):
         await c.send(i)
     await c.send(None)   # Sentinel
 
-import contextvars
-x = contextvars.ContextVar('x', default=0)
-
 def test_contextvars():
+    import contextvars
+    x = contextvars.ContextVar('x', default=0)
     from curio.task import ContextTask
     events = []
     async def countdown(n):
