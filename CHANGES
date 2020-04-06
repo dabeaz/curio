@@ -2,6 +2,14 @@ CHANGES
 -------
 Version 1.2 - In Progress
 
+04/06/2020 Removed hard dependency on contextvars.   It was unnecessary and
+           needlessly broken some things on Python 3.6.
+	   
+04/06/2020 Added a default selector timeout of 1 second for Windows.  This
+           makes everything a bit more friendly for Control-C.  This can be
+	   disabled or changed using the max_select_timeout argument to Kernel
+	   or curio.run().
+	   
 04/04/2020 First crack at a Curio repl.  Idea borrowed from the asyncio
            REPL.  If you run `python -m curio` it will start a REPL
 	   in which Curio is already running in the background. You

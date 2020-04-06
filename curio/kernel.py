@@ -81,7 +81,8 @@ class Kernel(object):
     Use the kernel run() method to submit work to the kernel.
     '''
 
-    def __init__(self, *, selector=None, debug=None, activations=None, taskcls=Task):
+    def __init__(self, *, selector=None, debug=None, activations=None, taskcls=Task,
+                 max_select_timeout=None if os.name != 'nt' else 1.0):
 
         # Functions to call at shutdown
         self._shutdown_funcs = []
@@ -106,6 +107,8 @@ class Kernel(object):
 
         # Task creation class
         self._taskcls = taskcls
+
+        self._max_select_timeout = max_select_timeout
 
 
     def __del__(self):
@@ -202,6 +205,7 @@ class Kernel(object):
         selector_modify = selector.modify
         selector_select = selector.select
         selector_getkey = selector.get_key
+        selector_max_timeout = kernel._max_select_timeout
 
         ready_popleft = ready.popleft
         ready_append = ready.append
@@ -632,6 +636,8 @@ class Kernel(object):
                 else:
                     current_time = time_monotonic()
                     timeout = sleepq.next_deadline(current_time)
+                    if selector_max_timeout and (timeout is None or timeout > selector_max_timeout):
+                        timeout = selector_max_timeout
                 try:
                     events = selector_select(timeout)
                 except OSError as e:
