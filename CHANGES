@@ -1,6 +1,12 @@
 CHANGES
 -------
-Version 1.2 - In Progress
+Version 1.3 - In progress
+-------------------------
+
+Nothing to report at this time.
+
+Version 1.2 - April 6, 2020
+---------------------------
 
 04/06/2020 Removed hard dependency on contextvars.   It was unnecessary and
            needlessly broken some things on Python 3.6.
