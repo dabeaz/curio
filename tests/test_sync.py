@@ -788,6 +788,7 @@ class TestUniversalEvent:
         async def main():
             evt = UniversalEvent()
             t1 = await spawn(event_waiter, evt)
+            await sleep(0.05)
             t2 = threading.Thread(target=asyncio.run, args=[event_setter(evt, 1)])
             t2.start()
             await t1.join()
