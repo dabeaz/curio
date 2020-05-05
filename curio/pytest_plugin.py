@@ -57,7 +57,7 @@ def pytest_configure(config):
 def pytest_pycollect_makeitem(collector, name, obj):
     """A pytest hook to collect coroutines in a test module."""
     if collector.funcnamefilter(name) and _is_coroutine(obj):
-        item = pytest.Function(name, parent=collector)
+        item = pytest.Function.from_parent(collector, name=name)
         if 'curio' in item.keywords:
             return list(collector._genfunctions(name, obj))
 
