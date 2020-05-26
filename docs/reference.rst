@@ -142,7 +142,7 @@ with the following methods and attributes:
    * - ``t.cycles``
      - The number of scheduling cycles the task has completed. 
    * - ``t.result``
-     - A property holding the task result. If accessed before the a terminates,
+     - A property holding the task result. If accessed before the task terminates,
        a ``RuntimeError`` exception is raised. If a task crashed with an exception,
        that exception is reraised on access.
    * - ``t.exception``
