@@ -667,6 +667,19 @@ For this, use the following queue and event classes.
    to coordinate Curio and ``asyncio``, they must be executing in
    separate threads.
 
+.. class:: UniversalResult()
+
+   A result object that can be used from Curio tasks, threads, and
+   ``asyncio``.  A result is somewhat similar to an event, but it
+   additionally carries an attached value or exception.  To set the
+   result, use ``set_result()`` or ``set_exception()``.  To return the
+   result, blocking if necessary, use ``result()``.  If used in an
+   asynchronous environment, these operations must be prefaced by
+   ``await``.  If used to coordinate Curio and ``asyncio``, they must
+   be executing in separate threads.  A ``UniversalResult()`` is
+   somewhat similar to a ``Future`` in usage, but it has a much more
+   restrictive API.
+
 Here is an example of a producer-consumer problem with a ``UniversalQueue``
 involving Curio, threads, and ``asyncio`` all running at once::
 

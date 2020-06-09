@@ -10,7 +10,7 @@
 # a queue.  When a task releases a lock, it wakes a sleeping task.
 # Task scheduling is provided by the SchedFIFO and SchedBarrier classes in sched.py
 
-__all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition' ]
+__all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition', 'UniversalResult' ]
 
 # -- Standard library
 
@@ -261,5 +261,47 @@ class Condition(_LockBase):
         await self.notify(len(self._waiting))
 
 
+class UniversalResult:
+    
+    def __init__(self):
+        self._evt = UniversalEvent()
+        self._value = None
+        self._exc = None
+
+    def is_set(self):
+        return self._evt.is_set()
+
+    def _return_result(self):
+        if self._exc:
+            raise self._exc from None
+        else:
+            return self._value
+
+    def result(self):
+        self._evt.wait()
+        return self._return_result()
+
+    @awaitable(result)
+    async def result(self):
+        await self._evt.wait()
+        return self._return_result()
+
+    def set_result(self, value):
+        self._value = value
+        self._evt.set()
+
+    @awaitable(set_result)
+    async def set_result(self, value):
+        self._value = value
+        await self._evt.set()
+
+    def set_exception(self, exc):
+        self._exc = exc
+        self._evt.set()
+
+    @awaitable(set_exception)
+    async def set_exception(self, exc):
+        self._exc = exc
+        await self._evt.set()
 
 

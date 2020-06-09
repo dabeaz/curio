@@ -3,7 +3,26 @@ CHANGES
 Version 1.3 - In progress
 -------------------------
 
-Nothing to report at this time.
+06/09/2020 Having now needed it a few projects, have added a UniversalResult
+           object.  It allows Curio tasks or threads to wait for a result
+	   to be set by another thread or task.   For example:
+
+               def do_work(result):
+	           ...
+		   result.set_result(value)
+
+               async def some_task(result):
+	           ...
+		   value = await result.result()
+		   ...
+
+               result = UniversalResult()
+	       threading.Thread(target=do_work, args=[result]).start()
+	       curio.run(some_task, result)
+
+           UniversalResult is somewhat similar to a Future.  However, it
+	   really only allows setting and waiting.  There are no callbacks,
+	   cancellation, or any other extras.
 
 Version 1.2 - April 6, 2020
 ---------------------------

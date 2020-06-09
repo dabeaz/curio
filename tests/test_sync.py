@@ -843,10 +843,26 @@ class TestUniversalEvent:
             False
         ]
 
+class TestUniversalResult:
+    def test_universal_result(self, kernel):
+        
+        def work(x, y, r):
+            time.sleep(0.25)
+            r.set_result(x+y)
 
+        async def main(r1, r2):
+            value = await r1.result()
+            await r2.set_result(value)
 
+        r1 = UniversalResult()
+        r2 = UniversalResult()
+        r3 = UniversalResult()
+        threading.Thread(target=work, args=[2,3,r1]).start()
+        threading.Thread(target=asyncio.run, args=[main(r1, r2)]).start()
+        kernel.run(main, r2, r3)
+        assert r3.result() == 5
 
 def test_repr():
     # For test coverage
-    for cls in [Lock, Event, Semaphore, Condition, RLock, UniversalEvent ]:
+    for cls in [Lock, Event, Semaphore, Condition, RLock, UniversalEvent, UniversalResult ]:
         repr(cls())
