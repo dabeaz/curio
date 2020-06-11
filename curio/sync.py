@@ -10,7 +10,7 @@
 # a queue.  When a task releases a lock, it wakes a sleeping task.
 # Task scheduling is provided by the SchedFIFO and SchedBarrier classes in sched.py
 
-__all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition', 'UniversalResult' ]
+__all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition', 'Result', 'UniversalResult' ]
 
 # -- Standard library
 
@@ -260,6 +260,39 @@ class Condition(_LockBase):
     async def notify_all(self):
         await self.notify(len(self._waiting))
 
+class Result:
+    def __init__(self):
+        self._evt = Event()
+        self._value = None
+        self._exc = None
+
+    def __repr__(self):
+        res = super().__repr__()        
+        if self._evt.is_set():
+            return f'<{res[1:-1]}, value={self._value!r}, exc={self._exc!r}>'
+        else:
+            return f'<{res[1:-1]}, not set>'
+        
+        status = "set" if self.is_set() else "not set"
+        return f'<Result status={status}>'
+    
+    def is_set(self):
+        return self._evt.is_set()
+
+    async def unwrap(self):
+        await self._evt.wait()
+        if self._exc:
+            raise self._exc from None
+        else:
+            return self._value
+
+    async def set_value(self, value):
+        self._value = value
+        await self._evt.set()
+        
+    async def set_exception(self, exc):
+        self._exc = exc
+        await self._evt.set()
 
 class UniversalResult:
     
@@ -267,6 +300,13 @@ class UniversalResult:
         self._evt = UniversalEvent()
         self._value = None
         self._exc = None
+
+    def __repr__(self):
+        res = super().__repr__()
+        if self._evt.is_set():
+            return f'<{res[1:-1]}, value={self._value!r}, exc={self._exc!r}>'
+        else:
+            return f'<{res[1:-1]}, not set>'
 
     def is_set(self):
         return self._evt.is_set()
@@ -286,12 +326,12 @@ class UniversalResult:
         await self._evt.wait()
         return self._return_result()
 
-    def set_result(self, value):
+    def set_value(self, value):
         self._value = value
         self._evt.set()
 
-    @awaitable(set_result)
-    async def set_result(self, value):
+    @awaitable(set_value)
+    async def set_value(self, value):
         self._value = value
         await self._evt.set()
 

@@ -843,16 +843,44 @@ class TestUniversalEvent:
             False
         ]
 
+class TestResult:
+    def test_value(self, kernel):
+        
+        async def work(x, y, r):
+            await r.set_value(x+y)
+
+        async def main():
+            r = Result()
+            await spawn(work, 2, 3, r)
+            assert await r.unwrap() == 5
+
+        kernel.run(main)
+
+    def test_error(self, kernel):
+        async def work(x, y, r):
+            try:
+                await r.set_value(x+y)
+            except Exception as err:
+                await r.set_exception(err)
+
+        async def main():
+            r = Result()
+            await spawn(work, 2, "3", r)
+            with pytest.raises(TypeError):
+                await r.unwrap()
+
+        kernel.run(main)
+
+        
 class TestUniversalResult:
-    def test_universal_result(self, kernel):
+    def test_universal_value(self, kernel):
         
         def work(x, y, r):
-            time.sleep(0.25)
-            r.set_result(x+y)
+            r.set_value(x+y)
 
         async def main(r1, r2):
             value = await r1.unwrap()
-            await r2.set_result(value)
+            await r2.set_value(value)
 
         r1 = UniversalResult()
         r2 = UniversalResult()
@@ -862,7 +890,32 @@ class TestUniversalResult:
         kernel.run(main, r2, r3)
         assert r3.unwrap() == 5
 
+    def test_universal_error(self, kernel):
+        
+        def work(x, y, r):
+            try:
+                r.set_value(x+y)
+            except Exception as err:
+                r.set_exception(err)
+
+        async def main(r1, r2):
+            try:
+                value = await r1.unwrap()
+                await r2.set_value(value)
+            except Exception as err:
+                await r2.set_exception(err)
+
+        r1 = UniversalResult()
+        r2 = UniversalResult()
+        r3 = UniversalResult()
+        threading.Thread(target=work, args=[2,"3",r1]).start()
+        threading.Thread(target=asyncio.run, args=[main(r1, r2)]).start()
+        kernel.run(main, r2, r3)
+        with pytest.raises(TypeError):
+            val = r3.unwrap()
+
+
 def test_repr():
     # For test coverage
-    for cls in [Lock, Event, Semaphore, Condition, RLock, UniversalEvent, UniversalResult ]:
+    for cls in [Lock, Event, Semaphore, Condition, RLock, UniversalEvent, Result, UniversalResult ]:
         repr(cls())

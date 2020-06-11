@@ -458,6 +458,27 @@ An :class:`Event` instance ``e`` supports the following methods:
    * - ``await e.set()``
      - Set the event. Wake all waiting tasks (if any)
 
+
+.. class:: Result()
+
+   A synchronized result object.  This is like an `Event` except
+   that it additionally carries a value or exception.
+
+An :class:`Result` instance ``r`` supports the following methods:
+
+.. list-table:: 
+   :widths: 40 60
+   :header-rows: 0
+
+   * - ``r.is_set()``
+     - Return ``True`` if a result value or exception has been set
+   * - ``await r.set_value(value)``
+     - Set the result value, waking any waiters.
+   * - ``await r.set_exception(exc)``
+     - Set the result exception, waking any waiters.
+   * - ``await r.unwrap()``
+     - Wait and return the set value. If an exception was set, it is reraised.
+
 ``Lock``, ``RLock``, ``Semaphore`` classes that allow for mutual exclusion and
 inter-task coordination. 
 
@@ -672,7 +693,7 @@ For this, use the following queue and event classes.
    A result object that can be used from Curio tasks, threads, and
    ``asyncio``.  A result is somewhat similar to an event, but it
    additionally carries an attached value or exception.  To set the
-   result, use ``set_result()`` or ``set_exception()``.  To return the
+   result, use ``set_value()`` or ``set_exception()``.  To return the
    result, blocking if necessary, use ``unwrap()``.  If used in an
    asynchronous environment, these operations must be prefaced by
    ``await``.  If used to coordinate Curio and ``asyncio``, they must
@@ -742,7 +763,10 @@ by a thread using a ``UniversalResult`` object::
 
     def worker(x, y, result):
         time.sleep(10)
-	result.set_result(x+y)
+	try:
+            result.set_value(x+y)
+	except Exception as err:
+	    result.set_exception(err)
 
     async def main():
         result = curio.UniversalResult()
