@@ -851,7 +851,7 @@ class TestUniversalResult:
             r.set_result(x+y)
 
         async def main(r1, r2):
-            value = await r1.result()
+            value = await r1.unwrap()
             await r2.set_result(value)
 
         r1 = UniversalResult()
@@ -860,7 +860,7 @@ class TestUniversalResult:
         threading.Thread(target=work, args=[2,3,r1]).start()
         threading.Thread(target=asyncio.run, args=[main(r1, r2)]).start()
         kernel.run(main, r2, r3)
-        assert r3.result() == 5
+        assert r3.unwrap() == 5
 
 def test_repr():
     # For test coverage

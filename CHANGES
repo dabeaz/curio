@@ -13,7 +13,7 @@ Version 1.3 - In progress
 
                async def some_task(result):
 	           ...
-		   value = await result.result()
+		   value = await result.unwrap()
 		   ...
 
                result = UniversalResult()

@@ -673,7 +673,7 @@ For this, use the following queue and event classes.
    ``asyncio``.  A result is somewhat similar to an event, but it
    additionally carries an attached value or exception.  To set the
    result, use ``set_result()`` or ``set_exception()``.  To return the
-   result, blocking if necessary, use ``result()``.  If used in an
+   result, blocking if necessary, use ``unwrap()``.  If used in an
    asynchronous environment, these operations must be prefaced by
    ``await``.  If used to coordinate Curio and ``asyncio``, they must
    be executing in separate threads.  A ``UniversalResult()`` is
@@ -733,8 +733,26 @@ involving Curio, threads, and ``asyncio`` all running at once::
 In this code, the ``consumer()`` coroutine is used simultaneously in
 Curio and ``asyncio``. ``producer()`` is an ordinary thread.
 
-When in doubt, queues and events are the preferred mechanism of
-coordinating Curio with foreign environments.  Higher-level
+Here is example that has Curio wait for the result produced
+by a thread using a ``UniversalResult`` object::
+
+    import threading
+    import curio
+    import time
+
+    def worker(x, y, result):
+        time.sleep(10)
+	result.set_result(x+y)
+
+    async def main():
+        result = curio.UniversalResult()
+	threading.Thread(target=worker, args=[2,3,result]).start()
+	print("Result:", await result.unwrap())
+
+    curio.run(main)
+
+When in doubt, queues, events, and results are the preferred mechanism
+of coordinating Curio with foreign environments.  Higher-level
 abstractions can often be built from these.
 
 Blocking Operations and External Work

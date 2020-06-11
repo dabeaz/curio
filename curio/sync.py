@@ -277,12 +277,12 @@ class UniversalResult:
         else:
             return self._value
 
-    def result(self):
+    def unwrap(self):
         self._evt.wait()
         return self._return_result()
 
-    @awaitable(result)
-    async def result(self):
+    @awaitable(unwrap)
+    async def unwrap(self):
         await self._evt.wait()
         return self._return_result()
 
