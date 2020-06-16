@@ -20,6 +20,7 @@ import dis
 import asyncio
 import threading
 from contextlib import contextmanager
+import collections.abc
 
 # -- Curio
 
@@ -94,13 +95,13 @@ def instantiate_coroutine(corofunc, *args, **kwargs):
     it's not a coroutine, we call corofunc(*args, **kwargs) and hope
     for the best.
     '''
-    if inspect.iscoroutine(corofunc) or inspect.isgenerator(corofunc):
+    if isinstance(corofunc, collections.abc.Coroutine) or inspect.isgenerator(corofunc):
         assert not args and not kwargs, "arguments can't be passed to an already instantiated coroutine"
         return corofunc
 
     if not iscoroutinefunction(corofunc) and not getattr(corofunc, '_async_thread', False):
         coro = corofunc(*args, **kwargs)
-        if not inspect.iscoroutine(coro):
+        if not isinstance(coro, collections.abc.Coroutine):
             raise TypeError(f'Could not create coroutine from {corofunc}')
         return coro
 
