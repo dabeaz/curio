@@ -2,7 +2,11 @@ CHANGES
 -------
 Version 1.3 - In progress
 -------------------------
-
+06/16/2020 Refined the detection of coroutines to use collections.abc.Coroutine.
+	   This change should not affect any existing part of Curio, but it
+	   allows it to properly recognize async functions defined in
+	   extensions such as Cython.  See Issue #326.
+	   
 06/11/2020 Added a Result object.  It's like an Event except that it has a
            an associated value/exception attached to it.  Here's the basic
 	   usage pattern:
