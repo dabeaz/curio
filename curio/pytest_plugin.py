@@ -66,7 +66,7 @@ def pytest_pycollect_makeitem(collector, name, obj):
 def pytest_pyfunc_call(pyfuncitem):
     """Run curio marked test functions in a Curio kernel instead of a normal function call.
     """
-    if 'curio' in pyfuncitem.keywords:
+    if pyfuncitem.get_closest_marker('curio'):
         pyfuncitem.obj = wrap_in_sync(pyfuncitem.obj)
     yield
 
