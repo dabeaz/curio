@@ -9,6 +9,8 @@ import threading
 import signal
 import os
 
+assert (sys.version_info.major >= 3 and sys.version_info.minor >= 8), "console requires Python 3.8+"
+
 class CurioIOInteractiveConsole(code.InteractiveConsole):
 
     def __init__(self, locals):

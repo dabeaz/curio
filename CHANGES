@@ -2,6 +2,10 @@ CHANGES
 -------
 Version 1.3 - In progress
 -------------------------
+08/21/2020 Moved the Pytest plugin to the examples directory.  There have 
+           been several reported problems with it.   It is no longer
+           installed by default.  It was never used by Curio itself.
+
 06/16/2020 Refined the detection of coroutines to use collections.abc.Coroutine.
 	   This change should not affect any existing part of Curio, but it
 	   allows it to properly recognize async functions defined in
