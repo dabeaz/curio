@@ -1,5 +1,8 @@
 CHANGES
 -------
+Version 1.4 - August 23, 2020
+-----------------------------
+08/23/2020 Fixed minimum requirement in setup.py
 
 Version 1.3 - August 23, 2020
 -----------------------------
