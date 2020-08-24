@@ -1,7 +1,8 @@
 CHANGES
 -------
-Version 1.3 - In progress
--------------------------
+
+Version 1.3 - August 23, 2020
+-----------------------------
 08/21/2020 Moved the Pytest plugin to the examples directory.  There have 
            been several reported problems with it.   It is no longer
            installed by default.  It was never used by Curio itself.
