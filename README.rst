@@ -126,7 +126,7 @@ fix bugs or support new versions of Python.
 
 A: Curio is not a community-based project seeking developers
 or maintainers.  However, having it work reliably is important. If you've
-found a bug or have an idea for making it better, please feel
+found a bug or have an idea for making it better, please feel free to
 file an `issue <https://github.com/dabeaz/curio>`_. 
 
 Contributors
