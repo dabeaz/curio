@@ -135,8 +135,7 @@ class Kernel(object):
             raise RuntimeError("Can't run a kernel that's been shut down or crashed. Create a new kernel.")
 
         coro = meta.instantiate_coroutine(corofunc, *args) if corofunc else None
-
-        with meta.running():
+        with meta.running(self):
             # Make the kernel runtime environment (if needed)
             if not self._runner:
                 self._runner = self._make_kernel_runtime()

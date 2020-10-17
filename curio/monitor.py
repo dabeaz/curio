@@ -61,6 +61,7 @@ import logging
 
 # --- Curio
 from .task import spawn
+from . import meta
 from . import queue
 
 # ---
@@ -69,6 +70,54 @@ log = logging.getLogger(__name__)
 MONITOR_HOST = '127.0.0.1'
 MONITOR_PORT = 48802
 
+# Implementation of the 'ps' command
+def _ps_impl(kernel):
+    headers = ('Task', 'State', 'Cycles', 'Timeout', 'Sleep', 'Task')
+    widths = (6, 12, 10, 7, 7, 50)
+    sout = ''
+    for h, w in zip(headers, widths):
+        sout += '%-*s ' % (w, h)
+    sout += '\n'
+    sout += ' '.join(w * '-' for w in widths)
+    sout += '\n'
+    timestamp = time.monotonic()
+    for taskid in sorted(kernel._tasks):
+        task = kernel._tasks.get(taskid)
+        if task:
+            timeout_remaining = format(
+                (task.timeout - timestamp),
+                '0.6f')[:7] if task.timeout else 'None'
+            sleep_remaining = format(
+                (task.sleep - timestamp),
+                '0.6f')[:7] if task.sleep else 'None'
+
+            sout += '%-*d %-*s %-*d %-*s %-*s %-*s\n' % (widths[0], taskid,
+                                                         widths[1], task.state,
+                                                         widths[2], task.cycles,
+                                                         widths[3], timeout_remaining,
+                                                         widths[4], sleep_remaining,
+                                                         widths[5], task.name)
+    return sout
+
+def ps():
+    '''
+    Print a list of active tasks
+    '''
+    print(_ps_impl(meta._locals.kernel))
+
+def _where_impl(kernel, taskid):
+    task = kernel._tasks.get(taskid)
+    if task:
+        return task.traceback() + '\n'
+    else:
+        return 'No task %d\n' % taskid
+
+def where(taskid):
+    '''
+    Display the current line of execution for a given task.
+    '''
+    print(_where_impl(meta._locals.kernel, taskid))
+    
 class Monitor(object):
     '''
     Task monitor that runs concurrently to the curio kernel in a
@@ -212,37 +261,10 @@ class Monitor(object):
 ''')
 
     def command_ps(self, sout):
-        headers = ('Task', 'State', 'Cycles', 'Timeout', 'Sleep', 'Task')
-        widths = (6, 12, 10, 7, 7, 50)
-        for h, w in zip(headers, widths):
-            sout.write('%-*s ' % (w, h))
-        sout.write('\n')
-        sout.write(' '.join(w * '-' for w in widths))
-        sout.write('\n')
-        timestamp = time.monotonic()
-        for taskid in sorted(self.kernel._tasks):
-            task = self.kernel._tasks.get(taskid)
-            if task:
-                timeout_remaining = format(
-                    (task.timeout - timestamp),
-                    '0.6f')[:7] if task.timeout else 'None'
-                sleep_remaining = format(
-                    (task.sleep - timestamp),
-                    '0.6f')[:7] if task.sleep else 'None'
-
-                sout.write('%-*d %-*s %-*d %-*s %-*s %-*s\n' % (widths[0], taskid,
-                                                                widths[1], task.state,
-                                                                widths[2], task.cycles,
-                                                                widths[3], timeout_remaining,
-                                                                widths[4], sleep_remaining,
-                                                                widths[5], task.name))
+        sout.write(_ps_impl(self.kernel))
 
     def command_where(self, sout, taskid):
-        task = self.kernel._tasks.get(taskid)
-        if task:
-            sout.write(task.traceback() + '\n')
-        else:
-            sout.write('No task %d\n' % taskid)
+        sout.write(_where_impl(self.kernel, taskid))
 
     def command_signal(self, sout, signame):
         if hasattr(signal, signame):

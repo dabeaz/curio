@@ -1,5 +1,6 @@
 import ast
 import curio
+import curio.monitor
 import code
 import inspect
 import sys
@@ -104,7 +105,10 @@ def run_repl(console):
         console.requests.put(None)
     
 if __name__ == '__main__':
-    repl_locals = { 'curio': curio }
+    repl_locals = { 'curio': curio,
+                    'ps': curio.monitor.ps,
+                    'where': curio.monitor.where,
+    }
     for key in {'__name__', '__package__',
                 '__loader__', '__spec__',
                 '__builtins__', '__file__'}:

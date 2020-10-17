@@ -32,15 +32,17 @@ _locals = threading.local()
 # Context manager that is used when the kernel is executing.
 
 @contextmanager
-def running():
+def running(kernel):
     if getattr(_locals, 'running', False):
         raise RuntimeError('Only one Curio kernel per thread is allowed')
     _locals.running = True
+    _locals.kernel = kernel
     try:
         with asyncgen_manager():
             yield
     finally:
         _locals.running = False
+        _locals.kernel = None
 
 def curio_running():
     '''
