@@ -1,14 +1,15 @@
 CHANGES
 -------
-Version 1.4 - August 23, 2020
------------------------------
-08/23/2020 Fixed minimum requirement in setup.py
-
-Version 1.4 - In Progress
+Version 1.5 - In Progress
 -------------------------
 10/17/2020 Added ps() and where() commands to the monitor
            that can be used from the Curio REPL when you run
 	   `python -m curio`.
+
+Version 1.4 - August 23, 2020
+-----------------------------
+08/23/2020 Fixed minimum requirement in setup.py
+
 
 Version 1.3 - August 23, 2020
 -----------------------------
