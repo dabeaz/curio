@@ -58,6 +58,7 @@ import threading
 import telnetlib
 import argparse
 import logging
+import sys
 
 # --- Curio
 from .task import spawn
@@ -71,7 +72,9 @@ MONITOR_HOST = '127.0.0.1'
 MONITOR_PORT = 48802
 
 # Implementation of the 'ps' command
-def _ps_impl(kernel):
+def ps(kernel=None, out=sys.stdout):
+    if kernel is None:
+        kernel = meta._locals.kernel
     headers = ('Task', 'State', 'Cycles', 'Timeout', 'Sleep', 'Task')
     widths = (6, 12, 10, 7, 7, 50)
     sout = ''
@@ -97,26 +100,17 @@ def _ps_impl(kernel):
                                                          widths[3], timeout_remaining,
                                                          widths[4], sleep_remaining,
                                                          widths[5], task.name)
-    return sout
+    out.write(sout)
 
-def ps():
-    '''
-    Print a list of active tasks
-    '''
-    print(_ps_impl(meta._locals.kernel))
-
-def _where_impl(kernel, taskid):
+# Implementation of the 'where' command
+def where(taskid, kernel=None, out=sys.stdout):
+    if kernel is None:
+        kernel = meta._locals.kernel
     task = kernel._tasks.get(taskid)
     if task:
-        return task.traceback() + '\n'
+        out.write(task.traceback() + '\n')
     else:
-        return 'No task %d\n' % taskid
-
-def where(taskid):
-    '''
-    Display the current line of execution for a given task.
-    '''
-    print(_where_impl(meta._locals.kernel, taskid))
+        out.write('No task %d\n' % taskid)
     
 class Monitor(object):
     '''
@@ -261,10 +255,10 @@ class Monitor(object):
 ''')
 
     def command_ps(self, sout):
-        sout.write(_ps_impl(self.kernel))
+        ps(self.kernel, sout)
 
     def command_where(self, sout, taskid):
-        sout.write(_where_impl(self.kernel, taskid))
+        where(taskid, self.kernel, sout)
 
     def command_signal(self, sout, signame):
         if hasattr(signal, signame):

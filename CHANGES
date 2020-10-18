@@ -4,7 +4,21 @@ Version 1.5 - In Progress
 -------------------------
 10/17/2020 Added ps() and where() commands to the monitor
            that can be used from the Curio REPL when you run
-	   `python -m curio`.
+	   `python -m curio`.  These can also be used to monitor
+	   the state of the kernel from a different thread.
+	   For example:
+
+               from threading import Thread
+	       
+               kern = Kernel()
+	       Thread(target=kern.run, args=[main]).start()
+
+               >>> from curio.monitor import ps
+               >>> ps(kern)
+	       ... displays active tasks ...
+
+           This makes it a bit easier to have some of the monitor
+	   capability in an live-environment where Curio is running.
 
 Version 1.4 - August 23, 2020
 -----------------------------
