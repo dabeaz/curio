@@ -13,11 +13,11 @@ __all__ = [
 
 class CurioError(Exception):
     '''
-    Base class for all Curio-related exceptions
+    Base class for all non-cancellation Curio-related exceptions
     '''
 
 
-class CancelledError(CurioError):
+class CancelledError(BaseException):
     '''
     Base class for all task-cancellation related exceptions
     '''

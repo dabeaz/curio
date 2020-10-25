@@ -2,6 +2,28 @@ CHANGES
 -------
 Version 1.5 - In Progress
 -------------------------
+10/25/2020 Changed all cancellation related exceptions to inherit
+           from BaseException instead of Exception.   This makes
+	   them play slightly better with normal exception handling
+	   code:
+
+               try:
+	           await some_operation()
+	       except Exception as err:
+	           # Normal (expected) program related error
+		   ...
+	       except CancelledError as err:
+	           # Cancellation of some kind
+		   ...
+
+           This also mirrors a similar change to asyncio.CancelledError
+	   which now directly inherits from BaseException.
+
+           ***POTENTIAL INCOMPATIBILITY***
+
+           If you were using try: ... except Exception: to catch
+	   cancellation, that code will break. 
+	   
 10/17/2020 Added ps() and where() commands to the monitor
            that can be used from the Curio REPL when you run
 	   `python -m curio`.  These can also be used to monitor

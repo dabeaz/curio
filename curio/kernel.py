@@ -753,7 +753,7 @@ class Kernel(object):
                                 active.exception = e
                                 if (active != main_task and not isinstance(e, (CancelledError, SystemExit))):
                                     log.error('Task Crash: %r', active, exc_info=True)
-                                if not isinstance(e, Exception):
+                                if not isinstance(e, (Exception, CancelledError)):
                                     raise
                             break
 
