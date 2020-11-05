@@ -106,20 +106,23 @@ other event loops using queues.
 
 **Q: How fast is Curio?**
 
-A: In rough benchmarking of the simple echo server shown here, Curio
-runs about 90% faster than comparable code using coroutines in
-``asyncio``. This was last measured on Linux using Python 3.7b3. Keep
-in mind there is a lot more to overall application performance than
-the performance of a simple echo server so your mileage might
-vary. See the ``examples/benchmark`` directory for various testing
-programs.
+A: Curio's primary goal is to be an async library that is minimal and
+understandable. Performance is not the primary concern.  That said, in
+rough benchmarking of a simple echo server, Curio is more than twice
+as fast as comparable code using coroutines in ``asyncio`` or
+``trio``.  This was last measured on OS-X using Python 3.9.  Keep in
+mind there is a lot more to overall application performance than the
+performance of a simple echo server so your mileage might
+vary. However, as a runtime environment, Curio doesn't introduce a lot of
+extra overhead. See the ``examples/benchmark`` directory for various
+testing programs.
 
 **Q: What is the future of Curio?**
 
 A: Curio should be viewed as a library of primitives related to
 concurrent systems programming.  At this time, it is considered
 to be feature-complete--meaning that it is not expected to
-sprout new capabilities.  It may be updated from time to time to
+sprout many new capabilities.  It may be updated from time to time to
 fix bugs or support new versions of Python.
 
 **Q: Can I contribute?**
