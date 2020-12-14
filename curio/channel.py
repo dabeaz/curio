@@ -119,7 +119,7 @@ class Connection(object):
             await self._writer.write(msg)
         return size
 
-    async def recv_bytes(self,maxlength=None):
+    async def recv_bytes(self, maxlength=None):
         '''
         Receive a message of bytes as a single message.
         '''
