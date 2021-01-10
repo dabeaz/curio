@@ -2,9 +2,40 @@ Curio
 =====
 
 Curio is a coroutine-based library for concurrent Python systems
-programming.  It provides standard programming abstractions such as as
-tasks, sockets, files, locks, and queues. It works on Unix and Windows. 
-You'll find it to be familiar, small, fast, and fun
+programming using async/await.  It provides standard programming
+abstractions such as as tasks, sockets, files, locks, and queues as
+well as some advanced features such as supported for structured
+concurrency. It works on Unix and Windows and has zero dependencies.
+You'll find it to be familiar, small, fast, and fun.
+
+Curio is Different
+------------------
+One of the most important ideas from software architecture is the
+"separation of concerns."  This can take many forms such as utilizing
+abstraction layers, object oriented programming, aspects, higher-order
+functions, and so forth.  However, another effective form of it exists
+in the idea of separating execution environments.  For example, "user
+mode" versus "kernel mode" in operating systems.  This is the
+underlying idea in Curio, but applied to "asynchronous" versus
+"synchronous" execution.
+
+A fundamental problem with asynchronous code is that it involves a
+completely different evaluation model that doesn't compose well with
+ordinary applications or with other approaches to concurrency such as
+thread programing.  Although the addition of "async/await" to Python
+helps clarify such code, "async" libraries still tend to be a confused
+mess of functionality that mix asynchronous and synchronous
+functionality together in the same environment--often bolting it all
+together with an assortment of hacks that try to sort out all of
+associated API confusion.
+
+Curio strictly separates asynchronous code from synchronous code.
+Specifically, *all* functionality related to the asynchronous
+environment utilizes "async/await" features and syntax--without
+exception.  Moreover, interactions between async and sync code is
+carefully managed through a small set of simple mechanisms such as
+events and queues.  As a result, Curio is small, fast, and
+significantly easier to reason about.
 
 A Simple Example
 -----------------
@@ -66,8 +97,8 @@ Talks Related to Curio
 ----------------------
 
 Concepts related to Curio's design and general issues related to async
-programming have been described by Curio's creator in various
-conference talks and tutorials:
+programming have been described by Curio's creator, `David Beazley <https://www.dabeaz.com>`_, in
+various conference talks and tutorials:
 
 * `Build Your Own Async <https://www.youtube.com/watch?v=Y4Gt3Xjd7G8>`_, Workshop talk by David Beazley at PyCon India, 2019.
 
@@ -96,7 +127,14 @@ A: No. Curio is a standalone library directly created from low-level I/O primiti
 A: No. Although Curio provides a significant amount of overlapping
 functionality, the API is different.  Compatibility with other
 libaries is not a goal.
- 
+
+**Q: Is Curio meant to be compatible with other async libraries?**
+
+A: No. Curio is a stand-alone project that emphasizes a certain
+software architecture based on separation of environments.  Other
+libraries have largely ignored this concept, preferring to simply
+provide variations on the existing approach found in asyncio.
+
 **Q: Can Curio interoperate with other event loops?**
 
 A: It depends on what you mean by the word "interoperate."  Curio's
@@ -119,11 +157,11 @@ testing programs.
 
 **Q: What is the future of Curio?**
 
-A: Curio should be viewed as a library of primitives related to
-concurrent systems programming.  At this time, it is considered
-to be feature-complete--meaning that it is not expected to
-sprout many new capabilities.  It may be updated from time to time to
-fix bugs or support new versions of Python.
+A: Curio should be viewed as a library of basic programming
+primitives.  At this time, it is considered to be
+feature-complete--meaning that it is not expected to sprout many new
+capabilities.  It may be updated from time to time to fix bugs or
+support new versions of Python.
 
 **Q: Can I contribute?**
 
