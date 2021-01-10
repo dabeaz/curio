@@ -14,7 +14,7 @@ setup(name="curio",
       description="Curio",
       long_description=long_description,
       license="BSD",
-      version="1.4",
+      version="1.5",
       author="David Beazley",
       author_email="dave@dabeaz.com",
       maintainer="David Beazley",
@@ -25,7 +25,7 @@ setup(name="curio",
       extras_require={
           'test': tests_require,
       },
-      python_requires='>= 3.6',
+      python_requires='>= 3.7',
       # This is disabled because it often causes interference with other testing
       # plugins people have written.  Curio doesn't use it for it's own testing.
       # entry_points={"pytest11": ["curio = curio.pytest_plugin"]},

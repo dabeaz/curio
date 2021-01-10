@@ -1,7 +1,7 @@
 CHANGES
 -------
-Version 1.5 - In Progress
--------------------------
+Version 1.5 - January 10, 2021
+------------------------------
 10/25/2020 Changed all cancellation related exceptions to inherit
            from BaseException instead of Exception.   This makes
 	   them play slightly better with normal exception handling
