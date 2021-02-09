@@ -3,7 +3,7 @@
 import curio_zmq as zmq
 from curio import sleep, spawn
 
-from hello import fib
+from fibserve import fib
 
 async def ticker():
     n = 0
