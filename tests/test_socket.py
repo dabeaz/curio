@@ -47,6 +47,7 @@ def test_tcp_echo(kernel, portno):
         results.append(('client', resp))
         results.append('client close')
         await sock.close()
+        await sleep(0.1)
 
     async def main():
         async with TaskGroup() as g:
@@ -109,6 +110,7 @@ def test_tcp_file_echo(kernel, portno):
         results.append(('client', resp))
         results.append('client close')
         await sock.close()
+        await sleep(0.1)
 
     async def main():
         async with TaskGroup() as g:
@@ -214,6 +216,7 @@ def test_fromfd_tcp_echo(kernel, portno):
         results.append(('client', resp))
         results.append('client close')
         await sock.close()
+        await sleep(0.1)
 
     async def main():
         async with TaskGroup() as g:
