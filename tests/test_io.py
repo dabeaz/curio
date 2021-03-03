@@ -730,6 +730,7 @@ def test_iterline(kernel, portno):
         await sock.recv(8)
         await sock.send(b'Msg1\nMsg2\nMsg3\n')
         await sock.close()
+        await sleep(0.1)
         await serv.cancel()
 
     async def main():
