@@ -370,9 +370,12 @@ class TaskGroup(object):
         for task in tasks:
             assert not task.taskgroup,  "Task already assigned to a task group"
             task.taskgroup = self
-            self._tasks.add(task)
+            if not task.daemon:
+                self._tasks.add(task)
             if task.terminated:
                 self._finished.append(task)
+            elif task.daemon:
+                self._daemonic.add(task)
             else:
                 self._running.add(task)
 
@@ -561,8 +564,7 @@ class TaskGroup(object):
     async def __aexit__(self, ty, val, tb):
         if ty:
             await self.cancel_remaining()
-        else:
-            await self.join()
+        await self.join()
 
     def __aiter__(self):
         return self

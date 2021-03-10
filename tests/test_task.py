@@ -101,18 +101,35 @@ def test_task_group_daemon(kernel):
         return x + y
 
     async def main():
-        async with TaskGroup(wait=all) as g:
+        t0 = await spawn(sleep, 5, daemon=True)
+        async with TaskGroup([t0], wait=all) as g:
             t1 = await g.spawn(child, 1, 1)
             t2 = await g.spawn(child, 2, 2, daemon=True)
             t3 = await g.spawn(child, 3, "3", daemon=True)
-            t4 = await g.spawn(sleep, 0.5, daemon=True)
+            t4 = await g.spawn(sleep, 5, daemon=True)
 
         assert t1.result == 2
+        # Verify that results from daemonic tasks are disregarded
         assert g.results == [2]
-
+        # Verify that daemon tasks get cancelled
+        assert t0.cancelled        
+        assert t4.cancelled
 
     kernel.run(main())
 
+def test_task_group_daemon_error(kernel):
+    async def main():
+        try:
+            async with TaskGroup(wait=all) as g:
+                t = await g.spawn(sleep, 5, daemon=True)
+                raise ValueError()
+        except ValueError:
+            pass
+        # Verify that the daemon task got cancelled
+        assert t.cancelled
+
+    kernel.run(main())
+    
 def test_task_group_existing(kernel):
     evt = Event()
     async def child(x, y):

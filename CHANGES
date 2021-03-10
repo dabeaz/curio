@@ -1,46 +1,52 @@
 CHANGES
 -------
-Version 1.5 - January 10, 2021
+Version 1.5 - In Progress
 ------------------------------
+03/10/2021 Fixed Issue #340 related to the handling of daemonic tasks
+           in a TaskGroup.   TaskGroups can now be given existing
+           daemonic tasks in the constructor.  Daemonic tasks are
+           correctly cancelled if a TaskGroup used as a context manager
+           terminates due to an exception.
+           
 10/25/2020 Changed all cancellation related exceptions to inherit
            from BaseException instead of Exception.   This makes
-	   them play slightly better with normal exception handling
-	   code:
+           them play slightly better with normal exception handling
+           code:
 
                try:
-	           await some_operation()
-	       except Exception as err:
-	           # Normal (expected) program related error
-		   ...
-	       except CancelledError as err:
-	           # Cancellation of some kind
-		   ...
+                   await some_operation()
+               except Exception as err:
+                   # Normal (expected) program related error
+                   ...
+               except CancelledError as err:
+                   # Cancellation of some kind
+                   ...
 
            This also mirrors a similar change to asyncio.CancelledError
-	   which now directly inherits from BaseException.
+           which now directly inherits from BaseException.
 
            ***POTENTIAL INCOMPATIBILITY***
 
            If you were using try: ... except Exception: to catch
-	   cancellation, that code will break. 
-	   
+           cancellation, that code will break. 
+           
 10/17/2020 Added ps() and where() commands to the monitor
            that can be used from the Curio REPL when you run
-	   `python -m curio`.  These can also be used to monitor
-	   the state of the kernel from a different thread.
-	   For example:
+           `python -m curio`.  These can also be used to monitor
+           the state of the kernel from a different thread.
+           For example:
 
                from threading import Thread
-	       
+               
                kern = Kernel()
-	       Thread(target=kern.run, args=[main]).start()
+               Thread(target=kern.run, args=[main]).start()
 
                >>> from curio.monitor import ps
                >>> ps(kern)
-	       ... displays active tasks ...
+               ... displays active tasks ...
 
            This makes it a bit easier to have some of the monitor
-	   capability in an live-environment where Curio is running.
+           capability in an live-environment where Curio is running.
 
 Version 1.4 - August 23, 2020
 -----------------------------
@@ -54,81 +60,81 @@ Version 1.3 - August 23, 2020
            installed by default.  It was never used by Curio itself.
 
 06/16/2020 Refined the detection of coroutines to use collections.abc.Coroutine.
-	   This change should not affect any existing part of Curio, but it
-	   allows it to properly recognize async functions defined in
-	   extensions such as Cython.  See Issue #326.
-	   
+           This change should not affect any existing part of Curio, but it
+           allows it to properly recognize async functions defined in
+           extensions such as Cython.  See Issue #326.
+           
 06/11/2020 Added a Result object.  It's like an Event except that it has a
            an associated value/exception attached to it.  Here's the basic
-	   usage pattern:
+           usage pattern:
 
                result = Result()
-	       ...
-	       async def do_work():
-	           try:
-		       ...
+               ...
+               async def do_work():
+                   try:
+                       ...
                        await result.set_value(value)
-		   except Exception as e:
-		       await result.set_exception(e)
+                   except Exception as e:
+                       await result.set_exception(e)
 
                async def some_task():
-	           ...
-		   try:
-		       value = await result.unwrap() 
-		       print("Success:", value)
-		   except Exception as e:
-		       print("Fail:", e)
+                   ...
+                   try:
+                       value = await result.unwrap() 
+                       print("Success:", value)
+                   except Exception as e:
+                       print("Fail:", e)
 
            In this example, the unwrap() method blocks until the result
-	   becomes available.
+           becomes available.
 
 06/09/2020 Having now needed it a few projects, have added a UniversalResult
            object.  It allows Curio tasks or threads to wait for a result
-	   to be set by another thread or task.   For example:
+           to be set by another thread or task.   For example:
 
                def do_work(result):
-	           ...
-		   result.set_value(value)
+                   ...
+                   result.set_value(value)
 
                async def some_task(result):
-	           ...
-		   value = await result.unwrap()
-		   ...
+                   ...
+                   value = await result.unwrap()
+                   ...
 
                result = UniversalResult()
-	       threading.Thread(target=do_work, args=[result]).start()
-	       curio.run(some_task, result)
+               threading.Thread(target=do_work, args=[result]).start()
+               curio.run(some_task, result)
 
            UniversalResult is somewhat similar to a Future.  However, it
-	   really only allows setting and waiting.  There are no callbacks,
-	   cancellation, or any other extras.
+           really only allows setting and waiting.  There are no callbacks,
+           cancellation, or any other extras.
 
 Version 1.2 - April 6, 2020
 ---------------------------
 
 04/06/2020 Removed hard dependency on contextvars.   It was unnecessary and
            needlessly broken some things on Python 3.6.
-	   
+           
 04/06/2020 Added a default selector timeout of 1 second for Windows.  This
            makes everything a bit more friendly for Control-C.  This can be
-	   disabled or changed using the max_select_timeout argument to Kernel
-	   or curio.run().
-	   
+           disabled or changed using the max_select_timeout argument to Kernel
+           or curio.run().
+           
 04/04/2020 First crack at a Curio repl.  Idea borrowed from the asyncio
            REPL.  If you run `python -m curio` it will start a REPL
-	   in which Curio is already running in the background. You
-	   can directly await operations at the top level. For example:
+           in which Curio is already running in the background. You
+           can directly await operations at the top level. For example:
 
               bash $ python -m curio
               Use "await" directly instead of "curio.run()".
               Type "help", "copyright", "credits" or "license" for more information.
               >>> import curio
               >>> await curio.sleep(4)
-	      >>>
+              >>>
 
            Pressing Control-C causes any `await` operation to be cancelled
-	   with a `curio.TaskCancelled` exception.   For normal operations
-	   not involving `await, Control-C raises a `KeyboardInterrupt` as
+           with a `curio.TaskCancelled` exception.   For normal operations
+           not involving `await, Control-C raises a `KeyboardInterrupt` as
            normal.  Note: This feature requires Python 3.8 or newer. 
 
 03/24/2020 Added a pytest plugin for Curio. Contributed by Keith Dart.
@@ -477,7 +483,7 @@ return, please submit a bug report. -- Dave
 
 04/14/2018 Changed the method of spawning processes for run_in_process to
            use the "spawn" method of the multiprocessing module. This 
-	   prevents issues of having open file-descriptors cloned by
+           prevents issues of having open file-descriptors cloned by
            accident via fork().  For example, as in Issue #256.
 
 Version 0.9 : March 10, 2018
@@ -542,7 +548,7 @@ Version 0.9 : March 10, 2018
               result = await t.join()
 
            Previously, async threads were created using the AsyncThread class.
-	   That still works, but the spawn_thread() function is probably easier.
+           That still works, but the spawn_thread() function is probably easier.
 
            The launched function must be a normal synchronous function. 
            spawn_thread() can also be used as a context manager (see below).
@@ -578,7 +584,7 @@ Version 0.9 : March 10, 2018
            it's still needed.   Better yet, maybe take a look at PEP 567.
 
 02/02/2018 Some refactoring and simplification of the kernel run() 
-	   method.  First, run() only executes as long as the
+           method.  First, run() only executes as long as the
            submitted coroutine is active.  Upon termination, run()
            immediately returns regardless of whether or not other
            tasks are still running.  Curio was already generating
@@ -616,7 +622,7 @@ Version 0.9 : March 10, 2018
            exception would be noticed there.
 
 01/22/2018 Semaphore and BoundedSemaphore now exposes a read-only
-	   property ".value" that gives the current Semaphore value.
+           property ".value" that gives the current Semaphore value.
            BoundedSemaphore objects expose a ".bound" property that
            gives the upper bound.
            
@@ -640,8 +646,8 @@ Version 0.9 : March 10, 2018
 
 09/15/2017 Made the @async_thread decorator return the actual
            exception that gets raised in the event of a failure.
-	   This makes it more like a normal function call.  Previously,
-	   it was returning a TaskError exception for any crash.
+           This makes it more like a normal function call.  Previously,
+           it was returning a TaskError exception for any crash.
            That's a bit weird since the use of threads or spawning
            of an external task is meant to be more implicit.
 
@@ -664,19 +670,19 @@ Version 0.8 : August 27, 2017
 04/23/2017 Change to ssl.wrap_socket() function and method to make it an
            async method.   If applied to an already connected socket, it
            needs to run the handshake--which needs to be async.  See
-	   Issue #206.
+           Issue #206.
 
 04/14/2017 Refinement to SignalEvent to make it work better on Windows.
            It's now triggered via the same file descriptor used for SignalQueue
            objects.
 
 03/26/2017 Added a Task.interrupt() method.  Cancels the task's current
-	   blocking operation with an 'TaskInterrupted' exception.
-	   This is really just a more nuanced form of cancellation,
-	   similar to a timeout.  However, it's understood that an 
-	   interrupted operation doesn't necessarily mean that the
-	   task should quit.   Instead, the task might coordinate with 
-	   other tasks in some way and retry later. 
+           blocking operation with an 'TaskInterrupted' exception.
+           This is really just a more nuanced form of cancellation,
+           similar to a timeout.  However, it's understood that an 
+           interrupted operation doesn't necessarily mean that the
+           task should quit.   Instead, the task might coordinate with 
+           other tasks in some way and retry later. 
 
 Version 0.7 : March 17, 2017
 ----------------------------
@@ -706,8 +712,8 @@ Version 0.7 : March 17, 2017
                   await g.cancel_remaining()
 
 03/12/2017 Added a .cancelled attribute to the context manager used
-	   by the ignore_after() and ignore_at() functions.  It
-	   can be used to determine if a timeout fired.  For example:
+           by the ignore_after() and ignore_at() functions.  It
+           can be used to determine if a timeout fired.  For example:
 
               async with ignore_after(10) as context:
                   await sleep(100)
@@ -724,7 +730,7 @@ Version 0.7 : March 17, 2017
                         ...
 
 03/08/2017 More work on signal handling. New objects: SignalQueue 
-	   and SignalEvent.  SignalEvents are neat:
+           and SignalEvent.  SignalEvents are neat:
 
                import signal
                from curio import SignalEvent
@@ -736,7 +742,7 @@ Version 0.7 : March 17, 2017
                    print("Goodbye")
 
 03/08/2017 UniversalEvent object added.  An event that's safe for use in
-	   Curio and threads.
+           Curio and threads.
 
 03/08/2017 Further improvement to signal handling.  Now handled by a backing
            thread.  Supports signal delivery to multiple threads, 
@@ -744,7 +750,7 @@ Version 0.7 : March 17, 2017
            of stuff.
 
 03/08/2017 Removed signal handling from the kernel up into Curio
-	   "user-space".  No existing code the uses signals should break.
+           "user-space".  No existing code the uses signals should break.
 
 03/07/2017 Refined error reporting and warnings related to Task
            termination.  If any non-daemonic task is garbage collected
@@ -755,7 +761,7 @@ Version 0.7 : March 17, 2017
            crashed with an uncaught exception, that exception is
            logged as an error.
 
-	   This change has a few impacts.  First, if a task crashes,
+           This change has a few impacts.  First, if a task crashes,
            but is joined, you won't get a spurious output message
            showing the crash.  The exception was delivered to someone
            else.   On the other hand, you might get more warning
@@ -763,21 +769,21 @@ Version 0.7 : March 17, 2017
            attention to their result. 
 
 03/06/2017 A lot of cleanup of the kernel. Moved some functionality 
-	   elsewhere. Removed unneeded traps.  Removed excess
+           elsewhere. Removed unneeded traps.  Removed excess
            abstraction in the interest of readability.  The different
            trap functions in Curio are almost all quite small.
            However, details concerning their execution behavior was
            split across a few different places in the code and wrapped
            with decorators--making it somewhat hard to piece together
            how they worked looking at them in isolation.  Each trap 
-	   is now basically self-contained.  You can look at the code and 
-	   see exactly what it does.  Each trap is also afforded more
-	   flexibility about how it could work in the future (e.g.,
-	   scheduling behavior, cancellation, etc.).  
+           is now basically self-contained.  You can look at the code and 
+           see exactly what it does.  Each trap is also afforded more
+           flexibility about how it could work in the future (e.g.,
+           scheduling behavior, cancellation, etc.).  
 
-	   Debug logging features have been removed from the kernel and
-	   placed into a new subsystem.  See the file curio/debug.py.
-	   This is still in progress.
+           Debug logging features have been removed from the kernel and
+           placed into a new subsystem.  See the file curio/debug.py.
+           This is still in progress.
 
 03/05/2017 Change to how the debugging monitor is invoked.  It's still
            an option on the run() function.  However, it is not a
@@ -792,8 +798,8 @@ Version 0.7 : March 17, 2017
 
 03/04/2017 Support for using Event.set() from a synchronous context has
            been withdrawn.   This was undocumented and experimental.
-	   There are other mechanisms for achieving this.  For example,
-	   communicating through a UniversalQueue.
+           There are other mechanisms for achieving this.  For example,
+           communicating through a UniversalQueue.
 
 03/03/2017 timeout_after() and related functions now accept
            coroutine functions and arguments such as this:
@@ -829,7 +835,7 @@ Version 0.7 : March 17, 2017
 
 03/03/2017 Functionality for using Queue.put() in a synchronous context
            has been withdrawn. This was always experimental and undocumented.
-	   There are better alternatives for doing this.  For example, use a
+           There are better alternatives for doing this.  For example, use a
            UniversalQueue.
 
 03/01/2017 Addition of an asyncio bridge.  You can instantiate a separate
@@ -850,8 +856,8 @@ Version 0.7 : March 17, 2017
 
 02/26/2017 Modified the gather() function so that it also cancels all tasks
            if it is cancelled by timeout or other means.  See issue #186.
-	   The resulting exception has a .results attribute set with
-	   the results of all tasks at the time of cancellation.
+           The resulting exception has a .results attribute set with
+           the results of all tasks at the time of cancellation.
 
 02/19/2017 Added new curio.zmq module for supporting ZeroMQ.
 
@@ -871,7 +877,7 @@ Version 0.6 : February 15, 2017
 
 02/11/2017 Added a guard for proper use of asynchronous generators
            involving asynchronous finalization.  Must be wrapped by finalize(). 
-	   For example:
+           For example:
 
            async def some_generator():
                ...
@@ -921,16 +927,16 @@ Version 0.6 : February 15, 2017
 
            async def main():
                t = await aside(child, 'Spam', 10)   # Runs in subprocess
-	       await t.join()
+               await t.join()
 
            run(main())
 
            In a nutshell, aside(coro, *args, **kwargs) creates a clean
-	   Python interpreter and invokes curio.run(coro(*args,
-	   **kwargs)) on the supplied coroutine.  The return value of
-	   aside() is a Task object.  Joining with it returns the
-	   child exit code (normally 0).  Cancelling it causes a
-	   TaskCancelled exception to be raised in the child.
+           Python interpreter and invokes curio.run(coro(*args,
+           **kwargs)) on the supplied coroutine.  The return value of
+           aside() is a Task object.  Joining with it returns the
+           child exit code (normally 0).  Cancelling it causes a
+           TaskCancelled exception to be raised in the child.
 
            aside() does not involve a process fork or pipe. There
            is no underlying communication between the child and parent
@@ -1024,7 +1030,7 @@ Version 0.5 : February 2, 2017
            to receive the result of the threaded operation.  This
            Future is guaranteed to have the result/exception set.
 
-	   Be aware that there is no way to know when the call_on_cancel 
+           Be aware that there is no way to know when the call_on_cancel 
            function might be triggered.  It might be far in the future.
            The Curio kernel might not even be running.   Thus, it's 
            generally not safe to make too many assumptions about it.
@@ -1135,15 +1141,15 @@ Version 0.5 : February 2, 2017
 01/03/2017 Added a TaskCancelled exception.  This is now what gets 
            raised when tasks are cancelled using the task.cancel()
            method.  It is a subclass of CancelledError.   This change 
-	   makes CancelledError more of an abstract exception class
+           makes CancelledError more of an abstract exception class
            for cancellation.  The TaskCancelled, TaskTimeout, and 
            TimeoutCancellationError exceptions are more specific
            subclasses that indicates exactly what has happened.
 
 01/02/2017 Major reorganization of how task cancellation works. There
-	   are two major parts to it.
+           are two major parts to it.
 
-	   Kernel:
+           Kernel:
 
            Every task has a boolean flag "task.allow_cancel" that
            determines whether or not cancellation exceptions (which
@@ -1155,15 +1161,15 @@ Version 0.5 : February 2, 2017
            holds onto the exception indefinitely, waiting for the task
            to re-enable cancellations.  Once re-enabled, the exception
            is raised immediately the next time the task performs a 
-	   blocking operation.
+           blocking operation.
 
-	   Coroutines:
+           Coroutines:
 
-	   From coroutines, control of the cancellation flag is
-	   performed by two functions which are used as context
-	   managers:
+           From coroutines, control of the cancellation flag is
+           performed by two functions which are used as context
+           managers:
 
-	   To disable cancellation, use the following construct:
+           To disable cancellation, use the following construct:
 
                async def coro():
                    async with disable_cancellation():
@@ -1178,8 +1184,8 @@ Version 0.5 : February 2, 2017
            a CancelledError exception to be raised--even manually. Doing
            so causes a RuntimeError.  
 
-	   To re-enable cancellation in specific regions of code, use
-	   enable_cancellation() like this:
+           To re-enable cancellation in specific regions of code, use
+           enable_cancellation() like this:
 
                async def coro():
                    async with disable_cancellation():
@@ -1191,7 +1197,7 @@ Version 0.5 : February 2, 2017
 
                            if c.cancel_pending:
                                # Cancellation is pending right now. Must bail out.
-      			       break
+                               break
 
                    await blocking_op()   # Cancellation raised here (if any)
 
@@ -1204,7 +1210,7 @@ Version 0.5 : February 2, 2017
            will never escape the block.  Instead, they turn back into
            a pending exception which can be checked as shown above.
 
-	   Normally cancellations are only delivered on blocking operations.
+           Normally cancellations are only delivered on blocking operations.
            If you want to force a check, you can use check_cancellation()
            like this:
 
@@ -1277,15 +1283,15 @@ Version 0.5 : February 2, 2017
            on the CalledProcessError exception raised if there is an error.
 
 12/03/2016 Added a parentid attribute to Task instances so you can find parent
-	   tasks.   Nothing else is done with this internally.
+           tasks.   Nothing else is done with this internally.
 
 12/03/2016 Withdrew the pdb and crash_handler arguments to Kernel() and the
            run() function.  Added a pdb() method to tasks that can be used
-	   to enter the debugger on a crashed task.  High-level handling
-	   of crashed/terminated tasks is being rethought.   The old
-	   crash_handler() callback was next to useless since no useful
-	   actions could be performed (i.e., there was no ability to respawn
-	   tasks or execute any kind of coroutine in response to a crash).
+           to enter the debugger on a crashed task.  High-level handling
+           of crashed/terminated tasks is being rethought.   The old
+           crash_handler() callback was next to useless since no useful
+           actions could be performed (i.e., there was no ability to respawn
+           tasks or execute any kind of coroutine in response to a crash).
 
 11/05/2016 Pulled time related functionality into the kernel as a new call.
            Use the following to get the current value of the kernel clock:
@@ -1314,7 +1320,7 @@ Version 0.5 : February 2, 2017
            
 10/29/2016 Modified TaskTimeout exception so that it subclasses CancelledError.
            This makes it easier to write code that handles any kind of 
-	   cancellation (explicit cancellation, cancellation by timeout, etc.)
+           cancellation (explicit cancellation, cancellation by timeout, etc.)
 
 10/17/2016 Added shutdown() method to sockets.  It is an async function
            to mirror async implementation of close()
@@ -1460,7 +1466,7 @@ Version 0.5 : February 2, 2017
                    print('Going away because of:', e)
 
            KernelExit by itself does not do anything to other 
-	   running tasks.  However, the run() function will
+           running tasks.  However, the run() function will
            separately issue a shutdown request causing all
            remaining tasks to cancel.
 
@@ -1596,7 +1602,7 @@ Version 0.5 : February 2, 2017
               s = await Spam()
 
 05/15/2016 Fixed Issue #50. Undefined variable n in io.py 
-	   Reported by Wolfgang Langner
+           Reported by Wolfgang Langner
 
 Version 0.4 : May 13, 2016
 --------------------------
@@ -1610,7 +1616,7 @@ Version 0.3 : May 13, 2016
 
 05/13/2016 Modification to the abide() function to allow it to work
            with RLocks from the threading module.  One caveat: Such
-	   locks are NOT reentrant from within curio itself. 
+           locks are NOT reentrant from within curio itself. 
 
 Version 0.2 : May 11, 2016
 --------------------------
@@ -1624,8 +1630,8 @@ Version 0.2 : May 11, 2016
 
 04/22/2016 Removed parent/child task relationship and associated
            tracking.  It's an added complexity that's not really
-	   needed in the kernel and it can be done easily enough by
-	   the user in cases where it might be needed.
+           needed in the kernel and it can be done easily enough by
+           the user in cases where it might be needed.
 
 04/18/2016 Major refactoring of timeout handling.  Virtually all
            operations in curio support cancellation and timeouts.
