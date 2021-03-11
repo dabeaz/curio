@@ -39,6 +39,7 @@ def test_tcp_echo(kernel):
         results.append(('client', resp))
         results.append('client close')
         await sock.close()
+        await sleep(0.1)
         await serv.cancel()
 
     async def main():
