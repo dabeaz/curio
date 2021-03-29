@@ -340,7 +340,7 @@ a stream like this::
 
     async def echo_client(client, addr):
         print("Connection from", addr)
-        async with client.as_stream() as s
+        async with client.as_stream() as s:
             async for line in s:
                 await s.write(line)
         print('Connection closed')
