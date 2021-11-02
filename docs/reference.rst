@@ -1197,12 +1197,14 @@ The following methods are used to establish a connection on a :class:`Channel` i
    :header-rows: 0
 
    * - ``await ch.accept(*, authkey=None)``
-     - Wait for an incoming connection and return a
+     - Wait for an authenticated incoming connection and return a
        :class:`Connection` instance.  *authkey* is an optional
-       authentication key.
+       authentication key.  Connections failing authentication are logged
+       and dropped.
    * - ``await ch.connect(*, authkey=None)``
      - Make an outgoing connection and return a :class:`Connection` instance. 
-       *authkey* is an optional authentication key.
+       *authkey* is an optional authentication key.  Raise AuthenticationError
+       if authentication fails.
    * - ``ch.bind()``
      - Performs the address binding step of the ``accept()`` method.
        Use this to have the host operating system to assign a port
@@ -1210,6 +1212,9 @@ The following methods are used to establish a connection on a :class:`Channel` i
        Afterwards,  ``ch.address`` contains the assigned address.
    * - ``await ch.close()``
      - Close the channel.
+
+:class:`Channel` supports the asynchronous context manager protocol to call ``close()`` on 
+leaving the context.
 
 The ``connect()`` and ``accept()`` methods of :class:`Channel` instances return an
 instance of the :class:`Connection` class:
