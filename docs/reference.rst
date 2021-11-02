@@ -790,7 +790,8 @@ foreign libraries.  Use the following functions to do that:
 .. asyncfunction:: run_in_process(callable, *args)
 
    Run ``callable(*args)`` in a separate process and returns the
-   result.  If cancelled, the underlying worker process is immediately
+   function's result (not the process exit code).  If cancelled,
+   the underlying worker process is immediately
    cancelled by a ``SIGTERM`` signal.  The given callable executes in
    an entirely independent Python interpreter and there is no shared
    global state. The separate process is launched using the "spawn"
