@@ -1390,6 +1390,7 @@ The following functions are also available.  They accept the same arguments as t
 equivalents in the :mod:`subprocess` module:
 
 .. asyncfunction:: run(args, stdin=None, input=None, stdout=None, stderr=None, shell=False, check=False)
+   :noindex:
 
    Run a command in a subprocess.  Returns a :class:`subprocess.CompletedProcess` instance.
    If cancelled, the underlying process is terminated using the process ``kill()`` method.
