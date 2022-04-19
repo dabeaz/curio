@@ -87,16 +87,22 @@ class UniversalEvent(object):
             await asyncio.wrap_future(self._fut)
 
     def set(self):
+        if self._set:
+            return
         self._set = True
         self._fut.set_result(True)
 
     @awaitable(set)
     async def set(self):
+        if self._set:
+            return
         self._set = True
         self._fut.set_result(True)
 
     @asyncioable(set)
     async def set(self):
+        if self._set:
+            return
         self._set = True
         self._fut.set_result(True)
 
