@@ -843,6 +843,40 @@ class TestUniversalEvent:
             False
         ]
 
+    def test_uevent_get_wait_timeout(self, kernel):
+        results = []
+        async def event_setter(evt, seconds):
+            results.append('sleep')
+            await sleep(seconds)
+            results.append('event_set')
+            await evt.set()
+
+        async def event_waiter(evt, seconds):
+            try:
+                results.append('wait_start')
+                await timeout_after(seconds, evt.wait())
+                results.append('wait_done')
+                results.append(evt.is_set())
+            except TaskTimeout:
+                results.append('wait_timeout')
+                results.append(evt.is_set())
+
+        async def main():
+            evt = UniversalEvent()
+            t1 = await spawn(event_waiter, evt, 1)
+            t2 = await spawn(event_setter, evt, 2)
+            await t1.join()
+            await t2.join()
+
+        kernel.run(main())
+        assert results == [
+            'wait_start',
+            'sleep',
+            'wait_timeout',
+            False,
+            'event_set',
+        ]
+        
 class TestResult:
     def test_value(self, kernel):
         

@@ -2,6 +2,12 @@ CHANGES
 -------
 Version 1.5 - In Progress
 ------------------------------
+05/09/2022 Fixed a problem with cancellation and waiting in UniversalEvent.
+	   Reported by vytasrgl.
+	   
+04/20/2022 Merged a fix for #350 where UniversalEvents couldn't be set
+           more than once.   Reported and fixed by Stephen Harding.
+	   
 03/10/2021 Fixed Issue #340 related to the handling of daemonic tasks
            in a TaskGroup.   TaskGroups can now be given existing
            daemonic tasks in the constructor.  Daemonic tasks are
