@@ -110,9 +110,10 @@ class UniversalEvent(object):
             self._waiting.discard(fut)
 
     def _unblock_waiters(self):
-        for fut in self._waiting:
+        # Caution: Should only be called with self._lock held.
+        now_waiting, self._waiting = self._waiting, set()
+        for fut in now_waiting:
             fut.set_result(True)
-        self._waiting.clear()
             
     def set(self):
         with self._lock:
