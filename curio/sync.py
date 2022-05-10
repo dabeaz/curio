@@ -71,65 +71,71 @@ class UniversalEvent(object):
         return self._set
 
     def clear(self):
-        self._set = False
+        with self._lock:
+            self._set = False
 
     def wait(self):
-        if not self._set:
+        with self._lock:
+            if self._set:
+                return
             fut = Future()
-            with self._lock:
-                self._waiting.add(fut)
-            try:
-                fut.result()
-            finally:
-                self._waiting.discard(fut)
+            self._waiting.add(fut)
+        try:
+            fut.result()
+        finally:
+            self._waiting.discard(fut)
 
     @awaitable(wait)
     async def wait(self):
-        if not self._set:
+        with self._lock:
+            if self._set:
+                return
             fut = Future()
-            with self._lock:
-                self._waiting.add(fut)
-            try:
-                await _future_wait(fut)
-            finally:
-                self._waiting.discard(fut)
+            self._waiting.add(fut)
+        try:
+            await _future_wait(fut)
+        finally:
+            self._waiting.discard(fut)
 
     @asyncioable(wait)
     async def wait(self):
-        if not self._set:
+        with self._lock:
+            if self._set:
+                return
             fut = Future()
-            with self._lock:
-                self._waiting.add(fut)
-            try:
-                await asyncio.wrap_future(fut)
-            finally:
-                self._waiting.discard(fut)
+            self._waiting.add(fut)
+        try:
+            await asyncio.wrap_future(fut)
+        finally:
+            self._waiting.discard(fut)
 
     def _unblock_waiters(self):
-        with self._lock:
-            for fut in self._waiting:
-                fut.set_result(True)
-            self._waiting.clear()
+        for fut in self._waiting:
+            fut.set_result(True)
+        self._waiting.clear()
             
     def set(self):
-        if self._set:
-            return
-        self._set = True
-        self._unblock_waiters()
+        with self._lock:
+            if self._set:
+                return
+            self._set = True
+            self._unblock_waiters()
 
     @awaitable(set)
     async def set(self):
-        if self._set:
-            return
-        self._set = True
-        self._unblock_waiters()        
+        with self._lock:
+            if self._set:
+                return
+            self._set = True
+            self._unblock_waiters()        
 
     @asyncioable(set)
     async def set(self):
-        if self._set:
-            return
-        self._set = True
-        self._unblock_waiters()                
+        with self._lock:
+            if self._set:
+                return
+            self._set = True
+            self._unblock_waiters()                
 
 # Base class for all synchronization primitives that operate as context managers.
 
