@@ -113,7 +113,8 @@ class UniversalEvent(object):
         # Caution: Should only be called with self._lock held.
         now_waiting, self._waiting = self._waiting, set()
         for fut in now_waiting:
-            fut.set_result(True)
+            if not fut.done():
+                fut.set_result(True)
             
     def set(self):
         with self._lock:
