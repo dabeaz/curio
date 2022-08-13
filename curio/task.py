@@ -97,11 +97,11 @@ class Task(object):
     instantiated directly. Instead, use spawn().
     '''
     _lastid = 1
-    def __init__(self, coro):
+    def __init__(self, coro, parent=None):
         # Informational attributes about the task itself
         self.id = Task._lastid
         Task._lastid += 1
-        self.parentid = None          # Parent task id (if any)
+        self.parentid = None if parent is None else parent.id  # Parent task id (if any)
         self.coro = coro              # Underlying generator/coroutine
         self.name = getattr(coro, '__qualname__', str(coro))
         self.daemon = False           # Daemonic flag
@@ -260,10 +260,13 @@ class ContextTask(Task):
     Task class that provides support for contextvars.  Use with the
     taskcls keyword argument to the Curio kernel.
     '''
-    def __init__(self, coro):
+    def __init__(self, coro, parent=None):
         import contextvars
         super().__init__(coro)
-        self._context = contextvars.copy_context()
+        if parent:
+            parent._context.run(lambda: setattr(self, '_context', contextvars.copy_context()))
+        else:
+            self._context = contextvars.copy_context()
 
     def send(self, value):
         return self._context.run(super().send, value)

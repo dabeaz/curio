@@ -277,7 +277,7 @@ class Kernel(object):
 
         # Create a new task. Putting it on the ready queue
         def new_task(coro):
-            task = taskcls(coro)
+            task = taskcls(coro, current)
             tasks[task.id] = task
             reschedule_task(task)
             for a in _activations:
@@ -466,7 +466,7 @@ class Kernel(object):
         # Add a new task to the kernel
         def trap_spawn(coro):
             task = new_task(coro)
-            task.parentid = current.id
+            # task.parentid = current.id
             current._trap_result = task
 
         # ----------------------------------------
