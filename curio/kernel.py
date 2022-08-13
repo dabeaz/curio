@@ -642,7 +642,9 @@ class Kernel(object):
                 except OSError as e:
                     # If there is nothing to select, windows throws an
                     # OSError, so just set events to an empty list.
-                    if e.errno != getattr(errno, 'WSAEINVAL', None):
+                    wsaeinval = getattr(errno, 'WSAEINVAL', None)
+                    einval = getattr(errno, 'EINVAL', None)
+                    if e.errno not in (wsaeinval, einval):
                         raise
                     events = []
 
