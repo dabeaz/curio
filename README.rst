@@ -8,6 +8,14 @@ well as some advanced features such as support for structured
 concurrency. It works on Unix and Windows and has zero dependencies.
 You'll find it to be familiar, small, fast, and fun.
 
+Important Notice: October 11, 2022
+----------------------------------
+I'm officially retiring the Curio project.  There will be no further
+releases.  Should you choose to still use it, the GitHub repo will
+remain alive--feel free to vendor the code and report bugs as you see
+fit.  I'd like to thank everyone who contributed to the
+project over the last seven years. -- Dave
+
 Curio is Different
 ------------------
 One of the most important ideas from software architecture is the
