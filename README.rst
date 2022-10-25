@@ -8,13 +8,13 @@ well as some advanced features such as support for structured
 concurrency. It works on Unix and Windows and has zero dependencies.
 You'll find it to be familiar, small, fast, and fun.
 
-Important Notice: October 11, 2022
+Important Notice: October 25, 2022
 ----------------------------------
-I'm officially retiring the Curio project.  There will be no further
-releases.  Should you choose to still use it, the GitHub repo will
-remain alive--feel free to vendor the code and report bugs as you see
-fit.  I'd like to thank everyone who contributed to the
-project over the last seven years. -- Dave
+The Curio project is no longer making package releases.  I'm more than
+happy to accept bug reports and may continue to work on it from time
+to time as the mood strikes.  If you want the absolute latest version, you
+should vendor the source code from here. Curio has no dependencies
+other than the Python standard library.  --Dave
 
 Curio is Different
 ------------------

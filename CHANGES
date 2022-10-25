@@ -1,7 +1,12 @@
 CHANGES
 -------
-Version 1.5 - In Progress
+Version 1.6 - October 25, 2022
 ------------------------------
+
+10/25/2022 ***IMPORTANT NOTE*** This is the last release on pypi.  Curio
+           will no longer be making package releases.  The most recent
+	   version can be obtained at https://github.com/dabeaz/curio.
+
 05/09/2022 Fixed a problem with cancellation and waiting in UniversalEvent.
 	   Reported by vytasrgl.
 	   
