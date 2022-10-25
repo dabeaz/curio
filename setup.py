@@ -6,7 +6,8 @@ except ImportError:
 tests_require = ['pytest', 'Sphinx']
 
 long_description = """
-Curio is a coroutine-based library for concurrent systems programming.
+Curio is a coroutine-based library for concurrent systems programming.  No longer
+maintained as a PyPi project.  Latest version is available on GitHub. 
 """
 
 
