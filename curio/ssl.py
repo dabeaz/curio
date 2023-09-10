@@ -27,7 +27,7 @@ from .workers import run_in_thread
 from .io import Socket
 
 if _ssl:
-    @wraps(_ssl.wrap_socket)
+    @wraps(_ssl.SSLContext.wrap_socket)
     async def wrap_socket(sock, *args, do_handshake_on_connect=True, **kwargs):
         if isinstance(sock, Socket):
             sock = sock._socket

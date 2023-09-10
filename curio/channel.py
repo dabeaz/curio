@@ -28,9 +28,16 @@ from .time import timeout_after, sleep
 # Authentication parameters (copied from multiprocessing)
 
 AUTH_MESSAGE_LENGTH = mpc.MESSAGE_LENGTH    # 20
-CHALLENGE = mpc.CHALLENGE                   # b'#CHALLENGE#'
-WELCOME = mpc.WELCOME                       # b'#WELCOME#'
-FAILURE = mpc.FAILURE                       # b'#FAILURE#'
+try:
+    # Python 3.12+
+    CHALLENGE = mpc._CHALLENGE              # b'#CHALLENGE#'
+    WELCOME = mpc._WELCOME                  # b'#WELCOME#'
+    FAILURE = mpc._FAILURE                  # b'#FAILURE#'
+except AttributeError:
+    # Python 3.7-3.11
+    CHALLENGE = mpc.CHALLENGE               # b'#CHALLENGE#'
+    WELCOME = mpc.WELCOME                   # b'#WELCOME#'
+    FAILURE = mpc.FAILURE                   # b'#FAILURE#'
 
 
 
