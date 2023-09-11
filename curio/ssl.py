@@ -32,7 +32,7 @@ if _ssl:
         if isinstance(sock, Socket):
             sock = sock._socket
 
-        ssl_sock = _ssl.wrap_socket(sock, *args, do_handshake_on_connect=False, **kwargs)
+        ssl_sock = _ssl.SSLContext.wrap_socket(sock, *args, do_handshake_on_connect=False, **kwargs)
         cssl_sock = Socket(ssl_sock)
         cssl_sock.do_handshake_on_connect = do_handshake_on_connect
         if do_handshake_on_connect and ssl_sock._connected:
