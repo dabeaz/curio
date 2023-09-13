@@ -3,7 +3,7 @@ Curio
 
 Curio is a coroutine-based library for concurrent Python systems
 programming using async/await.  It provides standard programming
-abstractions such as as tasks, sockets, files, locks, and queues as
+abstractions such as tasks, sockets, files, locks, and queues as
 well as some advanced features such as support for structured
 concurrency. It works on Unix and Windows and has zero dependencies.
 You'll find it to be familiar, small, fast, and fun.
