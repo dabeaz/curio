@@ -1,7 +1,12 @@
 # Adapted from https://hg.python.org/cpython/file/default/Doc/tools/extensions/pyspecific.py .
 
-from sphinx import addnodes
-from sphinx.domains.python import PyModulelevel, PyClassmember
+from sphinx import addnodes, __version__
+
+if tuple(map(int,__version__.split('.'))) >= (4, 0, 0):
+    from sphinx.domains.python import PyAttribute, PyFunction
+else:
+    from sphinx.domains.python import PyModulelevel, PyClassmember
+    PyFunction, PyAttribute = PyModulelevel, PyClassmember
 
 
 class PyCoroutineMixin(object):
@@ -12,18 +17,18 @@ class PyCoroutineMixin(object):
         return ret
 
 
-class PyAsyncFunction(PyCoroutineMixin, PyModulelevel):
+class PyAsyncFunction(PyCoroutineMixin, PyFunction):
 
     def run(self):
         self.name = 'py:function'
-        return PyModulelevel.run(self)
+        return PyFunction.run(self)
 
 
-class PyAsyncMethod(PyCoroutineMixin, PyClassmember):
+class PyAsyncMethod(PyCoroutineMixin, PyAttribute):
 
     def run(self):
         self.name = 'py:method'
-        return PyClassmember.run(self)
+        return PyAttribute.run(self)
 
 
 def setup(app):
