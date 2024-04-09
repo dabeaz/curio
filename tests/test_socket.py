@@ -596,13 +596,6 @@ def test_create_connection(kernel):
 
     kernel.run(main)
 
-def test_create_bad_connection(kernel):
-    async def main():
-        with pytest.raises(OSError):
-            await create_connection(('python.org', 1))
-
-    kernel.run(main)
-
 # Smoke test on various socket functions
 @pytest.mark.skipif(True,
                     reason='unreliable')

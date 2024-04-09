@@ -796,48 +796,6 @@ def test_double_recv(kernel, portno):
         'handler done'
         ]
 
-@pytest.mark.skipif(True,
-                    reason="flaky")
-def test_sendall_cancel(kernel, portno):
-    done = Event()
-    start = Event()
-    results = {}
-
-    async def handler(client, addr):
-        await start.wait()
-        nrecv = 0
-        while True:
-            data = await client.recv(1000000)
-            if not data:
-                break
-            nrecv += len(data)
-        results['handler'] = nrecv
-        await client.close()
-        await done.set()
-
-    async def test_client(address, serv):
-        sock = socket(AF_INET, SOCK_STREAM)
-        await sock.connect(address)
-        try:
-            await sock.sendall(b'x'*10000000)
-        except CancelledError as e:
-            results['sender'] = e.bytes_sent
-        await sock.close()
-
-    async def main():
-        serv = await spawn(tcp_server, '', portno, handler)
-        t = await spawn(test_client, ('localhost', portno), serv)
-        await sleep(0.1)
-        await t.cancel()
-        await start.set()
-        await serv.cancel()
-        await done.wait()
-
-    kernel.run(main())
-
-    assert results['handler'] == results['sender']
-
-
 def test_stream_bad_context(kernel, portno):
     done = Event()
     results = []

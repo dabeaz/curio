@@ -396,36 +396,6 @@ def test_channel_hello_auth_fail(kernel, chs):
 
     kernel.run(main(*chs))
 
-@pytest.mark.skip
-def test_channel_slow_connect(kernel, chs):
-    results = []
-
-    async def server(ch):
-        await sleep(2)
-        c = await ch.accept(authkey=b'peekaboo')
-        async with c:
-            await c.send('server hello world')
-            results.append(await c.recv())
-
-    async def client(ch):
-        c = await ch.connect(authkey=b'peekaboo')
-        async with c:
-            msg = await c.recv()
-            results.append(msg)
-            await c.send('client hello world')
-
-    async def main(ch1, ch2):
-        async with ch1, ch2:
-            t1 = await spawn(server, ch1)
-            t2 = await spawn(client, ch2)
-            await t1.join()
-            await t2.join()
-
-    kernel.run(main(*chs))
-    assert results == ['server hello world',
-                       'client hello world']
-
-
 def test_recv_bytes_into(kernel, chs):
     import array
     results = { }

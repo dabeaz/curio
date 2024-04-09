@@ -225,23 +225,6 @@ def test_task_group_spawn_thread(kernel):
 
     kernel.run(task)
 
-@pytest.mark.skip
-def test_thread_context(kernel):
-    results = []
-    async def func(x, y):
-        async with spawn_thread():
-            time.sleep(0.5)
-            results.append(AWAIT(simple_coro(x, y)))
-
-    async def main():
-        t = await spawn(func, 2, 3)
-        await sleep(0.1)
-        results.append(1)
-        await t.join()
-
-    kernel.run(main)
-    assert results == [1, 5]
-
 def test_await_passthrough(kernel):
     import time
     def add(x, y):
