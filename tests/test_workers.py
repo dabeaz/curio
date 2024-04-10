@@ -75,14 +75,6 @@ def test_blocking(kernel):
         'sleep done',
     ]
 
-def test_executor(kernel):
-    from concurrent.futures import ThreadPoolExecutor
-    pool = ThreadPoolExecutor()
-    async def main():
-        r = await run_in_executor(pool, fib, 1)
-        assert r == 1
-    kernel.run(main())
-
 @pytest.mark.parametrize('runner', [run_in_thread, run_in_process ])
 def test_worker_cancel(kernel, runner):
     results = []

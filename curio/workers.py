@@ -4,7 +4,7 @@
 # running functions in threads, processes, and executors from the
 # concurrent.futures module.
 
-__all__ = ['run_in_executor', 'run_in_thread', 'run_in_process', 'block_in_thread']
+__all__ = ['run_in_thread', 'run_in_process', 'block_in_thread']
 
 # -- Standard Library
 
@@ -52,23 +52,6 @@ def rebuild_exc(exc, tb):
     exc.__cause__ = RemoteTraceback(tb)
     return exc
 
-async def run_in_executor(exc, callable, *args):
-    '''
-    Run callable(*args) in an executor such as
-    ThreadPoolExecutor or ProcessPoolExecutor from the
-    concurrent.futures module.  Be aware that on cancellation, any
-    worker thread or process that was handling the request will
-    continue to run to completion as a kind of zombie-- possibly
-    rendering the executor unusable for subsequent work.
-
-    This function is provided for compatibility with
-    concurrent.futures, but is not the recommend approach for running
-    blocking or cpu-bound work in curio. Use the run_in_thread() or
-    run_in_process() methods instead.
-    '''
-    future = exc.submit(callable, *args)
-    await _future_wait(future)
-    return future.result()
 
 MAX_WORKER_THREADS = 64
 
