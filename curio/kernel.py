@@ -817,8 +817,8 @@ def run(corofunc, *args, with_monitor=False, selector=None,
     if with_monitor or 'CURIOMONITOR' in os.environ:
         from .monitor import Monitor
         m = Monitor(kernel)
+        m.start()
         kernel._call_at_shutdown(m.close)
-        kernel.run(m.start)
 
     with kernel:
         return kernel.run(corofunc, *args)

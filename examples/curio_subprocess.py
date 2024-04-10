@@ -1,4 +1,4 @@
-# curio/subprocess.py
+# curio_subprocess.py
 #
 # A curio-compatible standin for the subprocess module.  Provides
 # asynchronous compatible versions of Popen(), check_output(),
@@ -24,15 +24,15 @@ from subprocess import (
 
 # -- Curio
 
-from .task import spawn
-from .time import sleep
-from .errors import CancelledError
-from .io import FileStream
-from . import thread
-from .workers import run_in_thread
+from curio.task import spawn
+from curio.time import sleep
+from curio.errors import CancelledError
+from curio.io import FileStream
+from curio import thread
+from curio.workers import run_in_thread
 
 if sys.platform.startswith('win'):
-    from .file import AsyncFile as FileStream
+    from curio.file import AsyncFile as FileStream
 
 class Popen(object):
     '''

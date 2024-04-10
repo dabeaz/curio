@@ -170,23 +170,6 @@ def test_thread_read(kernel):
 
     kernel.run(main)
 
-import curio.subprocess as subprocess
-import sys
-
-@pytest.mark.skipif(sys.platform.startswith('win'),
-                    reason='Broken on windows')
-def test_subprocess_popen(kernel):
-    def func():
-        with subprocess.Popen([sys.executable, '-c', 'print("hello")'], stdout=subprocess.PIPE) as p:
-            data = AWAIT(p.stdout.read())
-            assert data == b'hello\n'
-
-    async def main():
-        t = await spawn_thread(func)
-        await t.join()
-
-    kernel.run(main)
-
 def test_task_group_thread(kernel):
     results = []
     async def add(x, y):

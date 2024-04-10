@@ -1,5 +1,28 @@
 CHANGES
 -------
+April 10, 2024: Note: I've decided to take Curio in a different
+direction.  Initially, Curio was developed with variety of
+"experimental" features with the expectation that people might play
+around with them and we'd learn together.  However, this never really
+materialized.  As such, I'm going to be trimming the feature set.  If
+this affects you, please look at the "examples" directory because I
+may have moved code there.  Many features of Curio were simply
+higher-level modules implemented on top of an existing core and can be
+added back to your code without much effort. -- Dave
+
+04/10/2024 Removed subprocess module.  Use the Python built-in instead.
+           Old code found in examples/curio_subprocess.py
+	   
+04/10/2024 Removed dependency on telnetlib.  Removed commands from the
+           monitor that allowed changes to the running environment,
+	   specifically the `cancel` and `signal` commands.  It's
+	   not clear that cancelling tasks from the monitor would
+	   be all that useful to begin with.  If you need to send
+	   a Unix signal, use `kill` at the command line.
+	  
+04/10/2024 Eliminated flaky tests that were already marked for
+           skipping in pytest.
+
 Version 1.6 - October 25, 2022
 ------------------------------
 

@@ -25,37 +25,28 @@
 # Where host and port configure the network address on which the monitor
 # operates.
 #
-# To connect to the monitor, run python3 -m curio.monitor -H [host] -p [port]. For example:
+# To connect to the monitor, run python3 -m curio.monitor -H [host] -p [port]. 
 #
 # Theory of operation:
 # --------------------
 # The monitor works by opening up a loopback socket on the local
-# machine and allowing connections via telnet. By default, it only
-# allows a connection originating from the local machine.  Only a
-# single monitor connection is allowed at any given time.
+# machine and allowing connections via a tool like telnet or nc.  By
+# default, it only allows a connection originating from the local
+# machine.  Only a single monitor connection is allowed at any given
+# time.
 #
-# There are two parts to the monitor itself: a user interface and an
-# internal loop that runs on curio itself.  The user interface part
-# runs in a completely separate execution thread.  The reason for this
-# is that it allows curio to be monitored even if the curio kernel is
-# completely deadlocked, occupied with a large CPU-bound task, or
-# otherwise hosed in the some way.  At a minimum, you can connect,
-# look at the task table, and see what the tasks are doing.
-#
-# The internal monitor loop implemented on curio itself is presently
-# used to implement external task cancellation.  Manipulating any part
-# of the kernel state or task status is unsafe from an outside thread.
-# To make it safe, the user-interface thread of the monitor hands over
-# requests requiring the involvement of the kernel to the monitor
-# loop.  Since this loop runs on curio, it can safely make
-# cancellation requests and perform other kernel-related actions.
+# The monitor is implemented externally to Curio using threads.  The
+# reason for this is that it allows curio to be monitored even if the
+# curio kernel is completely deadlocked, occupied with a large
+# CPU-bound task, or otherwise hosed in the some way.  At a minimum,
+# you can connect, look at the task table, and see what the tasks are
+# doing.
 
 import os
 import signal
 import time
 import socket
 import threading
-import telnetlib
 import argparse
 import logging
 import sys
@@ -121,7 +112,6 @@ class Monitor(object):
     def __init__(self, kern, host=MONITOR_HOST, port=MONITOR_PORT):
         self.kernel = kern
         self.address = (host, port)
-        self.monitor_queue = queue.UniversalQueue()
         self._closing = None
         self._ui_thread = None
 
@@ -131,27 +121,14 @@ class Monitor(object):
         if self._ui_thread:
             self._ui_thread.join()
 
-    async def monitor_task(self):
-        '''
-        Asynchronous task loop for carrying out task cancellation.
-        '''
-        while True:
-            task = await self.monitor_queue.get()
-            await task.cancel()
-
-    async def start(self):
+    def start(self):
         '''
         Function to start the monitor
         '''
-        # The monitor launches both a separate thread and helper task
-        # that runs inside curio itself to manage cancellation events
-
         log.info('Starting Curio monitor at %s', self.address)
-
+        self._closing = threading.Event()        
         self._ui_thread = threading.Thread(target=self.server, args=(), daemon=True)
-        self._closing = threading.Event()
         self._ui_thread.start()
-        await spawn(self.monitor_task, daemon=True)
 
     def server(self):
         '''
@@ -159,7 +136,7 @@ class Monitor(object):
         from curio itself.
         '''
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
 
         # set the timeout to prevent the server loop from
         # blocking indefinitaly on sock.accept()
@@ -172,7 +149,6 @@ class Monitor(object):
                     client, addr = sock.accept()
                     with client:
                         client.settimeout(0.5)
-
                         # This bit of magic is for reading lines of input while still allowing timeouts
                         # and the ability for the monitor to die when curio exits.  See Issue #108.
                         def readlines():
@@ -193,6 +169,7 @@ class Monitor(object):
 
                         sout = client.makefile('w', encoding='latin-1')
                         self.interactive_loop(sout, readlines())
+                        sout.close()
                 except socket.timeout:
                     continue
 
@@ -224,14 +201,6 @@ class Monitor(object):
                     self.command_exit(sout)
                     return
 
-                elif resp.startswith('cancel'):
-                    _, taskid_s = resp.split()
-                    self.command_cancel(sout, int(taskid_s))
-
-                elif resp.startswith('signal'):
-                    _, signame = resp.split()
-                    self.command_signal(sout, signame)
-
                 elif resp.startswith('w'):
                     _, taskid_s = resp.split()
                     self.command_where(sout, int(taskid_s))
@@ -248,8 +217,6 @@ class Monitor(object):
             '''Commands:
          ps               : Show task table
          where taskid     : Show stack frames for a task
-         cancel taskid    : Cancel an indicated task
-         signal signame   : Send a Unix signal
          parents taskid   : List task parents
          quit             : Leave the monitor
 ''')
@@ -259,18 +226,6 @@ class Monitor(object):
 
     def command_where(self, sout, taskid):
         where(taskid, self.kernel, sout)
-
-    def command_signal(self, sout, signame):
-        if hasattr(signal, signame):
-            os.kill(os.getpid(), getattr(signal, signame))
-        else:
-            sout.write('Unknown signal %s\n' % signame)
-
-    def command_cancel(self, sout, taskid):
-        task = self.kernel._tasks.get(taskid)
-        if task:
-            sout.write('Cancelling task %d\n' % taskid)
-            self.monitor_queue.put(task)
 
     def command_parents(self, sout, taskid):
         while taskid:
@@ -282,22 +237,25 @@ class Monitor(object):
                 break
 
     def command_exit(self, sout):
-        sout.write('Leaving monitor. Hit Ctrl-C to exit\n')
+        sout.write('Leaving monitor.\n')
         sout.flush()
 
 def monitor_client(host, port):
     '''
-    Client to connect to the monitor via "telnet"
+    Client to connect to the monitor via a socket
     '''
-    tn = telnetlib.Telnet()
-    tn.open(host, port, timeout=0.5)
-    try:
-        tn.interact()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        tn.close()
-
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((host, port))
+    def display(sock):
+        while (chunk := sock.recv(1000)):
+            sys.stdout.write(chunk.decode('utf-8'))
+            sys.stdout.flush()
+        os._exit(0)
+    threading.Thread(target=display, args=[sock], daemon=True).start()
+    while True:
+        line = sys.stdin.readline()
+        sock.sendall(line.encode('utf-8'))
+    sock.close()
 
 def main():
     parser = argparse.ArgumentParser("usage: python -m curio.monitor [options]")
