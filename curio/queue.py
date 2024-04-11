@@ -293,7 +293,7 @@ class UniversalQueueBase:
 
     @awaitable(join_sync)
     async def join(self):
-        await workers.block_in_thread(self.join_sync)
+        return await workers.run_in_thread(self.join_sync)
 
     @asyncioable(join)
     async def join(self):

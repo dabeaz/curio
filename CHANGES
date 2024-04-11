@@ -10,6 +10,12 @@ may have moved code there.  Many features of Curio were simply
 higher-level modules implemented on top of an existing core and can be
 added back to your code without much effort. -- Dave
 
+04/11/2024 Removed undocumented ProcessPool and ThreadPool names.
+
+04/11/2024 Removed block_in_thread().  This functionality can be
+           replicated by protecting calls to run_in_thread() with a
+	   semaphore. 
+
 04/10/2024 Removed run_in_executor().  If you want to wait on work
            submitted to a traditional executor (from concurrent.futures),
 	   use curio.traps._future_wait().
