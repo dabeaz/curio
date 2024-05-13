@@ -64,7 +64,9 @@ This program does two things at once::
         curio.run(parent)
 
 ``curio.spawn()`` launches a concurrent task. The ``join()`` method waits
-for it to finish and returns its result. The following output is produced::
+for it to finish and returns its result. The following output is produced:
+
+.. code-block:: console
 
     bash % python3 hello.py
     Getting around to doing my homework
@@ -141,7 +143,9 @@ Likewise, cancellation can be caught. For example::
             print("No go diggy die!")
             raise
 
-Now the program produces this output::
+Now the program produces this output:
+
+.. code-block:: console
 
     bash % python3 hello.py
     Getting around to doing my homework
@@ -153,7 +157,7 @@ Now the program produces this output::
     Are you done yet?
     We've got to go!
     No go diggy die!
-   bash %
+    bash %
 
 This is the basic gist of tasks. You can create
 tasks, join tasks, and cancel tasks.  
@@ -190,7 +194,9 @@ Running this code, you will either get output similar to this::
     T-minus 7
     Result: 1554
 
-or you will get this if the ``kid()`` took too long::
+or you will get this if the ``kid()`` took too long:
+
+.. code-block:: console
 
     Getting around to doing my homework
     T-minus 10
@@ -305,7 +311,9 @@ An Echo Server
 --------------
 
 A common use of Curio is network programming.  Here is an
-echo server::
+echo server:
+
+.. code-block:: python3
 
     from curio import run, tcp_server
 
@@ -322,7 +330,9 @@ echo server::
         run(tcp_server, '', 25000, echo_client)
 
 Run this program and connect to it using ``nc`` or ``telnet``.  You'll
-see the program echoing back data to you::
+see the program echoing back data to you: 
+
+.. code-block:: console
 
     bash % nc localhost 25000
     Hello                 (you type)
