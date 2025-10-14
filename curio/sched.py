@@ -84,7 +84,7 @@ class SchedFIFO(SchedBase):
 
     def _kernel_wake(self, ntasks=1):
         tasks = []
-        while ntasks > 0:
+        while ntasks > 0 and len(self._queue) > 0:
             task, = self._queue.popleft()
             if task:
                 tasks.append(task)
