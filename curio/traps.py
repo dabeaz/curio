@@ -69,12 +69,13 @@ async def _future_wait(future, event=None):
     '''
     return await _kernel_trap('trap_future_wait', future, event)
 
-async def _sleep(clock):
+async def _sleep(seconds):
     '''
-    Sleep until the monotonic clock reaches the specified clock value.
+    Sleep for the specified floating-point number of seconds.
     If clock is 0, forces the current task to yield to the next task (if any).
+    Returns the current value of the monotonic clock.
     '''
-    return await _kernel_trap('trap_sleep', clock)
+    return await _kernel_trap('trap_sleep', seconds)
 
 async def _spawn(coro):
     '''
